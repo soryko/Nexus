@@ -41,16 +41,62 @@ from nexus_memory.domain.models import (
 
 _TOKEN = re.compile(r"\w+", re.UNICODE)
 
+_SEPARATORS = ("_", "/", "\\", ".")
+_CAMEL = re.compile(r"[a-z0-9][A-Z]")
+_ALNUM_MIX = re.compile(r"(?:[A-Za-z][0-9])|(?:[0-9][A-Za-z])")
+
+
+def _is_code_shaped(chunk: str) -> bool:
+    """Whether a whitespace-delimited chunk looks like an identifier, path or symbol.
+
+    Used only by the ``split`` search profile, to keep a stemmer away from text where
+    stemming is wrong. The test is deliberately syntactic and local: a chunk qualifies
+    if a separator sits between alphanumerics (``transcode_worker.py``, ``/v3/assets``),
+    if it is camelCase, or if letters and digits are adjacent (``mux2``, ``h264``).
+    Trailing sentence punctuation is stripped first so that an ordinary word ending a
+    sentence is not mistaken for a dotted name.
+    """
+    chunk = chunk.strip("`'\"(),;:!?“”‘’")
+    chunk = chunk.rstrip(".")
+    if not chunk or not any(character.isalnum() for character in chunk):
+        return False
+    for separator in _SEPARATORS:
+        position = chunk.find(separator)
+        while position != -1:
+            before = chunk[position - 1] if position > 0 else ""
+            after = chunk[position + 1] if position + 1 < len(chunk) else ""
+            if before.isalnum() and after.isalnum():
+                return True
+            position = chunk.find(separator, position + 1)
+    return bool(_CAMEL.search(chunk) or _ALNUM_MIX.search(chunk))
+
+
+def _prose_text(text: str) -> str:
+    """The subset of a body that the ``split`` profile allows a stemmer to see."""
+    return " ".join(chunk for chunk in text.split() if not _is_code_shaped(chunk))
+
 
 class SQLiteRepository:
-    SCHEMA_VERSION = 2
+    SCHEMA_VERSION = 3
     MINIMUM_SQLITE = (3, 51, 3)
     EXCERPT_LIMIT = 240
+    SEARCH_PROFILES = ("exact", "stem", "dual", "split")
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path, index_profile: str = "exact") -> None:
+        """``index_profile`` selects how bodies are tokenised for search.
+
+        ``exact`` is the shipped behaviour and the default; the other three exist so a
+        stemming change can be measured against it on development data before anything
+        is promoted. The profile is a property of the database, not of a call: it is
+        recorded in ``search_profile`` and the auxiliary indexes are rebuilt when the
+        requested profile differs from the stored one.
+        """
         if sqlite3.sqlite_version_info < self.MINIMUM_SQLITE:
             raise UnsupportedRuntime("SQLite 3.51.3 or newer is required")
+        if index_profile not in self.SEARCH_PROFILES:
+            raise UnsupportedRuntime(f"unknown search index profile: {index_profile}")
         self.path = str(path)
+        self.index_profile = index_profile
         self._migrate()
 
     def _connect(self) -> sqlite3.Connection:
@@ -112,6 +158,50 @@ class SQLiteRepository:
             self._index_tags(connection, seq, tuple(json.loads(tags_json)))
             connection.execute("INSERT INTO head_fts(rowid,body) VALUES(?,?)", (seq, body))
 
+    _STEM_TOKENIZER = "porter unicode61"
+
+    def _stored_profile(self, connection: sqlite3.Connection) -> str:
+        return connection.execute("SELECT profile FROM search_profile WHERE id=1").fetchone()[0]
+
+    def _apply_profile(self, connection: sqlite3.Connection) -> None:
+        """Bring the auxiliary search structures into line with the requested profile.
+
+        Rebuilding is unconditional when the profile changes, because an FTS5 table's
+        tokenizer is fixed at creation: a profile switch is a drop and a rebuild, not an
+        ALTER. Doing it here keeps the profile a property of the database, so a caller
+        cannot half-open one database under two tokenisers.
+        """
+        stored = self._stored_profile(connection)
+        if stored == self.index_profile:
+            return
+        connection.execute("DROP TABLE IF EXISTS head_fts_stem")
+        connection.execute("DROP TABLE IF EXISTS head_fts_prose")
+        if stored == "stem" or self.index_profile == "stem":
+            connection.execute("DROP TABLE IF EXISTS head_fts")
+            tokenizer = f",tokenize='{self._STEM_TOKENIZER}'" if self.index_profile == "stem" else ""
+            connection.execute(
+                "CREATE VIRTUAL TABLE head_fts USING fts5(body,content='head_body',content_rowid='rowid'" + tokenizer + ")"
+            )
+            connection.execute("INSERT INTO head_fts(head_fts) VALUES('rebuild')")
+        if self.index_profile == "dual":
+            connection.execute(
+                "CREATE VIRTUAL TABLE head_fts_stem USING fts5(body,content='head_body',content_rowid='rowid'"
+                f",tokenize='{self._STEM_TOKENIZER}')"
+            )
+            connection.execute("INSERT INTO head_fts_stem(head_fts_stem) VALUES('rebuild')")
+        if self.index_profile == "split":
+            # Not external content: the prose index holds a filtered copy of the body, so the
+            # stemmer never sees an identifier. That copy is a real storage cost, and it is
+            # meant to be visible to the storage gate rather than hidden behind a view.
+            connection.execute(
+                f"CREATE VIRTUAL TABLE head_fts_prose USING fts5(body,tokenize='{self._STEM_TOKENIZER}')"
+            )
+            for seq, body in connection.execute("SELECT rowid,body FROM head_body").fetchall():
+                connection.execute(
+                    "INSERT INTO head_fts_prose(rowid,body) VALUES(?,?)", (seq, _prose_text(body))
+                )
+        connection.execute("UPDATE search_profile SET profile=? WHERE id=1", (self.index_profile,))
+
     def _migrate(self) -> None:
         connection = None
         try:
@@ -132,7 +222,13 @@ class SQLiteRepository:
             if version == 1:
                 self._apply_migration_002(connection)
                 version = 2
+            if version == 2:
+                for statement in self._script("003_search_profile.sql").split(";"):
+                    if statement.strip():
+                        connection.execute(statement)
+                version = 3
             connection.execute(f"PRAGMA user_version = {version}")
+            self._apply_profile(connection)
             connection.commit()
         except NexusError:
             if connection is not None and connection.in_transaction:
@@ -222,6 +318,10 @@ class SQLiteRepository:
         ).lastrowid
         self._index_tags(db, seq, item.tags)
         db.execute("INSERT INTO head_fts(rowid,body) VALUES(?,?)", (seq, item.content))
+        if self.index_profile == "dual":
+            db.execute("INSERT INTO head_fts_stem(rowid,body) VALUES(?,?)", (seq, item.content))
+        elif self.index_profile == "split":
+            db.execute("INSERT INTO head_fts_prose(rowid,body) VALUES(?,?)", (seq, _prose_text(item.content)))
 
     def _index_remove(self, db: sqlite3.Connection, scope: Scope, memory_id: str) -> None:
         """External content does not self-synchronise: the prior body must be supplied to delete."""
@@ -234,6 +334,10 @@ class SQLiteRepository:
             return
         seq, body = row
         db.execute("INSERT INTO head_fts(head_fts,rowid,body) VALUES('delete',?,?)", (seq, body))
+        if self.index_profile == "dual":
+            db.execute("INSERT INTO head_fts_stem(head_fts_stem,rowid,body) VALUES('delete',?,?)", (seq, body))
+        elif self.index_profile == "split":
+            db.execute("DELETE FROM head_fts_prose WHERE rowid=?", (seq,))
         db.execute("DELETE FROM head_tags WHERE seq=?", (seq,))
         db.execute("DELETE FROM head_index WHERE seq=?", (seq,))
 
@@ -395,6 +499,29 @@ class SQLiteRepository:
             return None
         return " OR ".join('"' + token.replace('"', '""') + '"' for token in tokens)
 
+    def _match_legs(self, query: SearchQuery, expression: str) -> list[tuple[str, str]]:
+        """Which index or indexes this profile matches against, and with what expression.
+
+        ``exact`` and ``stem`` are one leg over ``head_fts``; the profile difference lives
+        entirely in that table's tokenizer. ``dual`` adds a stemmed leg over the same
+        bodies. ``split`` adds a stemmed leg that only ever sees prose, and sends it only
+        the prose-shaped query tokens, so an identifier never reaches the stemmer from
+        either side. Advanced queries take the exact leg alone: an FTS5 expression cannot
+        be token-filtered without reinterpreting the caller's syntax.
+        """
+        if self.index_profile in ("exact", "stem"):
+            return [("head_fts", expression)]
+        if self.index_profile == "dual":
+            return [("head_fts", expression), ("head_fts_stem", expression)]
+        legs = [("head_fts", expression)]
+        if query.advanced:
+            return legs
+        prose = [chunk for chunk in (query.query or "").split() if not _is_code_shaped(chunk)]
+        tokens = _TOKEN.findall(" ".join(prose))
+        if tokens:
+            legs.append(("head_fts_prose", " OR ".join('"' + token.replace('"', '""') + '"' for token in tokens)))
+        return legs
+
     @staticmethod
     def _validate_match_expression(expression: str) -> None:
         """Establish query validity by executing it in isolation.
@@ -456,14 +583,28 @@ class SQLiteRepository:
                         db.commit()
                         return SearchPage(hits=(), cursor=None, generation=generation)
                     self._validate_match_expression(expression)
-                    inner = (
-                        "SELECT h.seq AS seq,h.memory_id,h.revision_id,h.kind,h.tags_json,h.created_at,"
-                        "h.has_parent,bm25(head_fts) AS rank,"
-                        "snippet(head_fts,0,'','','…',16) AS excerpt"
-                        " FROM head_fts JOIN head_index h ON h.seq=head_fts.rowid"
-                        + authority + "AND head_fts MATCH ? " + filters
-                    )
-                    parameters = [scope.namespace, scope.actor, expression, *filter_parameters]
+                    legs = self._match_legs(query, expression)
+                    leg_sql = []
+                    parameters = []
+                    for table, leg_expression in legs:
+                        leg_sql.append(
+                            "SELECT h.seq AS seq,h.memory_id,h.revision_id,h.kind,h.tags_json,h.created_at,"
+                            f"h.has_parent,bm25({table}) AS rank,"
+                            f"snippet({table},0,'','','…',16) AS excerpt"
+                            f" FROM {table} JOIN head_index h ON h.seq={table}.rowid"
+                            + authority + f"AND {table} MATCH ? " + filters
+                        )
+                        parameters.extend([scope.namespace, scope.actor, leg_expression, *filter_parameters])
+                    if len(leg_sql) == 1:
+                        inner = leg_sql[0]
+                    else:
+                        # One row per memory, keeping its best leg. BM25 scores from two indexes
+                        # are computed over different corpus statistics, so best-of is a stated
+                        # heuristic, not a principled combination — it is recorded as such.
+                        inner = (
+                            "SELECT seq,memory_id,revision_id,kind,tags_json,created_at,has_parent,"
+                            "MIN(rank) AS rank,excerpt FROM (" + " UNION ALL ".join(leg_sql) + ") GROUP BY seq"
+                        )
                 else:
                     inner = (
                         "SELECT h.seq AS seq,h.memory_id,h.revision_id,h.kind,h.tags_json,h.created_at,"

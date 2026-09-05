@@ -1,0 +1,187 @@
+{
+  "corpus_version": "dev1",
+  "purpose": "Development corpus for T1/T2/T3 work. NOT evaluation data. Nothing measured against this corpus may be reported as a v2 result.",
+  "domain": "Media asset publishing pipeline — transcoding, captions, storage tiers, licensing, CDN delivery.",
+  "disjointness": "Chosen to share no topic with corpus-v2.json, whose domain is payments, auth, database migrations, deploys, CI, product search and observability. No v2 item could answer a dev query and no dev item could answer a v2 query.",
+  "authoring_record": {
+    "authored_by": "implementation side",
+    "labels_by": "implementation side, not blind-assessed",
+    "authored_before": "any variant was run",
+    "porter_checked_during_authoring": false,
+    "note": "Morphological pairs were written as a person would plausibly write and ask them, NOT selected for whether the porter stemmer unifies them. Some pairs are expected to be unrecoverable by stemming; that is a finding about the mechanism, not a defect in the corpus. The corpus is frozen at this commit and is not edited after a variant is run."
+  },
+  "memories": [
+    {"memory_id": "d01", "revisions": [
+      {"revision_id": "d01r1", "state": "current", "kind": "constraint", "tags": ["captions", "jobs"],
+       "content": "Caption jobs expire after 72 hours in the queue. An expired job is not retried automatically; the asset must be resubmitted through the ingest API."}]},
+
+    {"memory_id": "d02", "revisions": [
+      {"revision_id": "d02r1", "state": "current", "kind": "note", "tags": ["thumbnails"],
+       "content": "Thumbnails fail to generate when the source has no keyframe in the first ten seconds. The pipeline falls back to a solid-colour placeholder rather than blocking publication."}]},
+
+    {"memory_id": "d03", "revisions": [
+      {"revision_id": "d03r1", "state": "current", "kind": "decision", "tags": ["licensing"],
+       "content": "Licence windows are approved by the rights desk, never by engineering. A window that opens without a recorded approval is a compliance incident, not a bug."}]},
+
+    {"memory_id": "d04", "revisions": [
+      {"revision_id": "d04r1", "state": "current", "kind": "decision", "tags": ["storage"],
+       "content": "Assets migrate to cold storage tiers after 90 days without a playback request. Migration is reversible but takes up to four hours to restore."}]},
+
+    {"memory_id": "d05", "revisions": [
+      {"revision_id": "d05r1", "state": "current", "kind": "constraint", "tags": ["ingest"],
+       "content": "The ingest API throttles uploads at 20 concurrent transfers per publisher. Exceeding the limit returns 429 with a Retry-After header the client is expected to honour."}]},
+
+    {"memory_id": "d06", "revisions": [
+      {"revision_id": "d06r1", "state": "current", "kind": "procedure", "tags": ["publishing"],
+       "content": "Assets are published on the hour, not continuously. A publish that misses its slot waits for the next one; there is no expedite path."}]},
+
+    {"memory_id": "d07", "revisions": [
+      {"revision_id": "d07r1", "state": "current", "kind": "note", "tags": ["pipeline", "notifications"],
+       "content": "The pipeline notifies subscribers when rendering completes, over a webhook with at-least-once delivery. Duplicate callbacks are normal and the receiver must be idempotent."}]},
+
+    {"memory_id": "d08", "revisions": [
+      {"revision_id": "d08r1", "state": "current", "kind": "procedure", "tags": ["pipeline", "code"],
+       "content": "The per-asset encode work runs in transcode_worker.py. It is the only process permitted to write to the mezzanine bucket; anything else writing there is a bug."}]},
+
+    {"memory_id": "d09", "revisions": [
+      {"revision_id": "d09r1", "state": "current", "kind": "constraint", "tags": ["publishing", "code"],
+       "content": "An asset reaches AssetState.PUBLISHED only after captions, thumbnails and at least one playable rendition all exist. The state machine refuses the transition otherwise."}]},
+
+    {"memory_id": "d10", "revisions": [
+      {"revision_id": "d10r1", "state": "current", "kind": "note", "tags": ["api", "code"],
+       "content": "Players fetch /v3/assets/manifest for the rendition list. The v2 path is frozen and serves only clients pinned before the March cutover."}]},
+
+    {"memory_id": "d11", "revisions": [
+      {"revision_id": "d11r1", "state": "current", "kind": "constraint", "tags": ["captions", "code"],
+       "content": "Every caption file carries a caption_track_id that is stable across re-encodes. Players cache by that id, so reusing one for different content silently serves the wrong subtitles."}]},
+
+    {"memory_id": "d12", "revisions": [
+      {"revision_id": "d12r1", "state": "current", "kind": "decision", "tags": ["captions"],
+       "content": "Captions are stored as WebVTT. SRT is accepted at ingest and converted immediately; nothing downstream reads SRT."}]},
+
+    {"memory_id": "d13", "revisions": [
+      {"revision_id": "d13r1", "state": "current", "kind": "procedure", "tags": ["encoding"],
+       "content": "To change an encode ladder, add the new rung alongside the old one, re-encode a sample of 50 assets, and compare VMAF before removing anything."}]},
+
+    {"memory_id": "d14", "revisions": [
+      {"revision_id": "d14r1", "state": "current", "kind": "note", "tags": ["cdn"],
+       "content": "Edge caches hold manifests for 30 seconds and segments for a year. A bad manifest therefore clears quickly; a bad segment does not, and needs a purge."}]},
+
+    {"memory_id": "d15", "revisions": [
+      {"revision_id": "d15r1", "state": "current", "kind": "note", "tags": ["storage"],
+       "content": "Mezzanine files are the only copies kept at full quality. Deleting one means every future rendition is generated from an already-compressed source."}]},
+
+    {"memory_id": "d16", "revisions": [
+      {"revision_id": "d16r1", "state": "current", "kind": "note", "tags": ["licensing"],
+       "content": "Territory restrictions are evaluated at playback, not at publication. An asset can be published globally and still be unplayable in most markets."}]},
+
+    {"memory_id": "d17", "revisions": [
+      {"revision_id": "d17r1", "state": "current", "kind": "note", "tags": ["thumbnails"],
+       "content": "Thumbnail sprites are regenerated whenever the poster frame changes. The sprite sheet and the poster share a cache key, so they can never disagree."}]},
+
+    {"memory_id": "d18", "revisions": [
+      {"revision_id": "d18r1", "state": "current", "kind": "note", "tags": ["ingest"],
+       "content": "Uploads arrive as a single multipart request. Resumable upload was evaluated and rejected: publisher sessions are short and the added state was not worth it."}]},
+
+    {"memory_id": "d19", "revisions": [
+      {"revision_id": "d19r1", "state": "current", "kind": "constraint", "tags": ["encoding"],
+       "content": "Never re-encode from a delivery rendition. Generation loss compounds quickly and the result is not recoverable without the mezzanine."}]},
+
+    {"memory_id": "d20", "revisions": [
+      {"revision_id": "d20r1", "state": "superseded", "kind": "note", "tags": ["pipeline"],
+       "content": "The orchestration service is called flowreel. It owns job scheduling for every stage between ingest and publication."},
+      {"revision_id": "d20r2", "state": "current", "kind": "note", "tags": ["pipeline"],
+       "content": "The orchestration service is called assetline. It owns job scheduling for every stage between ingest and publication."}]},
+
+    {"memory_id": "d21", "revisions": [
+      {"revision_id": "d21r1", "state": "superseded", "kind": "note", "tags": ["pipeline", "legacy"],
+       "content": "Audio is remuxed by the mux2 path for every asset."},
+      {"revision_id": "d21r2", "state": "current", "kind": "note", "tags": ["pipeline", "legacy"],
+       "content": "Audio is remuxed by the mux2 path only for archive assets ingested before 2024. Everything newer goes through the current remuxer."}]},
+
+    {"memory_id": "d22", "revisions": [
+      {"revision_id": "d22r1", "state": "superseded", "kind": "constraint", "tags": ["captions"],
+       "content": "Caption turnaround is 48 hours from ingest for every title."},
+      {"revision_id": "d22r2", "state": "current", "kind": "constraint", "tags": ["captions"],
+       "content": "Caption turnaround is 6 hours from ingest for every title."}]},
+
+    {"memory_id": "d23", "revisions": [
+      {"revision_id": "d23r1", "state": "current", "kind": "note", "tags": ["playback"],
+       "content": "Playback start time is measured from the first manifest request, not from the user's tap. The gap between the two is a client concern and is not in our numbers."}]},
+
+    {"memory_id": "d24", "revisions": [
+      {"revision_id": "d24r1", "state": "current", "kind": "note", "tags": ["encoding"],
+       "content": "The encode ladder tops out at 1080p. 4K was descoped in planning and no rung above 1080p exists in any profile."}]}
+  ],
+
+  "queries": [
+    {"query_id": "dq01", "class": "morphology", "text": "how long does a caption job take to expire",
+     "intent": "The expiry time for a queued caption job.", "grade2": ["d01"], "grade1": [], "pair": null},
+
+    {"query_id": "dq02", "class": "morphology", "text": "thumbnail generation failure",
+     "intent": "Why thumbnail generation fails and what happens then.", "grade2": ["d02"], "grade1": ["d17"], "pair": null},
+
+    {"query_id": "dq03", "class": "morphology", "text": "who approves a licensing window",
+     "intent": "Which group signs off a licence window.", "grade2": ["d03"], "grade1": ["d16"], "pair": null},
+
+    {"query_id": "dq04", "class": "morphology", "text": "storage tier migration policy",
+     "intent": "When assets move to cold storage and whether it reverses.", "grade2": ["d04"], "grade1": ["d15"], "pair": null},
+
+    {"query_id": "dq05", "class": "morphology", "text": "ingest throttling",
+     "intent": "The upload concurrency limit at ingest.", "grade2": ["d05"], "grade1": ["d18"], "pair": null},
+
+    {"query_id": "dq06", "class": "morphology", "text": "publishing schedule",
+     "intent": "When assets go out.", "grade2": ["d06"], "grade1": [], "pair": null},
+
+    {"query_id": "dq07", "class": "morphology", "text": "notification when a render finishes",
+     "intent": "How completion is signalled.", "grade2": ["d07"], "grade1": [], "pair": null},
+
+    {"query_id": "dq08", "class": "exact_reference", "text": "transcode_worker.py",
+     "intent": "The module that does the per-asset encode work.", "grade2": ["d08"], "grade1": [], "pair": null},
+
+    {"query_id": "dq09", "class": "exact_reference", "text": "AssetState.PUBLISHED",
+     "intent": "What that state requires.", "grade2": ["d09"], "grade1": [], "pair": null},
+
+    {"query_id": "dq10", "class": "exact_reference", "text": "/v3/assets/manifest",
+     "intent": "What that endpoint serves.", "grade2": ["d10"], "grade1": [], "pair": null},
+
+    {"query_id": "dq11", "class": "exact_reference", "text": "caption_track_id",
+     "intent": "What that identifier guarantees.", "grade2": ["d11"], "grade1": [], "pair": null},
+
+    {"query_id": "dq12", "class": "no_answer", "text": "what is our subtitle translation vendor",
+     "intent": "Nothing in the corpus names a translation vendor.", "grade2": [], "grade1": [], "pair": "dq13"},
+
+    {"query_id": "dq13", "class": "answerable_pair", "text": "what is our caption file format",
+     "intent": "The stored caption format.", "grade2": ["d12"], "grade1": [], "pair": "dq12"},
+
+    {"query_id": "dq14", "class": "no_answer", "text": "how do we roll back a bad encode ladder",
+     "intent": "No rollback procedure exists in the corpus; d13 covers changing a ladder, not reverting one.", "grade2": [], "grade1": ["d13"], "pair": "dq15"},
+
+    {"query_id": "dq15", "class": "answerable_pair", "text": "how do we change an encode ladder",
+     "intent": "The procedure for adding a rung.", "grade2": ["d13"], "grade1": [], "pair": "dq14"},
+
+    {"query_id": "dq16", "class": "historical_vocabulary", "text": "flowreel",
+     "intent": "What flowreel is. The term survives only in a superseded revision; the current head calls it assetline.",
+     "grade2": [], "grade2_revisions": ["d20r1"], "grade1": [], "pair": null},
+
+    {"query_id": "dq17", "class": "historical_control", "text": "mux2",
+     "intent": "Control for dq16: an old term that still appears in the current head, so head-only search must find it.",
+     "grade2": ["d21"], "grade1": [], "pair": null},
+
+    {"query_id": "dq18", "class": "historical_vocabulary", "text": "what was the caption turnaround before it changed",
+     "intent": "The superseded 48-hour SLA.", "grade2": [], "grade2_revisions": ["d22r1"], "grade1": ["d22"], "pair": null},
+
+    {"query_id": "dq19", "class": "near_miss", "text": "4K encoding support",
+     "intent": "The corpus answers this in the negative — 4K was descoped. A near-miss for abstention: there is a correct answer and it is a refusal of the premise.",
+     "grade2": ["d24"], "grade1": [], "pair": null},
+
+    {"query_id": "dq20", "class": "near_miss", "text": "how fast does a bad segment clear from the edge",
+     "intent": "Answered, but only by inverting what d14 says about segment TTL.", "grade2": ["d14"], "grade1": [], "pair": null}
+  ],
+
+  "label_scale": {
+    "2": "Directly answers the information need.",
+    "1": "Supporting evidence: relevant and useful, does not answer on its own.",
+    "0": "Not relevant."
+  }
+}

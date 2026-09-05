@@ -55,7 +55,8 @@ def test_migration_upgrades_v1_and_backfills_the_index(tmp_path: Path) -> None:
 
     db = sqlite3.connect(path)
     try:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert db.execute("SELECT profile FROM search_profile WHERE id=1").fetchone() == ("exact",)
         indexed = db.execute("SELECT memory_id,revision_id FROM head_index").fetchall()
         assert indexed == [(memory_id, revision_id)]
         assert db.execute("SELECT count(*) FROM head_fts").fetchone()[0] == 1
