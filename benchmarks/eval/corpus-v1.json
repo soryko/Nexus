@@ -1,8 +1,8 @@
 {
   "benchmark_version": 1,
-  "frozen": false,
+  "frozen": true,
   "shuffle_seed": 20260905,
-  "note": "Corpus and intents are authored before any judgments exist and before any ranking work. Query categories are withheld from the judging sheet so they cannot steer a judgment; they are recorded here for post-freeze analysis only.",
+  "note": "Frozen with judgments-v1.json. Categories are post-hoc analysis metadata only. q02 was authored as misleading_overlap but its intent made the distractors genuinely relevant, so it is recorded as broad_recall. q05 was authored as historical but its grade-2 answer is the current head. See judgments-v1.json for disclosure and known gaps.",
   "memories": [
     {
       "memory_id": "m01",
@@ -331,7 +331,7 @@
       "query_id": "q02",
       "text": "retry policy",
       "intent": "Find memories about retry behaviour; several unrelated senses of retry exist in the corpus.",
-      "category": "misleading_overlap"
+      "category": "broad_recall"
     },
     {
       "query_id": "q03",
@@ -349,7 +349,7 @@
       "query_id": "q05",
       "text": "why did the retry cap change from three attempts",
       "intent": "Find the reason the earlier three-attempt policy was replaced.",
-      "category": "historical"
+      "category": "description"
     },
     {
       "query_id": "q06",
