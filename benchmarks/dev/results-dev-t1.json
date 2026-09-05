@@ -2,7 +2,7 @@
   "experiment": "T1 morphology",
   "development_data": true,
   "not_a_v2_result": true,
-  "build_commit": "ceb2a3e",
+  "build_commit": "e17176b",
   "interpreter": "/Users/soko/Cerebros/nexus-memory/.venv-sqlite/bin/python",
   "sqlite_version": "3.53.4",
   "corpus_sha256": "4c3bb1c9ac9404e32d6378c3c8154e17d12f3821b8c2c863c45fa65d7a4ecd97",
@@ -19,8 +19,9 @@
       "profile": "exact",
       "index_bytes": {
         "head_fts": 24576,
-        "head_index": 8192,
-        "head_tags": 8192,
+        "head_index": 12288,
+        "head_tags": 12288,
+        "_retrieval_total": 49152,
         "_database_file": 159744,
         "_page_size": 4096
       },
@@ -360,6 +361,1113 @@
           "pool_size": 1,
           "delivered": 1,
           "delivered_bytes": 257,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d24": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq20",
+          "class": "near_miss",
+          "text": "how fast does a bad segment clear from the edge",
+          "pool_size": 20,
+          "delivered": 5,
+          "delivered_bytes": 1370,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d14": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 6
+        }
+      ]
+    },
+    {
+      "profile": "stem",
+      "index_bytes": {
+        "head_fts": 24576,
+        "head_index": 12288,
+        "head_tags": 12288,
+        "_retrieval_total": 49152,
+        "_database_file": 159744,
+        "_page_size": 4096
+      },
+      "per_class": {
+        "answerable_pair": {
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "queries": 2
+        },
+        "exact_reference": {
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "queries": 4
+        },
+        "historical_control": {
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "queries": 1
+        },
+        "historical_vocabulary": {
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "queries": 0
+        },
+        "morphology": {
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "queries": 7
+        },
+        "near_miss": {
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "queries": 2
+        },
+        "no_answer": {
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "queries": 0
+        }
+      },
+      "grade0_delivered_bytes": 17024,
+      "grade2_delivered_bytes": 4746,
+      "grade1_delivered_bytes": 785,
+      "per_query": [
+        {
+          "query_id": "dq01",
+          "class": "morphology",
+          "text": "how long does a caption job take to expire",
+          "pool_size": 19,
+          "delivered": 5,
+          "delivered_bytes": 1339,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d01": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 4
+        },
+        {
+          "query_id": "dq02",
+          "class": "morphology",
+          "text": "thumbnail generation failure",
+          "pool_size": 5,
+          "delivered": 5,
+          "delivered_bytes": 1508,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d02": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq03",
+          "class": "morphology",
+          "text": "who approves a licensing window",
+          "pool_size": 14,
+          "delivered": 5,
+          "delivered_bytes": 1430,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d03": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq04",
+          "class": "morphology",
+          "text": "storage tier migration policy",
+          "pool_size": 1,
+          "delivered": 1,
+          "delivered_bytes": 283,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d04": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq05",
+          "class": "morphology",
+          "text": "ingest throttling",
+          "pool_size": 6,
+          "delivered": 5,
+          "delivered_bytes": 1316,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d05": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 6
+        },
+        {
+          "query_id": "dq06",
+          "class": "morphology",
+          "text": "publishing schedule",
+          "pool_size": 6,
+          "delivered": 5,
+          "delivered_bytes": 1457,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d06": 2
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 2
+        },
+        {
+          "query_id": "dq07",
+          "class": "morphology",
+          "text": "notification when a render finishes",
+          "pool_size": 14,
+          "delivered": 5,
+          "delivered_bytes": 1522,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d07": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq08",
+          "class": "exact_reference",
+          "text": "transcode_worker.py",
+          "pool_size": 1,
+          "delivered": 1,
+          "delivered_bytes": 310,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d08": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq09",
+          "class": "exact_reference",
+          "text": "AssetState.PUBLISHED",
+          "pool_size": 5,
+          "delivered": 5,
+          "delivered_bytes": 1503,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d09": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq10",
+          "class": "exact_reference",
+          "text": "/v3/assets/manifest",
+          "pool_size": 11,
+          "delivered": 5,
+          "delivered_bytes": 1458,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d10": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 2
+        },
+        {
+          "query_id": "dq11",
+          "class": "exact_reference",
+          "text": "caption_track_id",
+          "pool_size": 1,
+          "delivered": 1,
+          "delivered_bytes": 331,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d11": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq12",
+          "class": "no_answer",
+          "text": "what is our subtitle translation vendor",
+          "pool_size": 15,
+          "delivered": 5,
+          "delivered_bytes": 1406,
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "rank_of_answers": {},
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 6
+        },
+        {
+          "query_id": "dq13",
+          "class": "answerable_pair",
+          "text": "what is our caption file format",
+          "pool_size": 16,
+          "delivered": 5,
+          "delivered_bytes": 1388,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d12": 5
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 6
+        },
+        {
+          "query_id": "dq14",
+          "class": "no_answer",
+          "text": "how do we roll back a bad encode ladder",
+          "pool_size": 15,
+          "delivered": 5,
+          "delivered_bytes": 1434,
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "rank_of_answers": {},
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq15",
+          "class": "answerable_pair",
+          "text": "how do we change an encode ladder",
+          "pool_size": 10,
+          "delivered": 5,
+          "delivered_bytes": 1409,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d13": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq16",
+          "class": "historical_vocabulary",
+          "text": "flowreel",
+          "pool_size": 0,
+          "delivered": 0,
+          "delivered_bytes": 0,
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "rank_of_answers": {},
+          "stopped_by": null,
+          "misses": {
+            "d20r1": "history_not_reached"
+          },
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq17",
+          "class": "historical_control",
+          "text": "mux2",
+          "pool_size": 1,
+          "delivered": 1,
+          "delivered_bytes": 285,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d21": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 2
+        },
+        {
+          "query_id": "dq18",
+          "class": "historical_vocabulary",
+          "text": "what was the caption turnaround before it changed",
+          "pool_size": 20,
+          "delivered": 5,
+          "delivered_bytes": 1343,
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "rank_of_answers": {},
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 6
+        },
+        {
+          "query_id": "dq19",
+          "class": "near_miss",
+          "text": "4K encoding support",
+          "pool_size": 5,
+          "delivered": 5,
+          "delivered_bytes": 1463,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d24": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq20",
+          "class": "near_miss",
+          "text": "how fast does a bad segment clear from the edge",
+          "pool_size": 20,
+          "delivered": 5,
+          "delivered_bytes": 1370,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d14": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 6
+        }
+      ]
+    },
+    {
+      "profile": "dual",
+      "index_bytes": {
+        "head_fts": 24576,
+        "head_fts_stem": 24576,
+        "head_index": 12288,
+        "head_tags": 12288,
+        "_retrieval_total": 73728,
+        "_database_file": 184320,
+        "_page_size": 4096
+      },
+      "per_class": {
+        "answerable_pair": {
+          "candidate_recall": 1.0,
+          "delivered_recall": 0.5,
+          "queries": 2
+        },
+        "exact_reference": {
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "queries": 4
+        },
+        "historical_control": {
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "queries": 1
+        },
+        "historical_vocabulary": {
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "queries": 0
+        },
+        "morphology": {
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "queries": 7
+        },
+        "near_miss": {
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "queries": 2
+        },
+        "no_answer": {
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "queries": 0
+        }
+      },
+      "grade0_delivered_bytes": 17382,
+      "grade2_delivered_bytes": 4490,
+      "grade1_delivered_bytes": 785,
+      "per_query": [
+        {
+          "query_id": "dq01",
+          "class": "morphology",
+          "text": "how long does a caption job take to expire",
+          "pool_size": 19,
+          "delivered": 5,
+          "delivered_bytes": 1339,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d01": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 4
+        },
+        {
+          "query_id": "dq02",
+          "class": "morphology",
+          "text": "thumbnail generation failure",
+          "pool_size": 5,
+          "delivered": 5,
+          "delivered_bytes": 1508,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d02": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq03",
+          "class": "morphology",
+          "text": "who approves a licensing window",
+          "pool_size": 14,
+          "delivered": 5,
+          "delivered_bytes": 1430,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d03": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq04",
+          "class": "morphology",
+          "text": "storage tier migration policy",
+          "pool_size": 1,
+          "delivered": 1,
+          "delivered_bytes": 283,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d04": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq05",
+          "class": "morphology",
+          "text": "ingest throttling",
+          "pool_size": 6,
+          "delivered": 5,
+          "delivered_bytes": 1330,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d05": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 6
+        },
+        {
+          "query_id": "dq06",
+          "class": "morphology",
+          "text": "publishing schedule",
+          "pool_size": 6,
+          "delivered": 5,
+          "delivered_bytes": 1457,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d06": 2
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 2
+        },
+        {
+          "query_id": "dq07",
+          "class": "morphology",
+          "text": "notification when a render finishes",
+          "pool_size": 14,
+          "delivered": 5,
+          "delivered_bytes": 1522,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d07": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq08",
+          "class": "exact_reference",
+          "text": "transcode_worker.py",
+          "pool_size": 1,
+          "delivered": 1,
+          "delivered_bytes": 310,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d08": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq09",
+          "class": "exact_reference",
+          "text": "AssetState.PUBLISHED",
+          "pool_size": 5,
+          "delivered": 5,
+          "delivered_bytes": 1503,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d09": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq10",
+          "class": "exact_reference",
+          "text": "/v3/assets/manifest",
+          "pool_size": 11,
+          "delivered": 5,
+          "delivered_bytes": 1449,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d10": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 2
+        },
+        {
+          "query_id": "dq11",
+          "class": "exact_reference",
+          "text": "caption_track_id",
+          "pool_size": 1,
+          "delivered": 1,
+          "delivered_bytes": 331,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d11": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq12",
+          "class": "no_answer",
+          "text": "what is our subtitle translation vendor",
+          "pool_size": 15,
+          "delivered": 5,
+          "delivered_bytes": 1406,
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "rank_of_answers": {},
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 6
+        },
+        {
+          "query_id": "dq13",
+          "class": "answerable_pair",
+          "text": "what is our caption file format",
+          "pool_size": 16,
+          "delivered": 5,
+          "delivered_bytes": 1431,
+          "candidate_recall": 1.0,
+          "delivered_recall": 0.0,
+          "rank_of_answers": {
+            "d12": 6
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {
+            "d12": "delivered_item_cap"
+          },
+          "revisions_discovered": 6
+        },
+        {
+          "query_id": "dq14",
+          "class": "no_answer",
+          "text": "how do we roll back a bad encode ladder",
+          "pool_size": 15,
+          "delivered": 5,
+          "delivered_bytes": 1434,
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "rank_of_answers": {},
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq15",
+          "class": "answerable_pair",
+          "text": "how do we change an encode ladder",
+          "pool_size": 10,
+          "delivered": 5,
+          "delivered_bytes": 1427,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d13": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq16",
+          "class": "historical_vocabulary",
+          "text": "flowreel",
+          "pool_size": 0,
+          "delivered": 0,
+          "delivered_bytes": 0,
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "rank_of_answers": {},
+          "stopped_by": null,
+          "misses": {
+            "d20r1": "history_not_reached"
+          },
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq17",
+          "class": "historical_control",
+          "text": "mux2",
+          "pool_size": 1,
+          "delivered": 1,
+          "delivered_bytes": 285,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d21": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 2
+        },
+        {
+          "query_id": "dq18",
+          "class": "historical_vocabulary",
+          "text": "what was the caption turnaround before it changed",
+          "pool_size": 20,
+          "delivered": 5,
+          "delivered_bytes": 1379,
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "rank_of_answers": {},
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 6
+        },
+        {
+          "query_id": "dq19",
+          "class": "near_miss",
+          "text": "4K encoding support",
+          "pool_size": 5,
+          "delivered": 5,
+          "delivered_bytes": 1463,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d24": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq20",
+          "class": "near_miss",
+          "text": "how fast does a bad segment clear from the edge",
+          "pool_size": 20,
+          "delivered": 5,
+          "delivered_bytes": 1370,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d14": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 6
+        }
+      ]
+    },
+    {
+      "profile": "split",
+      "index_bytes": {
+        "head_fts": 24576,
+        "head_fts_prose": 28672,
+        "head_index": 12288,
+        "head_tags": 12288,
+        "_retrieval_total": 77824,
+        "_database_file": 188416,
+        "_page_size": 4096
+      },
+      "per_class": {
+        "answerable_pair": {
+          "candidate_recall": 1.0,
+          "delivered_recall": 0.5,
+          "queries": 2
+        },
+        "exact_reference": {
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "queries": 4
+        },
+        "historical_control": {
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "queries": 1
+        },
+        "historical_vocabulary": {
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "queries": 0
+        },
+        "morphology": {
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "queries": 7
+        },
+        "near_miss": {
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "queries": 2
+        },
+        "no_answer": {
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "queries": 0
+        }
+      },
+      "grade0_delivered_bytes": 16759,
+      "grade2_delivered_bytes": 4490,
+      "grade1_delivered_bytes": 785,
+      "per_query": [
+        {
+          "query_id": "dq01",
+          "class": "morphology",
+          "text": "how long does a caption job take to expire",
+          "pool_size": 19,
+          "delivered": 5,
+          "delivered_bytes": 1339,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d01": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 4
+        },
+        {
+          "query_id": "dq02",
+          "class": "morphology",
+          "text": "thumbnail generation failure",
+          "pool_size": 5,
+          "delivered": 5,
+          "delivered_bytes": 1508,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d02": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq03",
+          "class": "morphology",
+          "text": "who approves a licensing window",
+          "pool_size": 14,
+          "delivered": 5,
+          "delivered_bytes": 1430,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d03": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq04",
+          "class": "morphology",
+          "text": "storage tier migration policy",
+          "pool_size": 1,
+          "delivered": 1,
+          "delivered_bytes": 283,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d04": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq05",
+          "class": "morphology",
+          "text": "ingest throttling",
+          "pool_size": 6,
+          "delivered": 5,
+          "delivered_bytes": 1330,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d05": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 6
+        },
+        {
+          "query_id": "dq06",
+          "class": "morphology",
+          "text": "publishing schedule",
+          "pool_size": 5,
+          "delivered": 5,
+          "delivered_bytes": 1444,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d06": 2
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 2
+        },
+        {
+          "query_id": "dq07",
+          "class": "morphology",
+          "text": "notification when a render finishes",
+          "pool_size": 14,
+          "delivered": 5,
+          "delivered_bytes": 1522,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d07": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq08",
+          "class": "exact_reference",
+          "text": "transcode_worker.py",
+          "pool_size": 1,
+          "delivered": 1,
+          "delivered_bytes": 310,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d08": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq09",
+          "class": "exact_reference",
+          "text": "AssetState.PUBLISHED",
+          "pool_size": 3,
+          "delivered": 3,
+          "delivered_bytes": 893,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d09": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq10",
+          "class": "exact_reference",
+          "text": "/v3/assets/manifest",
+          "pool_size": 7,
+          "delivered": 5,
+          "delivered_bytes": 1449,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d10": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 2
+        },
+        {
+          "query_id": "dq11",
+          "class": "exact_reference",
+          "text": "caption_track_id",
+          "pool_size": 1,
+          "delivered": 1,
+          "delivered_bytes": 331,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d11": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq12",
+          "class": "no_answer",
+          "text": "what is our subtitle translation vendor",
+          "pool_size": 15,
+          "delivered": 5,
+          "delivered_bytes": 1406,
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "rank_of_answers": {},
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 6
+        },
+        {
+          "query_id": "dq13",
+          "class": "answerable_pair",
+          "text": "what is our caption file format",
+          "pool_size": 16,
+          "delivered": 5,
+          "delivered_bytes": 1431,
+          "candidate_recall": 1.0,
+          "delivered_recall": 0.0,
+          "rank_of_answers": {
+            "d12": 6
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {
+            "d12": "delivered_item_cap"
+          },
+          "revisions_discovered": 6
+        },
+        {
+          "query_id": "dq14",
+          "class": "no_answer",
+          "text": "how do we roll back a bad encode ladder",
+          "pool_size": 15,
+          "delivered": 5,
+          "delivered_bytes": 1434,
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "rank_of_answers": {},
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq15",
+          "class": "answerable_pair",
+          "text": "how do we change an encode ladder",
+          "pool_size": 10,
+          "delivered": 5,
+          "delivered_bytes": 1427,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d13": 1
+          },
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq16",
+          "class": "historical_vocabulary",
+          "text": "flowreel",
+          "pool_size": 0,
+          "delivered": 0,
+          "delivered_bytes": 0,
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "rank_of_answers": {},
+          "stopped_by": null,
+          "misses": {
+            "d20r1": "history_not_reached"
+          },
+          "revisions_discovered": 0
+        },
+        {
+          "query_id": "dq17",
+          "class": "historical_control",
+          "text": "mux2",
+          "pool_size": 1,
+          "delivered": 1,
+          "delivered_bytes": 285,
+          "candidate_recall": 1.0,
+          "delivered_recall": 1.0,
+          "rank_of_answers": {
+            "d21": 1
+          },
+          "stopped_by": null,
+          "misses": {},
+          "revisions_discovered": 2
+        },
+        {
+          "query_id": "dq18",
+          "class": "historical_vocabulary",
+          "text": "what was the caption turnaround before it changed",
+          "pool_size": 20,
+          "delivered": 5,
+          "delivered_bytes": 1379,
+          "candidate_recall": null,
+          "delivered_recall": null,
+          "rank_of_answers": {},
+          "stopped_by": "delivered_item_cap",
+          "misses": {},
+          "revisions_discovered": 6
+        },
+        {
+          "query_id": "dq19",
+          "class": "near_miss",
+          "text": "4K encoding support",
+          "pool_size": 5,
+          "delivered": 5,
+          "delivered_bytes": 1463,
           "candidate_recall": 1.0,
           "delivered_recall": 1.0,
           "rank_of_answers": {

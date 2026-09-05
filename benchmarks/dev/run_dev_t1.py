@@ -233,11 +233,18 @@ def index_sizes(path: Path) -> dict[str, int]:
             exists = db.execute("SELECT count(*) FROM sqlite_master WHERE name=?", (name,)).fetchone()[0]
             if not exists:
                 continue
-            try:
-                pages = db.execute("SELECT sum(pgsize) FROM dbstat WHERE name LIKE ?", (name + "%",)).fetchone()[0]
-            except sqlite3.OperationalError:
-                pages = None
-            sizes[name] = pages if pages is not None else 0
+            # Exact names, never a LIKE prefix: 'head_fts%' also matches head_fts_stem's own
+            # shadow tables, which double-counts the auxiliary index into the baseline one.
+            members = [name] + [f"{name}_{suffix}" for suffix in ("data", "idx", "content", "docsize", "config")]
+            members += [row[0] for row in db.execute(
+                "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name=?", (name,)
+            ).fetchall()]
+            placeholders = ",".join("?" * len(members))
+            total = db.execute(
+                f"SELECT sum(pgsize) FROM dbstat WHERE name IN ({placeholders})", members
+            ).fetchone()[0]
+            sizes[name] = total or 0
+        sizes["_retrieval_total"] = sum(value for key, value in sizes.items() if not key.startswith("_"))
         sizes["_database_file"] = path.stat().st_size
         sizes["_page_size"] = page_size
         return sizes

@@ -1,6 +1,7 @@
 """Execute the registered v2 measurement protocol against the frozen benchmark.
 
-    python run_v2.py
+    python run_v2.py                       # the frozen protocol, exactly as registered
+    python run_v2.py --profile=split       # the same protocol as a regression check
 
 Implements `protocol-v2.md` including amendments A1-A5, which were registered before
 this file was written. Where the protocol and this code disagree, the protocol wins and
@@ -9,6 +10,12 @@ the code is the bug.
 Writes the complete run record to `results-v2.json` and prints a readable summary. The
 JSON artifact is the preserved first result: build commit, input hashes, load order,
 revision-id mapping, per-query figures at every cutoff, aggregates, and control outcomes.
+
+`--profile` selects a search index profile for a **regression check** of a configuration
+chosen on development data. It defaults to `exact`, which is the frozen behaviour, and a
+non-default profile is written to its own file: the frozen record is never overwritten by
+one. A regression check is not a fresh evaluation of v2 — the failures it moves were
+already known when the configuration was chosen.
 """
 
 from __future__ import annotations
@@ -66,14 +73,14 @@ def item_map(corpus: dict) -> dict[str, str]:
     return {flat[source]["revision_id"]: f"i{position + 1:02d}" for position, source in enumerate(order)}
 
 
-def build_fixture(path: Path, corpus: dict) -> tuple[MemoryService, dict, list[str]]:
+def build_fixture(path: Path, corpus: dict, profile: str = "exact") -> tuple[MemoryService, dict, list[str]]:
     """Load every memory at its first revision, then revise forward. Nothing is forgotten.
 
     Returns the service, a map from live (memory_id, revision_id) to corpus revision id,
     and the load order actually used. Load order is recorded, not asserted away: B1's
     mutation-sequence tiebreaker makes insertion history relevant to ranking by design.
     """
-    service = MemoryService(SQLiteRepository(path), SCOPE)
+    service = MemoryService(SQLiteRepository(path, index_profile=profile), SCOPE)
     live: dict[tuple[str, str], str] = {}
     order: list[str] = []
     for memory in corpus["memories"]:
@@ -268,6 +275,12 @@ def control_forget_relevant(corpus: dict, judgments: dict) -> dict:
 # --------------------------------------------------------------------------------- main
 
 def main() -> None:
+    profile = "exact"
+    for argument in sys.argv[1:]:
+        if argument.startswith("--profile="):
+            profile = argument.split("=", 1)[1]
+    destination = HERE / ("results-v2.json" if profile == "exact" else f"results-v2-regression-{profile}.json")
+
     corpus = json.loads((HERE / "corpus-v2.json").read_text())
     judgments = json.loads((HERE / "judgments-v2.json").read_text())
     partition = judgments["partition"]
@@ -275,7 +288,7 @@ def main() -> None:
 
     with tempfile.TemporaryDirectory() as work:
         path = Path(work) / "eval-v2.sqlite3"
-        service, live, order = build_fixture(path, corpus)
+        service, live, order = build_fixture(path, corpus, profile)
         results = search_all(corpus, service)
         again = search_all(corpus, service)
         repeatable = all(results[q] == again[q] for q in results)
@@ -300,7 +313,13 @@ def main() -> None:
             "forget_relevant": control_forget_relevant(corpus, judgments),
         },
     }
-    (HERE / "results-v2.json").write_text(json.dumps(record, indent=2) + "\n")
+    record["index_profile"] = profile
+    if profile != "exact":
+        record["regression_check"] = (
+            "Not a fresh evaluation of v2. This configuration was chosen on development data "
+            "with v2's failure modes already known; the run says whether a known failure moved."
+        )
+    destination.write_text(json.dumps(record, indent=2) + "\n")
 
     # ------------------------------------------------------------------ readable summary
     print(f"build {record['build_commit'][:7]}  src dirty: {record['src_dirty']}")
