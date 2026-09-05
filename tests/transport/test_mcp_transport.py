@@ -31,7 +31,7 @@ def test_stdio_tools_enforce_contract_and_lifecycle(tmp_path: Path) -> None:
         async with Client(_server(tmp_path / "state" / "memory.sqlite3")) as client:
             listed = await client.list_tools()
             tools = {tool.name: tool for tool in listed.tools}
-            assert set(tools) == {"record", "get", "revise", "forget", "status"}
+            assert set(tools) == {"record", "get", "revise", "forget", "search", "history", "status"}
 
             expected_properties = {
                 "record": {"content", "idempotency_key", "kind", "tags", "source_uri", "snapshot"},
@@ -41,6 +41,8 @@ def test_stdio_tools_enforce_contract_and_lifecycle(tmp_path: Path) -> None:
                     "kind", "tags", "source_uri", "snapshot",
                 },
                 "forget": {"memory_id", "expected_revision_id", "idempotency_key"},
+                "search": {"query", "advanced", "tags_all", "tags_any", "kinds", "limit", "cursor"},
+                "history": {"memory_id", "limit", "cursor"},
                 "status": set(),
             }
             for name, tool in tools.items():
@@ -205,3 +207,98 @@ def test_default_path_is_cwd_independent_and_storage_creation_can_race(
     with ThreadPoolExecutor(max_workers=8) as pool:
         list(pool.map(_prepare_new_storage, [path] * 8))
     assert path.is_file()
+
+
+def test_stdio_search_and_history_contract(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        async with Client(_server(tmp_path / "state" / "memory.sqlite3")) as client:
+            status = await client.call_tool("status")
+            assert status.structured_content["lexical_index"] == "available"
+
+            first = await client.call_tool("record", {
+                "content": "Retry policy: three attempts before failing the payment",
+                "idempotency_key": "b1-1", "kind": "decision", "tags": ["payments", "retry"],
+            })
+            memory_id = first.structured_content["memory_id"]
+            revision_id = first.structured_content["revision_id"]
+            await client.call_tool("record", {
+                "content": "An unrelated note about typography", "idempotency_key": "b1-2",
+            })
+
+            found = await client.call_tool("search", {"query": "payment"})
+            assert not found.is_error
+            hits = found.structured_content["hits"]
+            assert [hit["memory_id"] for hit in hits] == [memory_id]
+            assert hits[0]["has_earlier_revisions"] is False
+            assert "body_terms" in hits[0]["match_reasons"]
+            assert "confidence" not in hits[0] and "relevance" not in hits[0]
+            assert found.structured_content["cursor"] is None
+            assert isinstance(found.structured_content["generation"], int)
+
+            filtered = await client.call_tool("search", {"tags_all": ["payments", "retry"], "kinds": ["decision"]})
+            assert [hit["memory_id"] for hit in filtered.structured_content["hits"]] == [memory_id]
+
+            await client.call_tool("revise", {
+                "memory_id": memory_id, "expected_revision_id": revision_id,
+                "content": "Retry policy: five attempts before failing the payment",
+                "idempotency_key": "b1-3", "kind": "decision",
+            })
+
+            # search -> history -> get the superseded revision
+            again = await client.call_tool("search", {"query": "payment"})
+            assert again.structured_content["hits"][0]["has_earlier_revisions"] is True
+            listed = await client.call_tool("history", {"memory_id": memory_id})
+            entries = listed.structured_content["entries"]
+            assert len(entries) == 2
+            assert entries[0]["is_current"] is True and entries[1]["is_current"] is False
+            assert entries[0]["parent_revision_id"] == entries[1]["revision_id"]
+            assert not any(key in entries[0] for key in ("reason", "rationale", "why", "explanation"))
+
+            older = await client.call_tool("get", {"memory_id": memory_id, "revision_id": entries[1]["revision_id"]})
+            assert older.structured_content["content"].startswith("Retry policy: three attempts")
+
+            # a superseded term is deliberately not discoverable in B1
+            assert (await client.call_tool("search", {"query": "three attempts"})).structured_content["hits"] == []
+
+            malformed = await client.call_tool("search", {"query": 'alpha AND ("unclosed', "advanced": True})
+            assert malformed.is_error
+            assert any("invalid_query:" in item.text for item in malformed.content)
+
+            # forgetting removes the memory from search and from history
+            head = again.structured_content["hits"][0]["revision_id"]
+            await client.call_tool("forget", {
+                "memory_id": memory_id, "expected_revision_id": head, "idempotency_key": "b1-4",
+            })
+            assert (await client.call_tool("search", {"query": "payment"})).structured_content["hits"] == []
+            gone = await client.call_tool("history", {"memory_id": memory_id})
+            assert gone.is_error
+            assert any("not_found:" in item.text for item in gone.content)
+
+            injected = await client.call_tool("search", {"query": "payment", "namespace": "other"})
+            assert injected.is_error
+
+    anyio.run(scenario)
+
+
+def test_stdio_cursor_expires_when_the_index_generation_advances(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        async with Client(_server(tmp_path / "state" / "memory.sqlite3")) as client:
+            for index in range(25):
+                await client.call_tool("record", {
+                    "content": f"payments document {index}", "idempotency_key": f"page-{index}",
+                })
+            page = await client.call_tool("search", {"query": "payments", "limit": 10})
+            cursor = page.structured_content["cursor"]
+            assert cursor is not None
+
+            second = await client.call_tool("search", {"query": "payments", "limit": 10, "cursor": cursor})
+            first_ids = {hit["memory_id"] for hit in page.structured_content["hits"]}
+            second_ids = {hit["memory_id"] for hit in second.structured_content["hits"]}
+            assert not first_ids & second_ids
+
+            await client.call_tool("record", {"content": "a concurrent write", "idempotency_key": "late"})
+            expired = await client.call_tool("search", {"query": "payments", "limit": 10, "cursor": cursor})
+            assert expired.is_error
+            assert any("cursor_expired:" in item.text for item in expired.content)
+
+    anyio.run(scenario)

@@ -29,3 +29,10 @@ class UnsupportedRuntime(NexusError):
 class StorageIntegrityError(NexusError):
     code = "storage_integrity"
 
+
+class InvalidQuery(NexusError):
+    code = "invalid_query"
+
+
+class CursorExpired(NexusError):
+    code = "cursor_expired"

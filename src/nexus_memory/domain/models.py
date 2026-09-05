@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from .errors import InvalidInput
 
 KINDS = frozenset({"observation", "decision", "constraint", "procedure", "failure"})
+
+# Version of the canonical request-digest format. A request carrying only milestone A's
+# fields must keep producing a version-1 digest, so old idempotency keys still replay.
+DIGEST_VERSION = 1
 TAG = re.compile(r"[a-z0-9][a-z0-9._/-]{0,63}\Z")
 
 
@@ -90,6 +94,7 @@ class MemoryView:
 class StoreStatus:
     durable_storage: str
     exact_retrieval: str
+    lexical_index: str
     derived_indexes: str
     schema_version: int
     sqlite_version: str
@@ -98,3 +103,79 @@ class StoreStatus:
     revisions: int
     pending_outbox: int
     latest_durable_seq: int
+
+
+def _normalized_tags(values: object, field: str) -> tuple[str, ...]:
+    try:
+        normalized = tuple(sorted({tag.strip().lower() for tag in values}))  # type: ignore[union-attr]
+    except (TypeError, AttributeError) as error:
+        raise InvalidInput(f"{field} must be strings") from error
+    if len(normalized) > 16 or any(not TAG.fullmatch(tag) for tag in normalized):
+        raise InvalidInput(f"invalid {field}")
+    return normalized
+
+
+@dataclass(frozen=True, slots=True)
+class SearchQuery:
+    query: str | None = None
+    advanced: bool = False
+    tags_all: tuple[str, ...] = ()
+    tags_any: tuple[str, ...] = ()
+    kinds: tuple[str, ...] = ()
+    limit: int = 20
+    cursor: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.query is not None:
+            _valid_utf8(self.query, "query", 1024)
+        if not isinstance(self.advanced, bool):
+            raise InvalidInput("advanced must be a boolean")
+        object.__setattr__(self, "tags_all", _normalized_tags(self.tags_all, "tags_all"))
+        object.__setattr__(self, "tags_any", _normalized_tags(self.tags_any, "tags_any"))
+        try:
+            kinds = tuple(sorted(set(self.kinds)))
+        except TypeError as error:
+            raise InvalidInput("kinds must be strings") from error
+        if any(kind not in KINDS for kind in kinds):
+            raise InvalidInput("unsupported memory kind")
+        object.__setattr__(self, "kinds", kinds)
+        if not isinstance(self.limit, int) or isinstance(self.limit, bool) or not 1 <= self.limit <= 100:
+            raise InvalidInput("limit must be between 1 and 100")
+        if self.cursor is not None:
+            _valid_utf8(self.cursor, "cursor", 4096)
+
+
+@dataclass(frozen=True, slots=True)
+class SearchHit:
+    memory_id: str
+    revision_id: str
+    kind: str
+    tags: tuple[str, ...]
+    created_at: str
+    excerpt: str
+    lexical_rank: float | None
+    match_reasons: tuple[str, ...]
+    has_earlier_revisions: bool
+
+
+@dataclass(frozen=True, slots=True)
+class SearchPage:
+    hits: tuple[SearchHit, ...]
+    cursor: str | None
+    generation: int
+
+
+@dataclass(frozen=True, slots=True)
+class RevisionEntry:
+    revision_id: str
+    parent_revision_id: str | None
+    kind: str
+    created_at: str
+    is_current: bool
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryPage:
+    memory_id: str
+    entries: tuple[RevisionEntry, ...]
+    cursor: str | None

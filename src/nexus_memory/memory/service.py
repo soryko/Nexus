@@ -4,11 +4,23 @@ import hashlib
 import json
 
 from nexus_memory.domain.errors import InvalidInput
-from nexus_memory.domain.models import MemoryInput, MemoryView, Scope, StoreStatus, WriteReceipt
+from nexus_memory.domain.models import (
+    DIGEST_VERSION,
+    HistoryPage,
+    MemoryInput,
+    MemoryView,
+    Scope,
+    SearchPage,
+    SearchQuery,
+    StoreStatus,
+    WriteReceipt,
+)
 from nexus_memory.storage.repository import MemoryRepository
 
 
 class MemoryService:
+    DIGEST_VERSION = DIGEST_VERSION
+
     def __init__(self, repository: MemoryRepository, scope: Scope) -> None:
         self.repository = repository
         self.scope = scope
@@ -35,6 +47,13 @@ class MemoryService:
 
     @staticmethod
     def _digest(operation: str, target: str | None, expected: str | None, item: MemoryInput | None) -> str:
+        """Version 1 of the canonical request digest.
+
+        This function is frozen. A request carrying only milestone A's fields must keep
+        hashing to the same value forever, or an idempotency key recorded before a
+        migration would stop replaying its original receipt. A later version adds fields
+        under a new function and a new DIGEST_VERSION, never by editing this one.
+        """
         value = {"operation": operation, "target": target, "expected_revision": expected, "input": None}
         if item is not None:
             value["input"] = {"content": item.content, "kind": item.kind, "tags": item.tags, "source_uri": item.source_uri, "snapshot": item.snapshot}
@@ -62,6 +81,19 @@ class MemoryService:
         if revision_id is not None:
             revision_id = self._identifier(revision_id, "revision_id")
         return self.repository.get(self.scope, memory_id, revision_id)
+
+    def search(self, query: SearchQuery) -> SearchPage:
+        if not isinstance(query, SearchQuery):
+            raise InvalidInput("query must be a SearchQuery")
+        return self.repository.search(self.scope, query)
+
+    def history(self, memory_id: str, limit: int = 20, cursor: str | None = None) -> HistoryPage:
+        memory_id = self._identifier(memory_id, "memory_id")
+        if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 100:
+            raise InvalidInput("limit must be between 1 and 100")
+        if cursor is not None:
+            cursor = self._identifier(cursor, "cursor")
+        return self.repository.history(self.scope, memory_id, limit, cursor)
 
     def status(self) -> StoreStatus:
         return self.repository.status(self.scope)

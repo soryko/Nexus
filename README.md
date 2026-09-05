@@ -5,16 +5,18 @@
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 [![SQLite](https://img.shields.io/badge/sqlite-3.51.3%2B-blue)](https://www.sqlite.org/)
 [![MCP](https://img.shields.io/badge/mcp-2.1.1-blue)](https://modelcontextprotocol.io/)
-[![Status](https://img.shields.io/badge/milestone-A%3A%20durable%20exact%20memory-orange)](docs/plans/milestone-a.md)
+[![Status](https://img.shields.io/badge/milestone-B1%3A%20lexical%20search-orange)](docs/plans/milestone-a.md)
 
 An agent stores a fact once and reads it back in a later session, on a different process, with the same bytes it wrote. Everything runs locally against one SQLite file. No model call, network request or external service touches the write path.
 
 > [!IMPORTANT]
-> **Milestone A only.** Retrieval is by exact memory ID. There is no search, no listing, and no semantic similarity — an agent that loses a `memory_id` has no route back to that memory. Lexical search, repository-verified snapshots, symbol indexing, automatic extraction and context-budget packing are later milestones. **No retrieval-quality or performance advantage over existing tools has been measured or is claimed.**
+> **Search covers current revisions only.** A term that appears solely in a superseded revision will not find that memory — use `history` to browse a memory's revisions and `get` to read an older one. Ranking is BM25 lexical ordering, not relevance: there is no semantic similarity, no embeddings and no learned ranking. Repository-verified commits, symbol indexing, automatic extraction and context-budget packing are later milestones. **No retrieval-quality advantage over existing tools has been measured or is claimed** — the evaluation set is not yet judged.
 
 ## What it gives you
 
 - **Durable exact retrieval** — one SQLite transaction boundary, WAL with `synchronous=FULL`
+- **Lexical search** — keyword, tag and kind filters over current revisions, indexed inside the write transaction
+- **Browsable history** — every revision reachable with parent links and timestamps
 - **Immutable revisions** — history is append-only; every revision keeps its own identity and metadata
 - **Safe retries** — an idempotency key replays the original receipt instead of writing twice
 - **Conflict detection** — compare-and-set on the head revision; a stale write is refused, never merged silently
@@ -88,7 +90,9 @@ On Windows the installed command is `.venv/Scripts/nexus-memory.exe`. Your clien
 | `get` | Read current content, or a specified revision | `memory_id` |
 | `revise` | Replace all revision fields if the head still matches | `memory_id`, `expected_revision_id`, `content`, `idempotency_key` |
 | `forget` | Tombstone a memory if the head still matches | `memory_id`, `expected_revision_id`, `idempotency_key` |
-| `status` | Inspect scoped durability and pending indexing state | none |
+| `search` | Find current memories by terms, tags and kinds | none |
+| `history` | List a memory's revision chain, newest first | `memory_id` |
+| `status` | Inspect scoped durability and index state | none |
 
 A `record` call looks like this:
 
@@ -104,6 +108,27 @@ A `record` call looks like this:
 ```
 
 Keep the returned `memory_id` and `revision_id`. Read with `get`, and pass the latest revision ID as `expected_revision_id` to change anything. A write receipt also carries `operation_id`, `operation` and `durable_seq`.
+
+## Finding a memory
+
+`search` returns bounded excerpts and the reason each hit matched, never whole bodies — fetch those with `get`. The workflow the milestone is built around:
+
+```text
+search "retry policy"      -> a hit, with has_earlier_revisions: true
+history <memory_id>        -> the revision chain, newest first
+get <memory_id> <revision> -> the superseded decision, in full
+```
+
+```json
+{ "query": "payments retry", "tags_all": ["payments"], "kinds": ["decision"], "limit": 20 }
+```
+
+Filters combine with AND. `query` is literal text unless `advanced` is true, which enables FTS5 syntax. `tags_all` and `tags_any` are deliberately separate. An empty request returns recent memories.
+
+> [!NOTE]
+> `lexical_rank` is a BM25 ordering value, **not** a confidence or relevance score, and it is only comparable within one result set. BM25 depends on corpus statistics, so a concurrent write can change the ranking of documents that did not themselves change. Cursors are therefore bound to an index generation: after any write, a stale cursor returns `cursor_expired` and the search must be restarted rather than silently returning inconsistent pages.
+
+A `history` entry records **what** changed — revision IDs, parent links, timestamps. It never carries a rationale, because Nexus does not infer *why* a change was made from the difference between two revisions. If the reason matters, record it as a memory.
 
 ## Semantics worth knowing
 
@@ -170,7 +195,7 @@ The suite pairs a generated lifecycle model with focused concurrency, transactio
 
 The code is a frozen domain layer, a repository protocol, a SQLite adapter and a scoped service; the MCP server only adapts schemas and errors. See [conditional guarantees](docs/guarantees.md) for the proofs, assumptions, storage formula and engineering critique, and [the milestone plan](docs/plans/milestone-a.md) for the development contract.
 
-Identical body bytes are stored once per scope, while revisions keep their own metadata and identity. Outbox events carry references, not copies of content, and remain pending until a future index worker exists.
+Identical body bytes are stored once per scope, while revisions keep their own metadata and identity. The lexical index is an external-content FTS5 table over a projection of active heads, maintained inside the same transaction as the write it describes, so it is never visible ahead of or behind the authoritative state. Search independently joins its results against the authoritative heads in one read snapshot: a stale index row cannot surface content. Outbox events carry references, not copies of content, and remain pending until a future embedding worker exists — milestone A's events keep their original meaning.
 
 ## Backups
 
@@ -178,4 +203,4 @@ Use SQLite's backup API, or shut every client down cleanly before copying. **Do 
 
 ## Roadmap
 
-The next milestone adds repository-aware exact and lexical retrieval — keyword search, tag filters, verified repository and commit identity, and file references — before any embeddings are introduced.
+**B2** adds repository context: a launch-bound repository identity, commit and path verification with explicit evidence, and reference filters. Cross-revision search — finding a term that only ever appeared in a superseded revision — is a separate follow-up with distinct current and history modes, so outdated instructions are never mixed into ordinary results. Embeddings come after a lexical baseline has been measured, not before.
