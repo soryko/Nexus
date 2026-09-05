@@ -3,51 +3,176 @@
   "frozen": true,
   "provenance": "assistant-judged, human-reviewed. The judge is the project owner, who also directed the system's design; the corpus and intents were authored by the implementer. This is not independent assessment and must never be described as such.",
   "freeze_point": "Frozen before any inspection of relevance results and before any ranking tuning. NOT before ranking implementation: BM25 lexical ranking already existed in B1 when these judgments were made. The judge saw no ranked output, no scores and no result positions.",
-  "grades": {"2": "directly answers the information need", "1": "useful supporting evidence", "0": "irrelevant"},
+  "grades": {
+    "2": "directly answers the information need",
+    "1": "useful supporting evidence",
+    "0": "irrelevant"
+  },
   "closed_world": "Every query-item pair not listed below is grade 0. 14 queries x 23 items = 322 pairs: 20 grade-2, 5 grade-1, 297 grade-0.",
   "judgments": {
-    "q01": {"2": ["i05"], "1": [], "rationale": "Gives the current five-attempt policy. i11 describes an obsolete policy and does not answer the current-state question."},
-    "q02": {"2": ["i05", "i10", "i11", "i14", "i15", "i18"], "1": ["i21"], "rationale": "The broad need covers retry policies, failure modes and repeat-request behavior across components. i21 describes testing retry changes.", "judge_uncertainty": "moderate: a narrower 'current retry limits' intent would require different labels."},
-    "q03": {"2": ["i21"], "1": ["i07"], "rationale": "i21 supplies the specific integration-test procedure. i07 adds the broader testing requirement for money movement."},
-    "q04": {"2": ["i03"], "1": ["i04"], "rationale": "i03 explains current service authentication. i04 explains the obsolete Kerberos terminology used in the query.", "judge_uncertainty": "moderate: 'how authentication works' read as current behavior; Kerberos is the caller's remembered terminology."},
-    "q05": {"2": ["i05"], "1": ["i11"], "rationale": "i05 explicitly attributes the change to the increased acquirer rate limit. i11 explains the original restriction."},
-    "q06": {"2": ["i15", "i18"], "1": [], "rationale": "i18 defines the contract; i15 supplies the related duplicate-charge incident."},
-    "q07": {"2": [], "1": [], "rationale": "No item specifies a database backup method or schedule. Migration and backfill instructions do not answer this."},
-    "q08": {"2": ["i06", "i22"], "1": ["i20"], "rationale": "i06 gives the procedure and i22 the prohibition. i20 supports the concern about migration write locks, without establishing that a combined backfill caused that incident."},
-    "q09": {"2": ["i13", "i16"], "1": [], "rationale": "Both directly prohibit logging sensitive values. i17 concerns log structure, not sensitive-value handling."},
-    "q10": {"2": ["i12"], "1": [], "rationale": "Gives the current continuous-deployment cadence. i23's superseded schedule would misanswer this question."},
-    "q11": {"2": ["i19"], "1": [], "rationale": "Directly identifies the separate terminal-firmware release train and this repository's exclusion from it."},
-    "q12": {"2": ["i09"], "1": [], "rationale": "Gives the threshold and second-approver requirement. It does not identify a named person or team."},
-    "q13": {"2": ["i02"], "1": [], "rationale": "Directly states the append-only ledger decision and compensating-entry rule."},
-    "q14": {"2": [], "1": [], "rationale": "No canary rollback procedure exists here. Mentioning automatic rollback during a migration failure does not supply one."}
+    "q01": {
+      "2": [
+        "i05"
+      ],
+      "1": [],
+      "rationale": "Gives the current five-attempt policy. i11 describes an obsolete policy and does not answer the current-state question."
+    },
+    "q02": {
+      "2": [
+        "i05",
+        "i10",
+        "i11",
+        "i14",
+        "i15",
+        "i18"
+      ],
+      "1": [
+        "i21"
+      ],
+      "rationale": "The broad need covers retry policies, failure modes and repeat-request behavior across components. i21 describes testing retry changes.",
+      "judge_uncertainty": "moderate: a narrower 'current retry limits' intent would require different labels."
+    },
+    "q03": {
+      "2": [
+        "i21"
+      ],
+      "1": [
+        "i07"
+      ],
+      "rationale": "i21 supplies the specific integration-test procedure. i07 adds the broader testing requirement for money movement."
+    },
+    "q04": {
+      "2": [
+        "i03"
+      ],
+      "1": [
+        "i04"
+      ],
+      "rationale": "i03 explains current service authentication. i04 explains the obsolete Kerberos terminology used in the query.",
+      "judge_uncertainty": "moderate: 'how authentication works' read as current behavior; Kerberos is the caller's remembered terminology."
+    },
+    "q05": {
+      "2": [
+        "i05"
+      ],
+      "1": [
+        "i11"
+      ],
+      "rationale": "i05 explicitly attributes the change to the increased acquirer rate limit. i11 explains the original restriction."
+    },
+    "q06": {
+      "2": [
+        "i15",
+        "i18"
+      ],
+      "1": [],
+      "rationale": "i18 defines the contract; i15 supplies the related duplicate-charge incident."
+    },
+    "q07": {
+      "2": [],
+      "1": [],
+      "rationale": "No item specifies a database backup method or schedule. Migration and backfill instructions do not answer this."
+    },
+    "q08": {
+      "2": [
+        "i06",
+        "i22"
+      ],
+      "1": [
+        "i20"
+      ],
+      "rationale": "i06 gives the procedure and i22 the prohibition. i20 supports the concern about migration write locks, without establishing that a combined backfill caused that incident."
+    },
+    "q09": {
+      "2": [
+        "i13",
+        "i16"
+      ],
+      "1": [],
+      "rationale": "Both directly prohibit logging sensitive values. i17 concerns log structure, not sensitive-value handling."
+    },
+    "q10": {
+      "2": [
+        "i12"
+      ],
+      "1": [],
+      "rationale": "Gives the current continuous-deployment cadence. i23's superseded schedule would misanswer this question."
+    },
+    "q11": {
+      "2": [
+        "i19"
+      ],
+      "1": [],
+      "rationale": "Directly identifies the separate terminal-firmware release train and this repository's exclusion from it."
+    },
+    "q12": {
+      "2": [
+        "i09"
+      ],
+      "1": [],
+      "rationale": "Gives the threshold and second-approver requirement. It does not identify a named person or team."
+    },
+    "q13": {
+      "2": [
+        "i02"
+      ],
+      "1": [],
+      "rationale": "Directly states the append-only ledger decision and compensating-entry rule."
+    },
+    "q14": {
+      "2": [],
+      "1": [],
+      "rationale": "No canary rollback procedure exists here. Mentioning automatic rollback during a migration failure does not supply one."
+    }
   },
   "disclosure": {
-    "summary": "Five judge-facing intents described the collection rather than the information need, and one out-of-band message disclosed that two queries have no answer. These exposures happened before judging and cannot be undone by editing the wording now. Any report using this benchmark must carry them.",
+    "summary": "Three judge-facing intents explicitly described the collection. Two more expressed a compound need in a way that may have shaped the answer shape without demonstrably doing so. One out-of-band message disclosed that two queries have no answer. These exposures preceded judging and cannot be undone by rewording now; any report using this benchmark must carry them.",
     "rule_that_was_violated": "An intent may state what the user wants to know. It must never describe what exists in the collection, how many items match, or how the collection was designed.",
-    "contaminated_queries": {
-      "q02": "intent announced that several unrelated senses of retry exist in the corpus",
-      "q06": "intent presupposed that a related incident exists",
-      "q08": "intent revealed the answer shape and count ('the constraint and procedure')",
-      "q09": "intent revealed the answer count ('Neither memory uses the word secrets'); the judge returned exactly two items",
-      "q11": "intent announced the keyword-overlap design"
-    },
     "out_of_band": {
-      "queries": ["q07", "q14"],
+      "queries": [
+        "q07",
+        "q14"
+      ],
       "what": "the implementer stated that two queries have no answer in the corpus, without saying which",
       "assessment": "lower impact than the intent leaks: the fact being judged (nothing in the corpus answers these) is independently verifiable, and was verified against item content during review. Retained for abstention measurement, with the exposure recorded."
     },
     "headline_eligibility": {
-      "clean_relevance_queries": ["q01", "q03", "q04", "q05", "q10", "q12", "q13"],
-      "abstention_queries": ["q07", "q14"],
-      "report_separately": ["q02", "q06", "q08", "q09", "q11"],
-      "reason": "Contaminated queries stay in the benchmark and must be reported, but must not be averaged into a headline precision or recall figure as if uncontaminated."
+      "clean_relevance_queries": [
+        "q01",
+        "q03",
+        "q04",
+        "q05",
+        "q10",
+        "q12",
+        "q13"
+      ],
+      "abstention_queries": [
+        "q07",
+        "q14"
+      ],
+      "report_separately": [
+        "q02",
+        "q06",
+        "q08",
+        "q09",
+        "q11"
+      ],
+      "reason": "Conservative partition. The three explicit disclosures and the two disputed cases are both held out of headline precision and recall, because the cost of an inflated headline exceeds the cost of a smaller clean set. All five are still reported per-query."
+    },
+    "explicit_disclosure": {
+      "q02": "intent announced that several unrelated senses of retry exist in the corpus",
+      "q09": "intent revealed the answer count ('Neither memory uses the word secrets')",
+      "q11": "intent announced the keyword-overlap design"
+    },
+    "flagged_potential_authoring_influence": {
+      "q06": "intent asked for the contract 'and any related incident'. A user may legitimately ask this without it promising that a matching document exists. Disputed, not demonstrated.",
+      "q08": "intent asked for 'the constraint and procedure'. The definite article presupposes existence, but finding one of each does not establish that the wording caused it. Disputed, not demonstrated."
     }
   },
   "known_gaps": {
-    "no_superseded_only_answer": "Every superseded item is at most grade 1. No query in v1 has a grade-2 answer that exists only in a superseded revision, so v1 CANNOT measure B1's most prominent documented limitation - that a term living only in a superseded revision makes its memory undiscoverable. A query such as 'what was the old deploy schedule' (i23) would test it. v2 must add one.",
+    "no_superseded_only_answer": "No query has its ONLY directly relevant answer in a superseded revision. q02 does grade the superseded i11 as 2, but alongside current items, so a system that never reads history can still score on it. v1 therefore cannot isolate B1's most prominent documented limitation. v2 adds two distinct cases.",
     "q02_cannot_measure_distractors": "The intent as authored makes the retry distractors genuinely relevant, so q02 measures broad recall, not distractor resistance. In v1 that property rests entirely on q11.",
-    "q05_miscategorised": "Recorded as 'historical' in corpus metadata, but its grade-2 answer is the current head, which already contains both the superseded cap and the rationale. Only q04 was ever historical, and only at grade 1.",
-    "q06_rationale_label_mismatch": "The rationale describes i15 as a 'related incident', which reads as grade-1 reasoning, while the label is 2. Defensible for a bare-term topical query; recorded rather than silently accepted."
+    "q05_temporal_shape": "Not a categorisation mistake. q05 is an explanation-of-change need whose direct answer resides in the current revision. v2 records information need and required evidence as two separate dimensions."
   },
   "reporting_requirements": [
     "Report current-head retrieval, search-then-history, and overall task coverage as separate figures. Never collapse them.",
@@ -55,5 +180,28 @@
     "q07 and q14 have no relevant-item denominator. Report inappropriate results and abstention for them; never report recall.",
     "Relevance labels are independent of eligibility. A label never changes because the system cannot reach the item.",
     "Corrections require a new benchmark version with a documented change. Never edit a label in place."
+  ],
+  "amendments": [
+    {
+      "item": "known_gaps.no_superseded_only_answer",
+      "was": "Every superseded item is at most grade 1. No query in v1 has a grade-2 answer that exists only in a superseded revision.",
+      "now": "q02 grades the superseded i11 as 2, so the first sentence was false. The surviving, narrower finding is that no query has its ONLY directly relevant answer in a superseded revision.",
+      "raised_by": "judge",
+      "verified": "checked against resolved item states: i11 (m01r1) is the single superseded grade-2 in the set; no query's grade-2 list is entirely superseded."
+    },
+    {
+      "item": "known_gaps.q06_rationale_label_mismatch",
+      "was": "The rationale describes i15 as a 'related incident', which reads as grade-1 reasoning, while the label is 2.",
+      "now": "Withdrawn. The stated need asks for the contract AND any related incident; i15 directly answers the incident component. 'Related' does not imply supporting evidence.",
+      "raised_by": "judge",
+      "verified": "re-read q06 intent and i15 content; the objection was mine and was wrong."
+    },
+    {
+      "item": "disclosure.contaminated_queries",
+      "was": "Five queries described as contaminated, with the claim that label patterns 'track the disclosure exactly'.",
+      "now": "Split into two tiers. Three intents explicitly describe the collection; two express a compound need without promising that matching documents exist. The implementer's claim that q06/q08 label patterns tracked the wording asserted causation from a correlation and is withdrawn.",
+      "raised_by": "judge",
+      "verified": "accepted; the conservative reporting partition is retained regardless."
+    }
   ]
 }

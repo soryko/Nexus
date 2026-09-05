@@ -257,8 +257,10 @@ def test_stdio_search_and_history_contract(tmp_path: Path) -> None:
             older = await client.call_tool("get", {"memory_id": memory_id, "revision_id": entries[1]["revision_id"]})
             assert older.structured_content["content"].startswith("Retry policy: three attempts")
 
-            # a superseded term is deliberately not discoverable in B1
-            assert (await client.call_tool("search", {"query": "three attempts"})).structured_content["hits"] == []
+            # a term living ONLY in the superseded revision is deliberately not discoverable in B1.
+            # "attempts" appears in the current head too, so it is not a valid probe for this.
+            assert (await client.call_tool("search", {"query": "attempts"})).structured_content["hits"] != []
+            assert (await client.call_tool("search", {"query": "three"})).structured_content["hits"] == []
 
             malformed = await client.call_tool("search", {"query": 'alpha AND ("unclosed', "advanced": True})
             assert malformed.is_error

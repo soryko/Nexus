@@ -10,6 +10,7 @@ from contextlib import closing, contextmanager
 from datetime import UTC, datetime
 from importlib.resources import files
 from pathlib import Path
+import re
 from typing import Iterator
 
 from nexus_memory.domain.errors import (
@@ -36,6 +37,9 @@ from nexus_memory.domain.models import (
     StoreStatus,
     WriteReceipt,
 )
+
+
+_TOKEN = re.compile(r"\w+", re.UNICODE)
 
 
 class SQLiteRepository:
@@ -375,10 +379,21 @@ class SQLiteRepository:
         return " ".join(clauses), parameters
 
     @staticmethod
-    def _match_expression(query: SearchQuery) -> str:
+    def _match_expression(query: SearchQuery) -> str | None:
+        """Literal mode means FTS operators are inert, not that the text must appear verbatim.
+
+        Quoting the whole query as one phrase made every multi-word natural-language
+        query a contiguous-phrase search: "append only ledger" could not match "the
+        ledger is append-only". Each token is quoted individually instead and combined
+        disjunctively, leaving BM25 to rank; a caller who wants a phrase asks for one
+        with advanced mode. Returns None when the text contains no indexable token.
+        """
         if query.advanced:
             return query.query or ""
-        return '"' + (query.query or "").replace('"', '""') + '"'
+        tokens = _TOKEN.findall(query.query or "")
+        if not tokens:
+            return None
+        return " OR ".join('"' + token.replace('"', '""') + '"' for token in tokens)
 
     @staticmethod
     def _validate_match_expression(expression: str) -> None:
@@ -436,7 +451,11 @@ class SQLiteRepository:
                     " WHERE h.namespace=? AND h.actor=? AND m.tombstoned=0 AND m.current_revision_id=h.revision_id "
                 )
                 if query.query:
-                    self._validate_match_expression(self._match_expression(query))
+                    expression = self._match_expression(query)
+                    if expression is None:  # no indexable token: match nothing, never everything
+                        db.commit()
+                        return SearchPage(hits=(), cursor=None, generation=generation)
+                    self._validate_match_expression(expression)
                     inner = (
                         "SELECT h.seq AS seq,h.memory_id,h.revision_id,h.kind,h.tags_json,h.created_at,"
                         "h.has_parent,bm25(head_fts) AS rank,"
@@ -444,7 +463,7 @@ class SQLiteRepository:
                         " FROM head_fts JOIN head_index h ON h.seq=head_fts.rowid"
                         + authority + "AND head_fts MATCH ? " + filters
                     )
-                    parameters = [scope.namespace, scope.actor, self._match_expression(query), *filter_parameters]
+                    parameters = [scope.namespace, scope.actor, expression, *filter_parameters]
                 else:
                     inner = (
                         "SELECT h.seq AS seq,h.memory_id,h.revision_id,h.kind,h.tags_json,h.created_at,"

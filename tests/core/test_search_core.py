@@ -151,16 +151,35 @@ def test_empty_request_returns_recent_memories_by_mutation_order(tmp_path: Path)
 
 def test_advanced_fts_syntax_requires_explicit_mode(tmp_path: Path) -> None:
     service = _service(tmp_path / "memory.sqlite3")
-    _store(service, "alpha beta", "k1")
-    literal, _ = _store(service, "the alpha OR beta operator", "k2")
+    only_alpha, _ = _store(service, "alpha on its own", "k1")
+    both, _ = _store(service, "alpha and beta together", "k2")
 
-    # literal mode treats the whole string as text, so only the literal phrase matches
-    plain = {hit.memory_id for hit in service.search(SearchQuery(query="alpha OR beta")).hits}
-    assert plain == {literal}
+    # literal mode: AND is an ordinary word, not an operator, so both documents match
+    plain = {hit.memory_id for hit in service.search(SearchQuery(query="alpha AND beta")).hits}
+    assert plain == {only_alpha, both}
 
-    # advanced mode interprets OR as a disjunction, matching both
-    advanced = {hit.memory_id for hit in service.search(SearchQuery(query="alpha OR beta", advanced=True)).hits}
-    assert len(advanced) == 2
+    # advanced mode: AND is a conjunction, so only the document with both terms matches
+    advanced = {hit.memory_id for hit in service.search(SearchQuery(query="alpha AND beta", advanced=True)).hits}
+    assert advanced == {both}
+
+
+def test_literal_multiword_query_does_not_require_a_contiguous_phrase(tmp_path: Path) -> None:
+    """Regression: literal mode once quoted the whole query as one phrase."""
+    service = _service(tmp_path / "memory.sqlite3")
+    ledger, _ = _store(service, "The ledger is append-only. Corrections are compensating entries.", "k1")
+    _store(service, "Unrelated note about typography", "k2")
+
+    assert [hit.memory_id for hit in service.search(SearchQuery(query="append only ledger")).hits] == [ledger]
+    assert [hit.memory_id for hit in service.search(SearchQuery(query="who approves the ledger")).hits] == [ledger]
+
+    # a caller who genuinely wants a phrase asks for one explicitly
+    assert service.search(SearchQuery(query='"append only ledger"', advanced=True)).hits == ()
+
+
+def test_query_with_no_indexable_token_matches_nothing(tmp_path: Path) -> None:
+    service = _service(tmp_path / "memory.sqlite3")
+    _store(service, "a real memory", "k1")
+    assert service.search(SearchQuery(query="!!! ???")).hits == ()
 
 
 def test_malformed_advanced_query_raises_invalid_query(tmp_path: Path) -> None:
