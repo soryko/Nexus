@@ -1,0 +1,1760 @@
+{
+  "build_commit": "4c818212183fddf12adfc50f91cdb58c268ad174",
+  "src_dirty": false,
+  "input_sha256": {
+    "corpus-v2.json": "c884e32c9fad21230bfa816c1747cc5f149aa39dc73c4248f905c329ce156d56",
+    "judgments-v2.json": "ccdbe144e21b5f235b5b8310e5d0e7fc47b6ff34d4d0d16c1bafa282ac1bf66d",
+    "protocol-v2.md": "66e86c2098566a21dee02006c05daf56788aae4c911fbbb53e7147aac516da63",
+    "judging-v2-assessor.md": "318a6fd33ec1145f2488187a53869e891d895f62d65853eb9cc58377171bd081"
+  },
+  "cutoffs": [
+    5,
+    10,
+    20
+  ],
+  "search_limit": 20,
+  "history_limit": 20,
+  "scope": [
+    "eval-v2",
+    "local"
+  ],
+  "load_order": [
+    "m01r1",
+    "m01r2",
+    "m02r1",
+    "m03r1",
+    "m04r1",
+    "m05r1",
+    "m06r1",
+    "m06r2",
+    "m07r1",
+    "m08r1",
+    "m09r1",
+    "m10r1",
+    "m11r1",
+    "m12r1",
+    "m13r1",
+    "m14r1",
+    "m15r1",
+    "m16r1",
+    "m17r1",
+    "m17r2",
+    "m18r1",
+    "m19r1",
+    "m20r1",
+    "m21r1",
+    "m21r2"
+  ],
+  "revision_mapping": {
+    "7c871897-9537-4afb-96b6-a22f9964ef49:45996b30-afb4-48ae-b84d-9de140943af5": "m01r1",
+    "7c871897-9537-4afb-96b6-a22f9964ef49:2de85660-11a7-4b62-8aa3-1311d14b2e0b": "m01r2",
+    "b00daa0d-f59c-4911-a541-f2b2c6e9d81e:b9194e72-295d-4655-b8c8-671c5b8ed222": "m02r1",
+    "7cb3013d-dffe-4344-a933-496fad7b1f78:79869644-39f9-4283-9874-f1e908630d69": "m03r1",
+    "12162ad5-c0e2-417d-8aff-cbcb814a8402:aea0f82d-5295-4f93-99a5-2c418ea993d6": "m04r1",
+    "517a4c10-7702-453f-8732-6560f950a5d4:537ae0fe-f26a-4b74-9843-928f47ba66c0": "m05r1",
+    "81f8baa8-3380-4bd2-80a5-f9b130954b1e:caa326cf-9143-4114-8cce-64caa8ee372b": "m06r1",
+    "81f8baa8-3380-4bd2-80a5-f9b130954b1e:ef9f25fd-888b-459a-b378-47bb4ffe410e": "m06r2",
+    "357679b9-aede-419c-b2ba-a4475ed1e419:ea4845e3-6313-440c-a30a-6fc54cebf63c": "m07r1",
+    "8f6ac6b7-1914-4baa-a1be-e6a946264a84:d570f153-6364-493d-bcef-780e60442dee": "m08r1",
+    "42b29a77-868e-46ac-aeb7-cef7cc043589:5ad03afa-5b11-447f-8228-845d396b6503": "m09r1",
+    "180da71d-8397-47b1-ad5a-7da42e448802:f32d24bb-0f49-4b59-a0cc-46eaf825e771": "m10r1",
+    "2f130469-a6de-4573-8440-7b1ac2ab415d:48b723f5-5848-4ed1-bb77-60fa3b1c03db": "m11r1",
+    "32619b64-63de-4af8-9861-be138bc83b42:57300cdf-0103-4ad0-8aa4-079a22b2fecd": "m12r1",
+    "1d3bdbb8-a5cd-456a-8695-c905a037fcbc:d093cb32-0281-444c-b055-b4dc1ddc2eb8": "m13r1",
+    "50d18547-1545-4a7a-8453-79ce1a8c3751:c71881ac-66e7-4280-bc9e-1b67319a4da9": "m14r1",
+    "75fce8ec-d5e8-47a2-a304-fbf5822c07a7:5fcdabbd-1f09-4442-a768-c132ff446c86": "m15r1",
+    "70ec1eb1-157f-4ffb-b99e-5e7936d9f422:c1369b94-0aff-472e-93aa-612ea9fc8c80": "m16r1",
+    "a0861910-d32e-4a7a-8ea7-5615a51181da:f5ea3c05-6971-4028-99cf-145d68ebd7c9": "m17r1",
+    "a0861910-d32e-4a7a-8ea7-5615a51181da:6a3fbcb0-3885-4d75-8108-a4e7d68fa868": "m17r2",
+    "98b936ca-9e21-46eb-85a8-f8a8c02be295:7d47982a-5aed-4c50-aa12-98b8318ed912": "m18r1",
+    "c80dbb84-aad3-4216-a056-e394ac27a0c9:84416021-941c-4346-be17-3f4329d2ccac": "m19r1",
+    "c007cb83-9e6c-4346-8989-dba965e9e723:b0865279-0d3a-46db-b452-9f469efc1774": "m20r1",
+    "3ef84496-5eed-4cc8-8815-68c56d6b496e:699e9506-8c17-4881-b7d6-76c494987a75": "m21r1",
+    "3ef84496-5eed-4cc8-8815-68c56d6b496e:90faf546-2e0c-4e0f-a869-3b04ef9f04de": "m21r2"
+  },
+  "item_mapping": {
+    "m06r1": "i01",
+    "m21r1": "i02",
+    "m20r1": "i03",
+    "m09r1": "i04",
+    "m06r2": "i05",
+    "m12r1": "i06",
+    "m05r1": "i07",
+    "m16r1": "i08",
+    "m17r2": "i09",
+    "m02r1": "i10",
+    "m21r2": "i11",
+    "m04r1": "i12",
+    "m18r1": "i13",
+    "m14r1": "i14",
+    "m11r1": "i15",
+    "m01r1": "i16",
+    "m07r1": "i17",
+    "m15r1": "i18",
+    "m19r1": "i19",
+    "m01r2": "i20",
+    "m03r1": "i21",
+    "m17r1": "i22",
+    "m13r1": "i23",
+    "m08r1": "i24",
+    "m10r1": "i25"
+  },
+  "queries": {
+    "q01": "how many times do we re-attempt a failed card charge",
+    "q02": "retry policy",
+    "q03": "payments integration suite",
+    "q04": "kerberos",
+    "q05": "why did the retry cap change from three attempts",
+    "q06": "idempotency key",
+    "q07": "what is our database backup schedule",
+    "q08": "migration backfill same deploy",
+    "q09": "never write secrets to logs",
+    "q10": "when do deploys happen",
+    "q11": "payment terminal firmware",
+    "q12": "who approves large refunds",
+    "q13": "append only ledger",
+    "q14": "how do we roll back a failed canary",
+    "q15": "what was the deploy schedule before it changed",
+    "q16": "nightflow",
+    "q17": "how many times does search retry the index"
+  },
+  "partition": {
+    "clean": [
+      "q01",
+      "q02",
+      "q03",
+      "q04",
+      "q05",
+      "q06",
+      "q08",
+      "q09",
+      "q10",
+      "q12",
+      "q13"
+    ],
+    "flagged_post_result_authoring": [
+      "q15",
+      "q16",
+      "q17"
+    ],
+    "no_direct_answer": [
+      "q07",
+      "q11",
+      "q14"
+    ]
+  },
+  "repeatability": {
+    "two_passes_same_database": true,
+    "claim": "Repeatability only. This does NOT establish independence from ingestion order: B1's mutation-sequence tiebreaker makes insertion history relevant to ranking by design. Load order is recorded above."
+  },
+  "per_query": {
+    "q01": {
+      "text": "how many times do we re-attempt a failed card charge",
+      "grade2": [
+        "i20"
+      ],
+      "grade1": [],
+      "eligible_current_head": [
+        "i20"
+      ],
+      "k": {
+        "5": {
+          "returned": 5,
+          "returned_items": [
+            "i04",
+            "i12",
+            "i15",
+            "i20",
+            "i21"
+          ],
+          "head_hits": [
+            "i20"
+          ],
+          "expanded_hits": [
+            "i20"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.2,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 4
+          },
+          "covered": true
+        },
+        "10": {
+          "returned": 10,
+          "returned_items": [
+            "i03",
+            "i04",
+            "i08",
+            "i12",
+            "i13",
+            "i15",
+            "i17",
+            "i20",
+            "i21",
+            "i24"
+          ],
+          "head_hits": [
+            "i20"
+          ],
+          "expanded_hits": [
+            "i20"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.1,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 9
+          },
+          "covered": true
+        },
+        "20": {
+          "returned": 15,
+          "returned_items": [
+            "i03",
+            "i04",
+            "i06",
+            "i07",
+            "i08",
+            "i11",
+            "i12",
+            "i13",
+            "i14",
+            "i15",
+            "i17",
+            "i18",
+            "i20",
+            "i21",
+            "i24"
+          ],
+          "head_hits": [
+            "i20"
+          ],
+          "expanded_hits": [
+            "i20"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.05,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 14
+          },
+          "covered": true
+        }
+      }
+    },
+    "q02": {
+      "text": "retry policy",
+      "grade2": [
+        "i12",
+        "i20",
+        "i25"
+      ],
+      "grade1": [
+        "i10",
+        "i15",
+        "i16"
+      ],
+      "eligible_current_head": [
+        "i12",
+        "i20",
+        "i25"
+      ],
+      "k": {
+        "5": {
+          "returned": 3,
+          "returned_items": [
+            "i10",
+            "i15",
+            "i20"
+          ],
+          "head_hits": [
+            "i20"
+          ],
+          "expanded_hits": [
+            "i20"
+          ],
+          "head_recall": 0.333,
+          "head_recall_denominator": 3,
+          "history_recall": 0.333,
+          "history_recall_denominator": 3,
+          "precision_at_k": 0.2,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 2,
+            "0": 0
+          },
+          "covered": true
+        },
+        "10": {
+          "returned": 3,
+          "returned_items": [
+            "i10",
+            "i15",
+            "i20"
+          ],
+          "head_hits": [
+            "i20"
+          ],
+          "expanded_hits": [
+            "i20"
+          ],
+          "head_recall": 0.333,
+          "head_recall_denominator": 3,
+          "history_recall": 0.333,
+          "history_recall_denominator": 3,
+          "precision_at_k": 0.1,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 2,
+            "0": 0
+          },
+          "covered": true
+        },
+        "20": {
+          "returned": 3,
+          "returned_items": [
+            "i10",
+            "i15",
+            "i20"
+          ],
+          "head_hits": [
+            "i20"
+          ],
+          "expanded_hits": [
+            "i20"
+          ],
+          "head_recall": 0.333,
+          "head_recall_denominator": 3,
+          "history_recall": 0.333,
+          "history_recall_denominator": 3,
+          "precision_at_k": 0.05,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 2,
+            "0": 0
+          },
+          "covered": true
+        }
+      }
+    },
+    "q03": {
+      "text": "payments integration suite",
+      "grade2": [
+        "i10"
+      ],
+      "grade1": [
+        "i23"
+      ],
+      "eligible_current_head": [
+        "i10"
+      ],
+      "k": {
+        "5": {
+          "returned": 3,
+          "returned_items": [
+            "i10",
+            "i21",
+            "i23"
+          ],
+          "head_hits": [
+            "i10"
+          ],
+          "expanded_hits": [
+            "i10"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.2,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 1,
+            "0": 1
+          },
+          "covered": true
+        },
+        "10": {
+          "returned": 3,
+          "returned_items": [
+            "i10",
+            "i21",
+            "i23"
+          ],
+          "head_hits": [
+            "i10"
+          ],
+          "expanded_hits": [
+            "i10"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.1,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 1,
+            "0": 1
+          },
+          "covered": true
+        },
+        "20": {
+          "returned": 3,
+          "returned_items": [
+            "i10",
+            "i21",
+            "i23"
+          ],
+          "head_hits": [
+            "i10"
+          ],
+          "expanded_hits": [
+            "i10"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.05,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 1,
+            "0": 1
+          },
+          "covered": true
+        }
+      }
+    },
+    "q04": {
+      "text": "kerberos",
+      "grade2": [
+        "i05"
+      ],
+      "grade1": [
+        "i01"
+      ],
+      "eligible_current_head": [
+        "i05"
+      ],
+      "k": {
+        "5": {
+          "returned": 0,
+          "returned_items": [],
+          "head_hits": [],
+          "expanded_hits": [],
+          "head_recall": 0.0,
+          "head_recall_denominator": 1,
+          "history_recall": 0.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 0,
+            "0": 0
+          },
+          "covered": false
+        },
+        "10": {
+          "returned": 0,
+          "returned_items": [],
+          "head_hits": [],
+          "expanded_hits": [],
+          "head_recall": 0.0,
+          "head_recall_denominator": 1,
+          "history_recall": 0.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 0,
+            "0": 0
+          },
+          "covered": false
+        },
+        "20": {
+          "returned": 0,
+          "returned_items": [],
+          "head_hits": [],
+          "expanded_hits": [],
+          "head_recall": 0.0,
+          "head_recall_denominator": 1,
+          "history_recall": 0.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 0,
+            "0": 0
+          },
+          "covered": false
+        }
+      }
+    },
+    "q05": {
+      "text": "why did the retry cap change from three attempts",
+      "grade2": [
+        "i20"
+      ],
+      "grade1": [
+        "i16"
+      ],
+      "eligible_current_head": [
+        "i20"
+      ],
+      "k": {
+        "5": {
+          "returned": 5,
+          "returned_items": [
+            "i10",
+            "i12",
+            "i15",
+            "i20",
+            "i24"
+          ],
+          "head_hits": [
+            "i20"
+          ],
+          "expanded_hits": [
+            "i20"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.2,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 4
+          },
+          "covered": true
+        },
+        "10": {
+          "returned": 10,
+          "returned_items": [
+            "i04",
+            "i05",
+            "i07",
+            "i10",
+            "i12",
+            "i15",
+            "i17",
+            "i20",
+            "i24",
+            "i25"
+          ],
+          "head_hits": [
+            "i20"
+          ],
+          "expanded_hits": [
+            "i20"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.1,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 9
+          },
+          "covered": true
+        },
+        "20": {
+          "returned": 20,
+          "returned_items": [
+            "i03",
+            "i04",
+            "i05",
+            "i06",
+            "i07",
+            "i09",
+            "i10",
+            "i11",
+            "i12",
+            "i13",
+            "i14",
+            "i15",
+            "i17",
+            "i18",
+            "i19",
+            "i20",
+            "i21",
+            "i23",
+            "i24",
+            "i25"
+          ],
+          "head_hits": [
+            "i20"
+          ],
+          "expanded_hits": [
+            "i20"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.05,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 19
+          },
+          "covered": true
+        }
+      }
+    },
+    "q06": {
+      "text": "idempotency key",
+      "grade2": [
+        "i04",
+        "i15"
+      ],
+      "grade1": [],
+      "eligible_current_head": [
+        "i04",
+        "i15"
+      ],
+      "k": {
+        "5": {
+          "returned": 2,
+          "returned_items": [
+            "i04",
+            "i15"
+          ],
+          "head_hits": [
+            "i04",
+            "i15"
+          ],
+          "expanded_hits": [
+            "i04",
+            "i15"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 2,
+          "history_recall": 1.0,
+          "history_recall_denominator": 2,
+          "precision_at_k": 0.4,
+          "returned_by_grade": {
+            "2": 2,
+            "1": 0,
+            "0": 0
+          },
+          "covered": true
+        },
+        "10": {
+          "returned": 2,
+          "returned_items": [
+            "i04",
+            "i15"
+          ],
+          "head_hits": [
+            "i04",
+            "i15"
+          ],
+          "expanded_hits": [
+            "i04",
+            "i15"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 2,
+          "history_recall": 1.0,
+          "history_recall_denominator": 2,
+          "precision_at_k": 0.2,
+          "returned_by_grade": {
+            "2": 2,
+            "1": 0,
+            "0": 0
+          },
+          "covered": true
+        },
+        "20": {
+          "returned": 2,
+          "returned_items": [
+            "i04",
+            "i15"
+          ],
+          "head_hits": [
+            "i04",
+            "i15"
+          ],
+          "expanded_hits": [
+            "i04",
+            "i15"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 2,
+          "history_recall": 1.0,
+          "history_recall_denominator": 2,
+          "precision_at_k": 0.1,
+          "returned_by_grade": {
+            "2": 2,
+            "1": 0,
+            "0": 0
+          },
+          "covered": true
+        }
+      }
+    },
+    "q07": {
+      "text": "what is our database backup schedule",
+      "grade2": [],
+      "grade1": [],
+      "eligible_current_head": [],
+      "k": {
+        "5": {
+          "returned": 5,
+          "returned_items": [
+            "i06",
+            "i08",
+            "i09",
+            "i19",
+            "i25"
+          ],
+          "head_hits": [],
+          "expanded_hits": [],
+          "head_recall": null,
+          "head_recall_denominator": 0,
+          "history_recall": null,
+          "history_recall_denominator": 0,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 0,
+            "0": 5
+          },
+          "covered": false
+        },
+        "10": {
+          "returned": 9,
+          "returned_items": [
+            "i04",
+            "i06",
+            "i08",
+            "i09",
+            "i11",
+            "i19",
+            "i20",
+            "i21",
+            "i25"
+          ],
+          "head_hits": [],
+          "expanded_hits": [],
+          "head_recall": null,
+          "head_recall_denominator": 0,
+          "history_recall": null,
+          "history_recall_denominator": 0,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 0,
+            "0": 9
+          },
+          "covered": false
+        },
+        "20": {
+          "returned": 9,
+          "returned_items": [
+            "i04",
+            "i06",
+            "i08",
+            "i09",
+            "i11",
+            "i19",
+            "i20",
+            "i21",
+            "i25"
+          ],
+          "head_hits": [],
+          "expanded_hits": [],
+          "head_recall": null,
+          "head_recall_denominator": 0,
+          "history_recall": null,
+          "history_recall_denominator": 0,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 0,
+            "0": 9
+          },
+          "covered": false
+        }
+      }
+    },
+    "q08": {
+      "text": "migration backfill same deploy",
+      "grade2": [
+        "i17",
+        "i24"
+      ],
+      "grade1": [
+        "i03"
+      ],
+      "eligible_current_head": [
+        "i17",
+        "i24"
+      ],
+      "k": {
+        "5": {
+          "returned": 5,
+          "returned_items": [
+            "i03",
+            "i04",
+            "i09",
+            "i17",
+            "i24"
+          ],
+          "head_hits": [
+            "i17",
+            "i24"
+          ],
+          "expanded_hits": [
+            "i17",
+            "i24"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 2,
+          "history_recall": 1.0,
+          "history_recall_denominator": 2,
+          "precision_at_k": 0.4,
+          "returned_by_grade": {
+            "2": 2,
+            "1": 1,
+            "0": 2
+          },
+          "covered": true
+        },
+        "10": {
+          "returned": 5,
+          "returned_items": [
+            "i03",
+            "i04",
+            "i09",
+            "i17",
+            "i24"
+          ],
+          "head_hits": [
+            "i17",
+            "i24"
+          ],
+          "expanded_hits": [
+            "i17",
+            "i24"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 2,
+          "history_recall": 1.0,
+          "history_recall_denominator": 2,
+          "precision_at_k": 0.2,
+          "returned_by_grade": {
+            "2": 2,
+            "1": 1,
+            "0": 2
+          },
+          "covered": true
+        },
+        "20": {
+          "returned": 5,
+          "returned_items": [
+            "i03",
+            "i04",
+            "i09",
+            "i17",
+            "i24"
+          ],
+          "head_hits": [
+            "i17",
+            "i24"
+          ],
+          "expanded_hits": [
+            "i17",
+            "i24"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 2,
+          "history_recall": 1.0,
+          "history_recall_denominator": 2,
+          "precision_at_k": 0.1,
+          "returned_by_grade": {
+            "2": 2,
+            "1": 1,
+            "0": 2
+          },
+          "covered": true
+        }
+      }
+    },
+    "q09": {
+      "text": "never write secrets to logs",
+      "grade2": [
+        "i08",
+        "i21"
+      ],
+      "grade1": [],
+      "eligible_current_head": [
+        "i08",
+        "i21"
+      ],
+      "k": {
+        "5": {
+          "returned": 5,
+          "returned_items": [
+            "i08",
+            "i13",
+            "i14",
+            "i19",
+            "i21"
+          ],
+          "head_hits": [
+            "i08",
+            "i21"
+          ],
+          "expanded_hits": [
+            "i08",
+            "i21"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 2,
+          "history_recall": 1.0,
+          "history_recall_denominator": 2,
+          "precision_at_k": 0.4,
+          "returned_by_grade": {
+            "2": 2,
+            "1": 0,
+            "0": 3
+          },
+          "covered": true
+        },
+        "10": {
+          "returned": 10,
+          "returned_items": [
+            "i05",
+            "i08",
+            "i09",
+            "i13",
+            "i14",
+            "i17",
+            "i18",
+            "i19",
+            "i21",
+            "i24"
+          ],
+          "head_hits": [
+            "i08",
+            "i21"
+          ],
+          "expanded_hits": [
+            "i08",
+            "i21"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 2,
+          "history_recall": 1.0,
+          "history_recall_denominator": 2,
+          "precision_at_k": 0.2,
+          "returned_by_grade": {
+            "2": 2,
+            "1": 0,
+            "0": 8
+          },
+          "covered": true
+        },
+        "20": {
+          "returned": 12,
+          "returned_items": [
+            "i03",
+            "i05",
+            "i08",
+            "i09",
+            "i12",
+            "i13",
+            "i14",
+            "i17",
+            "i18",
+            "i19",
+            "i21",
+            "i24"
+          ],
+          "head_hits": [
+            "i08",
+            "i21"
+          ],
+          "expanded_hits": [
+            "i08",
+            "i21"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 2,
+          "history_recall": 1.0,
+          "history_recall_denominator": 2,
+          "precision_at_k": 0.1,
+          "returned_by_grade": {
+            "2": 2,
+            "1": 0,
+            "0": 10
+          },
+          "covered": true
+        }
+      }
+    },
+    "q10": {
+      "text": "when do deploys happen",
+      "grade2": [
+        "i09"
+      ],
+      "grade1": [],
+      "eligible_current_head": [
+        "i09"
+      ],
+      "k": {
+        "5": {
+          "returned": 2,
+          "returned_items": [
+            "i09",
+            "i18"
+          ],
+          "head_hits": [
+            "i09"
+          ],
+          "expanded_hits": [
+            "i09"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.2,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 1
+          },
+          "covered": true
+        },
+        "10": {
+          "returned": 2,
+          "returned_items": [
+            "i09",
+            "i18"
+          ],
+          "head_hits": [
+            "i09"
+          ],
+          "expanded_hits": [
+            "i09"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.1,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 1
+          },
+          "covered": true
+        },
+        "20": {
+          "returned": 2,
+          "returned_items": [
+            "i09",
+            "i18"
+          ],
+          "head_hits": [
+            "i09"
+          ],
+          "expanded_hits": [
+            "i09"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.05,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 1
+          },
+          "covered": true
+        }
+      }
+    },
+    "q11": {
+      "text": "payment terminal firmware",
+      "grade2": [],
+      "grade1": [
+        "i18"
+      ],
+      "eligible_current_head": [],
+      "k": {
+        "5": {
+          "returned": 1,
+          "returned_items": [
+            "i18"
+          ],
+          "head_hits": [],
+          "expanded_hits": [],
+          "head_recall": null,
+          "head_recall_denominator": 0,
+          "history_recall": null,
+          "history_recall_denominator": 0,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 1,
+            "0": 0
+          },
+          "covered": false
+        },
+        "10": {
+          "returned": 1,
+          "returned_items": [
+            "i18"
+          ],
+          "head_hits": [],
+          "expanded_hits": [],
+          "head_recall": null,
+          "head_recall_denominator": 0,
+          "history_recall": null,
+          "history_recall_denominator": 0,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 1,
+            "0": 0
+          },
+          "covered": false
+        },
+        "20": {
+          "returned": 1,
+          "returned_items": [
+            "i18"
+          ],
+          "head_hits": [],
+          "expanded_hits": [],
+          "head_recall": null,
+          "head_recall_denominator": 0,
+          "history_recall": null,
+          "history_recall_denominator": 0,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 1,
+            "0": 0
+          },
+          "covered": false
+        }
+      }
+    },
+    "q12": {
+      "text": "who approves large refunds",
+      "grade2": [
+        "i06"
+      ],
+      "grade1": [],
+      "eligible_current_head": [
+        "i06"
+      ],
+      "k": {
+        "5": {
+          "returned": 1,
+          "returned_items": [
+            "i06"
+          ],
+          "head_hits": [
+            "i06"
+          ],
+          "expanded_hits": [
+            "i06"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.2,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 0
+          },
+          "covered": true
+        },
+        "10": {
+          "returned": 1,
+          "returned_items": [
+            "i06"
+          ],
+          "head_hits": [
+            "i06"
+          ],
+          "expanded_hits": [
+            "i06"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.1,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 0
+          },
+          "covered": true
+        },
+        "20": {
+          "returned": 1,
+          "returned_items": [
+            "i06"
+          ],
+          "head_hits": [
+            "i06"
+          ],
+          "expanded_hits": [
+            "i06"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.05,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 0
+          },
+          "covered": true
+        }
+      }
+    },
+    "q13": {
+      "text": "append only ledger",
+      "grade2": [
+        "i19"
+      ],
+      "grade1": [],
+      "eligible_current_head": [
+        "i19"
+      ],
+      "k": {
+        "5": {
+          "returned": 4,
+          "returned_items": [
+            "i11",
+            "i19",
+            "i21",
+            "i23"
+          ],
+          "head_hits": [
+            "i19"
+          ],
+          "expanded_hits": [
+            "i19"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.2,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 3
+          },
+          "covered": true
+        },
+        "10": {
+          "returned": 4,
+          "returned_items": [
+            "i11",
+            "i19",
+            "i21",
+            "i23"
+          ],
+          "head_hits": [
+            "i19"
+          ],
+          "expanded_hits": [
+            "i19"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.1,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 3
+          },
+          "covered": true
+        },
+        "20": {
+          "returned": 4,
+          "returned_items": [
+            "i11",
+            "i19",
+            "i21",
+            "i23"
+          ],
+          "head_hits": [
+            "i19"
+          ],
+          "expanded_hits": [
+            "i19"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.05,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 3
+          },
+          "covered": true
+        }
+      }
+    },
+    "q14": {
+      "text": "how do we roll back a failed canary",
+      "grade2": [],
+      "grade1": [],
+      "eligible_current_head": [],
+      "k": {
+        "5": {
+          "returned": 5,
+          "returned_items": [
+            "i03",
+            "i04",
+            "i08",
+            "i15",
+            "i17"
+          ],
+          "head_hits": [],
+          "expanded_hits": [],
+          "head_recall": null,
+          "head_recall_denominator": 0,
+          "history_recall": null,
+          "history_recall_denominator": 0,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 0,
+            "0": 5
+          },
+          "covered": false
+        },
+        "10": {
+          "returned": 10,
+          "returned_items": [
+            "i03",
+            "i04",
+            "i06",
+            "i08",
+            "i11",
+            "i13",
+            "i15",
+            "i17",
+            "i18",
+            "i24"
+          ],
+          "head_hits": [],
+          "expanded_hits": [],
+          "head_recall": null,
+          "head_recall_denominator": 0,
+          "history_recall": null,
+          "history_recall_denominator": 0,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 0,
+            "0": 10
+          },
+          "covered": false
+        },
+        "20": {
+          "returned": 13,
+          "returned_items": [
+            "i03",
+            "i04",
+            "i06",
+            "i07",
+            "i08",
+            "i11",
+            "i12",
+            "i13",
+            "i14",
+            "i15",
+            "i17",
+            "i18",
+            "i24"
+          ],
+          "head_hits": [],
+          "expanded_hits": [],
+          "head_recall": null,
+          "head_recall_denominator": 0,
+          "history_recall": null,
+          "history_recall_denominator": 0,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 0,
+            "0": 13
+          },
+          "covered": false
+        }
+      }
+    },
+    "q15": {
+      "text": "what was the deploy schedule before it changed",
+      "grade2": [
+        "i22"
+      ],
+      "grade1": [
+        "i09"
+      ],
+      "eligible_current_head": [],
+      "k": {
+        "5": {
+          "returned": 5,
+          "returned_items": [
+            "i03",
+            "i06",
+            "i13",
+            "i15",
+            "i17"
+          ],
+          "head_hits": [],
+          "expanded_hits": [],
+          "head_recall": null,
+          "head_recall_denominator": 0,
+          "history_recall": 0.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 0,
+            "0": 5
+          },
+          "covered": false
+        },
+        "10": {
+          "returned": 10,
+          "returned_items": [
+            "i03",
+            "i06",
+            "i09",
+            "i10",
+            "i11",
+            "i12",
+            "i13",
+            "i15",
+            "i17",
+            "i24"
+          ],
+          "head_hits": [],
+          "expanded_hits": [
+            "i22"
+          ],
+          "head_recall": null,
+          "head_recall_denominator": 0,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 1,
+            "0": 9
+          },
+          "covered": true
+        },
+        "20": {
+          "returned": 20,
+          "returned_items": [
+            "i03",
+            "i04",
+            "i05",
+            "i06",
+            "i07",
+            "i09",
+            "i10",
+            "i11",
+            "i12",
+            "i13",
+            "i14",
+            "i15",
+            "i17",
+            "i18",
+            "i19",
+            "i20",
+            "i21",
+            "i23",
+            "i24",
+            "i25"
+          ],
+          "head_hits": [],
+          "expanded_hits": [
+            "i22"
+          ],
+          "head_recall": null,
+          "head_recall_denominator": 0,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 1,
+            "0": 19
+          },
+          "covered": true
+        }
+      },
+      "diagnostic_m17_returned": {
+        "5": false,
+        "10": true,
+        "20": true
+      }
+    },
+    "q16": {
+      "text": "nightflow",
+      "grade2": [
+        "i02",
+        "i11"
+      ],
+      "grade1": [
+        "i07"
+      ],
+      "eligible_current_head": [
+        "i11"
+      ],
+      "k": {
+        "5": {
+          "returned": 0,
+          "returned_items": [],
+          "head_hits": [],
+          "expanded_hits": [],
+          "head_recall": 0.0,
+          "head_recall_denominator": 1,
+          "history_recall": 0.0,
+          "history_recall_denominator": 2,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 0,
+            "0": 0
+          },
+          "covered": false
+        },
+        "10": {
+          "returned": 0,
+          "returned_items": [],
+          "head_hits": [],
+          "expanded_hits": [],
+          "head_recall": 0.0,
+          "head_recall_denominator": 1,
+          "history_recall": 0.0,
+          "history_recall_denominator": 2,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 0,
+            "0": 0
+          },
+          "covered": false
+        },
+        "20": {
+          "returned": 0,
+          "returned_items": [],
+          "head_hits": [],
+          "expanded_hits": [],
+          "head_recall": 0.0,
+          "head_recall_denominator": 1,
+          "history_recall": 0.0,
+          "history_recall_denominator": 2,
+          "precision_at_k": 0.0,
+          "returned_by_grade": {
+            "2": 0,
+            "1": 0,
+            "0": 0
+          },
+          "covered": false
+        }
+      }
+    },
+    "q17": {
+      "text": "how many times does search retry the index",
+      "grade2": [
+        "i25"
+      ],
+      "grade1": [],
+      "eligible_current_head": [
+        "i25"
+      ],
+      "k": {
+        "5": {
+          "returned": 5,
+          "returned_items": [
+            "i10",
+            "i12",
+            "i15",
+            "i20",
+            "i25"
+          ],
+          "head_hits": [
+            "i25"
+          ],
+          "expanded_hits": [
+            "i25"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.2,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 4
+          },
+          "covered": true
+        },
+        "10": {
+          "returned": 10,
+          "returned_items": [
+            "i04",
+            "i05",
+            "i06",
+            "i10",
+            "i12",
+            "i15",
+            "i17",
+            "i20",
+            "i23",
+            "i25"
+          ],
+          "head_hits": [
+            "i25"
+          ],
+          "expanded_hits": [
+            "i25"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.1,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 9
+          },
+          "covered": true
+        },
+        "20": {
+          "returned": 20,
+          "returned_items": [
+            "i03",
+            "i04",
+            "i05",
+            "i06",
+            "i07",
+            "i09",
+            "i10",
+            "i11",
+            "i12",
+            "i13",
+            "i14",
+            "i15",
+            "i17",
+            "i18",
+            "i19",
+            "i20",
+            "i21",
+            "i23",
+            "i24",
+            "i25"
+          ],
+          "head_hits": [
+            "i25"
+          ],
+          "expanded_hits": [
+            "i25"
+          ],
+          "head_recall": 1.0,
+          "head_recall_denominator": 1,
+          "history_recall": 1.0,
+          "history_recall_denominator": 1,
+          "precision_at_k": 0.05,
+          "returned_by_grade": {
+            "2": 1,
+            "1": 0,
+            "0": 19
+          },
+          "covered": true
+        }
+      }
+    }
+  },
+  "headline_clean_unweighted_mean": {
+    "5": {
+      "head_recall_mean": 0.848,
+      "head_recall_n": "11/11",
+      "history_recall_mean": 0.848,
+      "history_recall_n": "11/11",
+      "task_coverage": "10/11"
+    },
+    "10": {
+      "head_recall_mean": 0.848,
+      "head_recall_n": "11/11",
+      "history_recall_mean": 0.848,
+      "history_recall_n": "11/11",
+      "task_coverage": "10/11"
+    },
+    "20": {
+      "head_recall_mean": 0.848,
+      "head_recall_n": "11/11",
+      "history_recall_mean": 0.848,
+      "history_recall_n": "11/11",
+      "task_coverage": "10/11"
+    }
+  },
+  "controls": {
+    "empty_index": {
+      "fixture": "independent",
+      "memories_retained": 21,
+      "head_projection_retained": 21,
+      "fts_postings": 21,
+      "results_returned": 0,
+      "verdict": "PASS",
+      "note": "Only FTS postings were cleared. A non-zero result would prove retrieval bypasses the index; a zero head projection would mean the control proved less than it claims."
+    },
+    "forget_relevant": {
+      "fixture": "independent",
+      "memories_forgotten": 15,
+      "revisions_of_forgotten_memories_returned": 0,
+      "detail": [],
+      "verdict": "PASS",
+      "note": "Asserts no revision of a forgotten memory reappears anywhere, regardless of its grade for the query at hand."
+    }
+  }
+}

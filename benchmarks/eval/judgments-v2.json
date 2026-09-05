@@ -1,0 +1,514 @@
+{
+  "benchmark_version": 2,
+  "frozen": true,
+  "freeze_point": "Frozen after adjudication and before any v2 retrieval was executed. No v2 query has been run against any build at the time of this freeze. A later correction is a new benchmark version with a documented amendment, never an edit in place.",
+  "provenance": {
+    "initial_labels": "A fresh Opus 5 agent with no history of this project, judging from judging-v2.md alone. It made 0 tool calls and was given no repository access. Its response is preserved verbatim in judging-v2-assessor.md and is never edited.",
+    "assistant_audit": "The assistant mapped both item shuffles back to revision ids, compared every grade-2 and grade-1 set against v1, and raised four grade-1 disagreements.",
+    "chatgpt_audit": "ChatGPT independently reproduced the 12-of-14 grade-2 agreement from the unchanged revision texts, verified the 425-pair totals, and issued an AI audit approval conditional on the seven adjudications recorded below. This is AI review, not human review.",
+    "human_step": "The project owner authorised the freeze and accepted the adjudications. The project owner did not independently re-derive the labels, and no human did: the label-level audit was performed by two AI systems. 'Human-reviewed' is therefore NOT claimed for v2, and must not be written into any report. The accurate description is AI-assessed, AI-audited twice, human-authorised.",
+    "shared_model_bias": "The assessor and the assistant auditor are the same model family; ChatGPT is a different one. Different families give diversity of assessment. No reliability advantage has been measured here, and none is claimed. What gives the second audit its value is that its checks are reproducible \u2014 the grade-2 agreement count, the 425-pair totals and the adjudication replay were each re-derived independently from the frozen inputs."
+  },
+  "source_of_truth": "judging-v2-assessor.md. This file is produced from it by parse_assessor_sheet.py, plus the adjudications listed below. Regenerate and diff rather than trusting the transcription.",
+  "grades": {
+    "2": "directly answers the information need",
+    "1": "useful supporting evidence",
+    "0": "irrelevant"
+  },
+  "closed_world": "Every query-item pair not listed is grade 0. 17 queries x 25 items = 425 pairs: 20 grade-2, 10 grade-1, 395 grade-0. Before adjudication the assessor's raw annotations were 19 grade-2, 17 grade-1, 389 grade-0.",
+  "item_to_revision": {
+    "i01": "m06r1",
+    "i02": "m21r1",
+    "i03": "m20r1",
+    "i04": "m09r1",
+    "i05": "m06r2",
+    "i06": "m12r1",
+    "i07": "m05r1",
+    "i08": "m16r1",
+    "i09": "m17r2",
+    "i10": "m02r1",
+    "i11": "m21r2",
+    "i12": "m04r1",
+    "i13": "m18r1",
+    "i14": "m14r1",
+    "i15": "m11r1",
+    "i16": "m01r1",
+    "i17": "m07r1",
+    "i18": "m15r1",
+    "i19": "m19r1",
+    "i20": "m01r2",
+    "i21": "m03r1",
+    "i22": "m17r1",
+    "i23": "m13r1",
+    "i24": "m08r1",
+    "i25": "m10r1"
+  },
+  "assessor_labels": {
+    "q03": {
+      "2": [
+        "i10"
+      ],
+      "1": [
+        "i23"
+      ],
+      "rationale": "i10 is exactly the procedure asked for \u2014 it names the retry-change trigger, the command, and what it exercises. i23 is a testing procedure for money-movement changes (run the suite twice with different seeds), which would plausibly also apply after a retry change to payments, but it is about ordering bugs in the ledger, not about retry changes, so it is supporting rather than answering.",
+      "uncertainty": "Whether i23 deserves 1 or 0 depends on reading \"after a retry change\" as implying money movement. A retry change in payments touches money movement, so I lean 1, but a stricter reading makes it 0. i20/i16 (the retry policy itself) are context for what changed, not testing procedure, so I left them at 0."
+    },
+    "q11": {
+      "2": [],
+      "1": [
+        "i18"
+      ],
+      "rationale": "Nothing here names an owner, team, or person for terminal firmware. i18 is the only item on the subject and it answers a neighbouring question \u2014 that firmware ships on a separate release train and nothing in this repository deploys to the terminals \u2014 which narrows responsibility by exclusion without naming who holds it.",
+      "uncertainty": "A lenient assessor could call i18 a 2 on the grounds that \"a separate firmware release train, not us\" is the practical answer to a \"who owns this\" question. I judged the need literally: it asks who, and no item says who."
+    },
+    "q06": {
+      "2": [
+        "i04",
+        "i15"
+      ],
+      "1": [],
+      "rationale": "The need has two halves and each item answers one. i04 gives the caller-facing contract: same key plus same body returns the original receipt, same key plus a different body is rejected rather than merged. i15 gives the failure mode: a client minting a fresh key per retry attempt caused duplicate charges, and the defect was client-side. Together they are the complete answer, and each is directly responsive on its own half.",
+      "uncertainty": "None material. i20/i16 are about retry counts, not keys, and I kept them at 0 even though retries are the setting in which the i15 mistake occurs \u2014 a retry policy does not tell a caller anything about key reuse."
+    },
+    "q02": {
+      "2": [
+        "i20",
+        "i25",
+        "i12"
+      ],
+      "1": [
+        "i16",
+        "i10",
+        "i15",
+        "i07"
+      ],
+      "rationale": "This is a survey need \u2014 it asks for the retry behaviour that exists, plural, not one policy. Three distinct retry mechanisms are described in the collection and each is a direct answer: i20 (card charges, five attempts with exponential backoff), i25 (product search retries the upstream index twice on timeout), i12 (CI retries flaky browser tests up to three times). i16 is the superseded card policy; for a survey of what exists now it is background, so 1 rather than 2. i10 documents that retry behaviour has a dedicated test suite, i15 shows retry behaviour interacting with idempotency, and i07 is arguably a retry-adjacent timing expectation \u2014 all supporting.",
+      "uncertainty": "i07 is the weakest of the 1s; it is about when settlement files arrive and what lateness means, and \"slow transfer\" only gestures at retry. I would not object to 0 there. I also considered demoting i12 to 1 since it is filed as a failure rather than a policy, but it states the actual retry configuration of a real job, which is what the need asks for. Whether i16 should be 0 instead of 1 depends on whether \"exists\" means \"is currently in force\"; I read superseded policy as still useful context for a survey."
+    },
+    "q01": {
+      "2": [
+        "i20"
+      ],
+      "1": [
+        "i16"
+      ],
+      "rationale": "i20 is the current policy and answers the count directly: five attempts, exponential backoff from 400ms. i16 states three attempts with 2s fixed backoff and is explicitly replaced by i20, so it is the wrong answer to \"current\" \u2014 but it carries the rate-limit rationale that explains the shape of the policy, so it is useful background rather than irrelevant.",
+      "uncertainty": "The line between 1 and 0 for i16 is the real judgment call. A superseded policy is actively misleading if a reader stops there, which argues for 0; I settled on 1 because i20 names and supersedes it explicitly, so the pair reads correctly together and i16 alone is unlikely to be encountered without it. i25 and i12 are retries elsewhere in the system, not card charges, so 0."
+    },
+    "q09": {
+      "2": [
+        "i21",
+        "i08"
+      ],
+      "1": [
+        "i14"
+      ],
+      "rationale": "Both 2s are stated rules about sensitive values in logs, and the need is plural. i21 covers card PANs, including at debug level, and names the sanctioned redaction path. i08 covers bearer tokens, including truncated ones, with the reason. i14 is the logging design decision (one event per request with a correlation id) \u2014 it defines the logging substrate the rules apply to but states no rule about sensitive values.",
+      "uncertainty": "i14 is a borderline 1/0. A correlation id is the non-sensitive alternative to logging a session identifier, which is close to i08's concern, but that connection is mine, not the item's. I would accept 0."
+    },
+    "q15": {
+      "2": [
+        "i22"
+      ],
+      "1": [
+        "i09"
+      ],
+      "rationale": "This need asks specifically for the superseded state, so being superseded is precisely what makes i22 the right answer: manual deploys on Tuesdays and Thursdays after the release call. i09 is the current cadence and is supporting \u2014 it establishes that i22 is the prior one and what replaced it \u2014 but it does not itself state the earlier schedule.",
+      "uncertainty": "None on i22. The i09 label depends on whether a \"before\" question needs the \"after\" for orientation; I say it helps but does not answer."
+    },
+    "q05": {
+      "2": [
+        "i20"
+      ],
+      "1": [
+        "i16"
+      ],
+      "rationale": "i20 carries the reason in its own text \u2014 the acquirer raised the per-merchant rate limit in March, so the three-attempt cap is no longer required. That is the whole answer. i16 supplies the other half of the picture: the three-attempt cap existed because the acquirer rate-limited above five requests per second per merchant, which is what makes the raised limit meaningful. It states the prior constraint but not the reason for the change.",
+      "uncertainty": "i16 could be argued to 2 on the view that a \"why did X change\" need is only fully served by both the old rationale and the new one. I kept it at 1 because the change reason is stated entirely within i20."
+    },
+    "q17": {
+      "2": [
+        "i25"
+      ],
+      "1": [],
+      "rationale": "i25 answers directly: the product search endpoint retries the upstream index twice on timeout, and those retries dominate p99 latency. Nothing else in the collection concerns the search request path.",
+      "uncertainty": "i12 is tagged ci and retry and mentions the search package plus a race in the session store, so it shares vocabulary with this need. I judged it 0 because it is about CI retrying browser tests, not about the search request path retrying the index \u2014 a different retry, in a different layer. This is the one place in the sheet where a term-matching reading and a content reading disagree sharply, and I went with content."
+    },
+    "q14": {
+      "2": [],
+      "1": [],
+      "rationale": "No item describes canary deploys or a rollback procedure. i09 says every passing merge ships automatically, which does not describe canaries or rollback. i03 and i17 both mention a deploy rolling back, but as the consequence of a failed health check during a migration, not as a procedure anyone follows, and neither involves a canary. I judged this need to have no answer here.",
+      "uncertainty": "If an assessor treated i17's \"the health check fails and the deploy rolls back mid-migration\" as evidence about how rollback works mechanically, it would be a weak 1. I declined because the need asks for a procedure for canaries specifically, and stretching to the automatic rollback of a migration answers a different question."
+    },
+    "q10": {
+      "2": [
+        "i09"
+      ],
+      "1": [
+        "i22"
+      ],
+      "rationale": "i09 is the current cadence and answers directly: continuous, every merge to main that passes the gate, no release call and no deploy window. i22 is the replaced schedule \u2014 wrong as an answer to \"current\", useful as background on what the cadence used to be.",
+      "uncertainty": "Same 1-versus-0 tension as i16 on q01. i22 read alone would mislead someone asking when deploys happen today; I gave it 1 on the same reasoning, that i09 explicitly negates it (\"no release call\") and the pair reads correctly together."
+    },
+    "q12": {
+      "2": [
+        "i06"
+      ],
+      "1": [],
+      "rationale": "i06 is the constraint: refunds above 10,000 in any currency need a second approver recorded in the audit trail before the transfer is submitted. Nothing else addresses refund approval.",
+      "uncertainty": "The need asks \"who\", and i06 says \"a second approver\" without naming a role or team. I still call it 2 \u2014 the constraint is the thing being asked for, and the phrasing of the information need is \"find the refund approval constraint\", which i06 is exactly."
+    },
+    "q13": {
+      "2": [
+        "i19"
+      ],
+      "1": [
+        "i23"
+      ],
+      "rationale": "i19 is the decision: the ledger is append-only, corrections are compensating entries, never updates or deletes. i23 is a testing procedure that depends on ledger behaviour (ordering bugs in the ledger showing up on only one of two seeded runs) \u2014 related to the ledger but not a design decision about it.",
+      "uncertainty": "i23 is a marginal 1; it tells you nothing about the design itself, only that ledger ordering is fragile under test. 0 would be defensible. i02/i11 compare settlement files against ledger entries but describe a reconciliation job, not ledger design, so 0."
+    },
+    "q04": {
+      "2": [
+        "i05"
+      ],
+      "1": [
+        "i01",
+        "i08"
+      ],
+      "rationale": "The query term is Kerberos but the stated need is how service-to-service auth works, and the need governs. i05 is the current mechanism: short-lived OIDC tokens from the platform issuer, ten-minute lifetime, refreshed by the sidecar. i01 is the Kerberos/KDC arrangement that i05 replaced \u2014 it matches the query string exactly while being the outdated answer, so it is background, not the answer. i08 is a rule about handling the bearer tokens the current scheme issues, which is supporting evidence about how the scheme operates in practice.",
+      "uncertainty": "i01 is the sharpest superseded-item call on the sheet, because the query literally is its distinguishing term. I judged content against the need rather than against the query string: someone asking how service auth works today is served wrongly by i01. If the need had been \"what did we use before OIDC\", i01 would be the 2. i08's 1 is softer \u2014 it constrains logging rather than describing the auth flow."
+    },
+    "q16": {
+      "2": [
+        "i11"
+      ],
+      "1": [
+        "i02",
+        "i07"
+      ],
+      "rationale": "The need asks what the job does and when it reports, and both items give the same answer for that: compares acquirer settlement files against ledger entries, files a discrepancy report by 06:00 UTC. They differ only in the job's name. i11 is current (sweepcheck) and so is the 2; i02 (nightflow) matches the query term but carries a name that is no longer right, which is the one substantive thing that changed between them \u2014 so it is background. i07 supports by giving the arrival window of the settlement files the job consumes, which bounds when it can run.",
+      "uncertainty": "i02 is a genuinely hard call and I want to flag it rather than smooth it over. Every fact the need asks for is present and correct in i02; only the name is stale, and the name is what the query asked by. An assessor could reasonably grade i02 a 2 on the grounds that it answers both halves of the stated need accurately. I put it at 1 because a reader who takes the job name away from i02 will look for a job that no longer exists under that name."
+    },
+    "q07": {
+      "2": [],
+      "1": [],
+      "rationale": "Nothing in the collection concerns backups, snapshots, restore, or retention. The database items cover migration safety (i03, i17, i24) and ledger design (i19); i24 mentions verifying replication lag, which is replication, not backup. No answer here.",
+      "uncertainty": "None. I considered whether replication in i24 counts as supporting evidence for durability and concluded it does not \u2014 replication lag is a deploy-safety check in that item, and treating it as backup evidence would be stretching."
+    },
+    "q08": {
+      "2": [
+        "i24",
+        "i17"
+      ],
+      "1": [
+        "i03"
+      ],
+      "rationale": "The need is prescriptive, and the two 2s answer it from both directions. i24 is the positive procedure: ship the migration alone, deploy, verify replication lag under one second, then ship the backfill separately. i17 is the prohibition and its reason: never in the same deploy, because the backfill holds the writer until the health check fails and the deploy rolls back mid-migration. i03 is the incident that motivates the rule \u2014 a NOT NULL column with a default on a 40 million row table holding the writer for eleven minutes \u2014 which is evidence for why, not instruction on how.",
+      "uncertainty": "i03 could be argued to 2 if the need is read as \"what happens if we get this wrong\", but as stated the need asks how to deploy, and i03 gives no procedure. I am comfortable with 1."
+    }
+  },
+  "parser_normalisations": [
+    "q06: 'grade 1' field absent from the response; normalised to empty under the sheet's 'everything unlisted is 0' rule"
+  ],
+  "adjudications": [
+    {
+      "query": "q02",
+      "item": "i07",
+      "revision": "m05r1",
+      "assessor_grade": 1,
+      "adjudicated_grade": 0,
+      "reason": "Settlement arrival times provide no evidence about retry behaviour."
+    },
+    {
+      "query": "q09",
+      "item": "i14",
+      "revision": "m14r1",
+      "assessor_grade": 1,
+      "adjudicated_grade": 0,
+      "reason": "Log structure supplies no sensitive-value logging rule. The claim that correlation ids are a safe alternative is not established by this item."
+    },
+    {
+      "query": "q13",
+      "item": "i23",
+      "revision": "m13r1",
+      "assessor_grade": 1,
+      "adjudicated_grade": 0,
+      "reason": "Testing ledger ordering does not explain the append-only design decision."
+    },
+    {
+      "query": "q04",
+      "item": "i08",
+      "revision": "m16r1",
+      "assessor_grade": 1,
+      "adjudicated_grade": 0,
+      "reason": "Token-logging restrictions do not explain the service authentication mechanism."
+    },
+    {
+      "query": "q01",
+      "item": "i16",
+      "revision": "m01r1",
+      "assessor_grade": 1,
+      "adjudicated_grade": 0,
+      "reason": "The obsolete attempt count does not support an explicitly current-policy question. Its rationale is useful for q05 instead, where it remains grade 1."
+    },
+    {
+      "query": "q10",
+      "item": "i22",
+      "revision": "m17r1",
+      "assessor_grade": 1,
+      "adjudicated_grade": 0,
+      "reason": "The obsolete deployment schedule does not support an explicitly current-cadence question. It directly answers q15 instead, where it is grade 2."
+    },
+    {
+      "query": "q16",
+      "item": "i02",
+      "revision": "m21r1",
+      "assessor_grade": 1,
+      "adjudicated_grade": 2,
+      "reason": "Both revisions state the requested function and reporting deadline identically, and the need does not ask for the current job name. An outdated name warrants historical labelling; it does not reduce an unchanged, correct answer to supporting evidence. Relevance and revision currency are separate properties."
+    }
+  ],
+  "judgments": {
+    "q01": {
+      "2": [
+        "i20"
+      ],
+      "1": [],
+      "rationale": "i20 is the current policy and answers the count directly: five attempts, exponential backoff from 400ms. i16 states three attempts with 2s fixed backoff and is explicitly replaced by i20, so it is the wrong answer to \"current\" \u2014 but it carries the rate-limit rationale that explains the shape of the policy, so it is useful background rather than irrelevant.",
+      "uncertainty": "The line between 1 and 0 for i16 is the real judgment call. A superseded policy is actively misleading if a reader stops there, which argues for 0; I settled on 1 because i20 names and supersedes it explicitly, so the pair reads correctly together and i16 alone is unlikely to be encountered without it. i25 and i12 are retries elsewhere in the system, not card charges, so 0."
+    },
+    "q02": {
+      "2": [
+        "i20",
+        "i25",
+        "i12"
+      ],
+      "1": [
+        "i16",
+        "i10",
+        "i15"
+      ],
+      "rationale": "This is a survey need \u2014 it asks for the retry behaviour that exists, plural, not one policy. Three distinct retry mechanisms are described in the collection and each is a direct answer: i20 (card charges, five attempts with exponential backoff), i25 (product search retries the upstream index twice on timeout), i12 (CI retries flaky browser tests up to three times). i16 is the superseded card policy; for a survey of what exists now it is background, so 1 rather than 2. i10 documents that retry behaviour has a dedicated test suite, i15 shows retry behaviour interacting with idempotency, and i07 is arguably a retry-adjacent timing expectation \u2014 all supporting.",
+      "uncertainty": "i07 is the weakest of the 1s; it is about when settlement files arrive and what lateness means, and \"slow transfer\" only gestures at retry. I would not object to 0 there. I also considered demoting i12 to 1 since it is filed as a failure rather than a policy, but it states the actual retry configuration of a real job, which is what the need asks for. Whether i16 should be 0 instead of 1 depends on whether \"exists\" means \"is currently in force\"; I read superseded policy as still useful context for a survey."
+    },
+    "q03": {
+      "2": [
+        "i10"
+      ],
+      "1": [
+        "i23"
+      ],
+      "rationale": "i10 is exactly the procedure asked for \u2014 it names the retry-change trigger, the command, and what it exercises. i23 is a testing procedure for money-movement changes (run the suite twice with different seeds), which would plausibly also apply after a retry change to payments, but it is about ordering bugs in the ledger, not about retry changes, so it is supporting rather than answering.",
+      "uncertainty": "Whether i23 deserves 1 or 0 depends on reading \"after a retry change\" as implying money movement. A retry change in payments touches money movement, so I lean 1, but a stricter reading makes it 0. i20/i16 (the retry policy itself) are context for what changed, not testing procedure, so I left them at 0."
+    },
+    "q04": {
+      "2": [
+        "i05"
+      ],
+      "1": [
+        "i01"
+      ],
+      "rationale": "The query term is Kerberos but the stated need is how service-to-service auth works, and the need governs. i05 is the current mechanism: short-lived OIDC tokens from the platform issuer, ten-minute lifetime, refreshed by the sidecar. i01 is the Kerberos/KDC arrangement that i05 replaced \u2014 it matches the query string exactly while being the outdated answer, so it is background, not the answer. i08 is a rule about handling the bearer tokens the current scheme issues, which is supporting evidence about how the scheme operates in practice.",
+      "uncertainty": "i01 is the sharpest superseded-item call on the sheet, because the query literally is its distinguishing term. I judged content against the need rather than against the query string: someone asking how service auth works today is served wrongly by i01. If the need had been \"what did we use before OIDC\", i01 would be the 2. i08's 1 is softer \u2014 it constrains logging rather than describing the auth flow."
+    },
+    "q05": {
+      "2": [
+        "i20"
+      ],
+      "1": [
+        "i16"
+      ],
+      "rationale": "i20 carries the reason in its own text \u2014 the acquirer raised the per-merchant rate limit in March, so the three-attempt cap is no longer required. That is the whole answer. i16 supplies the other half of the picture: the three-attempt cap existed because the acquirer rate-limited above five requests per second per merchant, which is what makes the raised limit meaningful. It states the prior constraint but not the reason for the change.",
+      "uncertainty": "i16 could be argued to 2 on the view that a \"why did X change\" need is only fully served by both the old rationale and the new one. I kept it at 1 because the change reason is stated entirely within i20."
+    },
+    "q06": {
+      "2": [
+        "i04",
+        "i15"
+      ],
+      "1": [],
+      "rationale": "The need has two halves and each item answers one. i04 gives the caller-facing contract: same key plus same body returns the original receipt, same key plus a different body is rejected rather than merged. i15 gives the failure mode: a client minting a fresh key per retry attempt caused duplicate charges, and the defect was client-side. Together they are the complete answer, and each is directly responsive on its own half.",
+      "uncertainty": "None material. i20/i16 are about retry counts, not keys, and I kept them at 0 even though retries are the setting in which the i15 mistake occurs \u2014 a retry policy does not tell a caller anything about key reuse."
+    },
+    "q07": {
+      "2": [],
+      "1": [],
+      "rationale": "Nothing in the collection concerns backups, snapshots, restore, or retention. The database items cover migration safety (i03, i17, i24) and ledger design (i19); i24 mentions verifying replication lag, which is replication, not backup. No answer here.",
+      "uncertainty": "None. I considered whether replication in i24 counts as supporting evidence for durability and concluded it does not \u2014 replication lag is a deploy-safety check in that item, and treating it as backup evidence would be stretching."
+    },
+    "q08": {
+      "2": [
+        "i24",
+        "i17"
+      ],
+      "1": [
+        "i03"
+      ],
+      "rationale": "The need is prescriptive, and the two 2s answer it from both directions. i24 is the positive procedure: ship the migration alone, deploy, verify replication lag under one second, then ship the backfill separately. i17 is the prohibition and its reason: never in the same deploy, because the backfill holds the writer until the health check fails and the deploy rolls back mid-migration. i03 is the incident that motivates the rule \u2014 a NOT NULL column with a default on a 40 million row table holding the writer for eleven minutes \u2014 which is evidence for why, not instruction on how.",
+      "uncertainty": "i03 could be argued to 2 if the need is read as \"what happens if we get this wrong\", but as stated the need asks how to deploy, and i03 gives no procedure. I am comfortable with 1."
+    },
+    "q09": {
+      "2": [
+        "i21",
+        "i08"
+      ],
+      "1": [],
+      "rationale": "Both 2s are stated rules about sensitive values in logs, and the need is plural. i21 covers card PANs, including at debug level, and names the sanctioned redaction path. i08 covers bearer tokens, including truncated ones, with the reason. i14 is the logging design decision (one event per request with a correlation id) \u2014 it defines the logging substrate the rules apply to but states no rule about sensitive values.",
+      "uncertainty": "i14 is a borderline 1/0. A correlation id is the non-sensitive alternative to logging a session identifier, which is close to i08's concern, but that connection is mine, not the item's. I would accept 0."
+    },
+    "q10": {
+      "2": [
+        "i09"
+      ],
+      "1": [],
+      "rationale": "i09 is the current cadence and answers directly: continuous, every merge to main that passes the gate, no release call and no deploy window. i22 is the replaced schedule \u2014 wrong as an answer to \"current\", useful as background on what the cadence used to be.",
+      "uncertainty": "Same 1-versus-0 tension as i16 on q01. i22 read alone would mislead someone asking when deploys happen today; I gave it 1 on the same reasoning, that i09 explicitly negates it (\"no release call\") and the pair reads correctly together."
+    },
+    "q11": {
+      "2": [],
+      "1": [
+        "i18"
+      ],
+      "rationale": "Nothing here names an owner, team, or person for terminal firmware. i18 is the only item on the subject and it answers a neighbouring question \u2014 that firmware ships on a separate release train and nothing in this repository deploys to the terminals \u2014 which narrows responsibility by exclusion without naming who holds it.",
+      "uncertainty": "A lenient assessor could call i18 a 2 on the grounds that \"a separate firmware release train, not us\" is the practical answer to a \"who owns this\" question. I judged the need literally: it asks who, and no item says who."
+    },
+    "q12": {
+      "2": [
+        "i06"
+      ],
+      "1": [],
+      "rationale": "i06 is the constraint: refunds above 10,000 in any currency need a second approver recorded in the audit trail before the transfer is submitted. Nothing else addresses refund approval.",
+      "uncertainty": "The need asks \"who\", and i06 says \"a second approver\" without naming a role or team. I still call it 2 \u2014 the constraint is the thing being asked for, and the phrasing of the information need is \"find the refund approval constraint\", which i06 is exactly."
+    },
+    "q13": {
+      "2": [
+        "i19"
+      ],
+      "1": [],
+      "rationale": "i19 is the decision: the ledger is append-only, corrections are compensating entries, never updates or deletes. i23 is a testing procedure that depends on ledger behaviour (ordering bugs in the ledger showing up on only one of two seeded runs) \u2014 related to the ledger but not a design decision about it.",
+      "uncertainty": "i23 is a marginal 1; it tells you nothing about the design itself, only that ledger ordering is fragile under test. 0 would be defensible. i02/i11 compare settlement files against ledger entries but describe a reconciliation job, not ledger design, so 0."
+    },
+    "q14": {
+      "2": [],
+      "1": [],
+      "rationale": "No item describes canary deploys or a rollback procedure. i09 says every passing merge ships automatically, which does not describe canaries or rollback. i03 and i17 both mention a deploy rolling back, but as the consequence of a failed health check during a migration, not as a procedure anyone follows, and neither involves a canary. I judged this need to have no answer here.",
+      "uncertainty": "If an assessor treated i17's \"the health check fails and the deploy rolls back mid-migration\" as evidence about how rollback works mechanically, it would be a weak 1. I declined because the need asks for a procedure for canaries specifically, and stretching to the automatic rollback of a migration answers a different question."
+    },
+    "q15": {
+      "2": [
+        "i22"
+      ],
+      "1": [
+        "i09"
+      ],
+      "rationale": "This need asks specifically for the superseded state, so being superseded is precisely what makes i22 the right answer: manual deploys on Tuesdays and Thursdays after the release call. i09 is the current cadence and is supporting \u2014 it establishes that i22 is the prior one and what replaced it \u2014 but it does not itself state the earlier schedule.",
+      "uncertainty": "None on i22. The i09 label depends on whether a \"before\" question needs the \"after\" for orientation; I say it helps but does not answer."
+    },
+    "q16": {
+      "2": [
+        "i02",
+        "i11"
+      ],
+      "1": [
+        "i07"
+      ],
+      "rationale": "The need asks what the job does and when it reports, and both items give the same answer for that: compares acquirer settlement files against ledger entries, files a discrepancy report by 06:00 UTC. They differ only in the job's name. i11 is current (sweepcheck) and so is the 2; i02 (nightflow) matches the query term but carries a name that is no longer right, which is the one substantive thing that changed between them \u2014 so it is background. i07 supports by giving the arrival window of the settlement files the job consumes, which bounds when it can run.",
+      "uncertainty": "i02 is a genuinely hard call and I want to flag it rather than smooth it over. Every fact the need asks for is present and correct in i02; only the name is stale, and the name is what the query asked by. An assessor could reasonably grade i02 a 2 on the grounds that it answers both halves of the stated need accurately. I put it at 1 because a reader who takes the job name away from i02 will look for a job that no longer exists under that name."
+    },
+    "q17": {
+      "2": [
+        "i25"
+      ],
+      "1": [],
+      "rationale": "i25 answers directly: the product search endpoint retries the upstream index twice on timeout, and those retries dominate p99 latency. Nothing else in the collection concerns the search request path.",
+      "uncertainty": "i12 is tagged ci and retry and mentions the search package plus a race in the session store, so it shares vocabulary with this need. I judged it 0 because it is about CI retrying browser tests, not about the search request path retrying the index \u2014 a different retry, in a different layer. This is the one place in the sheet where a term-matching reading and a content reading disagree sharply, and I went with content."
+    }
+  },
+  "annotations": [
+    {
+      "query": "q08",
+      "target": "assessor rationale",
+      "correction": "The rationale calls i03 'the incident that motivates the rule'. The corpus does not establish that this incident motivated the backfill rule; i03 illustrates migration locking risk and nothing links it causally to i17. The grade stays 1; only the stated reasoning overstates.",
+      "grade_changed": false
+    },
+    {
+      "query": "q06",
+      "target": "response structure",
+      "correction": "The grade-1 field is absent from the response rather than left blank. It is normalised to empty under the sheet's own 'everything unlisted is 0' rule, and the parser now reports that normalisation instead of treating the response as structurally complete.",
+      "grade_changed": false
+    }
+  ],
+  "partition": {
+    "declared_before_labels": [
+      "clean",
+      "flagged_post_result_authoring"
+    ],
+    "derived_from_labels": [
+      "no_direct_answer"
+    ],
+    "clean": [
+      "q01",
+      "q02",
+      "q03",
+      "q04",
+      "q05",
+      "q06",
+      "q08",
+      "q09",
+      "q10",
+      "q12",
+      "q13"
+    ],
+    "flagged_post_result_authoring": [
+      "q15",
+      "q16",
+      "q17"
+    ],
+    "no_direct_answer": [
+      "q07",
+      "q11",
+      "q14"
+    ],
+    "unchanged_by_adjudication": "None of the seven adjudications moves a query between sets. The 11/3/3 partition is the same before and after.",
+    "what_clean_means": "A declared exposure category, not an untouched test set. It means: query text authored before any v1 measurement existed, v2 intent free of collection commentary, and no out-of-band exposure to the v2 assessor. It does not mean the corpus or the implementation are uncontaminated by v1 \u2014 they are not."
+  },
+  "no_direct_answer_detail": {
+    "classification": {
+      "q07": "no_relevant_evidence",
+      "q11": "supporting_evidence_only",
+      "q14": "no_relevant_evidence"
+    },
+    "rule": "q07 and q14 have no relevant evidence of any grade. q11 has supporting evidence (i18) but no item that names an owner. Returning i18 for q11 is therefore NOT an irrelevant-result error, and requiring an empty result set for all three would penalise useful context.",
+    "reporting": "For each no-direct-answer query, report returned results in three buckets \u2014 grade-2 (impossible by construction), grade-1, and grade-0 \u2014 never as a single 'wrong results' count.",
+    "agent_behaviour_note": "If an answering agent is evaluated later, the correct behaviour on q11 is to surface i18 and state that ownership is unspecified, without inventing an owner."
+  },
+  "consequences_for_measurement": {
+    "superseded_only_answer_gap_closed": "q15's only grade-2 is m17r1, a superseded revision. It is the only query whose direct answer requires a historical revision, and it closes v1's known_gaps.no_superseded_only_answer.",
+    "q16_denominator": "q16 now has two grade-2 items: m21r2 (current head) and m21r1 (superseded). Its current-head eligibility is 1 item; its search-then-history denominator is 2. Report both, and do not let the two denominators be silently collapsed.",
+    "history_evidence_not_in_the_headline": "Both queries carrying historical grade-2 evidence (q15, q16) are flagged for post-result authoring and sit outside the clean headline. v2's headline can no more estimate the benefit of history browsing than v1's could; the difference is that v2 measures it per-query, which v1 could not. Moving either into the headline after seeing labels is what the partition rule forbids.",
+    "distractor_resistance": "With q11 in the no-direct-answer set, recall-side distractor resistance rests on q17 alone.",
+    "what_the_fresh_assessment_establishes": "Evidence of label consistency, strongest on the intents that did not change. It says nothing whatever about retrieval performance."
+  },
+  "reporting_requirements": [
+    "Report current-head retrieval, search-then-history, and overall task coverage as separate figures. Never collapse them.",
+    "Do not remove difficult queries from the headline result.",
+    "Queries with no grade-2 item have no relevant-item denominator. Never report recall for them; report returned results split into grade-1 and grade-0 buckets.",
+    "Relevance labels are independent of eligibility. A label never changes because the system cannot reach the item.",
+    "Corrections require a new benchmark version with a documented change. Never edit a label in place.",
+    "Quote the exact submitted query string, or mark a shortened form as a display label.",
+    "Say who reviewed. v2 is AI-assessed, AI-audited twice, human-authorised. 'Human-reviewed' is not available for it.",
+    "For q15, report whether m17 appeared in the returned set at all, separately from whether the superseded answer was covered.",
+    "For q16, report the current-head denominator (1) and the search-then-history denominator (2) separately."
+  ],
+  "amendments": [
+    {
+      "item": "provenance.shared_model_bias",
+      "was": "The assessor and the assistant auditor are the same model family. ChatGPT is a different family, which is why its independent reproduction of the agreement figure is worth more than a second pass from the same lineage. None of this is quantified.",
+      "now": "The assessor and the assistant auditor are the same model family; ChatGPT is a different one. Different families give diversity of assessment. No reliability advantage has been measured here, and none is claimed. What gives the second audit its value is that its checks are reproducible \u2014 the grade-2 agreement count, the 425-pair totals and the adjudication replay were each re-derived independently from the frozen inputs.",
+      "raised_by": "audit review",
+      "verified": "The withdrawn wording claimed a cross-family audit was 'worth more ... precisely because it isn't the same lineage'. That asserts a reliability advantage nobody measured. Diversity of assessment is the supportable claim; reproducible checks are what actually carried the audit. No label changed."
+    }
+  ]
+}

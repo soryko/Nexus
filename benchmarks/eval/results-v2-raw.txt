@@ -1,0 +1,88 @@
+build 4c81821  src dirty: False
+  sha256 c884e32c9fad2123…  corpus-v2.json
+  sha256 ccdbe144e21b5f23…  judgments-v2.json
+  sha256 66e86c2098566a21…  protocol-v2.md
+  sha256 318a6fd33ec1145f…  judging-v2-assessor.md
+
+repeatability (two passes, one unchanged database): True
+  not an ordering-invariance claim; load order recorded in results-v2.json
+
+PER-QUERY   head=search only, hist=search-then-history, N/A=zero denominator
+q    set        k   ret    2/1/0         head         hist    P@k
+q01  clean      5     5  1/0/4      1.000 / 1    1.000 / 1  0.200
+               10    10  1/0/9      1.000 / 1    1.000 / 1  0.100
+               20    15  1/0/14     1.000 / 1    1.000 / 1  0.050
+q02  clean      5     3  1/2/0      0.333 / 3    0.333 / 3  0.200
+               10     3  1/2/0      0.333 / 3    0.333 / 3  0.100
+               20     3  1/2/0      0.333 / 3    0.333 / 3  0.050
+q03  clean      5     3  1/1/1      1.000 / 1    1.000 / 1  0.200
+               10     3  1/1/1      1.000 / 1    1.000 / 1  0.100
+               20     3  1/1/1      1.000 / 1    1.000 / 1  0.050
+q04  clean      5     0  0/0/0      0.000 / 1    0.000 / 1  0.000
+               10     0  0/0/0      0.000 / 1    0.000 / 1  0.000
+               20     0  0/0/0      0.000 / 1    0.000 / 1  0.000
+q05  clean      5     5  1/0/4      1.000 / 1    1.000 / 1  0.200
+               10    10  1/0/9      1.000 / 1    1.000 / 1  0.100
+               20    20  1/0/19     1.000 / 1    1.000 / 1  0.050
+q06  clean      5     2  2/0/0      1.000 / 2    1.000 / 2  0.400
+               10     2  2/0/0      1.000 / 2    1.000 / 2  0.200
+               20     2  2/0/0      1.000 / 2    1.000 / 2  0.100
+q07  no-answer  5     5  0/0/5        N/A / 0      N/A / 0  0.000
+               10     9  0/0/9        N/A / 0      N/A / 0  0.000
+               20     9  0/0/9        N/A / 0      N/A / 0  0.000
+q08  clean      5     5  2/1/2      1.000 / 2    1.000 / 2  0.400
+               10     5  2/1/2      1.000 / 2    1.000 / 2  0.200
+               20     5  2/1/2      1.000 / 2    1.000 / 2  0.100
+q09  clean      5     5  2/0/3      1.000 / 2    1.000 / 2  0.400
+               10    10  2/0/8      1.000 / 2    1.000 / 2  0.200
+               20    12  2/0/10     1.000 / 2    1.000 / 2  0.100
+q10  clean      5     2  1/0/1      1.000 / 1    1.000 / 1  0.200
+               10     2  1/0/1      1.000 / 1    1.000 / 1  0.100
+               20     2  1/0/1      1.000 / 1    1.000 / 1  0.050
+q11  no-answer  5     1  0/1/0        N/A / 0      N/A / 0  0.000
+               10     1  0/1/0        N/A / 0      N/A / 0  0.000
+               20     1  0/1/0        N/A / 0      N/A / 0  0.000
+q12  clean      5     1  1/0/0      1.000 / 1    1.000 / 1  0.200
+               10     1  1/0/0      1.000 / 1    1.000 / 1  0.100
+               20     1  1/0/0      1.000 / 1    1.000 / 1  0.050
+q13  clean      5     4  1/0/3      1.000 / 1    1.000 / 1  0.200
+               10     4  1/0/3      1.000 / 1    1.000 / 1  0.100
+               20     4  1/0/3      1.000 / 1    1.000 / 1  0.050
+q14  no-answer  5     5  0/0/5        N/A / 0      N/A / 0  0.000
+               10    10  0/0/10       N/A / 0      N/A / 0  0.000
+               20    13  0/0/13       N/A / 0      N/A / 0  0.000
+q15  flagged    5     5  0/0/5        N/A / 0    0.000 / 1  0.000
+               10    10  0/1/9        N/A / 0    1.000 / 1  0.000
+               20    20  0/1/19       N/A / 0    1.000 / 1  0.000
+q16  flagged    5     0  0/0/0      0.000 / 1    0.000 / 2  0.000
+               10     0  0/0/0      0.000 / 1    0.000 / 2  0.000
+               20     0  0/0/0      0.000 / 1    0.000 / 2  0.000
+q17  flagged    5     5  1/0/4      1.000 / 1    1.000 / 1  0.200
+               10    10  1/0/9      1.000 / 1    1.000 / 1  0.100
+               20    20  1/0/19     1.000 / 1    1.000 / 1  0.050
+
+q15 diagnostic — was m17 returned at all? {'5': False, '10': True, '20': True}
+
+HEADLINE  unweighted mean over the eleven clean queries
+  k=5   head recall 0.848 (11/11)   history recall 0.848 (11/11)   task coverage 10/11
+  k=10  head recall 0.848 (11/11)   history recall 0.848 (11/11)   task coverage 10/11
+  k=20  head recall 0.848 (11/11)   history recall 0.848 (11/11)   task coverage 10/11
+
+FLAGGED (post-result authoring; reported, never averaged into the headline)
+  q15 "what was the deploy schedule before it changed"  k=5: missed  k=10: covered  k=20: covered
+  q16 "nightflow"  k=5: missed  k=10: missed  k=20: missed
+  q17 "how many times does search retry the index"  k=5: covered  k=10: covered  k=20: covered
+
+NO DIRECT ANSWER (recall undefined; returned results split by grade)
+  q07 "what is our database backup schedule"
+      k=5: 5 returned (0 grade-1, 5 grade-0)  k=10: 9 returned (0 grade-1, 9 grade-0)  k=20: 9 returned (0 grade-1, 9 grade-0)
+  q11 "payment terminal firmware"
+      k=5: 1 returned (1 grade-1, 0 grade-0)  k=10: 1 returned (1 grade-1, 0 grade-0)  k=20: 1 returned (1 grade-1, 0 grade-0)
+  q14 "how do we roll back a failed canary"
+      k=5: 5 returned (0 grade-1, 5 grade-0)  k=10: 10 returned (0 grade-1, 10 grade-0)  k=20: 13 returned (0 grade-1, 13 grade-0)
+
+NEGATIVE CONTROLS (independent fixtures)
+  1. FTS postings cleared, 21 memories and 21 head-projection rows retained -> 0 results  PASS
+  2. 15 memories forgotten -> 0 revisions of forgotten memories anywhere  PASS
+
+wrote results-v2.json

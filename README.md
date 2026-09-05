@@ -125,6 +125,14 @@ get <memory_id> <revision> -> the superseded decision, in full
 
 Filters combine with AND. `query` is literal text unless `advanced` is true, which enables FTS5 syntax. `tags_all` and `tags_any` are deliberately separate. An empty request returns recent memories.
 
+Literal mode makes two separate commitments, and they are worth stating apart because one does not imply the other:
+
+1. **FTS5 operators are inert.** `AND`, `OR`, `NEAR`, `*` and quotes in a literal query are matched as text, not obeyed as syntax.
+2. **Multiple tokens combine disjunctively.** A document matches if it contains *any* query token; BM25 then orders the results. This is a recall-first policy, not a consequence of (1) — the same inert-operator rule could equally have been implemented conjunctively. Ask for a phrase or a conjunction through `advanced`.
+
+> [!WARNING]
+> Disjunction means B1 has **no abstention behaviour**. A question with no answer in the store still returns a confidently ordered list, because a common word matches something. Treat an empty result as informative and a non-empty result as *candidates*, not as an assertion that the answer is present.
+
 > [!NOTE]
 > `lexical_rank` is a BM25 ordering value, **not** a confidence or relevance score, and it is only comparable within one result set. BM25 depends on corpus statistics, so a concurrent write can change the ranking of documents that did not themselves change. Cursors are therefore bound to an index generation: after any write, a stale cursor returns `cursor_expired` and the search must be restarted rather than silently returning inconsistent pages.
 

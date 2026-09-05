@@ -57,3 +57,20 @@ Additions B and C may require new corpus items; A is satisfiable with existing i
 - Whether a retrieved memory is *true*, or still applicable to the code as it stands.
 - Anything about repository-verified commits or paths — that is B2.
 - Performance at any realistic corpus size. 23 items measures behaviour, not scale.
+
+---
+
+## Finalisation, recorded after v1 results were read
+
+Everything above this line was locked on 2026-09-05 before any v1 relevance score existed. Everything below was written after v1 run 2 was measured, and is marked as such.
+
+| Locked change | How it was realised | New corpus item? |
+| --- | --- | --- |
+| Five intent rewrites | Query text unchanged, intents rewritten as tabled above; v1 wording preserved in `corpus-v2.json` under `v1_intent` | No |
+| **A.** Historical evidence access | `q15` — "what was the deploy schedule before it changed" | No. `m17` already had the shape: `deploy` in the current head, the old cadence in `m17r1`. |
+| **B.** Obsolete terminology only | `q16` — "nightflow" | **Yes**, `m21`: a pure rename (`nightflow` → `sweepcheck`) whose old name appears in no current head. |
+| **C.** Narrow retry with distractors | `q17` — "how many times does search retry the index" | No. `m01` and `m04` are already lexically adjacent distractors. |
+
+The concrete wording of these three queries, and the content of `m21`, were authored **after** 0.857 was known. That is a different freeze point from the scope lock above, and [v2-packet.md](v2-packet.md) states both. Locking the scope early means the *choice of gaps* was not selected to flatter a number; it does not mean the examples predate the measurement.
+
+One thing this section deliberately does not do: revisit any query outside the five locked rewrites. `q03` and `q14` carry intents that presuppose a procedure exists, which is the same defect class as v1's `q06`/`q08` flags. Fixing `q14` after learning that abstention is the weak spot would be a post-result change to evaluation data, so it stays as written and is recorded as a residual instead.

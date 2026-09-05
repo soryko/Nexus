@@ -1,0 +1,579 @@
+{
+  "benchmark_version": 2,
+  "frozen": true,
+  "frozen_scope": "Corpus content and query wording are frozen as of this file. Labels are NOT part of this freeze: they do not exist yet and are produced by a fresh assessor from judging-v2.md.",
+  "shuffle_seed": 20260906,
+  "shuffle_queries": true,
+  "sheet_preamble": [
+    "**Nothing in this set has been judged, and you are the first assessor to see it.**",
+    "Judgments freeze this benchmark; correcting a label afterwards requires a new version,",
+    "never an edit in place.",
+    "",
+    "You are judging **content against an information need**. Deliberately withheld from you:",
+    "any earlier round of labels, any system output or ranking, how many items are expected to",
+    "match anything, and the reasons particular items or questions exist. None of that should",
+    "affect a judgment, and knowing it would be hard to unsee."
+  ],
+  "sheet_analysis_note": "q15 diagnostic requirement: report whether m17 appeared in the returned set at all, separately from whether the superseded answer was covered. Without that split, a failure from common-word flooding is indistinguishable from a failure of history expansion. This is an analysis requirement for the measurement report, not assessor-facing.",
+  "freeze_record": {
+    "coverage_scope": {
+      "when": "2026-09-05, before any v1 relevance score existed or was seen",
+      "what": "v2-scope.md: the five intent rewrites, the three coverage additions (A historical access, B obsolete terminology, C narrow retry with distractors), and the two-dimension recording of temporal shape."
+    },
+    "concrete_examples": {
+      "when": "after v1 run 2 results were read",
+      "what": "the exact wording of q15/q16/q17 and the m21 rename memory that case B needs.",
+      "consequence": "These are two different freeze points and must not be reported as one. Broad scope locked before results does not make the later concrete examples data that existed before the first measurement. What the earlier lock does buy is that the CHOICE OF GAPS was not selected to flatter a number."
+    },
+    "not_comparable_to_v1": "v2 changes the corpus, the query set and the labels at once. No v2 figure may be compared to a v1 figure. v1 remains the regression baseline for the B1 build it measured."
+  },
+  "retrieval_not_run": "No v2 query has been executed against any build. Case A's reachability was verified by reading the corpus text for shared tokens, not by running search. Running retrieval before labels exist would let query wording be tuned to system behaviour.",
+  "assessor_visibility": {
+    "shown": [
+      "item content",
+      "item kind",
+      "item tags",
+      "which item is an earlier version of which",
+      "query text",
+      "information need"
+    ],
+    "withheld": [
+      "v1 labels and rationales",
+      "any score or result position",
+      "expected answer counts",
+      "test categories and the two temporal dimensions",
+      "design notes explaining why a query or item exists",
+      "which queries are new in v2"
+    ],
+    "residual": "Query ids are presented in a shuffled order in the sheet, but the ids themselves are sequential, so an assessor who reasons about numbering could infer that q15-q17 were added last. Recorded rather than hidden."
+  },
+  "known_authoring_residuals": {
+    "q03_q14_definite_article": "Both carried intents say 'the procedure for...'. This is NOT demonstrated collection leakage: a user can legitimately ask for a procedure the collection does not contain, and the definite article does not establish that one exists. The wording therefore stays as frozen, and it is not a defect requiring replacement. What it may be is a framing effect on the assessor, which is unmeasured. Record it as uncertainty if the assessor's rationale shows it operating; do not count it as a disclosure flag.",
+    "q07_q14_out_of_band_v1": "The v1 judge was told out of band that two queries have no answer. That exposure does not transfer to a fresh assessor, so v2 abstention labels are clean of it. The corpus authors remain exposed.",
+    "q11_information_need_changed": "The v1 intent 'Find anything about terminal firmware' became 'Who is responsible for payment terminal firmware releases?'. That is more than removing collection commentary: it narrows the need to responsibility and so changes the evidence that would satisfy it. The frozen wording is what the assessor judges, and its labels carry NO expectation of resembling v1's. Recorded here because the v2 scope table presented all five rewrites as commentary removal, and for this one that description was incomplete."
+  },
+  "note": "Item ids in the generated sheet are reshuffled with a new seed and DO NOT correspond to v1 item ids. Any cross-version discussion must map through revision ids.",
+  "memories": [
+    {
+      "memory_id": "m01",
+      "revisions": [
+        {
+          "revision_id": "m01r1",
+          "state": "superseded",
+          "kind": "decision",
+          "tags": [
+            "payments",
+            "retry"
+          ],
+          "content": "Retry policy for card charges: three attempts, 2s fixed backoff. Chosen because the acquirer rate-limits above five requests per second per merchant."
+        },
+        {
+          "revision_id": "m01r2",
+          "state": "current",
+          "kind": "decision",
+          "tags": [
+            "payments",
+            "retry"
+          ],
+          "content": "Retry policy for card charges: five attempts with exponential backoff starting at 400ms. The acquirer raised the per-merchant rate limit in March, so the earlier three-attempt cap is no longer required."
+        }
+      ]
+    },
+    {
+      "memory_id": "m02",
+      "revisions": [
+        {
+          "revision_id": "m02r1",
+          "state": "current",
+          "kind": "procedure",
+          "tags": [
+            "payments",
+            "testing"
+          ],
+          "content": "Run the payments integration suite after changing retry behaviour: `pytest tests/integration/payments -k retry`. It exercises the acquirer sandbox and takes about four minutes."
+        }
+      ]
+    },
+    {
+      "memory_id": "m03",
+      "revisions": [
+        {
+          "revision_id": "m03r1",
+          "state": "current",
+          "kind": "constraint",
+          "tags": [
+            "payments",
+            "compliance"
+          ],
+          "content": "Card PANs must never be written to application logs, including at debug level. The redaction filter in payments/logging.py is the only sanctioned path."
+        }
+      ]
+    },
+    {
+      "memory_id": "m04",
+      "revisions": [
+        {
+          "revision_id": "m04r1",
+          "state": "current",
+          "kind": "failure",
+          "tags": [
+            "ci",
+            "retry"
+          ],
+          "content": "The CI job for the search package retries flaky browser tests up to three times. This masked a genuine race in the session store for two weeks before anyone noticed."
+        }
+      ]
+    },
+    {
+      "memory_id": "m05",
+      "revisions": [
+        {
+          "revision_id": "m05r1",
+          "state": "current",
+          "kind": "observation",
+          "tags": [
+            "payments"
+          ],
+          "content": "Settlement files from the acquirer arrive between 02:10 and 02:40 UTC. Anything later than 03:00 has always meant an upstream incident, not a slow transfer."
+        }
+      ]
+    },
+    {
+      "memory_id": "m06",
+      "revisions": [
+        {
+          "revision_id": "m06r1",
+          "state": "superseded",
+          "kind": "decision",
+          "tags": [
+            "auth"
+          ],
+          "content": "Service-to-service authentication uses Kerberos tickets issued by the internal KDC."
+        },
+        {
+          "revision_id": "m06r2",
+          "state": "current",
+          "kind": "decision",
+          "tags": [
+            "auth"
+          ],
+          "content": "Service-to-service authentication uses short-lived OIDC tokens from the platform issuer. Tokens live for ten minutes and are refreshed by the sidecar."
+        }
+      ]
+    },
+    {
+      "memory_id": "m07",
+      "revisions": [
+        {
+          "revision_id": "m07r1",
+          "state": "current",
+          "kind": "constraint",
+          "tags": [
+            "database"
+          ],
+          "content": "Never run a schema migration and a backfill in the same deploy. The backfill holds the writer long enough that the health check fails and the deploy rolls back mid-migration."
+        }
+      ]
+    },
+    {
+      "memory_id": "m08",
+      "revisions": [
+        {
+          "revision_id": "m08r1",
+          "state": "current",
+          "kind": "procedure",
+          "tags": [
+            "database"
+          ],
+          "content": "To add a column safely: ship the migration alone, deploy, verify replication lag under one second, then ship the backfill as a separate change."
+        }
+      ]
+    },
+    {
+      "memory_id": "m09",
+      "revisions": [
+        {
+          "revision_id": "m09r1",
+          "state": "current",
+          "kind": "decision",
+          "tags": [
+            "payments",
+            "idempotency"
+          ],
+          "content": "Charge requests carry a client-supplied idempotency key. A repeat of the same key with the same body returns the original receipt; the same key with a different body is rejected rather than merged."
+        }
+      ]
+    },
+    {
+      "memory_id": "m10",
+      "revisions": [
+        {
+          "revision_id": "m10r1",
+          "state": "current",
+          "kind": "observation",
+          "tags": [
+            "search"
+          ],
+          "content": "The product search endpoint retries the upstream index twice on timeout. Latency at p99 is dominated by those retries, not by the index itself."
+        }
+      ]
+    },
+    {
+      "memory_id": "m11",
+      "revisions": [
+        {
+          "revision_id": "m11r1",
+          "state": "current",
+          "kind": "failure",
+          "tags": [
+            "payments"
+          ],
+          "content": "A duplicate charge incident in January came from a client generating a fresh idempotency key on every retry attempt. The fix was client-side; the server behaved as specified."
+        }
+      ]
+    },
+    {
+      "memory_id": "m12",
+      "revisions": [
+        {
+          "revision_id": "m12r1",
+          "state": "current",
+          "kind": "constraint",
+          "tags": [
+            "payments",
+            "compliance"
+          ],
+          "content": "Refunds above 10,000 in any currency require a second approver recorded in the audit trail before the transfer is submitted."
+        }
+      ]
+    },
+    {
+      "memory_id": "m13",
+      "revisions": [
+        {
+          "revision_id": "m13r1",
+          "state": "current",
+          "kind": "procedure",
+          "tags": [
+            "testing"
+          ],
+          "content": "Before merging anything that touches money movement, run the full suite twice with different random seeds. Ordering bugs in the ledger only show up on one of the two runs."
+        }
+      ]
+    },
+    {
+      "memory_id": "m14",
+      "revisions": [
+        {
+          "revision_id": "m14r1",
+          "state": "current",
+          "kind": "decision",
+          "tags": [
+            "observability"
+          ],
+          "content": "Structured logs use one event per request with a correlation id. Nested spans were tried and dropped: the volume tripled and nobody queried the extra depth."
+        }
+      ]
+    },
+    {
+      "memory_id": "m15",
+      "revisions": [
+        {
+          "revision_id": "m15r1",
+          "state": "current",
+          "kind": "observation",
+          "tags": [
+            "infrastructure"
+          ],
+          "content": "The payment terminal fleet in retail stores runs a separate firmware release train. Nothing in this repository deploys to those terminals."
+        }
+      ]
+    },
+    {
+      "memory_id": "m16",
+      "revisions": [
+        {
+          "revision_id": "m16r1",
+          "state": "current",
+          "kind": "constraint",
+          "tags": [
+            "auth"
+          ],
+          "content": "Never log a bearer token, even truncated. A truncated token is still enough to correlate a session across services."
+        }
+      ]
+    },
+    {
+      "memory_id": "m17",
+      "revisions": [
+        {
+          "revision_id": "m17r1",
+          "state": "superseded",
+          "kind": "procedure",
+          "tags": [
+            "deploy"
+          ],
+          "content": "Deploys go out manually on Tuesdays and Thursdays after the release call."
+        },
+        {
+          "revision_id": "m17r2",
+          "state": "current",
+          "kind": "procedure",
+          "tags": [
+            "deploy"
+          ],
+          "content": "Deploys are continuous: every merge to main that passes the gate ships automatically. There is no release call and no fixed deploy window."
+        }
+      ]
+    },
+    {
+      "memory_id": "m18",
+      "revisions": [
+        {
+          "revision_id": "m18r1",
+          "state": "current",
+          "kind": "observation",
+          "tags": [
+            "payments"
+          ],
+          "content": "Chargeback volume roughly doubles in the two weeks after a promotional campaign. Support staffing has never been adjusted for it."
+        }
+      ]
+    },
+    {
+      "memory_id": "m19",
+      "revisions": [
+        {
+          "revision_id": "m19r1",
+          "state": "current",
+          "kind": "decision",
+          "tags": [
+            "database"
+          ],
+          "content": "The ledger is append-only. Corrections are new compensating entries, never updates or deletes of an existing row."
+        }
+      ]
+    },
+    {
+      "memory_id": "m20",
+      "revisions": [
+        {
+          "revision_id": "m20r1",
+          "state": "current",
+          "kind": "failure",
+          "tags": [
+            "deploy",
+            "database"
+          ],
+          "content": "The June outage was a migration that added a NOT NULL column with a default to a 40 million row table, holding the writer for eleven minutes."
+        }
+      ]
+    },
+    {
+      "memory_id": "m21",
+      "revisions": [
+        {
+          "revision_id": "m21r1",
+          "state": "superseded",
+          "kind": "observation",
+          "tags": [
+            "payments",
+            "reconciliation"
+          ],
+          "content": "The overnight reconciliation job is named nightflow. It compares acquirer settlement files against ledger entries and files a discrepancy report by 06:00 UTC."
+        },
+        {
+          "revision_id": "m21r2",
+          "state": "current",
+          "kind": "observation",
+          "tags": [
+            "payments",
+            "reconciliation"
+          ],
+          "content": "The overnight reconciliation job is named sweepcheck. It compares acquirer settlement files against ledger entries and files a discrepancy report by 06:00 UTC."
+        }
+      ]
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "q01",
+      "text": "how many times do we re-attempt a failed card charge",
+      "intent": "Find the current retry policy for card charges.",
+      "information_need": "current_state",
+      "required_evidence_expected": "current_revision",
+      "provenance": "carried",
+      "v1_intent": null
+    },
+    {
+      "query_id": "q02",
+      "text": "retry policy",
+      "intent": "Find what retry behaviour exists across the system.",
+      "information_need": "current_state",
+      "required_evidence_expected": "both",
+      "provenance": "intent_rewritten",
+      "v1_intent": "Find memories about retry behaviour; several unrelated senses of retry exist in the corpus."
+    },
+    {
+      "query_id": "q03",
+      "text": "payments integration suite",
+      "intent": "Find the procedure for testing after a retry change.",
+      "information_need": "current_state",
+      "required_evidence_expected": "current_revision",
+      "provenance": "carried",
+      "v1_intent": null
+    },
+    {
+      "query_id": "q04",
+      "text": "kerberos",
+      "intent": "Find how service-to-service authentication works.",
+      "information_need": "current_state",
+      "required_evidence_expected": "current_revision",
+      "provenance": "carried",
+      "v1_intent": null
+    },
+    {
+      "query_id": "q05",
+      "text": "why did the retry cap change from three attempts",
+      "intent": "Find the reason the earlier three-attempt policy was replaced.",
+      "information_need": "explanation_of_change",
+      "required_evidence_expected": "current_revision",
+      "provenance": "carried",
+      "v1_intent": null
+    },
+    {
+      "query_id": "q06",
+      "text": "idempotency key",
+      "intent": "How should callers reuse idempotency keys, and what can go wrong?",
+      "information_need": "current_state",
+      "required_evidence_expected": "current_revision",
+      "provenance": "intent_rewritten",
+      "v1_intent": "Find the idempotency contract and any related incident."
+    },
+    {
+      "query_id": "q07",
+      "text": "what is our database backup schedule",
+      "intent": "Find how and how often the database is backed up.",
+      "information_need": "current_state",
+      "required_evidence_expected": "no_answer_expected",
+      "provenance": "carried",
+      "v1_intent": null
+    },
+    {
+      "query_id": "q08",
+      "text": "migration backfill same deploy",
+      "intent": "How should we deploy a schema change that requires a backfill?",
+      "information_need": "current_state",
+      "required_evidence_expected": "current_revision",
+      "provenance": "intent_rewritten",
+      "v1_intent": "Find the constraint and procedure about migrations and backfills."
+    },
+    {
+      "query_id": "q09",
+      "text": "never write secrets to logs",
+      "intent": "What are the rules about writing sensitive values to logs?",
+      "information_need": "current_state",
+      "required_evidence_expected": "current_revision",
+      "provenance": "intent_rewritten",
+      "v1_intent": "Find constraints about logging sensitive values. Neither memory uses the word secrets."
+    },
+    {
+      "query_id": "q10",
+      "text": "when do deploys happen",
+      "intent": "Find the current deploy cadence.",
+      "information_need": "current_state",
+      "required_evidence_expected": "current_revision",
+      "provenance": "carried",
+      "v1_intent": null
+    },
+    {
+      "query_id": "q11",
+      "text": "payment terminal firmware",
+      "intent": "Who is responsible for payment terminal firmware releases?",
+      "information_need": "current_state",
+      "required_evidence_expected": "current_revision",
+      "provenance": "intent_rewritten",
+      "v1_intent": "Find anything about terminal firmware; shares the word payment with much of the corpus."
+    },
+    {
+      "query_id": "q12",
+      "text": "who approves large refunds",
+      "intent": "Find the refund approval constraint.",
+      "information_need": "current_state",
+      "required_evidence_expected": "current_revision",
+      "provenance": "carried",
+      "v1_intent": null
+    },
+    {
+      "query_id": "q13",
+      "text": "append only ledger",
+      "intent": "Find the ledger design decision.",
+      "information_need": "current_state",
+      "required_evidence_expected": "current_revision",
+      "provenance": "carried",
+      "v1_intent": null
+    },
+    {
+      "query_id": "q14",
+      "text": "how do we roll back a failed canary",
+      "intent": "Find the procedure for rolling back a canary deploy that is failing.",
+      "information_need": "current_state",
+      "required_evidence_expected": "no_answer_expected",
+      "provenance": "carried",
+      "v1_intent": null
+    },
+    {
+      "query_id": "q15",
+      "text": "what was the deploy schedule before it changed",
+      "intent": "Find the deploy cadence that was in effect before the current one.",
+      "information_need": "past_state",
+      "required_evidence_expected": "historical_revision",
+      "provenance": "new_v2_case_A",
+      "design_note": "Historical evidence access. The query shares the token 'deploy' with the CURRENT head of m17 ('no fixed deploy window'), so search can reach the memory; the answer it asks for lives in the superseded m17r1. Measures whether search-then-history closes the gap. Withheld from the assessor.",
+      "v1_intent": null
+    },
+    {
+      "query_id": "q16",
+      "text": "nightflow",
+      "intent": "Find what the overnight reconciliation job does and when it reports.",
+      "information_need": "current_state",
+      "required_evidence_expected": "current_revision",
+      "provenance": "new_v2_case_B",
+      "design_note": "Discovery through obsolete terminology only. 'nightflow' occurs in exactly one revision (m21r1, superseded) and in no current head. Head-only search cannot surface the memory at all, so history is never reached: a history endpoint alone cannot solve this case, because history needs a memory id that nothing supplied. Distinct from q04, where the obsolete term and the answer sit in different technologies rather than a rename. Withheld from the assessor.",
+      "v1_intent": null
+    },
+    {
+      "query_id": "q17",
+      "text": "how many times does search retry the index",
+      "intent": "Find the retry behaviour of the product search request path.",
+      "information_need": "current_state",
+      "required_evidence_expected": "current_revision",
+      "provenance": "new_v2_case_C",
+      "design_note": "Narrow retry question with distractors. Other retry mechanisms are present and lexically close: m01 (card charge retries), m04 (CI job for the SEARCH package, retries three times). Restores the disambiguation measurement v1's q02 lost when its intent made the distractors genuinely relevant. Withheld from the assessor.",
+      "v1_intent": null
+    }
+  ],
+  "partition_rules": {
+    "declared": "2026-09-06, before any v2 label existed.",
+    "why_now": "Partition membership must not be decided by what the labels turn out to be. Fixing the rules in advance is what stops a query being moved out of the headline for producing an unexpected result.",
+    "criteria_independent_of_labels": {
+      "clean": "Query text authored before any v1 measurement existed, v2 intent free of collection commentary, and no out-of-band exposure to the v2 assessor. Applies to q01-q14. The v1 judge's exposure does not transfer: a fresh assessor never saw the v1 intents or the out-of-band message about two unanswerable queries.",
+      "flagged_post_result_authoring": "Query wording authored after v1 run 2 was measured, by someone who knew where the system failed. Applies to q15, q16, q17. Reported per-query and prominently, never averaged into the headline. This is a different exposure from v1's disclosure flags and is named differently on purpose.",
+      "note_on_q11": "q11 stays clean. A changed information need is a change to record, not an exposure."
+    },
+    "criteria_that_legitimately_depend_on_labels": {
+      "abstention_set": "A query belongs to the abstention set if the frozen labels give it no grade-2 item. Membership therefore cannot be declared in advance and is read off the labels once frozen. q07 and q14 are expected to land there; the assessor decides.",
+      "boundary": "This is the ONLY partition allowed to depend on labels, because 'has no answer' is the property being measured. Ambiguity, assessor uncertainty, or a label that surprises the implementer are never grounds for moving a query out of the headline."
+    }
+  },
+  "assessor_dispatch": {
+    "date": "2026-09-06",
+    "sheet": "judging-v2.md, dispatched unchanged",
+    "context": "A fresh agent session with no history of this project, this conversation, or the packet documentation. It received the neutral dispatch prompt and the sheet text inline, and nothing else.",
+    "model": "Opus 5 \u2014 the same model family as the auditing session. Shared-model bias between assessor and auditor is acknowledged and unquantified.",
+    "repository_access": "Not given. The sheet was pasted inline specifically so no path could lead to judgments-v1.json, which sits beside it.",
+    "tool_disabling_limitation": "Tools were forbidden by instruction ('Do not read any file, search anything, or use any tool'), not disabled by configuration \u2014 the dispatch mechanism available here has no tools-off switch. The control is therefore instruction-level and its compliance is asserted, not enforced.",
+    "output_handling": "The first response is saved verbatim as judging-v2-assessor.md, including anything wrong or left blank. Adjudication happens against that file, never by editing it."
+  },
+  "v2_provenance_plan": "AI-assessed, AI-audited, human-approved. The fresh assessor is an AI and supplies the initial labels; the assistant audits them; the project owner gives final approval and is the only human in the chain. 'Human-reviewed' must not be used for the assistant's audit."
+}

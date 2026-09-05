@@ -1,7 +1,7 @@
 {
   "benchmark_version": 1,
   "frozen": true,
-  "provenance": "assistant-judged, human-reviewed. The judge is the project owner, who also directed the system's design; the corpus and intents were authored by the implementer. This is not independent assessment and must never be described as such.",
+  "provenance": "Two-party, non-independent assessment: assistant-judged, human-reviewed. The assistant supplied the initial labels; the project owner, a human, reviewed every label and the amendments below record the disagreements that surfaced. The corpus and the query wording were authored on the implementation side, and both parties were exposed to the corpus design before judging. This must never be described as independent assessment, and must not be described as a single assessor who is the project owner. Corrected after review; the superseded wording is preserved verbatim in amendments.",
   "freeze_point": "Frozen before any inspection of relevance results and before any ranking tuning. NOT before ranking implementation: BM25 lexical ranking already existed in B1 when these judgments were made. The judge saw no ranked output, no scores and no result positions.",
   "grades": {
     "2": "directly answers the information need",
@@ -179,7 +179,9 @@
     "Do not remove difficult queries from the headline result. q04 in particular stays: its grade-2 answer is current and eligible, so a miss is a retrieval failure that no ranking change can fix, because the query term appears nowhere in the answer.",
     "q07 and q14 have no relevant-item denominator. Report inappropriate results and abstention for them; never report recall.",
     "Relevance labels are independent of eligibility. A label never changes because the system cannot reach the item.",
-    "Corrections require a new benchmark version with a documented change. Never edit a label in place."
+    "Corrections require a new benchmark version with a documented change. Never edit a label in place.",
+    "Quote the exact submitted query string, or mark a shortened form as a display label. The harness submits the text in the corpus file; a report that silently abbreviates a query makes the measurement unreproducible from the report alone.",
+    "Say who reviewed, not just that review happened. 'Human-reviewed' applies only to checks a human performed. Review by a second AI is AI review, and a report must distinguish AI audit from human approval even when both occurred."
   ],
   "amendments": [
     {
@@ -202,6 +204,27 @@
       "now": "Split into two tiers. Three intents explicitly describe the collection; two express a compound need without promising that matching documents exist. The implementer's claim that q06/q08 label patterns tracked the wording asserted causation from a correlation and is withdrawn.",
       "raised_by": "judge",
       "verified": "accepted; the conservative reporting partition is retained regardless."
+    },
+    {
+      "item": "provenance",
+      "was": "assistant-judged, human-reviewed. The judge is the project owner, who also directed the system's design; the corpus and intents were authored by the implementer. This is not independent assessment and must never be described as such.",
+      "now": "Two-party process: initial labels from the assistant, full review of every label by the project owner. The defect was in results-v1.md, which compressed this into 'a single assessor who is the project owner'. The original 'assistant-judged, human-reviewed' string was correct on ordering; it was only ambiguous because the following sentence named the project owner as 'the judge'.",
+      "raised_by": "audit review",
+      "verified": "Confirmed against the reviewer's account of the process. No label changed."
+    },
+    {
+      "item": "reporting_requirements",
+      "was": "No requirement covered how query strings are quoted in a report.",
+      "now": "Added: exact submitted string, or an explicitly marked display label.",
+      "raised_by": "audit review",
+      "verified": "results-v1.md abbreviated q07 and q14 differently from the judging sheet and the corpus. Report corrected; the requirement is added so v2 does not repeat it."
+    },
+    {
+      "item": "amendments[3] (the provenance amendment itself)",
+      "was": "The first version of that amendment claimed the superseded provenance string 'asserted the opposite ordering of the two roles', and recorded an unresolved conflict between it and the reviewer's account.",
+      "now": "Withdrawn. There was no ordering conflict. 'Assistant-judged, human-reviewed' means the assistant supplied the initial labels and the human reviewed them, which is what happened. The only inaccurate claim was results-v1.md's 'a single assessor who is the project owner'.",
+      "raised_by": "audit review",
+      "verified": "The error was the assistant's, in reading an ambiguous provenance string as a contradiction and reporting a conflict that did not exist. Kept rather than deleted so the amendment history shows the correction."
     }
   ]
 }

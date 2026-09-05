@@ -1,25 +1,40 @@
-"""Emit the blind judging sheet from the frozen corpus.
+"""Emit the blind judging sheet from a frozen corpus.
+
+    python make_judging_sheet.py [version]     # default 1
 
 The sheet deliberately withholds anything that could steer a judgment:
 no query categories, no scores, no result positions, no indication of what the
-implementation would return, and no ordering that reflects authoring order.
+implementation would return, no earlier round of labels, and no ordering that
+reflects authoring order.
 
 It does disclose which items are earlier versions of which, because a judge
 cannot reason about an outdated answer without knowing it was superseded.
 That is corpus structure, not an implementation preference.
+
+Everything version-specific is read from the corpus file rather than branched on
+in code, so regenerating an older sheet reproduces it byte for byte:
+`sheet_preamble` overrides the default instructions, and `shuffle_queries`
+presents the queries in a seeded non-authoring order.
 """
 
 from __future__ import annotations
 
 import json
 import random
+import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
 
+DEFAULT_PREAMBLE = [
+    "**Nothing here has been judged yet, and no ranking work has been done.** Judgments",
+    "freeze this benchmark; correcting a label afterwards requires a new version, never an",
+    "edit in place.",
+]
 
-def build() -> str:
-    corpus = json.loads((HERE / "corpus-v1.json").read_text())
+
+def build(version: int = 1) -> str:
+    corpus = json.loads((HERE / f"corpus-v{version}.json").read_text())
 
     flat = []
     for memory in corpus["memories"]:
@@ -41,9 +56,7 @@ def build() -> str:
     lines = [
         f"# Nexus retrieval benchmark v{corpus['benchmark_version']} — judging sheet",
         "",
-        "**Nothing here has been judged yet, and no ranking work has been done.** Judgments",
-        "freeze this benchmark; correcting a label afterwards requires a new version, never an",
-        "edit in place.",
+        *corpus.get("sheet_preamble", DEFAULT_PREAMBLE),
         "",
         "## How to judge",
         "",
@@ -84,8 +97,12 @@ def build() -> str:
         lines.append(f"> {entry['content']}")
         lines.append("")
 
-    lines += [f"## Queries ({len(corpus['queries'])})", ""]
-    for query in corpus["queries"]:
+    queries = list(corpus["queries"])
+    if corpus.get("shuffle_queries"):
+        random.Random(corpus["shuffle_seed"] + 1).shuffle(queries)
+
+    lines += [f"## Queries ({len(queries)})", ""]
+    for query in queries:
         lines.append(f"### {query['query_id']} — \"{query['text']}\"")
         lines.append("")
         lines.append(f"Information need: {query['intent']}")
@@ -100,5 +117,7 @@ def build() -> str:
 
 
 if __name__ == "__main__":
-    (HERE / "judging-v1.md").write_text(build())
-    print(f"wrote {HERE / 'judging-v1.md'}")
+    version = int(sys.argv[1]) if len(sys.argv) > 1 else 1
+    destination = HERE / f"judging-v{version}.md"
+    destination.write_text(build(version))
+    print(f"wrote {destination}")
