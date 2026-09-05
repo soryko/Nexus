@@ -55,9 +55,11 @@ Two fixtures, built once per size under `exact` and then copied per profile, so 
 
 The long-history slice sits at 25 revisions, above the 20-revision expansion cap, so the cap binds rather than being nominal.
 
-### Retrieval p95 at 10,000 memories — the binding measurement
+### Retrieval p95 — both fixtures, both orders
 
-Every profile was measured in two orders, `exact→split` and `split→exact`, because the first profile measured absorbs cold-cache cost.
+Every profile was measured in two orders, `exact→split` and `split→exact`, because the first profile measured absorbs cold-cache cost. Both fixture sizes are reported; neither is dropped.
+
+At 10,000 memories:
 
 | Profile | p95 forward | p95 reversed | vs baseline | ≤ 50 ms | ≤ 1.5× |
 | --- | ---: | ---: | --- | --- | --- |
@@ -66,9 +68,28 @@ Every profile was measured in two orders, `exact→split` and `split→exact`, b
 | dual | 191.64 ms | 169.86 ms | 8.88× / 8.65× | fail | fail |
 | split | 171.17 ms | 180.35 ms | 7.93× / 9.18× | fail | fail |
 
-At 1,000 memories `dual` and `split` measured 1.74× and 2.04× — over the gate but unremarkable, and at that size the ordering noise is larger than the effect (`stem` swung 25.97 → 16.02 ms between orders). The 10,000 fixture is where the design breaks and where the figures are stable across orders. **Measuring at one size would have missed it.**
+At 1,000 memories:
 
-The cause is mechanical, not a tuning matter. `EXPLAIN QUERY PLAN` on the two-index profiles shows a `USE TEMP B-TREE FOR GROUP BY` over both legs' complete match sets, ahead of the sort the baseline already does. Because matching is disjunctive, nearly everything matches: **2,538 of 3,000 documents** for one two-word query. The union materialises roughly twice the corpus per query, so its cost tracks corpus size rather than result size.
+| Profile | p95 forward | p95 reversed | vs baseline | ≤ 50 ms | ≤ 1.5× |
+| --- | ---: | ---: | --- | --- | --- |
+| exact | 13.99 ms | 17.99 ms | baseline | — | — |
+| stem | 25.97 ms | 16.02 ms | **1.86×** / 0.89× | pass | **fail forward**, pass reversed |
+| dual | 24.39 ms | 29.35 ms | 1.74× / 1.63× | pass | fail both |
+| split | 28.56 ms | 17.73 ms | **2.04×** / 0.99× | pass | fail forward, pass reversed |
+
+**Both rejected variants had already failed the 1.5× ratio gate at 1,000 memories** — `dual` in both orders, `split` in forward order. The 10,000 fixture did not reveal the failure. It revealed the **severity** of the scaling problem, and it is where the figures stop depending on order.
+
+At 1,000 memories the order sensitivity is comparable to the effect being measured, so that size ranks the variants unreliably in **both** directions. Reversed, `split` measured 0.99× — a pass. Forward, the promoted `stem` measured 1.86× — a **gate failure**, against 0.89× reversed. Read on its own, the 1,000 fixture flags the right variants in one order and the wrong one in the other.
+
+**`stem`'s 1,000-memory forward measurement exceeds the ratio gate and is recorded here as a failure, not netted out.** Its promotion rests on the 10,000 fixture, where every profile's two orders agree (`stem` 1.04× / 1.02×, `dual` 8.88× / 8.65×, `split` 7.93× / 9.18×), and on the judgment that a 1.86×/0.89× swing across orders at 1,000 measures run position rather than profile. That judgment is stated so it can be disagreed with; the number it sets aside is above.
+
+### Why the two-index profiles are slow — a partial explanation
+
+`EXPLAIN QUERY PLAN` on the two-index profiles shows a `USE TEMP B-TREE FOR GROUP BY` over both legs' match sets, ahead of the sort the baseline already does. Matching is disjunctive, so those match sets are large: **2,538 of 3,000 documents** for one two-word query. The temporary grouping structure is consistent with the slowdown and points at the union as its likely site.
+
+**It does not isolate the grouping structure's contribution.** `EXPLAIN QUERY PLAN` reports SQLite's high-level execution strategy, not runtime cost ([SQLite: EXPLAIN QUERY PLAN](https://www.sqlite.org/eqp.html)). Nothing measured here separates the temp B-tree from the second leg's own matching and scoring work, and the query-plan inspection was an ad-hoc probe whose output is **not retained in the machine record** — it is reported as a probe, on the same footing as the porter mechanism probe in the charter.
+
+What the measurement supports is a rejection of **these two implementations at these sizes**. It does not establish that two-index designs inherently require this cost. A union built to avoid the grouping step, or matched conjunctively, would be a new registered configuration with its own measurement — not a foregone conclusion either way.
 
 ### Storage — persistent retrieval structures at 10,000 memories
 
@@ -83,28 +104,30 @@ Checkpointed database; every FTS shadow table and every real index counted by ex
 
 `stem` adds no structure at all — it replaces a tokenizer. `dual`'s stemmed index is external-content and stores only postings. `split`'s prose index is standalone and stores its own filtered copy of every body, which is where its 2.27× comes from; that copy was deliberately not hidden behind a view so the gate could see it.
 
-### Write latency — gate met, direction not established
+### Write latency — observed ratios passed in both orders
 
 | Worst observed ratio to baseline, either order, either fixture | ≤ 2× |
 | --- | --- |
 | record p95: 1.68× (dual, 1,000, reversed) | pass |
 | revise p95: 1.82× (dual, 1,000, reversed) | pass |
 
-In forward order the **baseline was slower than all three variants**, which cannot be a real effect: `dual` writes two indexes where `exact` writes one. Reversing the order flipped the pattern — `exact` record p95 went 3.245 → 1.741 ms at 1,000, and `split` went 1.514 → 1.809 — so the measured differences track *position in the run*, not profile. All figures sit between 1.514 and 3.640 ms across every profile, size and order.
+**Observed write ratios passed in both orders.** That is the claim, and it is the whole of it. A worst observed ratio of 1.82× against a 2× gate **does not establish a reliable margin**: it is the extreme of a small set of paired measurements whose run-to-run spread is of the same order as the gap it leaves.
 
-**The write gate is met with margin in both orders. The direction of any profile difference in the write path is not established by this measurement, and is not claimed.**
+The two orders disagree about direction. In forward order the baseline measured slower than all three variants; reversing it moved `exact` record p95 from 3.245 to 1.741 ms at 1,000 while `split` went 1.514 → 1.809. **This demonstrates that the write measurement is order-sensitive. It does not show that ordering explains every difference**, and it is not grounds for calling any individual figure impossible — more index operations do not guarantee a higher observed wall-clock p95, so `dual` measuring faster than `exact` is not by itself incoherent.
+
+All figures sit between 1.514 and 3.640 ms across every profile, size and order. **The direction of any profile difference in the write path is not established by this measurement, and is not claimed.**
 
 ## Outcome
 
-| Profile | Quality gate | Retrieval | Writes | Storage | Verdict |
-| --- | --- | --- | --- | --- | --- |
-| stem | pass | pass | pass | pass | **promoted** |
-| dual | pass | fail | pass | pass | not promoted |
-| split | pass | fail | pass | fail | not promoted |
+| Profile | Quality gate | Retrieval @10k | Retrieval @1k | Writes | Storage | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| stem | pass | pass (1.04× / 1.02×) | **fail forward (1.86×)**, pass reversed | pass | pass | **promoted** |
+| dual | pass | fail (8.88× / 8.65×) | fail both (1.74× / 1.63×) | pass | pass | not promoted |
+| split | pass | fail (7.93× / 9.18×) | fail forward (2.04×), pass reversed | pass | fail | not promoted |
 
-`stem` is the one configuration carried forward. Exceeding a gate does not delete a result: `dual` and `split` stay in the registration table with their numbers.
+`stem` is the one configuration carried forward. Exceeding a gate does not delete a result: `dual` and `split` stay in the registration table with their numbers, and `stem`'s own 1,000-memory forward failure stays in this table rather than being summarised away. The promotion is a judgment that the 1,000-memory ratios measure run position — argued above, and open to disagreement — not a claim that `stem` cleared every measurement taken.
 
-Promoting `stem` **accepts a measured cost**: identifier queries widen (dq09 3→5, dq10 7→11) and grade-0 delivered bytes rise 24%. `split` was the variant that avoided the first of those, and it is not viable as built — the two-index union is what makes it eight times slower, and the standalone prose index is what busts the storage gate. A profile with `split`'s selectivity and one index — selective stemming inside a single tokenizer rather than a second table — would be a **new registered configuration**, not a rerun of this one.
+Promoting `stem` **accepts a measured cost**: identifier queries widen (dq09 3→5, dq10 7→11) and grade-0 delivered bytes rise 24%. `split` was the variant that avoided the first of those, and it is not viable as built: its two-index union is where the eight-fold slowdown appears, and its standalone prose index is what busts the storage gate. A profile with `split`'s selectivity and one index — selective stemming inside a single tokenizer rather than a second table — would be a **new registered configuration**, not a rerun of this one.
 
 ## v2 regression check — what it is and is not
 
