@@ -1,0 +1,273 @@
+"""T1 morphology experiment harness — development data only.
+
+Nothing this script produces is a v2 result. It loads the development corpus into a
+fresh database per index profile, runs every development query through the budgeted
+retrieval pipeline registered in benchmarks/eval/v2-development-queries.md, and reports
+candidate recall and delivered-evidence recall separately.
+
+Usage:  .venv-sqlite/bin/python benchmarks/dev/run_dev_t1.py [profile ...]
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import subprocess
+import sys
+import sqlite3
+import tempfile
+from dataclasses import dataclass, field
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "src"))
+
+from nexus_memory.domain.models import MemoryInput, Scope, SearchQuery  # noqa: E402
+from nexus_memory.memory import MemoryService  # noqa: E402
+from nexus_memory.storage import SQLiteRepository  # noqa: E402
+
+CORPUS = Path(__file__).resolve().parent / "corpus-dev1.json"
+
+# Registered budgets. Changing any of these invalidates the comparison.
+POOL_LIMIT = 20            # distinct eligible memories in the candidate pool
+HISTORY_MEMORIES = 5       # candidate memories whose history may be expanded
+HISTORY_REVISIONS = 20     # revisions per expanded memory
+DELIVERED_ITEMS = 5        # evidence items delivered
+DELIVERED_BYTES = 8 * 1024 # UTF-8 bytes of text and provenance delivered
+DIAGNOSTIC_LIMIT = 100     # outside the budget: used only to separate "never a candidate"
+                           # from "a candidate that the pool limit cut off"
+
+
+@dataclass
+class QueryResult:
+    query_id: str
+    query_class: str
+    text: str
+    grade2_memories: list[str]
+    grade2_revisions: list[str]
+    grade1_memories: list[str]
+    pool: list[str] = field(default_factory=list)
+    pool_provenance: dict[str, str] = field(default_factory=dict)
+    matched_beyond_pool: list[str] = field(default_factory=list)
+    expanded: list[str] = field(default_factory=list)
+    discovered_revisions: list[str] = field(default_factory=list)
+    delivered: list[str] = field(default_factory=list)
+    delivered_bytes: int = 0
+    delivered_bytes_by_grade: dict[str, int] = field(default_factory=lambda: {"2": 0, "1": 0, "0": 0})
+    stopped_by: str | None = None
+    misses: dict[str, str] = field(default_factory=dict)
+
+    def grade(self, memory_id: str) -> str:
+        if memory_id in self.grade2_memories:
+            return "2"
+        if memory_id in self.grade1_memories:
+            return "1"
+        return "0"
+
+    def candidate_recall(self) -> float | None:
+        if not self.grade2_memories:
+            return None
+        found = sum(1 for memory_id in self.grade2_memories if memory_id in self.pool)
+        return found / len(self.grade2_memories)
+
+    def delivered_recall(self) -> float | None:
+        if not self.grade2_memories:
+            return None
+        found = sum(1 for memory_id in self.grade2_memories if memory_id in self.delivered)
+        return found / len(self.grade2_memories)
+
+
+def load_corpus() -> dict:
+    return json.loads(CORPUS.read_text())
+
+
+def build(path: Path, corpus: dict, profile: str) -> tuple[MemoryService, dict[str, str]]:
+    """Load every memory in file order, replaying revisions so history is real."""
+    service = MemoryService(SQLiteRepository(path, index_profile=profile), Scope("dev", "local"))
+    fixture_to_memory: dict[str, str] = {}
+    revision_map: dict[str, str] = {}
+    for memory in corpus["memories"]:
+        current_revision = None
+        memory_id = None
+        for index, revision in enumerate(memory["revisions"]):
+            item = MemoryInput(revision["content"], kind=revision["kind"], tags=tuple(revision["tags"]))
+            if index == 0:
+                receipt = service.record(item, f"{memory['memory_id']}-{index}")
+                memory_id = receipt.memory_id
+            else:
+                receipt = service.revise(memory_id, current_revision, item, f"{memory['memory_id']}-{index}")
+            current_revision = receipt.revision_id
+            revision_map[revision["revision_id"]] = receipt.revision_id
+        fixture_to_memory[memory["memory_id"]] = memory_id
+    return service, {
+        "memories": fixture_to_memory,
+        "revisions": revision_map,
+        "to_fixture": {**{v: k for k, v in fixture_to_memory.items()},
+                       **{v: k for k, v in revision_map.items()}},
+    }
+
+
+def run_query(service: MemoryService, query: dict, mapping: dict) -> QueryResult:
+    to_memory = mapping["memories"]
+    to_revision = mapping["revisions"]
+    result = QueryResult(
+        query_id=query["query_id"],
+        query_class=query["class"],
+        text=query["text"],
+        grade2_memories=[to_memory[m] for m in query.get("grade2", [])],
+        grade2_revisions=[to_revision[r] for r in query.get("grade2_revisions", [])],
+        grade1_memories=[to_memory[m] for m in query.get("grade1", [])],
+    )
+
+    # --- candidate pool -------------------------------------------------------------
+    page = service.search(SearchQuery(query=query["text"], limit=POOL_LIMIT))
+    for hit in page.hits:
+        if hit.memory_id not in result.pool:
+            result.pool.append(hit.memory_id)
+            # Provenance of the match. Head-only search in this build always matches the
+            # current revision; the field exists so T2 can record a superseded match here
+            # without changing the accounting.
+            result.pool_provenance[hit.memory_id] = hit.revision_id
+
+    diagnostic = service.search(SearchQuery(query=query["text"], limit=DIAGNOSTIC_LIMIT))
+    result.matched_beyond_pool = [h.memory_id for h in diagnostic.hits if h.memory_id not in result.pool]
+
+    # --- history expansion ----------------------------------------------------------
+    # Selection uses retrieved evidence only: rank order, and the has_earlier_revisions
+    # flag the search itself reports. Known answer ids are never consulted.
+    expandable = [hit.memory_id for hit in page.hits if hit.has_earlier_revisions]
+    result.expanded = expandable[:HISTORY_MEMORIES]
+    for memory_id in result.expanded:
+        history = service.history(memory_id, limit=HISTORY_REVISIONS)
+        result.discovered_revisions.extend(entry.revision_id for entry in history.entries)
+
+    # --- delivered context ----------------------------------------------------------
+    for memory_id in result.pool:
+        if len(result.delivered) >= DELIVERED_ITEMS:
+            result.stopped_by = "delivered_item_cap"
+            break
+        view = service.get(memory_id)
+        provenance = json.dumps({"memory_id": view.memory_id, "revision_id": view.revision_id,
+                                 "kind": view.kind, "tags": list(view.tags)}, separators=(",", ":"))
+        size = len(view.content.encode("utf-8")) + len(provenance.encode("utf-8"))
+        if result.delivered_bytes + size > DELIVERED_BYTES:
+            result.stopped_by = "delivered_byte_cap"
+            break
+        result.delivered.append(memory_id)
+        result.delivered_bytes += size
+        result.delivered_bytes_by_grade[result.grade(memory_id)] += size
+
+    # --- miss attribution -----------------------------------------------------------
+    for memory_id in result.grade2_memories:
+        if memory_id in result.delivered:
+            continue
+        if memory_id not in result.pool:
+            reason = "pool_overflow" if memory_id in result.matched_beyond_pool else "candidate_generation"
+        elif result.stopped_by == "delivered_byte_cap":
+            reason = "delivered_byte_cap"
+        else:
+            reason = "delivered_item_cap"
+        result.misses[memory_id] = reason
+    for revision_id in result.grade2_revisions:
+        if revision_id not in result.discovered_revisions:
+            result.misses[revision_id] = "history_not_reached"
+    return result
+
+
+def mean(values: list[float]) -> float | None:
+    return round(sum(values) / len(values), 4) if values else None
+
+
+def run_profile(corpus: dict, profile: str) -> dict:
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "memory.sqlite3"
+        service, mapping = build(path, corpus, profile)
+        results = [run_query(service, query, mapping) for query in corpus["queries"]]
+        sizes = index_sizes(path)
+        label = mapping["to_fixture"]
+
+    by_class: dict[str, dict] = {}
+    for result in results:
+        bucket = by_class.setdefault(result.query_class, {"candidate": [], "delivered": []})
+        if result.candidate_recall() is not None:
+            bucket["candidate"].append(result.candidate_recall())
+            bucket["delivered"].append(result.delivered_recall())
+    return {
+        "profile": profile,
+        "index_bytes": sizes,
+        "per_class": {
+            name: {"candidate_recall": mean(values["candidate"]),
+                   "delivered_recall": mean(values["delivered"]),
+                   "queries": len(values["candidate"])}
+            for name, values in sorted(by_class.items())
+        },
+        "grade0_delivered_bytes": sum(r.delivered_bytes_by_grade["0"] for r in results),
+        "grade2_delivered_bytes": sum(r.delivered_bytes_by_grade["2"] for r in results),
+        "grade1_delivered_bytes": sum(r.delivered_bytes_by_grade["1"] for r in results),
+        "per_query": [
+            {"query_id": r.query_id, "class": r.query_class, "text": r.text,
+             "pool_size": len(r.pool), "delivered": len(r.delivered),
+             "delivered_bytes": r.delivered_bytes,
+             "candidate_recall": r.candidate_recall(), "delivered_recall": r.delivered_recall(),
+             "rank_of_answers": {label[m]: (r.pool.index(m) + 1 if m in r.pool else None)
+                                 for m in r.grade2_memories},
+             "stopped_by": r.stopped_by,
+             "misses": {label[k]: v for k, v in r.misses.items()},
+             "revisions_discovered": len(r.discovered_revisions)}
+            for r in results
+        ],
+    }
+
+
+def index_sizes(path: Path) -> dict[str, int]:
+    """Persistent retrieval structures, measured on a checkpointed database.
+
+    Reported per table so an added index cannot hide inside the total, and with the
+    whole-database size beside it so a growing outbox cannot be mistaken for one.
+    """
+    db = sqlite3.connect(path)
+    try:
+        db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        page_size = db.execute("PRAGMA page_size").fetchone()[0]
+        sizes: dict[str, int] = {}
+        for name in ("head_fts", "head_fts_stem", "head_fts_prose", "head_index", "head_tags"):
+            exists = db.execute("SELECT count(*) FROM sqlite_master WHERE name=?", (name,)).fetchone()[0]
+            if not exists:
+                continue
+            try:
+                pages = db.execute("SELECT sum(pgsize) FROM dbstat WHERE name LIKE ?", (name + "%",)).fetchone()[0]
+            except sqlite3.OperationalError:
+                pages = None
+            sizes[name] = pages if pages is not None else 0
+        sizes["_database_file"] = path.stat().st_size
+        sizes["_page_size"] = page_size
+        return sizes
+    finally:
+        db.close()
+
+
+def main() -> None:
+    profiles = sys.argv[1:] or ["exact", "stem", "dual", "split"]
+    corpus = load_corpus()
+    commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
+                            capture_output=True, text=True).stdout.strip()
+    record = {
+        "experiment": "T1 morphology",
+        "development_data": True,
+        "not_a_v2_result": True,
+        "build_commit": commit,
+        "interpreter": sys.executable,
+        "sqlite_version": sqlite3.sqlite_version,
+        "corpus_sha256": hashlib.sha256(CORPUS.read_bytes()).hexdigest(),
+        "budgets": {"pool": POOL_LIMIT, "history_memories": HISTORY_MEMORIES,
+                    "history_revisions": HISTORY_REVISIONS, "delivered_items": DELIVERED_ITEMS,
+                    "delivered_bytes": DELIVERED_BYTES, "diagnostic_limit": DIAGNOSTIC_LIMIT},
+        "profiles": [run_profile(corpus, profile) for profile in profiles],
+    }
+    out = Path(__file__).resolve().parent / "results-dev-t1.json"
+    out.write_text(json.dumps(record, indent=2) + "\n")
+    print(json.dumps({p["profile"]: p["per_class"] for p in record["profiles"]}, indent=2))
+    print(f"\nwritten: {out}")
+
+
+if __name__ == "__main__":
+    main()

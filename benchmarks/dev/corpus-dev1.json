@@ -16,7 +16,7 @@
        "content": "Caption jobs expire after 72 hours in the queue. An expired job is not retried automatically; the asset must be resubmitted through the ingest API."}]},
 
     {"memory_id": "d02", "revisions": [
-      {"revision_id": "d02r1", "state": "current", "kind": "note", "tags": ["thumbnails"],
+      {"revision_id": "d02r1", "state": "current", "kind": "observation", "tags": ["thumbnails"],
        "content": "Thumbnails fail to generate when the source has no keyframe in the first ten seconds. The pipeline falls back to a solid-colour placeholder rather than blocking publication."}]},
 
     {"memory_id": "d03", "revisions": [
@@ -36,7 +36,7 @@
        "content": "Assets are published on the hour, not continuously. A publish that misses its slot waits for the next one; there is no expedite path."}]},
 
     {"memory_id": "d07", "revisions": [
-      {"revision_id": "d07r1", "state": "current", "kind": "note", "tags": ["pipeline", "notifications"],
+      {"revision_id": "d07r1", "state": "current", "kind": "observation", "tags": ["pipeline", "notifications"],
        "content": "The pipeline notifies subscribers when rendering completes, over a webhook with at-least-once delivery. Duplicate callbacks are normal and the receiver must be idempotent."}]},
 
     {"memory_id": "d08", "revisions": [
@@ -48,7 +48,7 @@
        "content": "An asset reaches AssetState.PUBLISHED only after captions, thumbnails and at least one playable rendition all exist. The state machine refuses the transition otherwise."}]},
 
     {"memory_id": "d10", "revisions": [
-      {"revision_id": "d10r1", "state": "current", "kind": "note", "tags": ["api", "code"],
+      {"revision_id": "d10r1", "state": "current", "kind": "observation", "tags": ["api", "code"],
        "content": "Players fetch /v3/assets/manifest for the rendition list. The v2 path is frozen and serves only clients pinned before the March cutover."}]},
 
     {"memory_id": "d11", "revisions": [
@@ -64,23 +64,23 @@
        "content": "To change an encode ladder, add the new rung alongside the old one, re-encode a sample of 50 assets, and compare VMAF before removing anything."}]},
 
     {"memory_id": "d14", "revisions": [
-      {"revision_id": "d14r1", "state": "current", "kind": "note", "tags": ["cdn"],
+      {"revision_id": "d14r1", "state": "current", "kind": "observation", "tags": ["cdn"],
        "content": "Edge caches hold manifests for 30 seconds and segments for a year. A bad manifest therefore clears quickly; a bad segment does not, and needs a purge."}]},
 
     {"memory_id": "d15", "revisions": [
-      {"revision_id": "d15r1", "state": "current", "kind": "note", "tags": ["storage"],
+      {"revision_id": "d15r1", "state": "current", "kind": "observation", "tags": ["storage"],
        "content": "Mezzanine files are the only copies kept at full quality. Deleting one means every future rendition is generated from an already-compressed source."}]},
 
     {"memory_id": "d16", "revisions": [
-      {"revision_id": "d16r1", "state": "current", "kind": "note", "tags": ["licensing"],
+      {"revision_id": "d16r1", "state": "current", "kind": "observation", "tags": ["licensing"],
        "content": "Territory restrictions are evaluated at playback, not at publication. An asset can be published globally and still be unplayable in most markets."}]},
 
     {"memory_id": "d17", "revisions": [
-      {"revision_id": "d17r1", "state": "current", "kind": "note", "tags": ["thumbnails"],
+      {"revision_id": "d17r1", "state": "current", "kind": "observation", "tags": ["thumbnails"],
        "content": "Thumbnail sprites are regenerated whenever the poster frame changes. The sprite sheet and the poster share a cache key, so they can never disagree."}]},
 
     {"memory_id": "d18", "revisions": [
-      {"revision_id": "d18r1", "state": "current", "kind": "note", "tags": ["ingest"],
+      {"revision_id": "d18r1", "state": "current", "kind": "observation", "tags": ["ingest"],
        "content": "Uploads arrive as a single multipart request. Resumable upload was evaluated and rejected: publisher sessions are short and the added state was not worth it."}]},
 
     {"memory_id": "d19", "revisions": [
@@ -88,15 +88,15 @@
        "content": "Never re-encode from a delivery rendition. Generation loss compounds quickly and the result is not recoverable without the mezzanine."}]},
 
     {"memory_id": "d20", "revisions": [
-      {"revision_id": "d20r1", "state": "superseded", "kind": "note", "tags": ["pipeline"],
+      {"revision_id": "d20r1", "state": "superseded", "kind": "observation", "tags": ["pipeline"],
        "content": "The orchestration service is called flowreel. It owns job scheduling for every stage between ingest and publication."},
-      {"revision_id": "d20r2", "state": "current", "kind": "note", "tags": ["pipeline"],
+      {"revision_id": "d20r2", "state": "current", "kind": "observation", "tags": ["pipeline"],
        "content": "The orchestration service is called assetline. It owns job scheduling for every stage between ingest and publication."}]},
 
     {"memory_id": "d21", "revisions": [
-      {"revision_id": "d21r1", "state": "superseded", "kind": "note", "tags": ["pipeline", "legacy"],
+      {"revision_id": "d21r1", "state": "superseded", "kind": "observation", "tags": ["pipeline", "legacy"],
        "content": "Audio is remuxed by the mux2 path for every asset."},
-      {"revision_id": "d21r2", "state": "current", "kind": "note", "tags": ["pipeline", "legacy"],
+      {"revision_id": "d21r2", "state": "current", "kind": "observation", "tags": ["pipeline", "legacy"],
        "content": "Audio is remuxed by the mux2 path only for archive assets ingested before 2024. Everything newer goes through the current remuxer."}]},
 
     {"memory_id": "d22", "revisions": [
@@ -106,11 +106,11 @@
        "content": "Caption turnaround is 6 hours from ingest for every title."}]},
 
     {"memory_id": "d23", "revisions": [
-      {"revision_id": "d23r1", "state": "current", "kind": "note", "tags": ["playback"],
+      {"revision_id": "d23r1", "state": "current", "kind": "observation", "tags": ["playback"],
        "content": "Playback start time is measured from the first manifest request, not from the user's tap. The gap between the two is a client concern and is not in our numbers."}]},
 
     {"memory_id": "d24", "revisions": [
-      {"revision_id": "d24r1", "state": "current", "kind": "note", "tags": ["encoding"],
+      {"revision_id": "d24r1", "state": "current", "kind": "observation", "tags": ["encoding"],
        "content": "The encode ladder tops out at 1080p. 4K was descoped in planning and no rung above 1080p exists in any profile."}]}
   ],
 
