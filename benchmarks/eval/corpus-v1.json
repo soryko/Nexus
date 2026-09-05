@@ -1,0 +1,409 @@
+{
+  "benchmark_version": 1,
+  "frozen": false,
+  "shuffle_seed": 20260905,
+  "note": "Corpus and intents are authored before any judgments exist and before any ranking work. Query categories are withheld from the judging sheet so they cannot steer a judgment; they are recorded here for post-freeze analysis only.",
+  "memories": [
+    {
+      "memory_id": "m01",
+      "revisions": [
+        {
+          "revision_id": "m01r1",
+          "state": "superseded",
+          "kind": "decision",
+          "tags": [
+            "payments",
+            "retry"
+          ],
+          "content": "Retry policy for card charges: three attempts, 2s fixed backoff. Chosen because the acquirer rate-limits above five requests per second per merchant."
+        },
+        {
+          "revision_id": "m01r2",
+          "state": "current",
+          "kind": "decision",
+          "tags": [
+            "payments",
+            "retry"
+          ],
+          "content": "Retry policy for card charges: five attempts with exponential backoff starting at 400ms. The acquirer raised the per-merchant rate limit in March, so the earlier three-attempt cap is no longer required."
+        }
+      ]
+    },
+    {
+      "memory_id": "m02",
+      "revisions": [
+        {
+          "revision_id": "m02r1",
+          "state": "current",
+          "kind": "procedure",
+          "tags": [
+            "payments",
+            "testing"
+          ],
+          "content": "Run the payments integration suite after changing retry behaviour: `pytest tests/integration/payments -k retry`. It exercises the acquirer sandbox and takes about four minutes."
+        }
+      ]
+    },
+    {
+      "memory_id": "m03",
+      "revisions": [
+        {
+          "revision_id": "m03r1",
+          "state": "current",
+          "kind": "constraint",
+          "tags": [
+            "payments",
+            "compliance"
+          ],
+          "content": "Card PANs must never be written to application logs, including at debug level. The redaction filter in payments/logging.py is the only sanctioned path."
+        }
+      ]
+    },
+    {
+      "memory_id": "m04",
+      "revisions": [
+        {
+          "revision_id": "m04r1",
+          "state": "current",
+          "kind": "failure",
+          "tags": [
+            "ci",
+            "retry"
+          ],
+          "content": "The CI job for the search package retries flaky browser tests up to three times. This masked a genuine race in the session store for two weeks before anyone noticed."
+        }
+      ]
+    },
+    {
+      "memory_id": "m05",
+      "revisions": [
+        {
+          "revision_id": "m05r1",
+          "state": "current",
+          "kind": "observation",
+          "tags": [
+            "payments"
+          ],
+          "content": "Settlement files from the acquirer arrive between 02:10 and 02:40 UTC. Anything later than 03:00 has always meant an upstream incident, not a slow transfer."
+        }
+      ]
+    },
+    {
+      "memory_id": "m06",
+      "revisions": [
+        {
+          "revision_id": "m06r1",
+          "state": "superseded",
+          "kind": "decision",
+          "tags": [
+            "auth"
+          ],
+          "content": "Service-to-service authentication uses Kerberos tickets issued by the internal KDC."
+        },
+        {
+          "revision_id": "m06r2",
+          "state": "current",
+          "kind": "decision",
+          "tags": [
+            "auth"
+          ],
+          "content": "Service-to-service authentication uses short-lived OIDC tokens from the platform issuer. Tokens live for ten minutes and are refreshed by the sidecar."
+        }
+      ]
+    },
+    {
+      "memory_id": "m07",
+      "revisions": [
+        {
+          "revision_id": "m07r1",
+          "state": "current",
+          "kind": "constraint",
+          "tags": [
+            "database"
+          ],
+          "content": "Never run a schema migration and a backfill in the same deploy. The backfill holds the writer long enough that the health check fails and the deploy rolls back mid-migration."
+        }
+      ]
+    },
+    {
+      "memory_id": "m08",
+      "revisions": [
+        {
+          "revision_id": "m08r1",
+          "state": "current",
+          "kind": "procedure",
+          "tags": [
+            "database"
+          ],
+          "content": "To add a column safely: ship the migration alone, deploy, verify replication lag under one second, then ship the backfill as a separate change."
+        }
+      ]
+    },
+    {
+      "memory_id": "m09",
+      "revisions": [
+        {
+          "revision_id": "m09r1",
+          "state": "current",
+          "kind": "decision",
+          "tags": [
+            "payments",
+            "idempotency"
+          ],
+          "content": "Charge requests carry a client-supplied idempotency key. A repeat of the same key with the same body returns the original receipt; the same key with a different body is rejected rather than merged."
+        }
+      ]
+    },
+    {
+      "memory_id": "m10",
+      "revisions": [
+        {
+          "revision_id": "m10r1",
+          "state": "current",
+          "kind": "observation",
+          "tags": [
+            "search"
+          ],
+          "content": "The product search endpoint retries the upstream index twice on timeout. Latency at p99 is dominated by those retries, not by the index itself."
+        }
+      ]
+    },
+    {
+      "memory_id": "m11",
+      "revisions": [
+        {
+          "revision_id": "m11r1",
+          "state": "current",
+          "kind": "failure",
+          "tags": [
+            "payments"
+          ],
+          "content": "A duplicate charge incident in January came from a client generating a fresh idempotency key on every retry attempt. The fix was client-side; the server behaved as specified."
+        }
+      ]
+    },
+    {
+      "memory_id": "m12",
+      "revisions": [
+        {
+          "revision_id": "m12r1",
+          "state": "current",
+          "kind": "constraint",
+          "tags": [
+            "payments",
+            "compliance"
+          ],
+          "content": "Refunds above 10,000 in any currency require a second approver recorded in the audit trail before the transfer is submitted."
+        }
+      ]
+    },
+    {
+      "memory_id": "m13",
+      "revisions": [
+        {
+          "revision_id": "m13r1",
+          "state": "current",
+          "kind": "procedure",
+          "tags": [
+            "testing"
+          ],
+          "content": "Before merging anything that touches money movement, run the full suite twice with different random seeds. Ordering bugs in the ledger only show up on one of the two runs."
+        }
+      ]
+    },
+    {
+      "memory_id": "m14",
+      "revisions": [
+        {
+          "revision_id": "m14r1",
+          "state": "current",
+          "kind": "decision",
+          "tags": [
+            "observability"
+          ],
+          "content": "Structured logs use one event per request with a correlation id. Nested spans were tried and dropped: the volume tripled and nobody queried the extra depth."
+        }
+      ]
+    },
+    {
+      "memory_id": "m15",
+      "revisions": [
+        {
+          "revision_id": "m15r1",
+          "state": "current",
+          "kind": "observation",
+          "tags": [
+            "infrastructure"
+          ],
+          "content": "The payment terminal fleet in retail stores runs a separate firmware release train. Nothing in this repository deploys to those terminals."
+        }
+      ]
+    },
+    {
+      "memory_id": "m16",
+      "revisions": [
+        {
+          "revision_id": "m16r1",
+          "state": "current",
+          "kind": "constraint",
+          "tags": [
+            "auth"
+          ],
+          "content": "Never log a bearer token, even truncated. A truncated token is still enough to correlate a session across services."
+        }
+      ]
+    },
+    {
+      "memory_id": "m17",
+      "revisions": [
+        {
+          "revision_id": "m17r1",
+          "state": "superseded",
+          "kind": "procedure",
+          "tags": [
+            "deploy"
+          ],
+          "content": "Deploys go out manually on Tuesdays and Thursdays after the release call."
+        },
+        {
+          "revision_id": "m17r2",
+          "state": "current",
+          "kind": "procedure",
+          "tags": [
+            "deploy"
+          ],
+          "content": "Deploys are continuous: every merge to main that passes the gate ships automatically. There is no release call and no fixed deploy window."
+        }
+      ]
+    },
+    {
+      "memory_id": "m18",
+      "revisions": [
+        {
+          "revision_id": "m18r1",
+          "state": "current",
+          "kind": "observation",
+          "tags": [
+            "payments"
+          ],
+          "content": "Chargeback volume roughly doubles in the two weeks after a promotional campaign. Support staffing has never been adjusted for it."
+        }
+      ]
+    },
+    {
+      "memory_id": "m19",
+      "revisions": [
+        {
+          "revision_id": "m19r1",
+          "state": "current",
+          "kind": "decision",
+          "tags": [
+            "database"
+          ],
+          "content": "The ledger is append-only. Corrections are new compensating entries, never updates or deletes of an existing row."
+        }
+      ]
+    },
+    {
+      "memory_id": "m20",
+      "revisions": [
+        {
+          "revision_id": "m20r1",
+          "state": "current",
+          "kind": "failure",
+          "tags": [
+            "deploy",
+            "database"
+          ],
+          "content": "The June outage was a migration that added a NOT NULL column with a default to a 40 million row table, holding the writer for eleven minutes."
+        }
+      ]
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "q01",
+      "text": "how many times do we re-attempt a failed card charge",
+      "intent": "Find the current retry policy for card charges.",
+      "category": "paraphrase"
+    },
+    {
+      "query_id": "q02",
+      "text": "retry policy",
+      "intent": "Find memories about retry behaviour; several unrelated senses of retry exist in the corpus.",
+      "category": "misleading_overlap"
+    },
+    {
+      "query_id": "q03",
+      "text": "payments integration suite",
+      "intent": "Find the procedure for testing after a retry change.",
+      "category": "description"
+    },
+    {
+      "query_id": "q04",
+      "text": "kerberos",
+      "intent": "Find how service-to-service authentication works.",
+      "category": "historical"
+    },
+    {
+      "query_id": "q05",
+      "text": "why did the retry cap change from three attempts",
+      "intent": "Find the reason the earlier three-attempt policy was replaced.",
+      "category": "historical"
+    },
+    {
+      "query_id": "q06",
+      "text": "idempotency key",
+      "intent": "Find the idempotency contract and any related incident.",
+      "category": "exact_identifier"
+    },
+    {
+      "query_id": "q07",
+      "text": "what is our database backup schedule",
+      "intent": "Find how and how often the database is backed up.",
+      "category": "unanswerable"
+    },
+    {
+      "query_id": "q08",
+      "text": "migration backfill same deploy",
+      "intent": "Find the constraint and procedure about migrations and backfills.",
+      "category": "description"
+    },
+    {
+      "query_id": "q09",
+      "text": "never write secrets to logs",
+      "intent": "Find constraints about logging sensitive values. Neither memory uses the word secrets.",
+      "category": "paraphrase"
+    },
+    {
+      "query_id": "q10",
+      "text": "when do deploys happen",
+      "intent": "Find the current deploy cadence.",
+      "category": "description"
+    },
+    {
+      "query_id": "q11",
+      "text": "payment terminal firmware",
+      "intent": "Find anything about terminal firmware; shares the word payment with much of the corpus.",
+      "category": "misleading_overlap"
+    },
+    {
+      "query_id": "q12",
+      "text": "who approves large refunds",
+      "intent": "Find the refund approval constraint.",
+      "category": "description"
+    },
+    {
+      "query_id": "q13",
+      "text": "append only ledger",
+      "intent": "Find the ledger design decision.",
+      "category": "exact_identifier"
+    },
+    {
+      "query_id": "q14",
+      "text": "how do we roll back a failed canary",
+      "intent": "Find the procedure for rolling back a canary deploy that is failing.",
+      "category": "unanswerable"
+    }
+  ]
+}
