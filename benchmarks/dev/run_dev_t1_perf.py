@@ -214,9 +214,15 @@ def measure_profile(fixture: Path, profile: str, queries: list[str], size: int) 
 
 def main() -> None:
     sizes = [1000, 10000]
+    profiles = list(PROFILES)
+    out_name = "results-dev-t1-perf.json"
     for argument in sys.argv[1:]:
         if argument.startswith("--sizes"):
             sizes = [int(value) for value in argument.split("=", 1)[1].split(",")]
+        elif argument.startswith("--profiles"):
+            profiles = argument.split("=", 1)[1].split(",")
+        elif argument.startswith("--out"):
+            out_name = argument.split("=", 1)[1]
     queries = query_set(WARMUP_QUERIES + BLOCKS * QUERIES_PER_BLOCK)
     commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
                             capture_output=True, text=True).stdout.strip()
@@ -229,6 +235,7 @@ def main() -> None:
         "sqlite_version": sqlite3.sqlite_version,
         "durability": {"journal_mode": "WAL", "synchronous": "FULL"},
         "seed": SEED,
+        "profile_order": profiles,
         "protocol": {"blocks": BLOCKS, "queries_per_block": QUERIES_PER_BLOCK,
                      "warmup_queries": WARMUP_QUERIES, "measured_writes": MEASURED_WRITES, "warmup_writes": WARMUP_WRITES,
                      "fixture_built_once_per_size_then_copied": True},
@@ -242,10 +249,10 @@ def main() -> None:
             started = time.perf_counter()
             record["fixtures"][str(size)] = build_fixture(fixture, size)
             record["fixtures"][str(size)]["build_seconds"] = round(time.perf_counter() - started, 2)
-            for profile in PROFILES:
+            for profile in profiles:
                 print(f"  measuring {profile} …", flush=True)
                 record["measurements"].append(measure_profile(fixture, profile, queries, size))
-    out = Path(__file__).resolve().parent / "results-dev-t1-perf.json"
+    out = Path(__file__).resolve().parent / out_name
     out.write_text(json.dumps(record, indent=2) + "\n")
     print(f"\nwritten: {out}")
 

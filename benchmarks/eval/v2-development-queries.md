@@ -111,12 +111,14 @@ Index profile is the only thing that varies. Every variant is run against the sa
 
 | # | Profile | Configuration | What it changes | Registered on | Outcome |
 | --- | --- | --- | --- | --- | --- |
-| B | `exact` | Current build: one FTS5 index, default `unicode61`, no stemming | *(nothing — the paired baseline)* | 2026-09-06 | |
-| 1 | `stem` | One FTS5 index, `porter unicode61`, applied to the whole body | Tokenizer for every token, prose and code alike | 2026-09-06 | |
-| 2 | `dual` | Two indexes over the same bodies — exact and porter — matched disjunctively, ranked best-of | Adds a second index; exact matching preserved by construction | 2026-09-06 | |
-| 3 | `split` | Exact index over everything, porter index over **prose tokens only**; code-shaped tokens are routed to the exact index on both the index and the query side | As `dual`, but stemming never sees identifiers, paths or symbols | 2026-09-06 | |
+| B | `exact` | Current build: one FTS5 index, default `unicode61`, no stemming | *(nothing — the paired baseline)* | 2026-09-06 | Baseline. Morphology candidate recall 0.714. |
+| 1 | `stem` | One FTS5 index, `porter unicode61`, applied to the whole body | Tokenizer for every token, prose and code alike | 2026-09-06 | **Promoted.** Recall 1.000; retrieval 1.02–1.04x, storage 0.99x, all gates passed. Costs identifier-query precision. |
+| 2 | `dual` | Two indexes over the same bodies — exact and porter — matched disjunctively, ranked best-of | Adds a second index; exact matching preserved by construction | 2026-09-06 | Not promoted. Recall 1.000, storage 1.26x, but retrieval p95 **8.6–8.9x** baseline at 10,000 memories. |
+| 3 | `split` | Exact index over everything, porter index over **prose tokens only**; code-shaped tokens are routed to the exact index on both the index and the query side | As `dual`, but stemming never sees identifiers, paths or symbols | 2026-09-06 | Not promoted. Recall 1.000 **and** the only variant preserving identifier-query precision, but retrieval p95 **7.9–9.2x** and storage **2.27x**. |
 
 Predeclared before the run: `stem` is expected to recover morphological misses and to be the most likely of the three to damage exact reference queries; `split` is expected to be the most conservative and the most complex; `dual` sits between them and is the one whose ranking rule is least principled, since best-of across two indexes compares BM25 scores computed over different corpus statistics.
+
+Measured, in [results-dev-t1.md](../dev/results-dev-t1.md): the prediction about quality held — `split` was the only variant that left identifier-query pools untouched — and the prediction about cost was wrong in shape. The two-index profiles were not merely more complex; their union plan adds a temp B-tree over both legs' full match sets, which under disjunctive matching is roughly twice the corpus per query. Neither is viable as built. The parsimonious variant is the one that survives, and it survives carrying the precision cost `split` was designed to avoid.
 
 ### Later rounds — not authorised to run
 
