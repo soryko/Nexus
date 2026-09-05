@@ -1,0 +1,13 @@
+{
+  "version": "0.1.0",
+  "milestone": "A - durable exact memory",
+  "source_commit": "64a6e55444ae168305e15311f62e9bff4ff4a7c6",
+  "python": "3.12.13",
+  "sqlite": "3.53.1",
+  "mcp": "2.1.1",
+  "final_tests_passed": 22,
+  "final_test_seconds": 3.94,
+  "installed_wheel_mcp_lifecycle": "passed",
+  "independent_review": "approved",
+  "wheel_sha256": "f5f7e16c38ba3f0cfafc98e96305453d35cbd20a482d209bd097e01d6f8297e1"
+}

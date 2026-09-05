@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.hypothesis/
+.ruff_cache/
+.superpowers/
+dist/
+build/
+*.egg-info/
+*.sqlite3*
+.coverage
+pytest-of-*/
+.tmp/
+.venv-sqlite/
+.venv*/
+.idea/

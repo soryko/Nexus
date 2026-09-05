@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling==1.32.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nexus-memory"
+version = "0.1.0"
+description = "Local durable memory for programming agents, served over MCP"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["mcp==2.1.1"]
+
+[project.scripts]
+nexus-memory = "nexus_memory.transport.mcp_server:main"
+
+[dependency-groups]
+dev = ["pytest==9.1.1", "hypothesis==6.167.1"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nexus_memory"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"

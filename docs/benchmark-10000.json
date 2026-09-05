@@ -1,0 +1,86 @@
+{
+  "python": "3.12.13",
+  "sqlite": "3.53.1",
+  "platform": "Linux-6.18.35-x86_64-with-glibc2.39",
+  "seed": 20260905,
+  "method": "Sequential local service calls; full-sync commits; warm OS cache; nearest-rank tail quantiles.",
+  "limits": "Synthetic bodies, no relevance labels, no MCP or queue timing, no cold-cache control, no peak disk/RSS measurement; samples are not latency guarantees.",
+  "cases": [
+    {
+      "name": "unique",
+      "records": 10000,
+      "unique_bodies": 10000,
+      "body_bytes_per_record": 1024,
+      "exact_get_samples": 1000,
+      "record": {
+        "median_ms": 0.4188185,
+        "p95_ms": 0.594409,
+        "p99_ms": 0.832079
+      },
+      "get": {
+        "median_ms": 0.2450295,
+        "p95_ms": 0.455407,
+        "p99_ms": 0.88151
+      },
+      "stored_unique_body_bytes": 10240000,
+      "raw_repeated_body_bytes": 10240000,
+      "file_bytes_at_measurement": {
+        "main": 25452544,
+        "-wal": 0,
+        "-shm": 0
+      },
+      "total_file_bytes_at_measurement": 25452544,
+      "integrity_check": "ok",
+      "status": {
+        "durable_storage": "sqlite-wal-full",
+        "exact_retrieval": "available",
+        "derived_indexes": "unavailable",
+        "schema_version": 1,
+        "sqlite_version": "3.53.1",
+        "active_memories": 10000,
+        "forgotten_memories": 0,
+        "revisions": 10000,
+        "pending_outbox": 10000,
+        "latest_durable_seq": 10000
+      }
+    },
+    {
+      "name": "repeated",
+      "records": 10000,
+      "unique_bodies": 1000,
+      "body_bytes_per_record": 1024,
+      "exact_get_samples": 1000,
+      "record": {
+        "median_ms": 0.4091275,
+        "p95_ms": 0.610173,
+        "p99_ms": 0.811798
+      },
+      "get": {
+        "median_ms": 0.227043,
+        "p95_ms": 0.387086,
+        "p99_ms": 0.538915
+      },
+      "stored_unique_body_bytes": 1024000,
+      "raw_repeated_body_bytes": 10240000,
+      "file_bytes_at_measurement": {
+        "main": 12447744,
+        "-wal": 0,
+        "-shm": 0
+      },
+      "total_file_bytes_at_measurement": 12447744,
+      "integrity_check": "ok",
+      "status": {
+        "durable_storage": "sqlite-wal-full",
+        "exact_retrieval": "available",
+        "derived_indexes": "unavailable",
+        "schema_version": 1,
+        "sqlite_version": "3.53.1",
+        "active_memories": 10000,
+        "forgotten_memories": 0,
+        "revisions": 10000,
+        "pending_outbox": 10000,
+        "latest_durable_seq": 10000
+      }
+    }
+  ]
+}
