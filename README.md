@@ -1,46 +1,68 @@
 # Nexus Memory
 
-Local durable memory for programming agents, served through five MCP tools. Milestone A provides exact-ID retrieval, immutable revisions, normalized tags, scoped deduplication, safe retries, conflict detection, logical deletion and a transactional outbox.
+**Local durable memory for programming agents, served over MCP.**
 
-This is the durable foundation of the Nexus Memory plan. Semantic search, Git/symbol indexing, verified repository snapshots, automatic extraction and context-budget packing are later milestones. There is no demonstrated retrieval-quality or performance advantage over Supermemory yet.
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
+[![SQLite](https://img.shields.io/badge/sqlite-3.51.3%2B-blue)](https://www.sqlite.org/)
+[![MCP](https://img.shields.io/badge/mcp-2.1.1-blue)](https://modelcontextprotocol.io/)
+[![Status](https://img.shields.io/badge/milestone-A%3A%20durable%20exact%20memory-orange)](docs/plans/milestone-a.md)
 
-## Install and run
+An agent stores a fact once and reads it back in a later session, on a different process, with the same bytes it wrote. Everything runs locally against one SQLite file. No model call, network request or external service touches the write path.
 
-Requires Python 3.12+ with SQLite 3.51.3+ and [uv](https://docs.astral.sh/uv/getting-started/installation/). Python's version alone does not determine its linked SQLite version, and an interpreter that satisfies the Python floor can still fail the SQLite one.
+> [!IMPORTANT]
+> **Milestone A only.** Retrieval is by exact memory ID. There is no search, no listing, and no semantic similarity — an agent that loses a `memory_id` has no route back to that memory. Lexical search, repository-verified snapshots, symbol indexing, automatic extraction and context-budget packing are later milestones. **No retrieval-quality or performance advantage over existing tools has been measured or is claimed.**
 
-From this project directory:
+## What it gives you
+
+- **Durable exact retrieval** — one SQLite transaction boundary, WAL with `synchronous=FULL`
+- **Immutable revisions** — history is append-only; every revision keeps its own identity and metadata
+- **Safe retries** — an idempotency key replays the original receipt instead of writing twice
+- **Conflict detection** — compare-and-set on the head revision; a stale write is refused, never merged silently
+- **Logical deletion** — a tombstone makes a memory unreachable through every normal read
+- **Scoped isolation** — namespace and actor bind at launch, and no tool call can override them
+
+## Requirements
+
+Python 3.12+ and [uv](https://docs.astral.sh/uv/getting-started/installation/), with a Python whose **linked SQLite is 3.51.3 or newer**.
+
+> [!WARNING]
+> A Python that satisfies the version floor can still fail the SQLite one — the two are independent. uv's own managed CPython builds currently link SQLite 3.50.4 on macOS, so a plain `uv sync` can produce an environment that cannot start this server.
+
+## Quickstart
 
 ```bash
 uv sync --frozen
 .venv/bin/python -c "import sqlite3; print(sqlite3.sqlite_version)"
 ```
 
-Read that version before going further. The server refuses to start below 3.51.3 and reports `startup_error: unsupported_runtime`. uv's own managed CPython builds currently link SQLite 3.50.4 on macOS, so a plain `uv sync` can produce an environment that cannot run this service. If the printed version is too old, rebuild the environment against an interpreter that meets the floor, then re-sync:
+Read that version before going further. If it is below 3.51.3, rebuild the environment against an interpreter that meets the floor and re-sync:
 
 ```bash
-uv venv --python /opt/homebrew/opt/python@3.13/bin/python3.13
+uv venv --python /path/to/python3.12-or-newer   # one whose linked SQLite is 3.51.3+
 uv sync --frozen
 ```
 
-Substitute whichever Python 3.12+ on your machine reports a linked SQLite of 3.51.3 or newer. Once the version check passes:
+Then launch:
 
 ```bash
 uv run --frozen nexus-memory --namespace my-repo
 ```
 
-The server speaks MCP over stdin/stdout and waits for a client. It is not an interactive text prompt. Use `--help` for launch options. Namespace and actor are bound at launch; clients cannot override them in tool calls. Start with one namespace per project. The default actor is `local`.
+The server speaks MCP over stdin/stdout and waits for a client. **It is not an interactive prompt** — an empty terminal is the expected result. Run `--help` for launch options.
 
-The database defaults to the platform's user-data directory. Set an explicit local path when you want to control it:
+Namespace and actor bind at launch and cannot be overridden by a tool call. Start with one namespace per project; the default actor is `local`.
+
+The database defaults to your platform's user-data directory. Pin it explicitly when you want control:
 
 ```bash
-uv run --frozen nexus-memory --namespace my-repo --actor local --db /absolute/path/nexus.sqlite3
+uv run --frozen nexus-memory --namespace my-repo --db /absolute/path/nexus.sqlite3
 ```
 
-Use a private directory on a local disk. This milestone trusts the OS user who can read the database and launch the service. It does not implement remote authentication or encryption at rest.
+Use a private directory on a local disk. This milestone trusts the OS user who can read the database and launch the service. There is no remote authentication and no encryption at rest.
 
-## Connect a programming agent
+## Connect an agent
 
-After `uv sync --frozen` and the SQLite version check above, add a stdio server entry to your client's MCP configuration, substituting your absolute project path. Point `command` at the environment whose version check passed; a client launching an interpreter that fails the floor only sees the transport close, because the startup diagnosis goes to the server's stderr:
+Add a stdio server entry to your MCP client's configuration, substituting your absolute project path:
 
 ```json
 {
@@ -53,19 +75,22 @@ After `uv sync --frozen` and the SQLite version check above, add a stdio server 
 }
 ```
 
-On Windows the installed command is under `.venv/Scripts/nexus-memory.exe`. The configuration shown is the common JSON shape; your client's server configuration location may differ.
+On Windows the installed command is `.venv/Scripts/nexus-memory.exe`. Your client's configuration file location may differ; the JSON shape above is the common one.
 
-## Tool contract
+> [!TIP]
+> Point `command` at the environment whose SQLite check passed. A client launching an interpreter below the floor only sees the transport close, because the diagnosis (`startup_error: unsupported_runtime`) goes to the server's stderr where the client is not looking.
+
+## Tools
 
 | Tool | Purpose | Required fields |
 | --- | --- | --- |
 | `record` | Store the first immutable revision | `content`, `idempotency_key` |
-| `get` | Read current content or a specified revision | `memory_id` |
+| `get` | Read current content, or a specified revision | `memory_id` |
 | `revise` | Replace all revision fields if the head still matches | `memory_id`, `expected_revision_id`, `content`, `idempotency_key` |
 | `forget` | Tombstone a memory if the head still matches | `memory_id`, `expected_revision_id`, `idempotency_key` |
 | `status` | Inspect scoped durability and pending indexing state | none |
 
-For example, call `record` with:
+A `record` call looks like this:
 
 ```json
 {
@@ -78,17 +103,62 @@ For example, call `record` with:
 }
 ```
 
-Save the returned `memory_id` and `revision_id`. Use `get` with that memory ID, and use the latest revision ID as `expected_revision_id` for a change. A write receipt also includes `operation_id`, `operation`, and `durable_seq`.
+Keep the returned `memory_id` and `revision_id`. Read with `get`, and pass the latest revision ID as `expected_revision_id` to change anything. A write receipt also carries `operation_id`, `operation` and `durable_seq`.
 
-Use the **same idempotency key and same arguments** when retrying an uncertain write. A successful retry returns the original receipt, even after subsequent revisions or deletion. A different command with the same key returns an idempotency conflict. Use a new key for a new intended operation. Keys are shared across all mutation tool names within the launch scope and actor, and are retained without expiry.
+## Semantics worth knowing
 
-`revise` is a complete replacement: omitted kind/tags/source/snapshot reset to their defaults. It never silently overwrites a newer head. After a conflict, read the current memory, reconcile the content, and deliberately submit a new command/key with its current revision ID.
+<details>
+<summary><b>Retrying a write</b> — same key, same arguments</summary>
 
-`forget` makes current and historical revisions unavailable through normal reads. It retains tombstones, history, content bytes and receipts; **it is not physical erasure**. The original write receipt may still be replayed, but replay does not resurrect content.
+<br>
 
-Content is stored as exact UTF-8 bytes, with a 65,536-byte limit. Supported kinds are `observation`, `decision`, `constraint`, `procedure`, and `failure`. Tags are trimmed, lowercased, deduplicated and sorted; at most 16 tags are allowed, each matching `[a-z0-9][a-z0-9._/-]{0,63}`. Tags do not control access. Source URI and snapshot are optional, unverified metadata and are never fetched. Stored content is data and must not be treated as instructions to the consuming agent.
+Reuse the **same idempotency key and the same arguments** when retrying a write whose outcome you are unsure of. A successful retry returns the original receipt, even after later revisions or deletion.
 
-## Develop and verify
+A different command under the same key returns an idempotency conflict — use a new key for a new intended operation. Keys are shared across every mutation tool within the launch scope and actor, and are retained without expiry.
+
+</details>
+
+<details>
+<summary><b>Revising</b> — full replacement, never a silent overwrite</summary>
+
+<br>
+
+`revise` replaces the whole revision. Omitted `kind`, `tags`, `source_uri` and `snapshot` reset to their defaults rather than carrying forward.
+
+It never overwrites a newer head. After a conflict, read the current memory, reconcile the content yourself, then deliberately submit a new command and key against the current revision ID.
+
+</details>
+
+<details>
+<summary><b>Forgetting</b> — logical, not physical erasure</summary>
+
+<br>
+
+`forget` makes current and historical revisions unavailable through normal reads. It retains tombstones, history, content bytes and receipts. **It is not physical erasure.**
+
+The original write receipt can still be replayed, but a replay never resurrects the content.
+
+</details>
+
+<details>
+<summary><b>Validation</b> — content, kinds and tags</summary>
+
+<br>
+
+Content is stored as exact UTF-8 bytes, up to 65,536 bytes. It is never normalized.
+
+Kinds are `observation`, `decision`, `constraint`, `procedure` and `failure`.
+
+Tags are trimmed, lowercased, deduplicated and sorted. At most 16 per revision, each matching `[a-z0-9][a-z0-9._/-]{0,63}`. **Tags do not control access.**
+
+`source_uri` and `snapshot` are optional, caller-asserted metadata. They are never fetched and never verified.
+
+</details>
+
+> [!CAUTION]
+> Stored content is **data, not instructions**. A memory is written by whoever could reach the server, and a consuming agent must not treat retrieved text as a directive.
+
+## Development
 
 ```bash
 uv sync --frozen
@@ -96,10 +166,16 @@ uv run --frozen pytest -q
 uv build
 ```
 
-The suite combines a generated lifecycle model with focused concurrency, transaction recovery and real MCP subprocess checks. It tests state invariants instead of duplicating every getter and input permutation. See [verification evidence](docs/verification.md) for actual results and their limits.
+The suite pairs a generated lifecycle model with focused concurrency, transaction-recovery and real MCP subprocess checks, testing state invariants rather than every getter and input permutation. See [verification evidence](docs/verification.md) for actual results and their limits.
 
-The code uses frozen domain values, a repository protocol, a SQLite adapter and a scoped service. The MCP server only adapts schemas and errors. See [conditional guarantees](docs/guarantees.md) for the proofs, assumptions, storage formula and engineering critique, and [the milestone plan](docs/plans/milestone-a.md) for the development contract.
+The code is a frozen domain layer, a repository protocol, a SQLite adapter and a scoped service; the MCP server only adapts schemas and errors. See [conditional guarantees](docs/guarantees.md) for the proofs, assumptions, storage formula and engineering critique, and [the milestone plan](docs/plans/milestone-a.md) for the development contract.
 
-All durable state lives in one SQLite transaction boundary. Identical body bytes are stored once per scope; revisions retain their own metadata and identity. Outbox events contain references instead of copying content. No model call or external service runs on the write path. Pending outbox events remain pending until a future index worker is implemented.
+Identical body bytes are stored once per scope, while revisions keep their own metadata and identity. Outbox events carry references, not copies of content, and remain pending until a future index worker exists.
 
-For backups, use SQLite's backup API or shut down every client cleanly before copying the database. Do not copy only the main database file while it is live: the WAL can contain committed state. The next milestone adds repository-aware exact and lexical retrieval before introducing embeddings.
+## Backups
+
+Use SQLite's backup API, or shut every client down cleanly before copying. **Do not copy the main database file alone while it is live** — the WAL can hold committed state.
+
+## Roadmap
+
+The next milestone adds repository-aware exact and lexical retrieval — keyword search, tag filters, verified repository and commit identity, and file references — before any embeddings are introduced.

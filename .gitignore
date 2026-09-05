@@ -15,3 +15,7 @@ pytest-of-*/
 .venv-sqlite/
 .venv*/
 .idea/
+
+# internal: unapproved planning draft and build metadata
+docs/plans/milestone-b.md
+BUILD.json
