@@ -302,8 +302,14 @@ def _initialize_together(path: str, start, results) -> None:
 
     The reporting path itself has been exercised on a forced failure (an unopenable path,
     which surfaced the chained `SQLITE_CANTOPEN` the old code flattened away). That
-    establishes that the diagnostics work. **It does not identify the original flake's
-    cause, which remains unknown**; only an ordinary failure can do that.
+    establishes diagnostic coverage and nothing more: an injected error says the reporting
+    works, not what the original flake was. **The original cause remains unknown.**
+
+    It need not stay unknown until an ordinary failure happens to recur, though — a
+    controlled reproduction that provokes the same signature would establish a cause just
+    as well. Neither is worth building on speculation, so the instrumentation stays in
+    place, and further work waits for an observed failure or a specific testable
+    hypothesis about the cause. Blind repetition is neither of those.
     """
     import traceback
 

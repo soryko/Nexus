@@ -395,7 +395,9 @@ Every rule preserved everything it had to: grade-2 delivered bytes 5,212 and gra
 - **`cutoff_40` is not carried forward as the selected configuration.**
 - **The shipped default is unchanged: `exact`.** Nothing from T1–T3 has been shipped.
 - **T3's development pass stays recorded exactly as measured.** This is a configuration decision informed by a separate reason against adoption — the rule removes a known directly relevant answer — not a retroactive v2 gate, and it re-scores nothing.
-- **Next selection experiment:** register it against **preserving multiple answers whose lexical scores are widely separated** — `q02` spreads three answers from 1.0000 to 0.3091 with supporting items interleaved — and measure it on **separately held-out development cases** authored for that shape, not on `corpus-dev2` and not on v2. **T0 abstention stays a separate unresolved problem.**
+- **Next selection experiment:** register it against **preserving multiple answers whose lexical scores are widely separated** — `q02` spreads three answers from 1.0000 to 0.3091 with supporting items interleaved — and measure it on **development cases authored for that shape**, not on `corpus-dev2` and not on v2. **T0 abstention stays a separate unresolved problem.**
+
+  Two things about those cases, corrected 2026-09-06. **They may be informed by `q02`.** Learning the failure category from an observed failure is how the category was found, and pretending otherwise would only hide the provenance; what must stay out of configuration tuning is the held-out v2 *cases and judgments themselves*. So this is disclosed rather than laundered: `q02` motivated the widely-separated-scores category, and any figure measured on cases written for it inherits that. **And new cases are not thereby independent validation.** A case authored after seeing the failure it is meant to catch is development data — it can show a rule stops removing that answer, and cannot show the rule generalises. Independent validation would need cases selected without reference to this failure.
 
 Two measurement corrections were made before the run, and neither is optional for reading the older records:
 
