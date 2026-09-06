@@ -142,11 +142,28 @@ The fix is a **single label-free, budgeted retrieval function shared by both har
 
 Either way, **the original failure and both original records are preserved**. T1-C adds evidence; it does not replace `results-dev-t1-perf.json` or `results-dev-t1-perf-reversed.json`, and it does not edit the numbers already reported.
 
+### Outcome — run once on 2026-09-06, pinned revision `f82138a`
+
+**`stem` cleared the rule in all four cells and is promoted.** Full report: [results-dev-t1c.md](../dev/results-dev-t1c.md).
+
+| Fixture | Order | `exact` worst-block p95 | `stem` worst-block p95 | Ratio | Cell |
+| --- | --- | ---: | ---: | ---: | --- |
+| 1,000 | `exact→stem` | 7.4948 ms | 8.3850 ms | 1.1188x | pass |
+| 1,000 | `stem→exact` | 7.5304 ms | 8.9346 ms | 1.1865x | pass |
+| 10,000 | `exact→stem` | 18.0782 ms | 20.8957 ms | 1.1559x | pass |
+| 10,000 | `stem→exact` | 19.0476 ms | 18.5715 ms | 0.9750x | pass |
+
+The verdict holds under a stricter statistic too: computing the ratio **within each pair**, so blocks measured minutes apart are never compared, the worst of all twelve pairs is **1.3611x**. Both readings clear 1.5x; neither clears it by a wide margin, and per-pair ratios span 0.9001x to 1.3611x.
+
+**The 1.8561x is explained.** T1's per-block figures show the registered statistic divided `stem`'s worst block by `exact`'s worst block when those were **different blocks running different query sets** — `stem` block 1 at 25.9749 (siblings 9.7370, 12.2273) over `exact` block 3 at 13.9946 (siblings 7.7502, 6.4850). Underneath sits a real paired anomaly: on block 1's queries `stem` measured 3.35x `exact`. T1-C's measured block is byte-for-byte T1's block 1, and across six fresh blocks `stem`'s worst there is 8.9346 ms. The spike does not recur, and is best explained as first-touch cost on the freshly rebuilt stem index that the warm-up did not absorb.
+
+**Two limits on this outcome.** The registered statistic still compounds two independent tail draws — it passed because no extreme block was drawn, not because the statistic was repaired, which is why the paired cross-check is reported beside it. And the spread it clears is wide enough that a rerun could plausibly produce a pair above 1.4x.
+
 ## T2 and T3 — authorisation (2026-09-06)
 
-**T2 and T3 scope and budgets are authorised. Their runs wait on one thing: the T1 baseline decision.**
+**T2 and T3 are authorised and their baselines are now pinned.** `stem` was promoted on 2026-09-06 after clearing [T1-C](#t1-c--performance-confirmation-registered-2026-09-06) in all four cells — not on the T1 measurement, which it failed. T2's baseline is pinned `stem`.
 
-`stem` is **not** the development baseline. Its promotion was withdrawn on 2026-09-06 — see [T1-C](#t1-c--performance-confirmation-registered-2026-09-06). Until T1-C resolves, `exact` is the standing baseline and the shipped default. The limits below apply to both stages regardless of which profile the baseline turns out to be; the differences between the stages are the fusion-input limit (T2 only), the baselines, and the success contracts.
+The limits below apply to both stages; the differences between the stages are the fusion-input limit (T2 only), the baselines, and the success contracts.
 
 ### Budgets — identical for T2 and T3
 
@@ -175,10 +192,10 @@ A T2 variant may take **at most 40 raw index hits in total**. For a two-channel 
 
 | Stage | Baseline |
 | --- | --- |
-| T2 | **Pending the T1-C outcome.** Pinned `stem` with the existing selection policy unchanged **if `stem` clears T1-C**; otherwise pinned `exact`. |
-| T3 | The pinned T2 winner; if no T2 variant passes, **whichever profile T1-C left as the T2 baseline** — `stem` if it cleared, `exact` if it did not. |
+| T2 | **Pinned `stem`**, with the existing selection policy unchanged. Pinned 2026-09-06 on the T1-C result. |
+| T3 | The pinned T2 winner, or **`stem`** if no T2 variant passes. |
 
-Neither baseline may be pinned before T1-C reports. A T2 variant measured against an unpinned baseline is not a result.
+`exact` remains the shipped default and the anchor for every resource ratio; promoting `stem` as the development baseline does not change either.
 
 T3 **freezes candidate generation.** Selection may choose which five candidate histories to expand; it may not change what becomes a candidate. A T3 variant that alters candidate generation is a different experiment and voids the comparison.
 
@@ -248,14 +265,14 @@ Every configuration considered gets a row **before** it is run, and the budget i
 
 The configuration-search budget is **baseline plus at most three predeclared variants per experiment**. A row with no configuration named has not been authorised to run.
 
-### T1 — morphology (quality complete; performance qualification pending)
+### T1 — morphology (complete; `stem` qualified by T1-C)
 
 Index profile is the only thing that varies. Every variant is run against the same development corpus, the same queries and the same budgets as the baseline.
 
 | # | Profile | Configuration | What it changes | Registered on | Outcome |
 | --- | --- | --- | --- | --- | --- |
 | B | `exact` | Current build: one FTS5 index, default `unicode61`, no stemming | *(nothing — the paired baseline)* | 2026-09-06 | Baseline. Morphology candidate recall 0.714. |
-| 1 | `stem` | One FTS5 index, `porter unicode61`, applied to the whole body | Tokenizer for every token, prose and code alike | 2026-09-06 | **Not promoted — quality passed, performance qualification pending.** Recall 1.000; retrieval 1.02–1.04x at 10,000, storage 0.99x. **Gate failure: 1.8561x at 1,000 in forward order** (0.8905x reversed). Promotion recorded 2026-09-06 and **withdrawn the same day**; see [T1-C](#t1-c--performance-confirmation-registered-2026-09-06). Costs identifier-query precision. |
+| 1 | `stem` | One FTS5 index, `porter unicode61`, applied to the whole body | Tokenizer for every token, prose and code alike | 2026-09-06 | **Promoted on [T1-C](#t1-c--performance-confirmation-registered-2026-09-06), not on T1.** Recall 1.000; storage 0.99x. T1 retrieval: 1.02–1.04x at 10,000 but a **gate failure of 1.8561x at 1,000 forward** (0.8905x reversed) — promotion recorded 2026-09-06 and **withdrawn the same day**. T1-C then cleared it 4/4 (worst 1.1865x registered, 1.3611x paired). Costs identifier-query precision. |
 | 2 | `dual` | Two indexes over the same bodies — exact and porter — matched disjunctively, ranked best-of | Adds a second index; exact matching preserved by construction | 2026-09-06 | Not promoted. Recall 1.000, storage 1.26x, but retrieval p95 **8.6–8.9x** baseline at 10,000 memories — and already over the 1.5x ratio gate at 1,000 in both orders (1.74x / 1.63x). |
 | 3 | `split` | Exact index over everything, porter index over **prose tokens only**; code-shaped tokens are routed to the exact index on both the index and the query side | As `dual`, but stemming never sees identifiers, paths or symbols | 2026-09-06 | Not promoted. Recall 1.000 **and** the only variant preserving identifier-query precision, but retrieval p95 **7.9–9.2x** at 10,000 and storage **2.27x**. At 1,000 it measured 2.04x forward and 0.99x reversed. |
 
