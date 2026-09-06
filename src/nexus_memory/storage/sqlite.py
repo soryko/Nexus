@@ -19,6 +19,7 @@ from nexus_memory.domain.errors import (
     InvalidQuery,
     MemoryNotFound,
     NexusError,
+    RepositoryMismatch,
     RevisionConflict,
     StorageIntegrityError,
     UnsupportedRuntime,
@@ -30,12 +31,14 @@ from nexus_memory.domain.models import (
     RevisionHit,
     MemoryInput,
     MemoryView,
+    RepositoryBinding,
     RevisionEntry,
     Scope,
     SearchHit,
     SearchPage,
     SearchQuery,
     StoreStatus,
+    VerifiedReference,
     WriteReceipt,
 )
 
@@ -78,7 +81,7 @@ def _prose_text(text: str) -> str:
 
 
 class SQLiteRepository:
-    SCHEMA_VERSION = 3
+    SCHEMA_VERSION = 4
     MINIMUM_SQLITE = (3, 51, 3)
     EXCERPT_LIMIT = 240
     SEARCH_PROFILES = ("exact", "stem", "dual", "split")
@@ -406,6 +409,13 @@ class SQLiteRepository:
                     if statement.strip():
                         connection.execute(statement)
                 version = 3
+            if version == 3:
+                # Additive: three tables, no backfill, no row rewritten. A failure rolls the
+                # database back to version 3 with the transaction.
+                for statement in self._script("004_repositories.sql").split(";"):
+                    if statement.strip():
+                        connection.execute(statement)
+                version = 4
             connection.execute(f"PRAGMA user_version = {version}")
             self._apply_profile(connection)
             self._apply_history_profile(connection)
@@ -528,7 +538,153 @@ class SQLiteRepository:
     def _generation(db: sqlite3.Connection) -> int:
         return db.execute("SELECT generation FROM index_state WHERE id = 1").fetchone()[0]
 
-    def _event_and_receipt(self, db: sqlite3.Connection, scope: Scope, key: str, digest: str, memory_id: str, revision_id: str, operation: str) -> WriteReceipt:
+    def receipt(self, scope: Scope, key: str, digest: str) -> WriteReceipt | None:
+        """The pre-check a reference-carrying write runs before verification.
+
+        It decides nothing: it can only short-circuit to a receipt that is already
+        committed, and the authoritative check inside the write transaction is unchanged.
+        A key reused for a different payload conflicts here exactly as it would inside
+        the transaction, so a retry that would have conflicted also never invokes git.
+        """
+        db = None
+        try:
+            db = self._connect()
+            with closing(db):
+                db.execute("BEGIN")
+                found = self._retry(db, scope, key, digest)
+                db.commit()
+                return found
+        except NexusError:
+            raise
+        except sqlite3.Error as error:
+            raise StorageIntegrityError("storage operation failed") from error
+
+    def _store_references(self, db: sqlite3.Connection, scope: Scope, memory_id: str, revision_id: str,
+                          references: tuple[VerifiedReference, ...]) -> None:
+        for reference in references:
+            db.execute(
+                "INSERT INTO revision_references(namespace,actor,memory_id,revision_id,repository_id,"
+                "commit_oid,path,object_oid,entry_type,mode,checked_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                (scope.namespace, scope.actor, memory_id, revision_id, reference.repository_id,
+                 reference.commit_oid, reference.path, reference.object_oid, reference.entry_type,
+                 reference.mode, reference.checked_at),
+            )
+
+    def _references(self, db: sqlite3.Connection, scope: Scope, memory_id: str,
+                    revision_ids: tuple[str, ...]) -> dict[str, tuple[VerifiedReference, ...]]:
+        if not revision_ids:
+            return {}
+        placeholders = ",".join("?" * len(revision_ids))
+        rows = db.execute(
+            "SELECT revision_id,repository_id,commit_oid,path,object_oid,entry_type,mode,checked_at"
+            " FROM revision_references WHERE namespace=? AND actor=? AND memory_id=?"
+            f" AND revision_id IN ({placeholders}) ORDER BY revision_id,commit_oid,path",
+            (scope.namespace, scope.actor, memory_id, *revision_ids),
+        ).fetchall()
+        grouped: dict[str, list[VerifiedReference]] = {}
+        for row in rows:
+            grouped.setdefault(row[0], []).append(VerifiedReference(*row[1:]))
+        return {revision_id: tuple(items) for revision_id, items in grouped.items()}
+
+    def _hit_references(self, db: sqlite3.Connection, scope: Scope,
+                        pairs: list[tuple[str, str]]) -> dict[tuple[str, str], tuple[VerifiedReference, ...]]:
+        if not pairs:
+            return {}
+        clauses = " OR ".join("(memory_id=? AND revision_id=?)" for _ in pairs)
+        parameters: list = [scope.namespace, scope.actor]
+        for memory_id, revision_id in pairs:
+            parameters.extend([memory_id, revision_id])
+        rows = db.execute(
+            "SELECT memory_id,revision_id,repository_id,commit_oid,path,object_oid,entry_type,mode,checked_at"
+            f" FROM revision_references WHERE namespace=? AND actor=? AND ({clauses})"
+            " ORDER BY memory_id,revision_id,commit_oid,path",
+            parameters,
+        ).fetchall()
+        grouped: dict[tuple[str, str], list[VerifiedReference]] = {}
+        for row in rows:
+            grouped.setdefault((row[0], row[1]), []).append(VerifiedReference(*row[2:]))
+        return {pair: tuple(items) for pair, items in grouped.items()}
+
+    def bind_checkout(self, scope: Scope, token: str, locator: str | None, object_format: str,
+                      repository_id: str | None = None) -> RepositoryBinding:
+        """Bind a published checkout token to a repository identity, in one immediate transaction.
+
+        ``BEGIN IMMEDIATE`` serialises registrations, so of two processes that published
+        the same token the second one reads the row the first one wrote and returns the
+        same mapping rather than minting a second identity. A token with no row is adopted
+        under a new identity here, or under ``repository_id`` when the operator asks for a
+        deliberate association; a token that already maps to a different identity than the
+        one asked for is a mismatch.
+        """
+        if object_format not in ("sha1", "sha256"):
+            raise RepositoryMismatch("unsupported repository object format")
+        with self._transaction() as db:
+            now = datetime.now(UTC).isoformat()
+            row = db.execute(
+                "SELECT c.repository_id,r.object_format,r.locator FROM repository_checkouts c"
+                " JOIN repositories r ON r.namespace=c.namespace AND r.actor=c.actor AND r.repository_id=c.repository_id"
+                " WHERE c.namespace=? AND c.actor=? AND c.token=?",
+                (scope.namespace, scope.actor, token),
+            ).fetchone()
+            if row is not None:
+                bound_id, stored_format, stored_locator = row
+                if repository_id is not None and repository_id != bound_id:
+                    raise RepositoryMismatch("checkout is registered to a different repository")
+                if stored_format != object_format:
+                    raise RepositoryMismatch("repository object format differs from the registered one")
+                if locator is not None and locator != stored_locator:
+                    db.execute(
+                        "UPDATE repositories SET locator=? WHERE namespace=? AND actor=? AND repository_id=?",
+                        (locator, scope.namespace, scope.actor, bound_id),
+                    )
+                return RepositoryBinding(bound_id, object_format, locator if locator is not None else stored_locator)
+            if repository_id is not None:
+                existing = db.execute(
+                    "SELECT object_format FROM repositories WHERE namespace=? AND actor=? AND repository_id=?",
+                    (scope.namespace, scope.actor, repository_id),
+                ).fetchone()
+                if existing is None:
+                    raise RepositoryMismatch("no such repository is registered in this scope")
+                if existing[0] != object_format:
+                    raise RepositoryMismatch("repository object format differs from the registered one")
+                bound_id = repository_id
+                if locator is not None:
+                    db.execute(
+                        "UPDATE repositories SET locator=? WHERE namespace=? AND actor=? AND repository_id=?",
+                        (locator, scope.namespace, scope.actor, bound_id),
+                    )
+            else:
+                bound_id = str(uuid.uuid4())
+                db.execute(
+                    "INSERT INTO repositories(namespace,actor,repository_id,object_format,locator,registered_at)"
+                    " VALUES(?,?,?,?,?,?)",
+                    (scope.namespace, scope.actor, bound_id, object_format, locator, now),
+                )
+            db.execute(
+                "INSERT INTO repository_checkouts(namespace,actor,token,repository_id,registered_at) VALUES(?,?,?,?,?)",
+                (scope.namespace, scope.actor, token, bound_id, now),
+            )
+            return RepositoryBinding(bound_id, object_format, locator)
+
+    def checkout_binding(self, scope: Scope, token: str) -> RepositoryBinding | None:
+        """Read an existing binding without registering anything. Used when git is absent."""
+        db = None
+        try:
+            db = self._connect()
+            with closing(db):
+                db.execute("BEGIN")
+                row = db.execute(
+                    "SELECT c.repository_id,r.object_format,r.locator FROM repository_checkouts c"
+                    " JOIN repositories r ON r.namespace=c.namespace AND r.actor=c.actor AND r.repository_id=c.repository_id"
+                    " WHERE c.namespace=? AND c.actor=? AND c.token=?",
+                    (scope.namespace, scope.actor, token),
+                ).fetchone()
+                db.commit()
+                return None if row is None else RepositoryBinding(row[0], row[1], row[2])
+        except sqlite3.Error as error:
+            raise StorageIntegrityError("storage operation failed") from error
+
+    def _event_and_receipt(self, db: sqlite3.Connection, scope: Scope, key: str, digest: str, memory_id: str, revision_id: str, operation: str, digest_version: int = DIGEST_VERSION) -> WriteReceipt:
         operation_id = str(uuid.uuid4())
         payload = json.dumps({"memory_id": memory_id, "revision_id": revision_id, "operation_id": operation_id, "operation": operation}, separators=(",", ":"))
         cursor = db.execute("INSERT INTO outbox(namespace,actor,operation_id,payload) VALUES(?,?,?,?)", (scope.namespace, scope.actor, operation_id, payload))
@@ -537,22 +693,24 @@ class SQLiteRepository:
             "INSERT INTO receipts(namespace,actor,idempotency_key,request_digest,memory_id,revision_id,"
             "operation_id,durable_seq,operation,digest_version) VALUES(?,?,?,?,?,?,?,?,?,?)",
             (scope.namespace, scope.actor, key, digest, memory_id, revision_id, operation_id,
-             receipt.durable_seq, operation, DIGEST_VERSION),
+             receipt.durable_seq, operation, digest_version),
         )
         return receipt
 
-    def record(self, scope: Scope, item: MemoryInput, key: str, digest: str) -> WriteReceipt:
+    def record(self, scope: Scope, item: MemoryInput, key: str, digest: str,
+               references: tuple[VerifiedReference, ...] = (), digest_version: int = DIGEST_VERSION) -> WriteReceipt:
         body = item.content.encode("utf-8")
         body_digest = hashlib.sha256(body).digest()
         with self._transaction() as db:
             if retry := self._retry(db, scope, key, digest):
-                return retry
+                return retry  # the loser's verification result is discarded, never merged
             memory_id, revision_id = self._ids()
             blob_id = self._blob(db, scope, body, body_digest)
             created_at = datetime.now(UTC).isoformat()
             db.execute("INSERT INTO memories VALUES(?,?,?,?,0)", (scope.namespace, scope.actor, memory_id, revision_id))
             db.execute("INSERT INTO revisions VALUES(?,?,?,?,?,?,?,?,?,?,?)", (scope.namespace, scope.actor, memory_id, revision_id, None, blob_id, item.kind, json.dumps(item.tags), item.source_uri, item.snapshot, created_at))
-            receipt = self._event_and_receipt(db, scope, key, digest, memory_id, revision_id, "record")
+            self._store_references(db, scope, memory_id, revision_id, references)
+            receipt = self._event_and_receipt(db, scope, key, digest, memory_id, revision_id, "record", digest_version)
             self._index_add(db, scope, memory_id, revision_id, blob_id, item, created_at, receipt.durable_seq, False)
             self._bump_generation(db)
             return receipt
@@ -563,7 +721,8 @@ class SQLiteRepository:
             raise MemoryNotFound("memory not found")
         return row
 
-    def revise(self, scope: Scope, memory_id: str, expected_revision_id: str, item: MemoryInput, key: str, digest: str) -> WriteReceipt:
+    def revise(self, scope: Scope, memory_id: str, expected_revision_id: str, item: MemoryInput, key: str, digest: str,
+               references: tuple[VerifiedReference, ...] = (), digest_version: int = DIGEST_VERSION) -> WriteReceipt:
         body = item.content.encode("utf-8")
         body_digest = hashlib.sha256(body).digest()
         with self._transaction() as db:
@@ -577,7 +736,8 @@ class SQLiteRepository:
             created_at = datetime.now(UTC).isoformat()
             db.execute("INSERT INTO revisions VALUES(?,?,?,?,?,?,?,?,?,?,?)", (scope.namespace, scope.actor, memory_id, revision_id, head, blob_id, item.kind, json.dumps(item.tags), item.source_uri, item.snapshot, created_at))
             db.execute("UPDATE memories SET current_revision_id=? WHERE namespace=? AND actor=? AND memory_id=?", (revision_id, scope.namespace, scope.actor, memory_id))
-            receipt = self._event_and_receipt(db, scope, key, digest, memory_id, revision_id, "revise")
+            self._store_references(db, scope, memory_id, revision_id, references)
+            receipt = self._event_and_receipt(db, scope, key, digest, memory_id, revision_id, "revise", digest_version)
             self._index_remove(db, scope, memory_id)
             self._index_add(db, scope, memory_id, revision_id, blob_id, item, created_at, receipt.durable_seq, True)
             self._history_add(db, scope, memory_id, head)   # the outgoing head
@@ -609,7 +769,8 @@ class SQLiteRepository:
                 row = db.execute("SELECT r.revision_id,r.parent_revision_id,b.body,r.kind,r.tags_json,r.source_uri,r.snapshot,r.created_at FROM revisions r JOIN blobs b ON b.id=r.blob_id WHERE r.namespace=? AND r.actor=? AND r.memory_id=? AND r.revision_id=?", (scope.namespace, scope.actor, memory_id, selected)).fetchone()
                 if row is None:
                     raise MemoryNotFound("memory not found")
-                result = MemoryView(memory_id, row[0], row[1], bytes(row[2]).decode("utf-8"), row[3], tuple(json.loads(row[4])), row[5], row[6], row[7], head)
+                references = self._references(db, scope, memory_id, (selected,)).get(selected, ())
+                result = MemoryView(memory_id, row[0], row[1], bytes(row[2]).decode("utf-8"), row[3], tuple(json.loads(row[4])), row[5], row[6], row[7], head, references)
                 db.commit()
                 return result
         except NexusError:
@@ -809,12 +970,14 @@ class SQLiteRepository:
                 more = len(rows) > query.limit
                 rows = rows[: query.limit]
                 reasons = self._reasons(query)
+                evidence = self._hit_references(db, scope, [(row[1], row[2]) for row in rows])
                 hits = tuple(
                     SearchHit(
                         memory_id=row[1], revision_id=row[2], kind=row[3],
                         tags=tuple(json.loads(row[4])), created_at=row[5],
                         excerpt=row[8], lexical_rank=row[7] if query.query else None,
                         match_reasons=reasons, has_earlier_revisions=bool(row[6]),
+                        references=evidence.get((row[1], row[2]), ()),
                     )
                     for row in rows
                 )

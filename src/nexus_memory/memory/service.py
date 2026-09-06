@@ -2,29 +2,53 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
+from datetime import UTC, datetime
 
-from nexus_memory.domain.errors import InvalidInput
+from nexus_memory.domain.errors import (
+    CommitNotFound,
+    InvalidInput,
+    InvalidReference,
+    PathNotInCommit,
+    RepositoryMismatch,
+    UnsupportedReferenceType,
+    VerificationUnavailable,
+)
 from nexus_memory.domain.models import (
     DIGEST_VERSION,
+    HEX,
+    OBJECT_FORMATS,
+    REFERENCE_DIGEST_VERSION,
+    SUPPORTED_MODES,
     HistoryPage,
     RevisionHit,
     MemoryInput,
     MemoryView,
+    ReferenceInput,
+    RepositoryBinding,
     Scope,
     SearchPage,
     SearchQuery,
     StoreStatus,
+    TreeEntry,
+    VerifiedReference,
     WriteReceipt,
 )
 from nexus_memory.storage.repository import MemoryRepository
 
+from .verifier import RepositoryVerifier
+
 
 class MemoryService:
     DIGEST_VERSION = DIGEST_VERSION
+    REFERENCE_DIGEST_VERSION = REFERENCE_DIGEST_VERSION
 
-    def __init__(self, repository: MemoryRepository, scope: Scope) -> None:
+    def __init__(self, repository: MemoryRepository, scope: Scope, binding: RepositoryBinding | None = None,
+                 verifier: RepositoryVerifier | None = None) -> None:
         self.repository = repository
         self.scope = scope
+        self.binding = binding
+        self.verifier = verifier
 
     @staticmethod
     def _key(key: str) -> str:
@@ -61,15 +85,106 @@ class MemoryService:
         encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
         return hashlib.sha256(encoded).hexdigest()
 
+    @staticmethod
+    def _digest_v2(operation: str, target: str | None, expected: str | None, item: MemoryInput) -> str:
+        """Version 2: the version-1 fields plus the caller's reference input, never resolved OIDs.
+
+        Hashing a resolved commit would make a retry of ``{path, commit: "HEAD"}`` after
+        ``HEAD`` moved hash differently, and raise a conflict instead of replaying.
+        """
+        value = {
+            "version": REFERENCE_DIGEST_VERSION, "operation": operation, "target": target,
+            "expected_revision": expected,
+            "input": {
+                "content": item.content, "kind": item.kind, "tags": item.tags,
+                "source_uri": item.source_uri, "snapshot": item.snapshot,
+                "references": [{"commit": reference.commit, "path": reference.path} for reference in item.references],
+            },
+        }
+        encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+        return hashlib.sha256(encoded).hexdigest()
+
+    def _request_digest(self, operation: str, target: str | None, expected: str | None, item: MemoryInput) -> tuple[str, int]:
+        if item.references:
+            return self._digest_v2(operation, target, expected, item), REFERENCE_DIGEST_VERSION
+        return self._digest(operation, target, expected, item), DIGEST_VERSION
+
+    @staticmethod
+    def _accept(path: str, entries: tuple[TreeEntry, ...]) -> TreeEntry:
+        """Tree-entry acceptance: one record, byte-equal pathname, blob, supported mode.
+
+        Non-empty output proves only that *something* matched a pathspec. Absence is
+        empty output, so it is read here and never from an exit status.
+        """
+        if len(entries) != 1:
+            raise PathNotInCommit("path is not in that commit")
+        entry = entries[0]
+        if entry.path != path:
+            raise PathNotInCommit("path is not in that commit")
+        if entry.entry_type != "blob" or entry.mode not in SUPPORTED_MODES:
+            raise UnsupportedReferenceType("reference is not a regular tracked file")
+        return entry
+
+    def _verify(self, references: tuple[ReferenceInput, ...]) -> tuple[VerifiedReference, ...]:
+        """Resolve each distinct effective spec exactly once, then check every path against it.
+
+        Runs before the write transaction opens: no subprocess is ever spawned while the
+        write lock is held. When the result is not the one that commits, it is discarded.
+        """
+        if self.binding is None or self.verifier is None:
+            raise VerificationUnavailable("reference verification is unavailable in this mode")
+        width = OBJECT_FORMATS[self.binding.object_format]
+        resolved: dict[str, str] = {}
+        for reference in references:
+            spec = reference.effective_spec
+            if spec in resolved:
+                continue
+            if HEX.fullmatch(spec) and len(spec) in OBJECT_FORMATS.values() and len(spec) != width:
+                raise InvalidReference("commit OID width does not match the repository object format")
+            oid = self.verifier.resolve_commit(spec)
+            if oid is None:
+                raise CommitNotFound("commit not found in the bound repository")
+            if not HEX.fullmatch(oid) or len(oid) != width:
+                raise RepositoryMismatch("repository object format differs from the registered one")
+            resolved[spec] = oid
+        checked_at = datetime.now(UTC).isoformat()
+        verified: dict[tuple[str, str], VerifiedReference] = {}
+        for reference in references:
+            commit_oid = resolved[reference.effective_spec]
+            if (commit_oid, reference.path) in verified:
+                continue  # two specs resolved to one commit: one observation, one row
+            entry = self._accept(reference.path, self.verifier.tree_entries(commit_oid, reference.path))
+            verified[(commit_oid, reference.path)] = VerifiedReference(
+                self.binding.repository_id, commit_oid, reference.path, entry.object_oid,
+                entry.entry_type, entry.mode, checked_at,
+            )
+        return tuple(sorted(verified.values(), key=lambda item: (item.commit_oid, item.path)))
+
+    def _prepare(self, operation: str, target: str | None, expected: str | None, item: MemoryInput,
+                 key: str) -> tuple[str, int, tuple[VerifiedReference, ...], WriteReceipt | None]:
+        digest, version = self._request_digest(operation, target, expected, item)
+        if not item.references:
+            return digest, version, (), None
+        # A retry never invokes git: an already-committed receipt is returned before verification.
+        if receipt := self.repository.receipt(self.scope, key, digest):
+            return digest, version, (), receipt
+        return digest, version, self._verify(item.references), None
+
     def record(self, input: MemoryInput, idempotency_key: str) -> WriteReceipt:
         key = self._key(idempotency_key)
-        return self.repository.record(self.scope, input, key, self._digest("record", None, None, input))
+        digest, version, verified, replay = self._prepare("record", None, None, input, key)
+        if replay is not None:
+            return replay
+        return self.repository.record(self.scope, input, key, digest, verified, version)
 
     def revise(self, memory_id: str, expected_revision_id: str, input: MemoryInput, idempotency_key: str) -> WriteReceipt:
         key = self._key(idempotency_key)
         memory_id = self._identifier(memory_id, "memory_id")
         expected_revision_id = self._identifier(expected_revision_id, "expected_revision_id")
-        return self.repository.revise(self.scope, memory_id, expected_revision_id, input, key, self._digest("revise", memory_id, expected_revision_id, input))
+        digest, version, verified, replay = self._prepare("revise", memory_id, expected_revision_id, input, key)
+        if replay is not None:
+            return replay
+        return self.repository.revise(self.scope, memory_id, expected_revision_id, input, key, digest, verified, version)
 
     def forget(self, memory_id: str, expected_revision_id: str, idempotency_key: str) -> WriteReceipt:
         key = self._key(idempotency_key)
@@ -109,4 +224,9 @@ class MemoryService:
         return self.repository.history(self.scope, memory_id, limit, cursor)
 
     def status(self) -> StoreStatus:
-        return self.repository.status(self.scope)
+        stored = self.repository.status(self.scope)
+        return replace(
+            stored,
+            repository_id=self.binding.repository_id if self.binding is not None else None,
+            verification="available" if self.binding is not None and self.verifier is not None else "unavailable",
+        )

@@ -37,6 +37,20 @@ class ReceiptOutput(BaseModel):
     operation: str
 
 
+class ReferenceOutput(BaseModel):
+    """Evidence about one path in one commit. Identifiers and an observation, never content."""
+
+    model_config = ConfigDict(extra="forbid")
+    repository_id: str
+    commit_oid: str
+    path: str
+    object_oid: str
+    entry_type: str
+    mode: str
+    checked_at: str
+    evidence: list[str]
+
+
 class MemoryOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     memory_id: str
@@ -49,6 +63,7 @@ class MemoryOutput(BaseModel):
     snapshot: str | None
     created_at: str
     current_revision_id: str
+    references: list[ReferenceOutput]
 
 
 class StatusOutput(BaseModel):
@@ -64,6 +79,8 @@ class StatusOutput(BaseModel):
     revisions: int
     pending_outbox: int
     latest_durable_seq: int
+    repository_id: str | None
+    verification: str
 
 
 class SearchHitOutput(BaseModel):
@@ -77,6 +94,7 @@ class SearchHitOutput(BaseModel):
     lexical_rank: float | None
     match_reasons: list[str]
     has_earlier_revisions: bool
+    references: list[ReferenceOutput]
 
 
 class SearchOutput(BaseModel):
