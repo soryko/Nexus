@@ -151,9 +151,15 @@ class MemoryService:
 
         Runs before the write transaction opens: no subprocess is ever spawned while the
         write lock is held. When the result is not the one that commits, it is discarded.
+
+        The binding is confirmed first, and only here. Every reference in this batch is
+        stamped with ``binding.repository_id``, so the identity has to be true now rather
+        than at launch; a retry is answered from its receipt before this runs, which is
+        what keeps a replay working after the checkout has changed underneath.
         """
         if self.binding is None or self.verifier is None:
             raise VerificationUnavailable("reference verification is unavailable in this mode")
+        self.verifier.check_identity()
         resolved = self._resolve_specs(references)
         checked_at = datetime.now(UTC).isoformat()
         verified: dict[tuple[str, str], VerifiedReference] = {}

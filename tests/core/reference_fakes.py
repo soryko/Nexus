@@ -20,9 +20,10 @@ def entry(path: str, oid: str = BLOB, mode: str = "100644", entry_type: str = "b
 class FakeVerifier:
     """Resolves specs from a table and answers tree lookups from another.
 
-    ``resolutions`` and ``checks`` record every call, so resolution counts are asserted
-    rather than inferred. ``pause`` blocks inside a tree lookup until released, which is
-    how the lock boundary is tested directly.
+    ``resolutions``, ``checks`` and ``identity_checks`` record every call, so counts are
+    asserted rather than inferred. ``pause`` blocks inside a tree lookup until released,
+    which is how the lock boundary is tested directly, and ``identity_error`` is how a
+    checkout that changed under a bound process is scripted without moving directories.
     """
 
     def __init__(self, commits: dict[str, str] | None = None,
@@ -35,6 +36,13 @@ class FakeVerifier:
         self.paused = threading.Event()
         self.barrier: threading.Barrier | None = None
         self.missing: set[str] = set()
+        self.identity_checks = 0
+        self.identity_error: BaseException | None = None
+
+    def check_identity(self) -> None:
+        self.identity_checks += 1
+        if self.identity_error is not None:
+            raise self.identity_error
 
     def resolve_commit(self, spec: str) -> str | None:
         self.resolutions.append(spec)
@@ -56,6 +64,9 @@ class FakeVerifier:
 
 class RaisingVerifier:
     """A verifier that must never be reached: any call is a test failure."""
+
+    def check_identity(self) -> None:
+        raise AssertionError("verifier was invoked for an identity check")
 
     def resolve_commit(self, spec: str) -> str | None:
         raise AssertionError(f"verifier was invoked for {spec!r}")

@@ -9,10 +9,13 @@ from pathlib import Path
 from nexus_memory.domain.errors import (
     CommitNotFound,
     InvalidReference,
+    RepositoryMismatch,
     RepositoryUnbound,
     VerificationUnavailable,
 )
 from nexus_memory.domain.models import HEX, OBJECT_FORMATS, TreeEntry
+
+from .token import read_token
 
 # Environment variables that would redirect git away from the checkout named at launch.
 # Removing them keeps the binding a property of the path, not of whoever launched us.
@@ -89,10 +92,37 @@ class GitCliVerifier:
     # working directory is; -z delivers pathnames unquoted, one record per NUL.
     LS_TREE_FLAGS = ("--full-tree", "-z")
 
-    def __init__(self, git: GitCli, checkout: Path, object_format: str) -> None:
+    def __init__(self, git: GitCli, checkout: Path, object_format: str,
+                 common_dir: Path, token: str) -> None:
         self.git = git
         self.checkout = checkout
+        self.object_format = object_format
         self.width = OBJECT_FORMATS[object_format]
+        self.common_dir = common_dir
+        self.token = token
+
+    def check_identity(self) -> None:
+        """Confirm the bound checkout path still hosts the repository bound at launch.
+
+        The binding is established once and the pathname is followed on every later
+        invocation, so a checkout that is moved away and replaced would otherwise have the
+        replacement's commits resolved here and stamped with the departed repository's
+        identity. The common directory is a locator, reused by whatever is put at that
+        path next; the token is the registration, so both are re-read. One ``rev-parse``
+        per verifying write is the price of the recorded ``repository_id`` being true at
+        the moment the evidence was taken.
+
+        A checkout that merely moved with its Git directory still matches: this refuses a
+        changed binding, not a changed path.
+        """
+        try:
+            info = self.git.inspect(self.checkout)
+        except RepositoryUnbound as error:
+            raise RepositoryMismatch("the bound checkout is no longer a git checkout") from error
+        if info.common_dir != self.common_dir or info.object_format != self.object_format:
+            raise RepositoryMismatch("the bound checkout now resolves to a different repository")
+        if read_token(info.common_dir) != self.token:
+            raise RepositoryMismatch("the bound checkout now resolves to a different repository")
 
     def resolve_commit(self, spec: str) -> str | None:
         """Typed resolution: an annotated tag dereferences to its commit, a tree is refused."""

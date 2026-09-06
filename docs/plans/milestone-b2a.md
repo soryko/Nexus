@@ -37,6 +37,7 @@ Binding rules:
 - **Independent clones never merge automatically.** A matching remote URL, a shared commit OID, an identical tree, or a similar path is not evidence of the same project. Two clones of the same upstream are two repositories until an operator says otherwise, and the association is an explicit local action, never an inference.
 - **No tool call can select, override or create a repository binding.** The MCP schemas carry no repository, commit-scope or path-root argument, and injected fields are rejected the way injected `namespace` already is.
 - Launch without `--repo`, or with `git` unavailable, is a supported mode: verification is **unavailable**, and `status` says so. Nothing is labelled verified in that mode.
+- **The binding is confirmed before every new verification, not only at launch.** The common directory is a locator and is reused by whatever is put at that path next, so a process that bound one repository and then had a different one moved into its path would otherwise resolve the newcomer's commits and stamp them with the departed repository's `repository_id`. Before resolving anything, the verifier re-reads the checkout's shared Git directory and its token and refuses a changed binding with `repository_mismatch`; a checkout that merely moved with its Git directory still matches. This costs one `rev-parse` per verifying write. Receipt replay stays **ahead** of the check: a retry is answered from its committed receipt and asks the checkout nothing, so it still succeeds after the repository underneath has changed.
 
 ### The isolation boundary is `Scope`, not the repository
 
@@ -184,7 +185,8 @@ Frozen with this contract, over temporary Git repositories created by the tests:
 12. **Migration and retry.** Replay a receipt written before migration `004`; assert a reference-free request still produces the pinned version-1 digest by byte equality; same key plus a new reference conflicts; and a retry returns the original receipt and original evidence with a verifier that **raises if called at all**, after `HEAD` has moved and with the object unavailable.
 13. **Verification unavailable.** Launched without `--repo` and with `git` absent: the server starts, reference-carrying writes are refused with `verification_unavailable`, plain writes still succeed, and `status` reports the mode.
 14. **Restart without git.** Write references with a working verifier, restart with git unavailable: bindings and evidence are still readable through `get` and `search`, receipts still replay, and a `forget`-then-replay returns the original receipt while `get` refuses.
-15. **One real MCP round trip.** Record with a reference over subprocess stdio, read the evidence back, and assert no repository, commit-root or path-root argument is accepted in any tool schema.
+16. **The bound checkout, over time.** A repository moved away and replaced at its path by an independently registered one: new reference-carrying writes are refused with `repository_mismatch`, stored evidence is unchanged, the original receipt still replays, and restoring the repository restores verification under the identity it always had. A removed token is the same refusal, not a fresh identity. The identity check is asserted to run once per verifying write and never before a replay.
+17. **One real MCP round trip.** Record with a reference over subprocess stdio, read the evidence back, and assert no repository, commit-root or path-root argument is accepted in any tool schema.
 
 **Negative controls, wired from the first test** — as with retrieval, a suite that cannot fail measures nothing:
 
@@ -283,6 +285,10 @@ The project `.venv` links SQLite 3.50.4 and cannot run the suite — every stora
 14. **The lock boundary is tested directly.** Test 11's final-state assertions cannot establish where verification ran; a paused verification during which an independent reference-free write completes can.
 15. **Textual corrections.** The reference table no longer fixes a 40-hex OID; §4 states the reachability-versus-parentage distinction instead of calling ancestry mutable; both orphan-branch probes are preserved as separate failures of the withdrawn discriminator, one with a committed orphan branch and a different root, one with an unborn `HEAD` and no root at all.
 16. **Measured while recording this amendment:** the committed orphan branch's root (`ba13e6a…` against `8ee056c…`, common directory shared); `ls-tree` from a subdirectory without `--full-tree` reporting a byte-equal name for the wrong blob, which moves test 10's `--full-tree` guard onto the object OID; and `link(2)` refusing an existing target, which is what makes publication safe.
+
+**2026-09-06, fourth review, against the implementation at `0b0a217`.** Each item was reproduced against that commit before anything was changed, and the regression written for it was confirmed to fail against it.
+
+17. **The binding is confirmed before every new verification, not only at launch.** A repository moved away and replaced at its path had the newcomer's commit — absent from the departed repository — recorded under the departed repository's `repository_id`, because git follows the saved pathname while the service stamps the saved identity. The verifier now re-reads the checkout's shared Git directory and token first and refuses a changed binding with `repository_mismatch`. Receipt replay stays ahead of the check.
 
 ## Explicitly out of scope
 
