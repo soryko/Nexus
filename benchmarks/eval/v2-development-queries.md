@@ -219,7 +219,7 @@ A T2 variant may take **at most 40 raw index hits in total**. For a two-channel 
 | Stage | Baseline |
 | --- | --- |
 | T2 | **Pinned `stem`**, with the existing selection policy unchanged. Pinned 2026-09-06 on the T1-C result. |
-| T3 | The pinned T2 winner, or **`stem`** if no T2 variant passes. |
+| T3 | The pinned T2 winner, or **`stem`** if no T2 variant passes. **Resolved 2026-09-06: no T2 variant passed, so T3's baseline is `stem` with head-only candidate generation.** |
 
 `exact` remains the shipped default and the anchor for every resource ratio; promoting `stem` as the development baseline does not change either.
 
@@ -306,13 +306,31 @@ Predeclared before the run: `stem` is expected to recover morphological misses a
 
 Measured, in [results-dev-t1.md](../dev/results-dev-t1.md): the prediction about quality held — `split` was the only variant that left identifier-query pools untouched — and the prediction about cost was wrong in shape. The two-index profiles were not merely more complex; both are an order of magnitude slower at 10,000 memories. `EXPLAIN QUERY PLAN` shows a temp B-tree over both legs' match sets, which is consistent with that and does not isolate its contribution — a high-level strategy description is not a runtime measurement. **Neither implementation is viable as built**; that is a rejection of these two configurations, not of two-index designs in general. The parsimonious variant is the one that survives, and it survives carrying the precision cost `split` was designed to avoid.
 
+### T2 — outcome, run once on 2026-09-06
+
+**No variant cleared the registered rule. `stem` with head-only candidate generation stands as T2's outcome, and T3's baseline is `stem`.** Full report: [results-dev-t2.md](../dev/results-dev-t2.md).
+
+| Variant | Quality clauses 1–4, 6 | Ceilings (clause 5) | Outcome |
+| --- | --- | --- | --- |
+| `history_headfirst` | fails 1 — `dq18` not recovered | not measured | not promoted |
+| `history_paired` | fails 3 and 4 — obsolete revisions delivered on both controls, `dq13`'s answer displaced | not measured | not promoted |
+| `history_cued` | **all pass** | **fails**: storage 2.5676x (1,000) and 2.6999x (10,000) against ≤2x, in 4/4 cells; retrieval worst block 53.6327 ms and 51.2873 ms at 10,000 against ≤50 ms | not promoted |
+
+Only `history_cued` was performance-measured; the other two had already failed a quality clause. Recorded rather than left implicit.
+
+**The mechanism works; its cost does not fit.** `history_cued` recovered every registered historical case — including `dq22`, twenty-one revisions back — resolved each to the correct live head with matched-revision provenance, delivered nothing from the forgotten memory, kept both head controls at rank 1, and lost no recall or rank anywhere. Retrieval-structure storage is the failure that does not depend on machine state: 14,995,456 bytes against `exact`'s 5,554,176 at 10,000 memories, of which **6,795,264 is `revision_index`**, the row table, not the FTS index over it. Stemming itself costs nothing — `stem` measures 0.98x `exact`.
+
+**Two measurement notes, both recorded in the report.** The historical channel roughly doubles retrieval p95 against the stage baseline (1.94x–2.35x at 10,000, stable across all six block sets), while the ratio against the anchor swung 1.24x–3.46x because the anchor arm itself swung between 14.8 and 37.3 ms; this run's machine was materially slower than T1-C's, so the absolute ≤50 ms failure is not established independently of machine state. And the write ceiling passes on the registered statistic (worst `revise` 1.3754x) but **fails on the paired one** (2.6609x at 10,000) — the masking effect T1-C's correction described, showing up in the other direction.
+
+**Deferred, not discarded.** `history_window3` was registered, then replaced by the pre-run amendment; no bounded-window index has been priced. Any follow-up should attack `revision_index` before anything else.
+
 ### T2 and T3 — authorised to run, 2026-09-06
 
 Limits registered in both rows. The full contracts are in [T2 and T3 — authorisation](#t2-and-t3--authorisation-2026-09-06).
 
 | # | Target | Configuration | What it changes | Baseline | Registered limits | Registered on | Outcome |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 4 | T2 | Historical-term discovery with matched-revision and current-head provenance | Candidate generation over non-head revisions; result shape | Pinned `stem`, existing selection policy unchanged | Pool **20 distinct eligible memories** · history **5 memories × 20 revisions** · delivered **5 items / 8,192 UTF-8 bytes** incl. provenance · **≤3 predeclared variants** per stage · **no network or model calls** · **fusion input ≤40 raw index hits** (20 current-head + 20 historical) | 2026-09-06 | *[predeclared](#t2--predeclaration-registered-2026-09-06) 2026-09-06 on `corpus-dev2.json`; baseline control measured; variants not yet run* |
+| 4 | T2 | Historical-term discovery with matched-revision and current-head provenance | Candidate generation over non-head revisions; result shape | Pinned `stem`, existing selection policy unchanged | Pool **20 distinct eligible memories** · history **5 memories × 20 revisions** · delivered **5 items / 8,192 UTF-8 bytes** incl. provenance · **≤3 predeclared variants** per stage · **no network or model calls** · **fusion input ≤40 raw index hits** (20 current-head + 20 historical) | 2026-09-06 | **[Run once 2026-09-06](#t2--outcome-run-once-on-2026-09-06). No variant promoted.** `history_cued` cleared every quality clause — all three historical cases delivered with provenance, both controls held, no recall lost — and failed the storage ceiling at **2.70x** against ≤2x. `stem` head-only stands; T3's baseline is `stem`. |
 | 5 | T3 | Ordering and weak-match rejection under a fixed expansion budget | Ranking and cutoff only; candidate generation **frozen** | Pinned T2 winner, or `stem` if no T2 variant passes | Pool **20 distinct eligible memories** · history **5 memories × 20 revisions**, selection choosing which five · delivered **5 items / 8,192 UTF-8 bytes** incl. provenance · **≤3 predeclared variants** per stage · **no network or model calls** | 2026-09-06 | *authorised, not yet run* |
 
 ### T0 — not authorised to run
