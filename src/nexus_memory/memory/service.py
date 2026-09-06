@@ -125,6 +125,27 @@ class MemoryService:
             raise UnsupportedReferenceType("reference is not a regular tracked file")
         return entry
 
+    def _resolve_one(self, spec: str) -> str:
+        assert self.binding is not None and self.verifier is not None
+        width = OBJECT_FORMATS[self.binding.object_format]
+        if HEX.fullmatch(spec) and len(spec) in OBJECT_FORMATS.values() and len(spec) != width:
+            raise InvalidReference("commit OID width does not match the repository object format")
+        oid = self.verifier.resolve_commit(spec)
+        if oid is None:
+            raise CommitNotFound("commit not found in the bound repository")
+        if not HEX.fullmatch(oid) or len(oid) != width:
+            raise RepositoryMismatch("repository object format differs from the registered one")
+        return oid
+
+    def _resolve_specs(self, references: tuple[ReferenceInput, ...]) -> dict[str, str]:
+        """Each distinct effective spec exactly once. One spec cannot split across two commits."""
+        resolved: dict[str, str] = {}
+        for reference in references:
+            spec = reference.effective_spec
+            if spec not in resolved:
+                resolved[spec] = self._resolve_one(spec)
+        return resolved
+
     def _verify(self, references: tuple[ReferenceInput, ...]) -> tuple[VerifiedReference, ...]:
         """Resolve each distinct effective spec exactly once, then check every path against it.
 
@@ -133,20 +154,7 @@ class MemoryService:
         """
         if self.binding is None or self.verifier is None:
             raise VerificationUnavailable("reference verification is unavailable in this mode")
-        width = OBJECT_FORMATS[self.binding.object_format]
-        resolved: dict[str, str] = {}
-        for reference in references:
-            spec = reference.effective_spec
-            if spec in resolved:
-                continue
-            if HEX.fullmatch(spec) and len(spec) in OBJECT_FORMATS.values() and len(spec) != width:
-                raise InvalidReference("commit OID width does not match the repository object format")
-            oid = self.verifier.resolve_commit(spec)
-            if oid is None:
-                raise CommitNotFound("commit not found in the bound repository")
-            if not HEX.fullmatch(oid) or len(oid) != width:
-                raise RepositoryMismatch("repository object format differs from the registered one")
-            resolved[spec] = oid
+        resolved = self._resolve_specs(references)
         checked_at = datetime.now(UTC).isoformat()
         verified: dict[tuple[str, str], VerifiedReference] = {}
         for reference in references:

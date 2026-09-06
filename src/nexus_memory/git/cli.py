@@ -85,6 +85,10 @@ class GitCliVerifier:
     by the service, not here: this class returns what git returned.
     """
 
+    # --full-tree fixes the coordinate system at the repository root whatever the process
+    # working directory is; -z delivers pathnames unquoted, one record per NUL.
+    LS_TREE_FLAGS = ("--full-tree", "-z")
+
     def __init__(self, git: GitCli, checkout: Path, object_format: str) -> None:
         self.git = git
         self.checkout = checkout
@@ -107,7 +111,7 @@ class GitCliVerifier:
         successful resolution is a pathspec git would not take, which validation should
         already have refused.
         """
-        result = self.git._run(self.checkout, "ls-tree", "--full-tree", "-z", commit_oid, "--", path)
+        result = self.git._run(self.checkout, "ls-tree", *self.LS_TREE_FLAGS, commit_oid, "--", path)
         if result.returncode != 0:
             raise InvalidReference("reference could not be checked against the commit")
         entries = []
