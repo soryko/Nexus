@@ -1,0 +1,140 @@
+corpus: 20000 memories, 40000 reference rows, 3 repositories, one scope
+baseline: 5524 pages, 0.00244 ms median / 0.00195 ms best per referenced-row write
+
+--- baseline (existing indexes only) ---
+shape                 rows  hits      steps  best ms   med ms  plan
+path_exact              20    20    2080995   120.33   157.87  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+path_prefix             20    20    2201049   145.78   180.72  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+commit_exact            20    20    1981157   109.83   117.78  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=? AND commit_oid=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+repository_bound      6667    20    2247280   135.21   165.03  SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=?)
+                                                             SEARCH h USING INDEX sqlite_autoindex_head_index_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             SEARCH r EXISTS USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+unfiltered           20000    20    2500218   171.55   209.21  SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=?)
+                                                             SEARCH h USING INDEX sqlite_autoindex_head_index_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+
+candidate path: +438 pages (7.9%), write 0.03013 ms median (12.33x baseline), 0.01206 ms best (6.19x)
+
+--- with path index ---
+shape                 rows  hits      steps  best ms   med ms  plan
+path_exact              20    20    2081139   138.33   241.11  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+path_prefix             20    20    2201205   150.91   188.83  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+commit_exact            20    20    1981297   218.68   600.20  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=? AND commit_oid=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+repository_bound      6667    20    2247420   314.03   541.35  SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=?)
+                                                             SEARCH h USING INDEX sqlite_autoindex_head_index_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             SEARCH r EXISTS USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+unfiltered           20000    20    2500344   188.43   316.80  SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=?)
+                                                             SEARCH h USING INDEX sqlite_autoindex_head_index_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+
+candidate commit: +618 pages (11.2%), write 0.02022 ms median (8.28x baseline), 0.01229 ms best (6.31x)
+
+--- with commit index ---
+shape                 rows  hits      steps  best ms   med ms  plan
+path_exact              20    20    2081135   146.59   173.75  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+path_prefix             20    20    2201201   134.21   269.71  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+commit_exact            20    20    1981301   112.72   136.56  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=? AND commit_oid=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+repository_bound      6667    20    2247420   145.21   213.22  SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=?)
+                                                             SEARCH h USING INDEX sqlite_autoindex_head_index_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             SEARCH r EXISTS USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+unfiltered           20000    20    2500344   193.12   337.66  SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=?)
+                                                             SEARCH h USING INDEX sqlite_autoindex_head_index_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+
+candidate repository: +618 pages (11.2%), write 0.00428 ms median (1.75x baseline), 0.00362 ms best (1.86x)
+
+--- with repository index ---
+shape                 rows  hits      steps  best ms   med ms  plan
+path_exact              20    20    2081092   141.13   182.77  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+path_prefix             20    20    2201158   219.21   278.32  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+commit_exact            20    20    1981254   256.05   316.91  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=? AND commit_oid=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+repository_bound      6667    20    2520439   133.21   216.02  SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=?)
+                                                             SEARCH h USING INDEX sqlite_autoindex_head_index_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             SEARCH r EXISTS USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+unfiltered           20000    20    2500301   128.42   159.37  SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=?)
+                                                             SEARCH h USING INDEX sqlite_autoindex_head_index_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+
+--- statistics only: ANALYZE, existing indexes ---
+shape                 rows  hits      steps  best ms   med ms  plan
+path_exact              20    20     364742    28.39    35.69  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+path_prefix             20    20     484862    40.29    44.44  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+commit_exact            20    20     264925    23.43    26.72  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=? AND commit_oid=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+repository_bound      6667    20     531022    38.71    42.49  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+unfiltered           20000    20     504121    32.27    33.91  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+
+--- statistics and all three candidates ---
+shape                 rows  hits      steps  best ms   med ms  plan
+path_exact              20    20     666853    46.91    58.21  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+path_prefix             20    20     487328    32.39    35.22  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+commit_exact            20    20     267337    20.46    21.50  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=? AND commit_oid=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+repository_bound      6667    20     853139    60.57    78.41  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             SEARCH r EXISTS USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY
+unfiltered           20000    20     506464    38.45    48.32  SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                             SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                             USE TEMP B-TREE FOR ORDER BY

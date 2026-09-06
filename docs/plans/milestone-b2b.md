@@ -317,3 +317,84 @@ Raised on review of the document at `a2cf1cc`, again before any implementation e
    `--literal-pathspecs` strips nothing. It **preserves the caller's text and disables its interpretation as a pattern** — the bytes reach git unchanged and magic prefixes in them are simply not given meaning. The distinction matters here because B2b is citing B2a as the precedent for its own rule, and the precedent is "the caller's bytes survive and are not interpreted", not "the caller's bytes are edited". Corrected in place.
 
    Test 2 then asserted only the segment boundary, which leaves the whole metacharacter and case surface untested. §3 now states that the comparison is case-sensitive, without Unicode normalisation, and that `%`, `_`, `[`, `]`, `*` and `?` match only themselves — stated because the obvious SQL spelling does not have those properties: SQLite's `LIKE` folds ASCII case and treats `%` and `_` as wildcards, so a `LIKE` prefix would match `SRC/APIARY.py` for `src/api` and would leave a recorded path containing a literal `%` unfilterable, while `GLOB` is byte-exact but gives `*`, `?` and `[...]` meaning instead. Test 2 now asserts case differences (`SRC/api`, `src/API` match nothing) and literal `%` and `_` in both positions — in a recorded path that must be matchable, and in a prefix that must not behave as a wildcard. A mutation control spelling the prefix as `LIKE` is added, and must fail test 2.
+
+### 4 — 2026-09-06, §9 discharged by measurement; migration `005` is not written
+
+Measured against the implementation at `8563758` with
+[`tools/measure_reference_filters.py`](../../tools/measure_reference_filters.py); the raw
+output is [`docs/measurements/b2b-reference-filter-plans.txt`](../measurements/b2b-reference-filter-plans.txt).
+Corpus: 20,000 memories, 40,000 reference rows, three `repository_id`s, one scope, on
+CPython 3.13.15 with SQLite 3.53.4 — the B2a development environment. Query work is VDBE
+steps counted through `set_progress_handler`, which is a counter rather than an estimate;
+latency is best-of-fifteen with the median alongside, because latency alone on a warm
+corpus is noise and the spread is what says so. Write cost is the median of nine
+transactions of two thousand inserts each, on a throwaway copy so every read arm measures a
+byte-identical corpus, with a warm-up transaction discarded — the first attempt at it used
+two hundred inserts and five repetitions and returned figures that moved by 5x between runs
+of the same arm, which is undersampling and not a result; those numbers are not reported
+here and the ones below replace them.
+
+**The invariant holds on the existing indexes. Migration `005` is not written.**
+
+1. **No filter shape full-scans `revision_references`, in any arm.** Every plan, for all
+   four shapes, in all five arms, serves the predicate from
+   `sqlite_autoindex_revision_references_1` — the autoindex behind the primary key — as
+   `SEARCH r EXISTS USING [COVERING] INDEX … (namespace=? AND actor=? AND memory_id=? AND
+   revision_id=?)`, with `commit_oid` joining that list for the commit shape. Zero
+   occurrences of a scan of the table anywhere in the output. §9 predicted that a
+   *standalone* predicate on `path` or `commit_oid` would scan and a scope-qualified
+   existence test correlated to an already-selected head revision would not; the second is
+   what §4 required for unrelated reasons, and it is why the invariant needs no new
+   storage. The correlation is load-bearing rather than incidental, so it is a named
+   constant in the code with that written next to it.
+
+2. **No candidate index was chosen by the planner, with or without statistics.** Three
+   candidates were built and measured one at a time — `(namespace, actor, path)`,
+   `(namespace, actor, commit_oid)`, `(namespace, actor, repository_id)` — and then all
+   three together. Not one appears in a single plan line in any arm. A plan change alone
+   would not have justified an index (amendment 2); there was not even a plan change.
+
+3. **Query work is unchanged by every candidate.** Against the baseline's 2,080,995 steps
+   for path-exact, the path-index arm measures 2,081,139 — a difference of 144 steps in two
+   million, which is the cost of reading a larger schema, not of answering the query.
+   Commit-exact and repository-bound behave the same way. There is no measured reduction in
+   query work, and the latency differences between arms are inside the noise their own
+   best/median spread describes.
+
+4. **The costs are real, were measured too, and are larger than the storage figure
+   suggests.** Storage: `path` +438 pages (+7.9%), `commit` and `repository` +618 pages
+   (+11.2%) each, against a 5,524-page baseline. The write path is where they are actually
+   expensive: against a baseline of 0.00244 ms per referenced-row insert, `path` costs
+   0.03013 ms (**12.33×**), `commit` 0.02022 ms (**8.28×**) and `repository` 0.00428 ms
+   (**1.75×**); by best-of rather than median the first two are 6.19× and 6.31×, so the
+   multiple is large under either statistic. That is paid on every referenced write and, for
+   storage, for the life of the database, against a measured benefit of zero. This project
+   declined a 2.70× storage cost on measured grounds in T2; paying this on no grounds at all
+   would be the same error inverted.
+
+5. **A statistics arm was run, and it had to be split in two to mean anything.** The
+   planner chooses on estimated cost, so "no candidate was chosen" could have been an
+   artefact of `sqlite_stat1` being empty — production never runs `ANALYZE`. Running
+   `ANALYZE` **with all three candidates present** cut work three- to sevenfold, which read
+   at first like the candidates finally paying. It was not: that arm varies two things at
+   once. The arm holding the index set at the baseline and adding statistics alone is
+   **faster than both** — path-exact 364,742 steps against the baseline's 2,080,995 and
+   against 666,853 with the candidates present; repository-bound 531,022 against 2,247,280
+   and 853,139. The unfiltered control settles it independently: it carries no reference
+   filter and cannot benefit from any candidate index, yet it improves by the same factor
+   under statistics alone (2,500,218 → 504,121). The gain is the planner reordering the
+   existing joins to lead with `head_index_recent`; the candidates, added on top, measurably
+   **increase** work.
+
+**Decided: `005` is not written, and §9's obligation is discharged as the invariant it was
+stated to be.** Test 16 asserts the plans rather than the migration, on a corpus of its own
+and in both statistics states, so it will pass unchanged if a later slice does add an index
+for a reason B2b does not have.
+
+**Recorded, and explicitly not acted on here.** `ANALYZE` alone is worth roughly a
+four- to sixfold reduction in query work on *every* search in this corpus, filtered and
+unfiltered alike. That is a finding about the shipped system, not about reference filters —
+it predates this slice, it changes ordering behaviour for queries B2b does not own, and
+adopting it means deciding when statistics are collected and refreshed. It belongs to its
+own slice with its own measurements, and is written down here only so the observation is not
+lost with the harness that produced it.

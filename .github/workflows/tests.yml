@@ -60,10 +60,16 @@ jobs:
           mkdir -p artifacts/junit
           uv run pytest -q --junitxml=artifacts/junit/suite.xml
 
+      # Both matrices, in one invocation separate from the suite so neither can hide the
+      # other's exit status. B2b's is added here rather than left to the development run:
+      # a matrix that only ever runs locally stops being evidence the first time nobody
+      # runs it.
       - name: Mutation matrix
         env:
           NEXUS_MUTATION_MATRIX: "1"
-        run: uv run pytest -q tests/core/test_b2a_mutations.py --junitxml=artifacts/junit/mutations.xml
+        run: |
+          uv run pytest -q tests/core/test_b2a_mutations.py tests/core/test_b2b_mutations.py \
+            --junitxml=artifacts/junit/mutations.xml
 
       - name: Collect failure evidence
         if: always()
