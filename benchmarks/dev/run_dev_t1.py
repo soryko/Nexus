@@ -213,7 +213,8 @@ def index_sizes(path: Path) -> dict[str, int]:
         db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         page_size = db.execute("PRAGMA page_size").fetchone()[0]
         sizes: dict[str, int] = {}
-        for name in ("head_fts", "head_fts_stem", "head_fts_prose", "head_index", "head_tags"):
+        for name in ("head_fts", "head_fts_stem", "head_fts_prose", "head_index", "head_tags",
+                     "revision_fts", "revision_index"):
             exists = db.execute("SELECT count(*) FROM sqlite_master WHERE name=?", (name,)).fetchone()[0]
             if not exists:
                 continue

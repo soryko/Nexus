@@ -272,10 +272,12 @@ def main() -> None:
         "budgets": {"pool": POOL_LIMIT, "history_memories": HISTORY_MEMORIES,
                     "history_revisions": HISTORY_REVISIONS, "delivered_items": DELIVERED_ITEMS,
                     "delivered_bytes": DELIVERED_BYTES, "diagnostic_limit": DIAGNOSTIC_LIMIT},
+        # The resource anchor is a fresh `exact` measurement, not the incoming baseline:
+        # successive promotions must not be able to multiply the allowed cost.
+        "resource_anchor": run_policy(corpus, "baseline", "exact"),
         "policies": [run_policy(corpus, policy, BASELINE_PROFILE) for policy in policies],
     }
-    suffix = "-".join(policies)
-    out = HERE / (f"results-dev-t2-{suffix}.json" if policies != ["baseline"] else "results-dev-t2-baseline.json")
+    out = HERE / ("results-dev-t2-baseline.json" if policies == ["baseline"] else "results-dev-t2.json")
     out.write_text(json.dumps(record, indent=2) + "\n")
     print(json.dumps({p["policy"]: p["per_class"] for p in record["policies"]}, indent=2))
     print(f"\nwritten: {out}")
