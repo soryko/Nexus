@@ -2,7 +2,7 @@
   "experiment": "T2 historical vocabulary",
   "development_data": true,
   "not_a_v2_result": true,
-  "build_commit": "af1d11a",
+  "build_commit": "c86ec66",
   "interpreter": "/Users/soko/Cerebros/nexus-memory/.venv-sqlite/bin/python",
   "sqlite_version": "3.53.4",
   "corpus": "corpus-dev2.json",
@@ -118,8 +118,6 @@
           "d01": 1
         },
         "history_slots_used": 2,
-        "history_memories_used": 2,
-        "max_revisions_for_one_memory": 2,
         "stopped_by": "delivered_item_cap",
         "misses": {},
         "revisions_discovered": 4
@@ -159,8 +157,6 @@
           "d02": null
         },
         "history_slots_used": 0,
-        "history_memories_used": 0,
-        "max_revisions_for_one_memory": 0,
         "stopped_by": null,
         "misses": {
           "d02": "candidate_generation"
@@ -205,8 +201,6 @@
           "d03": 1
         },
         "history_slots_used": 0,
-        "history_memories_used": 0,
-        "max_revisions_for_one_memory": 0,
         "stopped_by": "delivered_item_cap",
         "misses": {},
         "revisions_discovered": 0
@@ -245,8 +239,6 @@
           "d04": 1
         },
         "history_slots_used": 0,
-        "history_memories_used": 0,
-        "max_revisions_for_one_memory": 0,
         "stopped_by": null,
         "misses": {},
         "revisions_discovered": 0
@@ -289,8 +281,6 @@
           "d05": 5
         },
         "history_slots_used": 2,
-        "history_memories_used": 2,
-        "max_revisions_for_one_memory": 2,
         "stopped_by": null,
         "misses": {},
         "revisions_discovered": 4
@@ -327,8 +317,6 @@
           "d06": null
         },
         "history_slots_used": 0,
-        "history_memories_used": 0,
-        "max_revisions_for_one_memory": 0,
         "stopped_by": null,
         "misses": {
           "d06": "candidate_generation"
@@ -373,8 +361,6 @@
           "d07": 1
         },
         "history_slots_used": 0,
-        "history_memories_used": 0,
-        "max_revisions_for_one_memory": 0,
         "stopped_by": "delivered_item_cap",
         "misses": {},
         "revisions_discovered": 0
@@ -413,8 +399,6 @@
           "d08": 1
         },
         "history_slots_used": 0,
-        "history_memories_used": 0,
-        "max_revisions_for_one_memory": 0,
         "stopped_by": null,
         "misses": {},
         "revisions_discovered": 0
@@ -455,8 +439,6 @@
           "d09": 1
         },
         "history_slots_used": 0,
-        "history_memories_used": 0,
-        "max_revisions_for_one_memory": 0,
         "stopped_by": null,
         "misses": {},
         "revisions_discovered": 0
@@ -499,8 +481,6 @@
           "d10": 1
         },
         "history_slots_used": 1,
-        "history_memories_used": 1,
-        "max_revisions_for_one_memory": 2,
         "stopped_by": "delivered_item_cap",
         "misses": {},
         "revisions_discovered": 2
@@ -539,8 +519,6 @@
           "d11": 1
         },
         "history_slots_used": 0,
-        "history_memories_used": 0,
-        "max_revisions_for_one_memory": 0,
         "stopped_by": null,
         "misses": {},
         "revisions_discovered": 0
@@ -581,8 +559,6 @@
         "revision_delivered_recall": null,
         "rank_of_answers": {},
         "history_slots_used": 4,
-        "history_memories_used": 4,
-        "max_revisions_for_one_memory": 20,
         "stopped_by": "delivered_item_cap",
         "misses": {},
         "revisions_discovered": 26
@@ -625,8 +601,6 @@
           "d12": 6
         },
         "history_slots_used": 4,
-        "history_memories_used": 4,
-        "max_revisions_for_one_memory": 20,
         "stopped_by": "delivered_item_cap",
         "misses": {
           "d12": "delivered_item_cap"
@@ -669,8 +643,6 @@
         "revision_delivered_recall": null,
         "rank_of_answers": {},
         "history_slots_used": 0,
-        "history_memories_used": 0,
-        "max_revisions_for_one_memory": 0,
         "stopped_by": "delivered_item_cap",
         "misses": {},
         "revisions_discovered": 0
@@ -713,8 +685,6 @@
           "d13": 1
         },
         "history_slots_used": 0,
-        "history_memories_used": 0,
-        "max_revisions_for_one_memory": 0,
         "stopped_by": "delivered_item_cap",
         "misses": {},
         "revisions_discovered": 0
@@ -749,8 +719,6 @@
         "revision_delivered_recall": 0.0,
         "rank_of_answers": {},
         "history_slots_used": 0,
-        "history_memories_used": 0,
-        "max_revisions_for_one_memory": 0,
         "stopped_by": null,
         "misses": {
           "d20r1": "history_not_reached"
@@ -791,8 +759,6 @@
           "d21": 1
         },
         "history_slots_used": 1,
-        "history_memories_used": 1,
-        "max_revisions_for_one_memory": 2,
         "stopped_by": null,
         "misses": {},
         "revisions_discovered": 2
@@ -833,8 +799,6 @@
         "revision_delivered_recall": 0.0,
         "rank_of_answers": {},
         "history_slots_used": 4,
-        "history_memories_used": 4,
-        "max_revisions_for_one_memory": 20,
         "stopped_by": "delivered_item_cap",
         "misses": {
           "d22r1": "discovered_not_delivered"
@@ -875,8 +839,6 @@
           "d24": 1
         },
         "history_slots_used": 0,
-        "history_memories_used": 0,
-        "max_revisions_for_one_memory": 0,
         "stopped_by": null,
         "misses": {},
         "revisions_discovered": 0
@@ -919,8 +881,6 @@
           "d14": 1
         },
         "history_slots_used": 3,
-        "history_memories_used": 3,
-        "max_revisions_for_one_memory": 2,
         "stopped_by": "delivered_item_cap",
         "misses": {},
         "revisions_discovered": 6
@@ -955,8 +915,6 @@
         "revision_delivered_recall": null,
         "rank_of_answers": {},
         "history_slots_used": 0,
-        "history_memories_used": 0,
-        "max_revisions_for_one_memory": 0,
         "stopped_by": null,
         "misses": {},
         "revisions_discovered": 0
@@ -991,8 +949,6 @@
         "revision_delivered_recall": 0.0,
         "rank_of_answers": {},
         "history_slots_used": 0,
-        "history_memories_used": 0,
-        "max_revisions_for_one_memory": 0,
         "stopped_by": null,
         "misses": {
           "d26r1": "history_not_reached"
@@ -1036,8 +992,6 @@
           "d22": 1
         },
         "history_slots_used": 1,
-        "history_memories_used": 1,
-        "max_revisions_for_one_memory": 2,
         "stopped_by": null,
         "misses": {},
         "revisions_discovered": 2
@@ -1076,8 +1030,6 @@
           "d20": 1
         },
         "history_slots_used": 1,
-        "history_memories_used": 1,
-        "max_revisions_for_one_memory": 2,
         "stopped_by": null,
         "misses": {},
         "revisions_discovered": 2
@@ -1183,8 +1135,6 @@
             "d01": 1
           },
           "history_slots_used": 2,
-          "history_memories_used": 2,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 4
@@ -1227,8 +1177,6 @@
             "d02": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -1271,8 +1219,6 @@
             "d03": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 0
@@ -1311,8 +1257,6 @@
             "d04": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -1355,8 +1299,6 @@
             "d05": 1
           },
           "history_slots_used": 3,
-          "history_memories_used": 3,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 6
@@ -1399,8 +1341,6 @@
             "d06": 2
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 2
@@ -1443,8 +1383,6 @@
             "d07": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 0
@@ -1483,8 +1421,6 @@
             "d08": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -1527,8 +1463,6 @@
             "d09": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -1571,8 +1505,6 @@
             "d10": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 2
@@ -1611,8 +1543,6 @@
             "d11": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -1653,8 +1583,6 @@
           "revision_delivered_recall": null,
           "rank_of_answers": {},
           "history_slots_used": 4,
-          "history_memories_used": 4,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 26
@@ -1697,8 +1625,6 @@
             "d12": 5
           },
           "history_slots_used": 4,
-          "history_memories_used": 4,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 26
@@ -1739,8 +1665,6 @@
           "revision_delivered_recall": null,
           "rank_of_answers": {},
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 0
@@ -1783,8 +1707,6 @@
             "d13": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 0
@@ -1819,8 +1741,6 @@
           "revision_delivered_recall": 0.0,
           "rank_of_answers": {},
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {
             "d20r1": "history_not_reached"
@@ -1861,8 +1781,6 @@
             "d21": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 2
@@ -1903,8 +1821,6 @@
           "revision_delivered_recall": 0.0,
           "rank_of_answers": {},
           "history_slots_used": 4,
-          "history_memories_used": 4,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {
             "d22r1": "discovered_not_delivered"
@@ -1949,8 +1865,6 @@
             "d24": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -1993,8 +1907,6 @@
             "d14": 1
           },
           "history_slots_used": 3,
-          "history_memories_used": 3,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 6
@@ -2029,8 +1941,6 @@
           "revision_delivered_recall": null,
           "rank_of_answers": {},
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -2065,8 +1975,6 @@
           "revision_delivered_recall": 0.0,
           "rank_of_answers": {},
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {
             "d26r1": "history_not_reached"
@@ -2111,8 +2019,6 @@
             "d22": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 2
@@ -2151,8 +2057,6 @@
             "d20": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 2
@@ -2261,11 +2165,9 @@
             "d01": 1
           },
           "history_slots_used": 3,
-          "history_memories_used": 3,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
-          "revisions_discovered": 24
+          "revisions_discovered": 25
         },
         {
           "query_id": "dq02",
@@ -2305,8 +2207,6 @@
             "d02": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -2351,11 +2251,9 @@
             "d03": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
-          "revisions_discovered": 20
+          "revisions_discovered": 21
         },
         {
           "query_id": "dq04",
@@ -2391,8 +2289,6 @@
             "d04": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -2435,8 +2331,6 @@
             "d05": 1
           },
           "history_slots_used": 3,
-          "history_memories_used": 3,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 6
@@ -2479,8 +2373,6 @@
             "d06": 2
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 2
@@ -2525,11 +2417,9 @@
             "d07": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
-          "revisions_discovered": 20
+          "revisions_discovered": 21
         },
         {
           "query_id": "dq08",
@@ -2565,8 +2455,6 @@
             "d08": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -2609,8 +2497,6 @@
             "d09": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -2653,8 +2539,6 @@
             "d10": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 2
@@ -2693,8 +2577,6 @@
             "d11": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -2735,8 +2617,6 @@
           "revision_delivered_recall": null,
           "rank_of_answers": {},
           "history_slots_used": 4,
-          "history_memories_used": 4,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 26
@@ -2779,8 +2659,6 @@
             "d12": 5
           },
           "history_slots_used": 4,
-          "history_memories_used": 4,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 26
@@ -2823,11 +2701,9 @@
           "revision_delivered_recall": null,
           "rank_of_answers": {},
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
-          "revisions_discovered": 20
+          "revisions_discovered": 21
         },
         {
           "query_id": "dq15",
@@ -2867,8 +2743,6 @@
             "d13": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 0
@@ -2907,8 +2781,6 @@
           "revision_delivered_recall": 1.0,
           "rank_of_answers": {},
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 2
@@ -2947,8 +2819,6 @@
             "d21": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 2
@@ -2989,8 +2859,6 @@
           "revision_delivered_recall": 0.0,
           "rank_of_answers": {},
           "history_slots_used": 4,
-          "history_memories_used": 4,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {
             "d22r1": "discovered_not_delivered"
@@ -3035,8 +2903,6 @@
             "d24": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -3079,8 +2945,6 @@
             "d14": 1
           },
           "history_slots_used": 3,
-          "history_memories_used": 3,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 6
@@ -3115,8 +2979,6 @@
           "revision_delivered_recall": null,
           "rank_of_answers": {},
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -3155,11 +3017,9 @@
           "revision_delivered_recall": 1.0,
           "rank_of_answers": {},
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": null,
           "misses": {},
-          "revisions_discovered": 20
+          "revisions_discovered": 21
         },
         {
           "query_id": "dq23",
@@ -3199,8 +3059,6 @@
             "d22": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 2
@@ -3239,8 +3097,6 @@
             "d20": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 2
@@ -3351,11 +3207,9 @@
             "d01": 1
           },
           "history_slots_used": 3,
-          "history_memories_used": 3,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
-          "revisions_discovered": 24
+          "revisions_discovered": 25
         },
         {
           "query_id": "dq02",
@@ -3395,8 +3249,6 @@
             "d02": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -3441,11 +3293,9 @@
             "d03": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
-          "revisions_discovered": 20
+          "revisions_discovered": 21
         },
         {
           "query_id": "dq04",
@@ -3481,8 +3331,6 @@
             "d04": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -3527,8 +3375,6 @@
             "d05": 1
           },
           "history_slots_used": 3,
-          "history_memories_used": 3,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 6
@@ -3573,8 +3419,6 @@
             "d06": 2
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 2
@@ -3619,11 +3463,9 @@
             "d07": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
-          "revisions_discovered": 20
+          "revisions_discovered": 21
         },
         {
           "query_id": "dq08",
@@ -3659,8 +3501,6 @@
             "d08": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -3703,8 +3543,6 @@
             "d09": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -3749,8 +3587,6 @@
             "d10": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 2
@@ -3789,8 +3625,6 @@
             "d11": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -3833,11 +3667,9 @@
           "revision_delivered_recall": null,
           "rank_of_answers": {},
           "history_slots_used": 4,
-          "history_memories_used": 4,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
-          "revisions_discovered": 26
+          "revisions_discovered": 27
         },
         {
           "query_id": "dq13",
@@ -3879,13 +3711,11 @@
             "d12": 5
           },
           "history_slots_used": 4,
-          "history_memories_used": 4,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {
             "d12": "delivered_item_cap"
           },
-          "revisions_discovered": 26
+          "revisions_discovered": 27
         },
         {
           "query_id": "dq14",
@@ -3925,11 +3755,9 @@
           "revision_delivered_recall": null,
           "rank_of_answers": {},
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
-          "revisions_discovered": 20
+          "revisions_discovered": 21
         },
         {
           "query_id": "dq15",
@@ -3969,8 +3797,6 @@
             "d13": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 0
@@ -4009,8 +3835,6 @@
           "revision_delivered_recall": 1.0,
           "rank_of_answers": {},
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 2
@@ -4052,8 +3876,6 @@
             "d21": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 2
@@ -4094,11 +3916,9 @@
           "revision_delivered_recall": 1.0,
           "rank_of_answers": {},
           "history_slots_used": 4,
-          "history_memories_used": 4,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
-          "revisions_discovered": 26
+          "revisions_discovered": 27
         },
         {
           "query_id": "dq19",
@@ -4138,8 +3958,6 @@
             "d24": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -4184,8 +4002,6 @@
             "d14": 1
           },
           "history_slots_used": 3,
-          "history_memories_used": 3,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 6
@@ -4220,8 +4036,6 @@
           "revision_delivered_recall": null,
           "rank_of_answers": {},
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -4260,11 +4074,9 @@
           "revision_delivered_recall": 1.0,
           "rank_of_answers": {},
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": null,
           "misses": {},
-          "revisions_discovered": 20
+          "revisions_discovered": 21
         },
         {
           "query_id": "dq23",
@@ -4306,8 +4118,6 @@
             "d22": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 2
@@ -4346,8 +4156,6 @@
             "d20": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 2
@@ -4456,11 +4264,9 @@
             "d01": 1
           },
           "history_slots_used": 3,
-          "history_memories_used": 3,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
-          "revisions_discovered": 24
+          "revisions_discovered": 25
         },
         {
           "query_id": "dq02",
@@ -4500,8 +4306,6 @@
             "d02": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -4546,11 +4350,9 @@
             "d03": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
-          "revisions_discovered": 20
+          "revisions_discovered": 21
         },
         {
           "query_id": "dq04",
@@ -4586,8 +4388,6 @@
             "d04": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -4630,8 +4430,6 @@
             "d05": 1
           },
           "history_slots_used": 3,
-          "history_memories_used": 3,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 6
@@ -4674,8 +4472,6 @@
             "d06": 2
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 2
@@ -4720,11 +4516,9 @@
             "d07": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
-          "revisions_discovered": 20
+          "revisions_discovered": 21
         },
         {
           "query_id": "dq08",
@@ -4760,8 +4554,6 @@
             "d08": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -4804,8 +4596,6 @@
             "d09": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -4848,8 +4638,6 @@
             "d10": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 2
@@ -4888,8 +4676,6 @@
             "d11": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -4930,8 +4716,6 @@
           "revision_delivered_recall": null,
           "rank_of_answers": {},
           "history_slots_used": 4,
-          "history_memories_used": 4,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 26
@@ -4974,8 +4758,6 @@
             "d12": 5
           },
           "history_slots_used": 4,
-          "history_memories_used": 4,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 26
@@ -5018,11 +4800,9 @@
           "revision_delivered_recall": null,
           "rank_of_answers": {},
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
-          "revisions_discovered": 20
+          "revisions_discovered": 21
         },
         {
           "query_id": "dq15",
@@ -5062,8 +4842,6 @@
             "d13": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 0
@@ -5102,8 +4880,6 @@
           "revision_delivered_recall": 1.0,
           "rank_of_answers": {},
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 2
@@ -5142,8 +4918,6 @@
             "d21": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 2
@@ -5184,11 +4958,9 @@
           "revision_delivered_recall": 1.0,
           "rank_of_answers": {},
           "history_slots_used": 4,
-          "history_memories_used": 4,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": "delivered_item_cap",
           "misses": {},
-          "revisions_discovered": 26
+          "revisions_discovered": 27
         },
         {
           "query_id": "dq19",
@@ -5228,8 +5000,6 @@
             "d24": 1
           },
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -5272,8 +5042,6 @@
             "d14": 1
           },
           "history_slots_used": 3,
-          "history_memories_used": 3,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 6
@@ -5308,8 +5076,6 @@
           "revision_delivered_recall": null,
           "rank_of_answers": {},
           "history_slots_used": 0,
-          "history_memories_used": 0,
-          "max_revisions_for_one_memory": 0,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 0
@@ -5348,11 +5114,9 @@
           "revision_delivered_recall": 1.0,
           "rank_of_answers": {},
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 20,
           "stopped_by": null,
           "misses": {},
-          "revisions_discovered": 20
+          "revisions_discovered": 21
         },
         {
           "query_id": "dq23",
@@ -5392,8 +5156,6 @@
             "d22": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": "delivered_item_cap",
           "misses": {},
           "revisions_discovered": 2
@@ -5432,8 +5194,6 @@
             "d20": 1
           },
           "history_slots_used": 1,
-          "history_memories_used": 1,
-          "max_revisions_for_one_memory": 2,
           "stopped_by": null,
           "misses": {},
           "revisions_discovered": 2

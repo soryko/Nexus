@@ -93,6 +93,7 @@ class Retrieval:
     pool_from_history: list[str] = field(default_factory=list)
     paired_revisions: dict[str, str] = field(default_factory=dict)
     history_budget_denied: list[str] = field(default_factory=list)
+    revisions_by_memory: dict[str, list[str]] = field(default_factory=dict)
     fusion: dict = field(default_factory=dict)
     expanded: list[str] = field(default_factory=list)
     discovered_revisions: list[str] = field(default_factory=list)
@@ -196,15 +197,23 @@ def retrieve(service, text: str, policy: str = "baseline") -> Retrieval:
                   if hit.has_earlier_revisions and hit.memory_id not in granted]
     out.expanded = granted + expandable[:remaining]
     for memory_id in out.expanded:
-        history = service.history(memory_id, limit=HISTORY_REVISIONS)
-        out.discovered_revisions.extend(entry.revision_id for entry in history.entries)
-    for memory_id in granted:
-        # A directly matched revision is reachable even when it lies outside the twenty
-        # most recent, and it is charged a slot exactly like any other history use.
-        revision_id = out.pool_provenance.get(memory_id) if memory_id in out.pool_from_history else out.paired_revisions.get(memory_id)
-        if revision_id is not None and revision_id not in out.discovered_revisions:
-            out.discovered_revisions.append(revision_id)
+        # The budget has two dimensions and both bind: at most five distinct memories,
+        # and at most twenty revisions of any one of them.
+        entries = [entry.revision_id
+                   for entry in service.history(memory_id, limit=HISTORY_REVISIONS).entries]
+        matched = (out.pool_provenance.get(memory_id) if memory_id in out.pool_from_history
+                   else out.paired_revisions.get(memory_id))
+        if matched is not None and matched not in entries:
+            # A directly matched revision is reachable when it lies outside the twenty
+            # most recent, and it **consumes that memory's revision allowance**: the
+            # oldest enumerated revision gives up its place rather than the query
+            # touching a twenty-first.
+            entries = entries[:HISTORY_REVISIONS - 1] + [matched]
+        assert len(entries) <= HISTORY_REVISIONS
+        out.revisions_by_memory[memory_id] = entries
+        out.discovered_revisions.extend(entries)
     out.history_slots_used = len(out.expanded)
+    assert out.history_slots_used <= HISTORY_MEMORIES
 
     # --- delivery ---------------------------------------------------------------------
     denied = set(out.history_budget_denied)

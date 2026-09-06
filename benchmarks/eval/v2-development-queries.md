@@ -253,13 +253,17 @@ All four, reported per query:
 
 When the **historical revision itself supplies the answer**, retrieving its content **counts against the same history-expansion budget** — including when that revision lies outside the most recent twenty. Being the answer does not earn it a separate allowance.
 
+**Both dimensions bind (clarified 2026-09-06):** at most **five distinct memories**, and at most **twenty revisions of any one memory**. A directly matched deep revision consumes that memory's revision allowance — enumerating twenty recent revisions and then fetching an older one would total twenty-one, which the budget does not permit. Enforced in `budgeted_retrieval.retrieve` and covered by saturating tests in `tests/dev/test_history_budget.py`; the development corpus saturates neither dimension, so the benchmark alone does not establish it.
+
 **Every per-query candidate-recall and delivered-recall loss is reported**, not netted against gains elsewhere.
 
 ### Controls — extended to every candidate-generating index
 
 The current empty-index control clears `head_fts` only. Once historical revisions generate candidates, **clearing the head index alone no longer tests the complete retrieval path**: a variant could return results entirely from a historical index and the control would still pass, proving nothing.
 
-From T2 onward the control must clear **every index that can generate a candidate** — head, historical, and any further index a variant introduces — and still return zero results, with authoritative rows and the head projection retained. Adding a candidate-generating index without adding it to the control is a defect in the control, not a passing run.
+From T2 onward the control must clear **every posting that can generate a candidate** — `head_fts`, `head_tags`, `revision_fts`, and any further index a variant introduces — and still return zero results for text search, tag search and historical search alike.
+
+**Corrected 2026-09-06:** an earlier wording said the control clears `head_index` while retaining the head projection. `head_index` *is* that projection, so the two halves contradicted each other. The control **retains** the authoritative rows and **both** content projections — `memories`, `revisions`, `head_index`/`head_body`, `revision_index`/`revision_body` — with every retained row count asserted explicitly, and `get()` must still return content afterwards. Otherwise the control proves only that retrieval returns nothing when the content is gone. Adding a candidate-generating posting without adding it to the control is a defect in the control, not a passing run.
 
 ### T3 success contract
 

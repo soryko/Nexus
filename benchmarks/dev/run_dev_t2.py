@@ -67,6 +67,7 @@ class QueryResult:
     delivered_bytes_by_grade: dict[str, int] = field(default_factory=lambda: {"2": 0, "1": 0, "0": 0})
     paired_revisions: dict[str, str] = field(default_factory=dict)
     history_budget_denied: list[str] = field(default_factory=list)
+    revisions_by_memory: dict[str, list[str]] = field(default_factory=dict)
     history_slots_used: int = 0
     stopped_by: str | None = None
     misses: dict[str, str] = field(default_factory=dict)
@@ -148,6 +149,7 @@ def run_query(service: MemoryService, query: dict, mapping: dict, policy: str) -
     result.delivered_provenance = budgeted.delivered_provenance
     result.delivered_bytes = budgeted.delivered_bytes
     result.paired_revisions = budgeted.paired_revisions
+    result.revisions_by_memory = budgeted.revisions_by_memory
     result.history_budget_denied = budgeted.history_budget_denied
     result.history_slots_used = budgeted.history_slots_used
     result.stopped_by = budgeted.stopped_by
@@ -242,6 +244,10 @@ def run_policy(corpus: dict, policy: str, profile: str) -> dict:
              "rank_of_answers": {label[m]: (r.pool.index(m) + 1 if m in r.pool else None)
                                  for m in r.grade2_memories},
              "history_slots_used": r.history_slots_used,
+             # Both dimensions of the history budget, recorded per query so the record
+             # shows the limits binding rather than asserting that they did.
+             "history_memories_used": len(r.revisions_by_memory),
+             "max_revisions_for_one_memory": max((len(v) for v in r.revisions_by_memory.values()), default=0),
              "stopped_by": r.stopped_by,
              "misses": {label.get(k, k): v for k, v in r.misses.items()},
              "revisions_discovered": len(r.discovered_revisions)}

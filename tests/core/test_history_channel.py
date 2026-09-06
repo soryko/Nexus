@@ -131,31 +131,55 @@ def test_stale_historical_row_cannot_surface_forgotten_content(tmp_path: Path) -
     assert service.search_history(SearchQuery(query="pipehold", limit=20)) == ()
 
 
-def test_negative_control_empty_indexes_include_the_historical_one(tmp_path: Path) -> None:
-    """From T2 the control must clear *every* candidate-generating index.
+def test_negative_control_clears_every_candidate_generating_posting(tmp_path: Path) -> None:
+    """From T2 the control must clear *every* candidate-generating index — and no more.
 
-    Clearing the head index alone would leave a variant answering entirely from history
-    while the control still passed, which would prove nothing.
+    Clearing the head postings alone would leave a variant answering entirely from
+    history while the control still passed, which would prove nothing. Clearing the
+    projections as well would prove something different and weaker: retrieval returns
+    nothing because the content it reads is gone. So the postings go — `head_fts`,
+    `head_tags`, `revision_fts` — and the authoritative rows and **both** content
+    projections stay, with their row counts asserted rather than assumed.
     """
     path = tmp_path / "memory.sqlite3"
     service = _service(path)
-    _superseded(service, "the orchestrator is called flowreel", "the orchestrator is called assetline", "k1")
+    _superseded(service, "the orchestrator is called flowreel", "the orchestrator is called assetline",
+                "k1")
+    second = service.record(MemoryInput("captions ship as WebVTT", tags=("captions",)), "k2-0")
+    service.revise(second.memory_id, second.revision_id,
+                   MemoryInput("captions ship as WebVTT only", tags=("captions",)), "k2-1")
     assert service.search(SearchQuery(query="assetline", limit=20)).hits
+    assert service.search(SearchQuery(tags_all=("captions",), limit=20)).hits
     assert service.search_history(SearchQuery(query="flowreel", limit=20))
 
     db = sqlite3.connect(path)
     try:
-        for table in ("head_fts", "head_tags", "head_index", "revision_fts", "revision_index"):
+        for table in ("head_fts", "head_tags", "revision_fts"):
             db.execute(f"DELETE FROM {table}")
         db.commit()
-        heads = db.execute("SELECT count(*) FROM memories WHERE tombstoned=0").fetchone()[0]
-        revisions = db.execute("SELECT count(*) FROM revisions").fetchone()[0]
+        retained = {
+            "memories": db.execute("SELECT count(*) FROM memories WHERE tombstoned=0").fetchone()[0],
+            "revisions": db.execute("SELECT count(*) FROM revisions").fetchone()[0],
+            "head_index": db.execute("SELECT count(*) FROM head_index").fetchone()[0],
+            "revision_index": db.execute("SELECT count(*) FROM revision_index").fetchone()[0],
+            "head_body": db.execute("SELECT count(*) FROM head_body").fetchone()[0],
+            "revision_body": db.execute("SELECT count(*) FROM revision_body").fetchone()[0],
+        }
     finally:
         db.close()
 
-    assert heads and revisions, "authoritative data must still exist for this control to mean anything"
+    # Two memories, two revisions each; one head projection row per live memory and one
+    # historical projection row per superseded revision. Stated as numbers so that a
+    # control which quietly stopped retaining them would fail here.
+    assert retained == {"memories": 2, "revisions": 4, "head_index": 2, "revision_index": 2,
+                        "head_body": 2, "revision_body": 2}
+
     assert service.search(SearchQuery(query="assetline", limit=20)).hits == ()
+    assert service.search(SearchQuery(tags_all=("captions",), limit=20)).hits == ()
     assert service.search_history(SearchQuery(query="flowreel", limit=20)) == ()
+    # The projections are still readable, which is what makes the three empty results
+    # above evidence about retrieval rather than about missing content.
+    assert service.get(second.memory_id).content == "captions ship as WebVTT only"
 
 
 def test_switching_the_history_profile_rebuilds_the_index(tmp_path: Path) -> None:

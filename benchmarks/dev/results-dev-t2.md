@@ -103,8 +103,9 @@ told apart. Fixtures: 1,000 memories / 2,979 revisions and 10,000 / 29,950.
 
 ### What is robust here, and what is not
 
-**Storage fails, and that finding does not depend on the machine at all.** It is a count
-of pages, identical in every block:
+**Storage fails, and the count is repeatable for this fixture and configuration.** It is a
+page count, identical in every block of this run; it is not a claim about other fixtures,
+other page sizes or other machines:
 
 | Fixture | Structure | `exact` | `stem` (stage baseline) | `stem` + history |
 | --- | --- | ---: | ---: | ---: |
@@ -114,11 +115,23 @@ of pages, identical in every block:
 | 10,000 | `revision_index` | — | — | **6,795,264** |
 | 10,000 | **total** | **5,554,176** | 5,455,872 | **14,995,456** |
 
-The historical channel costs **2.70× the whole `exact` retrieval structure** at 10,000
-memories and 2.57× at 1,000, against a ≤2× ceiling. Stemming itself costs nothing —
-`stem` is *smaller* than `exact` (0.98×). Nearly three quarters of the added bytes are
-`revision_index`, the row table, not the FTS index over it: 6.8 MB of namespace, actor,
-ids, kind, tags and timestamp for 19,950 superseded revisions.
+**2.6999× describes total retrieval storage, not the increment.** The distinction matters
+for what a follow-up would have to achieve:
+
+| At 10,000 memories | Bytes |
+| --- | ---: |
+| `exact` retrieval structures | 5,554,176 |
+| `stem` plus history | 14,995,456 |
+| Allowed ceiling: 2× `exact` | 11,108,352 |
+| **Minimum saving required** | **3,887,104** |
+
+With the other structures fixed, `revision_index` would have to fall from 6,795,264 to
+**≤2,908,160 bytes — a 57.2% reduction** — for the total to reach the ceiling. That is a
+requirement any compact-history experiment must meet, not a saving anyone has predicted or
+measured. Stemming itself costs nothing: `stem` is *smaller* than `exact` (0.98×). Nearly
+three quarters of the added bytes are `revision_index`, the row table, not the FTS index
+over it: 6.8 MB of namespace, actor, ids, kind, tags and timestamp for 19,950 superseded
+revisions.
 
 **The relative retrieval cost is stable; the ratio against the anchor is not.** Across all
 twelve block sets the variant measured **1.94×–2.35×** the stage baseline at 10,000 and
@@ -128,13 +141,17 @@ arm itself swung between 14.8 and 37.3 ms. Two independently selected maxima aga
 that spread: the registered statistic reports 1.4396× for a cell whose worst *pair* is
 3.4556×.
 
-**This run's machine was materially slower than T1-C's.** T1-C measured `exact` at a
-19.0476 ms worst block at 10,000; the same arm here reached 37.2549 ms. Absolute figures
-from the two runs are not comparable, and the ≤50 ms failure is therefore **not**
-established as a property of the variant independent of machine state — the variant
-exceeded 50 ms in two of six blocks at 10,000 (53.6327 and 51.2873, against 37.8674 at
-best). What *is* established is that the historical channel roughly doubles retrieval
-cost, and that on this machine that was enough to cross an absolute ceiling the baseline
+**The anchor arm measured slower here than in T1-C, and why is unknown.** T1-C measured
+`exact` at a 19.0476 ms worst block at 10,000; the same arm here reached 37.2549 ms. That
+is an observed difference between two runs, not an explanation of one: nothing in this
+measurement identifies its cause, and "the machine was busier" is a hypothesis of exactly
+the kind [T1-C's correction](results-dev-t1c.md) says not to state as a finding. What
+follows from it is only this: absolute figures from the two runs are not comparable, so the
+≤50 ms failure is **not** established as a property of the variant independent of the
+conditions this run was made under. The variant exceeded 50 ms in two of six blocks at
+10,000 (53.6327 and 51.2873, against 37.8674 at best). What *is* established within this
+run is that the historical channel roughly doubles retrieval cost against the stage
+baseline, stably, and that here that was enough to cross an absolute ceiling the baseline
 did not cross.
 
 **The paired reading fails where the registered one passes, for writes.** Registered:
@@ -145,6 +162,23 @@ understates it exactly as [T1-C's correction](results-dev-t1c.md) said it can.
 
 ### Disclosures about how this run was made
 
+- **The registered run enforced only one dimension of the history budget.** Five distinct
+  memories bound correctly; the twenty-revision-per-memory limit did not, because a
+  directly matched revision was appended *after* twenty had been enumerated. Five queries
+  touched a twenty-first revision of `d26` (`dq01`, `dq03`, `dq07`, `dq14`, `dq22`). The
+  path now caps both dimensions — the matched revision consumes the allowance and the
+  oldest enumerated revision gives up its place — and `tests/dev/test_history_budget.py`
+  saturates both, which the 24-query corpus never does. The as-run record is retained
+  unchanged as `results-dev-t2-asrun.json`; `results-dev-t2.json` is the re-run under the
+  corrected budget. **Every graded figure is identical** — recall, delivered recall,
+  revision delivery, obsolete deliveries, byte totals, ranks, misses — and the only
+  changes are the `revisions_discovered` counts on those five queries, each one lower by
+  one. The failed promotion is not reopened by this: it turned on storage.
+- **The empty-index control was corrected after the run.** Its first wording cleared
+  `head_index` while claiming to retain the head projection, which is the same table. The
+  control now clears only the candidate-generating postings, retains the authoritative
+  rows and both content projections with their row counts asserted, and requires `get()`
+  to still return content.
 - A **pilot** ran first at 1,000 memories only, with two arms, to check the harness. Its
   record is kept as `results-dev-t2-perf-pilot-1000.json` rather than deleted. It measured
   storage at 2.5743× — the complete run's 2.5676× — and it is not part of the verdict.
@@ -175,6 +209,14 @@ enabled by default, and not carried into v2.
   including a revision twenty-one steps back — resolved each to the correct live head with
   matched-revision provenance, delivered nothing from a forgotten memory, and lost no
   recall or rank anywhere else. Candidate generation over history is not the hard part.
+- **The comparison does not isolate the historical index.** `baseline` against
+  `history_cued` differs in two things at once — candidate generation over superseded
+  revisions, and a delivery policy that can emit a second item per memory — so the
+  end-to-end cost cannot be attributed to the index alone. The pre-run amendment made that
+  so deliberately, and it is what let the experiment identify the delivery question at
+  all; the price is that generation and delivery are not separated here. The
+  `stage_baseline` arm separates stemming from the pair of them, and nothing separates the
+  pair from each other.
 - **Deciding *which* revision answers is the hard part**, and one bit of query text decided
   it here. `history_paired` and `history_cued` differ only in that bit, and it is the whole
   difference between failing two controls and passing them. A cue list authored against 24
@@ -186,7 +228,8 @@ enabled by default, and not carried into v2.
   pre-run amendment. Whether a bounded window brings storage under 2× is unmeasured.
 - **Nothing here is a v2 result**, and no v2 regression check was run: there is no
   promotion to check.
-- **The `history_budget` attribution never fired.** Five slots were always enough on a
-  24-query corpus, so that path is implemented and untested by measurement.
+- **`history_budget` denial is now covered by tests, not by this measurement.** No claim
+  was denied a slot anywhere in the 24-query corpus, so the benchmark establishes nothing
+  about that path.
 - **Two historical targets and three controls remain a smoke test.** A variant that
   recovers `dq16`, `dq18` and `dq22` has been shown to recover those three.

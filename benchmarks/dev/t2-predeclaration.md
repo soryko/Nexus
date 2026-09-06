@@ -120,8 +120,11 @@ spending a different budget:
   pool order, then paired revisions — and generic head expansion takes what remains of
   the five. A claim with no slot left is not delivered and its miss is attributed
   `history_budget`.
-- A directly matched revision is delivered even when it lies outside the twenty most
-  recent, and is charged one slot like any other history use.
+- **The budget has two dimensions and both bind: at most five distinct memories, and at
+  most twenty revisions of any one of them.** A directly matched revision is delivered
+  even when it lies outside the twenty most recent, and it **consumes that memory's
+  revision allowance**: enumerating twenty and then fetching an older one would touch a
+  twenty-first, so the oldest enumerated revision gives up its place instead.
 - Duplicate collapse, per-channel truncation and per-channel shortfall are recorded on
   every query. A short channel is **not** refilled from the other one.
 
@@ -148,7 +151,9 @@ If no variant passes, **`stem` with policy `baseline` stands as T2's outcome** a
 
 ## Controls, extended as the charter requires
 
-From T2 the empty-index control clears **every candidate-generating index** — `head_fts`, `head_tags`, `head_index` **and** `revision_fts` — with authoritative rows and the head projection retained, and must still return zero results. A variant that adds an index without adding it to the control is a defect in the control.
+**Corrected 2026-09-06.** The first draft of this section said the control clears `head_index` *and* retains the head projection. `head_index` **is** the head projection, so those two statements contradicted each other, and clearing it would have proved the weaker thing: that retrieval returns nothing when the content it reads is gone.
+
+The control clears the **candidate-generating postings** — `head_fts`, `head_tags` and `revision_fts` — and **retains the authoritative rows and both content projections**: `memories`, `revisions`, `head_index`/`head_body` and `revision_index`/`revision_body`. Every retained row count is asserted explicitly, not assumed. Text search, tag search and historical search must all then return zero while `get()` still returns content. A variant that adds a candidate-generating index without adding it to the control is a defect in the control.
 
 ## Known limits of this experiment
 
@@ -158,4 +163,4 @@ From T2 the empty-index control clears **every candidate-generating index** — 
   prices a bounded historical index; `history_window3` is deferred, and the storage
   figures below are for the full one.
 - `dq22`'s deep history is one memory with 22 revisions. It shows that a directly matched deep revision is reachable and charged; it says nothing about how cost scales with history depth in general.
-- BM25 fusion across two indexes with different corpus statistics is a heuristic, and variant 2's ordering rests on it.
+- **The comparison is not a clean measurement of the historical index alone.** `baseline` against `history_cued` differs in two things at once: candidate generation over superseded revisions, *and* a changed delivery policy that can emit a second item per memory. End-to-end cost cannot be attributed solely to the historical index, and the report does not attribute it that way. The `stage_baseline` arm separates stemming from the rest; nothing here separates generation from delivery.
