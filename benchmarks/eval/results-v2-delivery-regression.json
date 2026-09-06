@@ -1,0 +1,1490 @@
+{
+  "check": "v2 delivery regression \u2014 selection carried unchanged from T3",
+  "fresh_evaluation_of_v2": false,
+  "regression_check": "`cutoff_40` was chosen on development data with v2's failure modes already known. This says whether a known failure moved and what selection costs on the frozen set.",
+  "separate_from_discovery_metrics": "Delivered-evidence metrics only. v2's registered k=5/10/20 discovery figures live in results-v2.json and results-v2-regression-stem.json and are untouched by this run.",
+  "pinned_revision": "a362f7c410f80c3eaf0068488de3b0e2cc5210cf",
+  "working_tree_clean_at_start": true,
+  "uncommitted_paths_at_start": [],
+  "executed_file_sha256": {
+    "benchmarks/eval/run_v2_delivery.py": "0b13438e7ad82df4358e2419e1d4d7f477b50d7de1ddec0e40ffe0cfa061b4c6",
+    "benchmarks/eval/run_v2.py": "2dbe2b419ef8d7146c1d1f853dd18b85d31adb299eba08c289f286e59b123345",
+    "benchmarks/dev/budgeted_retrieval.py": "60f6ae55f39ef553970582cd5d0fd79cbcda065d9f4a3d16b2724e15b5affcc3",
+    "src/nexus_memory/memory/service.py": "be8ae122a981feaf0670e6291bd1dbf7c4533b5b78420b7fc8fdde19cecfc8da",
+    "src/nexus_memory/storage/sqlite.py": "e4589cdd8aaf208c2e28e31c26fd0bebdbf655c5207c0297d3d0bb30baa556aa",
+    "src/nexus_memory/domain/models.py": "ab545bbf8915324d0573625afcb628949ed626fd666c0190aaf08cd5e181bdbb"
+  },
+  "input_sha256": {
+    "corpus-v2.json": "c884e32c9fad21230bfa816c1747cc5f149aa39dc73c4248f905c329ce156d56",
+    "judgments-v2.json": "ccdbe144e21b5f235b5b8310e5d0e7fc47b6ff34d4d0d16c1bafa282ac1bf66d",
+    "protocol-v2.md": "66e86c2098566a21dee02006c05daf56788aae4c911fbbb53e7147aac516da63",
+    "judging-v2-assessor.md": "318a6fd33ec1145f2488187a53869e891d895f62d65853eb9cc58377171bd081"
+  },
+  "interpreter": "/Users/soko/Cerebros/nexus-memory/.venv-sqlite/bin/python",
+  "sqlite_version": "3.53.4",
+  "configuration": {
+    "index_profile": "stem",
+    "candidate_generation": "head-only (T2 outcome)",
+    "baseline_selection": "all",
+    "variant_selection": "cutoff_40",
+    "cutoff_fraction_fixed_at": 0.4
+  },
+  "budgets": {
+    "pool": 20,
+    "history_memories": 5,
+    "history_revisions": 20,
+    "delivered_items": 5,
+    "delivered_bytes": 8192
+  },
+  "retrieval_function": "budgeted_retrieval.retrieve (shared with the development harnesses)",
+  "partition": {
+    "clean": [
+      "q01",
+      "q02",
+      "q03",
+      "q04",
+      "q05",
+      "q06",
+      "q08",
+      "q09",
+      "q10",
+      "q12",
+      "q13"
+    ],
+    "flagged_post_result_authoring": [
+      "q15",
+      "q16",
+      "q17"
+    ],
+    "no_direct_answer": [
+      "q07",
+      "q11",
+      "q14"
+    ]
+  },
+  "arms": {
+    "all": {
+      "selection": "all",
+      "index_profile": "stem",
+      "policy": "baseline",
+      "load_order": [
+        "m01r1",
+        "m01r2",
+        "m02r1",
+        "m03r1",
+        "m04r1",
+        "m05r1",
+        "m06r1",
+        "m06r2",
+        "m07r1",
+        "m08r1",
+        "m09r1",
+        "m10r1",
+        "m11r1",
+        "m12r1",
+        "m13r1",
+        "m14r1",
+        "m15r1",
+        "m16r1",
+        "m17r1",
+        "m17r2",
+        "m18r1",
+        "m19r1",
+        "m20r1",
+        "m21r1",
+        "m21r2"
+      ],
+      "grade0_delivered_bytes": 12474,
+      "grade1_delivered_bytes": 1822,
+      "grade2_delivered_bytes": 4931,
+      "delivered_items": 63,
+      "per_query": [
+        {
+          "query_id": "q01",
+          "text": "how many times do we re-attempt a failed card charge",
+          "pool_size": 15,
+          "selected_items": 15,
+          "delivered": 5,
+          "delivered_items": [
+            "i12",
+            "i15",
+            "i17",
+            "i20",
+            "i21"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i20"
+            ],
+            "1": [],
+            "0": [
+              "i12",
+              "i15",
+              "i17",
+              "i21"
+            ]
+          },
+          "delivered_bytes": 1606,
+          "grade2_delivered_bytes": 353,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 1253,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 1,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 4,
+          "history_memories_used": 2,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "delivered_item_cap"
+        },
+        {
+          "query_id": "q02",
+          "text": "retry policy",
+          "pool_size": 5,
+          "selected_items": 5,
+          "delivered": 5,
+          "delivered_items": [
+            "i10",
+            "i12",
+            "i15",
+            "i20",
+            "i25"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i12",
+              "i20",
+              "i25"
+            ],
+            "1": [
+              "i10",
+              "i15"
+            ],
+            "0": []
+          },
+          "delivered_bytes": 1595,
+          "grade2_delivered_bytes": 949,
+          "grade1_delivered_bytes": 646,
+          "grade0_delivered_bytes": 0,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 3,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 3,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 2,
+          "history_memories_used": 1,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": null
+        },
+        {
+          "query_id": "q03",
+          "text": "payments integration suite",
+          "pool_size": 4,
+          "selected_items": 4,
+          "delivered": 4,
+          "delivered_items": [
+            "i10",
+            "i18",
+            "i21",
+            "i23"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i10"
+            ],
+            "1": [
+              "i23"
+            ],
+            "0": [
+              "i18",
+              "i21"
+            ]
+          },
+          "delivered_bytes": 1243,
+          "grade2_delivered_bytes": 330,
+          "grade1_delivered_bytes": 314,
+          "grade0_delivered_bytes": 599,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 1,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 0,
+          "history_memories_used": 0,
+          "max_revisions_for_one_memory": 0,
+          "stopped_by": null
+        },
+        {
+          "query_id": "q04",
+          "text": "kerberos",
+          "pool_size": 0,
+          "selected_items": 0,
+          "delivered": 0,
+          "delivered_items": [],
+          "delivered_by_grade": {
+            "2": [],
+            "1": [],
+            "0": []
+          },
+          "delivered_bytes": 0,
+          "grade2_delivered_bytes": 0,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 0,
+          "delivered_head_recall": 0.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 0.0,
+          "grade2_denominator": 1,
+          "covered": false,
+          "grade1_only_query": false,
+          "revisions_discovered": 0,
+          "history_memories_used": 0,
+          "max_revisions_for_one_memory": 0,
+          "stopped_by": null
+        },
+        {
+          "query_id": "q05",
+          "text": "why did the retry cap change from three attempts",
+          "pool_size": 20,
+          "selected_items": 20,
+          "delivered": 5,
+          "delivered_items": [
+            "i10",
+            "i12",
+            "i15",
+            "i20",
+            "i24"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i20"
+            ],
+            "1": [],
+            "0": [
+              "i10",
+              "i12",
+              "i15",
+              "i24"
+            ]
+          },
+          "delivered_bytes": 1595,
+          "grade2_delivered_bytes": 353,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 1242,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 1,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 8,
+          "history_memories_used": 4,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "delivered_item_cap"
+        },
+        {
+          "query_id": "q06",
+          "text": "idempotency key",
+          "pool_size": 2,
+          "selected_items": 2,
+          "delivered": 2,
+          "delivered_items": [
+            "i04",
+            "i15"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i04",
+              "i15"
+            ],
+            "1": [],
+            "0": []
+          },
+          "delivered_bytes": 670,
+          "grade2_delivered_bytes": 670,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 0,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 2,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 2,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 0,
+          "history_memories_used": 0,
+          "max_revisions_for_one_memory": 0,
+          "stopped_by": null
+        },
+        {
+          "query_id": "q07",
+          "text": "what is our database backup schedule",
+          "pool_size": 9,
+          "selected_items": 9,
+          "delivered": 5,
+          "delivered_items": [
+            "i06",
+            "i08",
+            "i09",
+            "i19",
+            "i25"
+          ],
+          "delivered_by_grade": {
+            "2": [],
+            "1": [],
+            "0": [
+              "i06",
+              "i08",
+              "i09",
+              "i19",
+              "i25"
+            ]
+          },
+          "delivered_bytes": 1361,
+          "grade2_delivered_bytes": 0,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 1361,
+          "delivered_head_recall": null,
+          "delivered_head_recall_denominator": 0,
+          "delivered_recall_all_grade2": null,
+          "grade2_denominator": 0,
+          "covered": false,
+          "grade1_only_query": true,
+          "revisions_discovered": 6,
+          "history_memories_used": 3,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "delivered_item_cap"
+        },
+        {
+          "query_id": "q08",
+          "text": "migration backfill same deploy",
+          "pool_size": 6,
+          "selected_items": 6,
+          "delivered": 5,
+          "delivered_items": [
+            "i03",
+            "i04",
+            "i09",
+            "i17",
+            "i24"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i17",
+              "i24"
+            ],
+            "1": [
+              "i03"
+            ],
+            "0": [
+              "i04",
+              "i09"
+            ]
+          },
+          "delivered_bytes": 1532,
+          "grade2_delivered_bytes": 606,
+          "grade1_delivered_bytes": 292,
+          "grade0_delivered_bytes": 634,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 2,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 2,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 2,
+          "history_memories_used": 1,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "delivered_item_cap"
+        },
+        {
+          "query_id": "q09",
+          "text": "never write secrets to logs",
+          "pool_size": 12,
+          "selected_items": 12,
+          "delivered": 5,
+          "delivered_items": [
+            "i08",
+            "i13",
+            "i14",
+            "i19",
+            "i21"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i08",
+              "i21"
+            ],
+            "1": [],
+            "0": [
+              "i13",
+              "i14",
+              "i19"
+            ]
+          },
+          "delivered_bytes": 1400,
+          "grade2_delivered_bytes": 565,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 835,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 2,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 2,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 4,
+          "history_memories_used": 2,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "delivered_item_cap"
+        },
+        {
+          "query_id": "q10",
+          "text": "when do deploys happen",
+          "pool_size": 4,
+          "selected_items": 4,
+          "delivered": 4,
+          "delivered_items": [
+            "i09",
+            "i17",
+            "i18",
+            "i24"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i09"
+            ],
+            "1": [],
+            "0": [
+              "i17",
+              "i18",
+              "i24"
+            ]
+          },
+          "delivered_bytes": 1176,
+          "grade2_delivered_bytes": 280,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 896,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 1,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 2,
+          "history_memories_used": 1,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": null
+        },
+        {
+          "query_id": "q11",
+          "text": "payment terminal firmware",
+          "pool_size": 3,
+          "selected_items": 3,
+          "delivered": 3,
+          "delivered_items": [
+            "i10",
+            "i18",
+            "i21"
+          ],
+          "delivered_by_grade": {
+            "2": [],
+            "1": [
+              "i18"
+            ],
+            "0": [
+              "i10",
+              "i21"
+            ]
+          },
+          "delivered_bytes": 929,
+          "grade2_delivered_bytes": 0,
+          "grade1_delivered_bytes": 290,
+          "grade0_delivered_bytes": 639,
+          "delivered_head_recall": null,
+          "delivered_head_recall_denominator": 0,
+          "delivered_recall_all_grade2": null,
+          "grade2_denominator": 0,
+          "covered": false,
+          "grade1_only_query": true,
+          "revisions_discovered": 0,
+          "history_memories_used": 0,
+          "max_revisions_for_one_memory": 0,
+          "stopped_by": null
+        },
+        {
+          "query_id": "q12",
+          "text": "who approves large refunds",
+          "pool_size": 1,
+          "selected_items": 1,
+          "delivered": 1,
+          "delivered_items": [
+            "i06"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i06"
+            ],
+            "1": [],
+            "0": []
+          },
+          "delivered_bytes": 282,
+          "grade2_delivered_bytes": 282,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 0,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 1,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 0,
+          "history_memories_used": 0,
+          "max_revisions_for_one_memory": 0,
+          "stopped_by": null
+        },
+        {
+          "query_id": "q13",
+          "text": "append only ledger",
+          "pool_size": 4,
+          "selected_items": 4,
+          "delivered": 4,
+          "delivered_items": [
+            "i11",
+            "i19",
+            "i21",
+            "i23"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i19"
+            ],
+            "1": [],
+            "0": [
+              "i11",
+              "i21",
+              "i23"
+            ]
+          },
+          "delivered_bytes": 1201,
+          "grade2_delivered_bytes": 256,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 945,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 1,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 2,
+          "history_memories_used": 1,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": null
+        },
+        {
+          "query_id": "q14",
+          "text": "how do we roll back a failed canary",
+          "pool_size": 13,
+          "selected_items": 13,
+          "delivered": 5,
+          "delivered_items": [
+            "i03",
+            "i04",
+            "i08",
+            "i15",
+            "i17"
+          ],
+          "delivered_by_grade": {
+            "2": [],
+            "1": [],
+            "0": [
+              "i03",
+              "i04",
+              "i08",
+              "i15",
+              "i17"
+            ]
+          },
+          "delivered_bytes": 1537,
+          "grade2_delivered_bytes": 0,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 1537,
+          "delivered_head_recall": null,
+          "delivered_head_recall_denominator": 0,
+          "delivered_recall_all_grade2": null,
+          "grade2_denominator": 0,
+          "covered": false,
+          "grade1_only_query": true,
+          "revisions_discovered": 2,
+          "history_memories_used": 1,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "delivered_item_cap"
+        },
+        {
+          "query_id": "q15",
+          "text": "what was the deploy schedule before it changed",
+          "pool_size": 20,
+          "selected_items": 20,
+          "delivered": 5,
+          "delivered_items": [
+            "i03",
+            "i09",
+            "i10",
+            "i15",
+            "i24"
+          ],
+          "delivered_by_grade": {
+            "2": [],
+            "1": [
+              "i09"
+            ],
+            "0": [
+              "i03",
+              "i10",
+              "i15",
+              "i24"
+            ]
+          },
+          "delivered_bytes": 1505,
+          "grade2_delivered_bytes": 0,
+          "grade1_delivered_bytes": 280,
+          "grade0_delivered_bytes": 1225,
+          "delivered_head_recall": null,
+          "delivered_head_recall_denominator": 0,
+          "delivered_recall_all_grade2": 0.0,
+          "grade2_denominator": 1,
+          "covered": false,
+          "grade1_only_query": false,
+          "revisions_discovered": 8,
+          "history_memories_used": 4,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "delivered_item_cap"
+        },
+        {
+          "query_id": "q16",
+          "text": "nightflow",
+          "pool_size": 0,
+          "selected_items": 0,
+          "delivered": 0,
+          "delivered_items": [],
+          "delivered_by_grade": {
+            "2": [],
+            "1": [],
+            "0": []
+          },
+          "delivered_bytes": 0,
+          "grade2_delivered_bytes": 0,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 0,
+          "delivered_head_recall": 0.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 0.0,
+          "grade2_denominator": 2,
+          "covered": false,
+          "grade1_only_query": false,
+          "revisions_discovered": 0,
+          "history_memories_used": 0,
+          "max_revisions_for_one_memory": 0,
+          "stopped_by": null
+        },
+        {
+          "query_id": "q17",
+          "text": "how many times does search retry the index",
+          "pool_size": 20,
+          "selected_items": 20,
+          "delivered": 5,
+          "delivered_items": [
+            "i10",
+            "i12",
+            "i15",
+            "i20",
+            "i25"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i25"
+            ],
+            "1": [],
+            "0": [
+              "i10",
+              "i12",
+              "i15",
+              "i20"
+            ]
+          },
+          "delivered_bytes": 1595,
+          "grade2_delivered_bytes": 287,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 1308,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 1,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 8,
+          "history_memories_used": 4,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "delivered_item_cap"
+        }
+      ],
+      "controls": {
+        "empty_index": {
+          "fixture": "independent",
+          "index_profile": "stem",
+          "policy": "baseline",
+          "selection": "all",
+          "memories_retained": 21,
+          "head_projection_retained": 21,
+          "pool_members": 0,
+          "delivered_items": 0,
+          "delivered_bytes": 0,
+          "verdict": "PASS",
+          "note": "Only head postings were cleared, under the profile being assessed. Delivered evidence with no postings would prove delivery bypasses the index; a zero head projection would mean the control proved less than it claims."
+        },
+        "forget_relevant": {
+          "fixture": "independent",
+          "index_profile": "stem",
+          "policy": "baseline",
+          "selection": "all",
+          "memories_forgotten": 15,
+          "forgotten_memories_reached": 0,
+          "detail": [],
+          "verdict": "PASS",
+          "note": "Asserts no forgotten memory is delivered or expanded anywhere in the budgeted path, regardless of its grade for the query at hand."
+        }
+      }
+    },
+    "cutoff_40": {
+      "selection": "cutoff_40",
+      "index_profile": "stem",
+      "policy": "baseline",
+      "load_order": [
+        "m01r1",
+        "m01r2",
+        "m02r1",
+        "m03r1",
+        "m04r1",
+        "m05r1",
+        "m06r1",
+        "m06r2",
+        "m07r1",
+        "m08r1",
+        "m09r1",
+        "m10r1",
+        "m11r1",
+        "m12r1",
+        "m13r1",
+        "m14r1",
+        "m15r1",
+        "m16r1",
+        "m17r1",
+        "m17r2",
+        "m18r1",
+        "m19r1",
+        "m20r1",
+        "m21r1",
+        "m21r2"
+      ],
+      "grade0_delivered_bytes": 6318,
+      "grade1_delivered_bytes": 900,
+      "grade2_delivered_bytes": 4622,
+      "delivered_items": 39,
+      "per_query": [
+        {
+          "query_id": "q01",
+          "text": "how many times do we re-attempt a failed card charge",
+          "pool_size": 15,
+          "selected_items": 4,
+          "delivered": 4,
+          "delivered_items": [
+            "i12",
+            "i15",
+            "i17",
+            "i20"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i20"
+            ],
+            "1": [],
+            "0": [
+              "i12",
+              "i15",
+              "i17"
+            ]
+          },
+          "delivered_bytes": 1297,
+          "grade2_delivered_bytes": 353,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 944,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 1,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 4,
+          "history_memories_used": 2,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "selection"
+        },
+        {
+          "query_id": "q02",
+          "text": "retry policy",
+          "pool_size": 5,
+          "selected_items": 3,
+          "delivered": 3,
+          "delivered_items": [
+            "i10",
+            "i20",
+            "i25"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i20",
+              "i25"
+            ],
+            "1": [
+              "i10"
+            ],
+            "0": []
+          },
+          "delivered_bytes": 970,
+          "grade2_delivered_bytes": 640,
+          "grade1_delivered_bytes": 330,
+          "grade0_delivered_bytes": 0,
+          "delivered_head_recall": 0.667,
+          "delivered_head_recall_denominator": 3,
+          "delivered_recall_all_grade2": 0.667,
+          "grade2_denominator": 3,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 2,
+          "history_memories_used": 1,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "selection"
+        },
+        {
+          "query_id": "q03",
+          "text": "payments integration suite",
+          "pool_size": 4,
+          "selected_items": 1,
+          "delivered": 1,
+          "delivered_items": [
+            "i10"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i10"
+            ],
+            "1": [],
+            "0": []
+          },
+          "delivered_bytes": 330,
+          "grade2_delivered_bytes": 330,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 0,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 1,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 0,
+          "history_memories_used": 0,
+          "max_revisions_for_one_memory": 0,
+          "stopped_by": "selection"
+        },
+        {
+          "query_id": "q04",
+          "text": "kerberos",
+          "pool_size": 0,
+          "selected_items": 0,
+          "delivered": 0,
+          "delivered_items": [],
+          "delivered_by_grade": {
+            "2": [],
+            "1": [],
+            "0": []
+          },
+          "delivered_bytes": 0,
+          "grade2_delivered_bytes": 0,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 0,
+          "delivered_head_recall": 0.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 0.0,
+          "grade2_denominator": 1,
+          "covered": false,
+          "grade1_only_query": false,
+          "revisions_discovered": 0,
+          "history_memories_used": 0,
+          "max_revisions_for_one_memory": 0,
+          "stopped_by": null
+        },
+        {
+          "query_id": "q05",
+          "text": "why did the retry cap change from three attempts",
+          "pool_size": 20,
+          "selected_items": 3,
+          "delivered": 3,
+          "delivered_items": [
+            "i10",
+            "i15",
+            "i20"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i20"
+            ],
+            "1": [],
+            "0": [
+              "i10",
+              "i15"
+            ]
+          },
+          "delivered_bytes": 999,
+          "grade2_delivered_bytes": 353,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 646,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 1,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 8,
+          "history_memories_used": 4,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "selection"
+        },
+        {
+          "query_id": "q06",
+          "text": "idempotency key",
+          "pool_size": 2,
+          "selected_items": 2,
+          "delivered": 2,
+          "delivered_items": [
+            "i04",
+            "i15"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i04",
+              "i15"
+            ],
+            "1": [],
+            "0": []
+          },
+          "delivered_bytes": 670,
+          "grade2_delivered_bytes": 670,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 0,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 2,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 2,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 0,
+          "history_memories_used": 0,
+          "max_revisions_for_one_memory": 0,
+          "stopped_by": null
+        },
+        {
+          "query_id": "q07",
+          "text": "what is our database backup schedule",
+          "pool_size": 9,
+          "selected_items": 9,
+          "delivered": 5,
+          "delivered_items": [
+            "i06",
+            "i08",
+            "i09",
+            "i19",
+            "i25"
+          ],
+          "delivered_by_grade": {
+            "2": [],
+            "1": [],
+            "0": [
+              "i06",
+              "i08",
+              "i09",
+              "i19",
+              "i25"
+            ]
+          },
+          "delivered_bytes": 1361,
+          "grade2_delivered_bytes": 0,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 1361,
+          "delivered_head_recall": null,
+          "delivered_head_recall_denominator": 0,
+          "delivered_recall_all_grade2": null,
+          "grade2_denominator": 0,
+          "covered": false,
+          "grade1_only_query": true,
+          "revisions_discovered": 6,
+          "history_memories_used": 3,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "delivered_item_cap"
+        },
+        {
+          "query_id": "q08",
+          "text": "migration backfill same deploy",
+          "pool_size": 6,
+          "selected_items": 2,
+          "delivered": 2,
+          "delivered_items": [
+            "i17",
+            "i24"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i17",
+              "i24"
+            ],
+            "1": [],
+            "0": []
+          },
+          "delivered_bytes": 606,
+          "grade2_delivered_bytes": 606,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 0,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 2,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 2,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 2,
+          "history_memories_used": 1,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "selection"
+        },
+        {
+          "query_id": "q09",
+          "text": "never write secrets to logs",
+          "pool_size": 12,
+          "selected_items": 3,
+          "delivered": 3,
+          "delivered_items": [
+            "i08",
+            "i14",
+            "i21"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i08",
+              "i21"
+            ],
+            "1": [],
+            "0": [
+              "i14"
+            ]
+          },
+          "delivered_bytes": 869,
+          "grade2_delivered_bytes": 565,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 304,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 2,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 2,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 4,
+          "history_memories_used": 2,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "selection"
+        },
+        {
+          "query_id": "q10",
+          "text": "when do deploys happen",
+          "pool_size": 4,
+          "selected_items": 4,
+          "delivered": 4,
+          "delivered_items": [
+            "i09",
+            "i17",
+            "i18",
+            "i24"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i09"
+            ],
+            "1": [],
+            "0": [
+              "i17",
+              "i18",
+              "i24"
+            ]
+          },
+          "delivered_bytes": 1176,
+          "grade2_delivered_bytes": 280,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 896,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 1,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 2,
+          "history_memories_used": 1,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": null
+        },
+        {
+          "query_id": "q11",
+          "text": "payment terminal firmware",
+          "pool_size": 3,
+          "selected_items": 1,
+          "delivered": 1,
+          "delivered_items": [
+            "i18"
+          ],
+          "delivered_by_grade": {
+            "2": [],
+            "1": [
+              "i18"
+            ],
+            "0": []
+          },
+          "delivered_bytes": 290,
+          "grade2_delivered_bytes": 0,
+          "grade1_delivered_bytes": 290,
+          "grade0_delivered_bytes": 0,
+          "delivered_head_recall": null,
+          "delivered_head_recall_denominator": 0,
+          "delivered_recall_all_grade2": null,
+          "grade2_denominator": 0,
+          "covered": false,
+          "grade1_only_query": true,
+          "revisions_discovered": 0,
+          "history_memories_used": 0,
+          "max_revisions_for_one_memory": 0,
+          "stopped_by": "selection"
+        },
+        {
+          "query_id": "q12",
+          "text": "who approves large refunds",
+          "pool_size": 1,
+          "selected_items": 1,
+          "delivered": 1,
+          "delivered_items": [
+            "i06"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i06"
+            ],
+            "1": [],
+            "0": []
+          },
+          "delivered_bytes": 282,
+          "grade2_delivered_bytes": 282,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 0,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 1,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 0,
+          "history_memories_used": 0,
+          "max_revisions_for_one_memory": 0,
+          "stopped_by": null
+        },
+        {
+          "query_id": "q13",
+          "text": "append only ledger",
+          "pool_size": 4,
+          "selected_items": 2,
+          "delivered": 2,
+          "delivered_items": [
+            "i19",
+            "i23"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i19"
+            ],
+            "1": [],
+            "0": [
+              "i23"
+            ]
+          },
+          "delivered_bytes": 570,
+          "grade2_delivered_bytes": 256,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 314,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 1,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 2,
+          "history_memories_used": 1,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "selection"
+        },
+        {
+          "query_id": "q14",
+          "text": "how do we roll back a failed canary",
+          "pool_size": 13,
+          "selected_items": 1,
+          "delivered": 1,
+          "delivered_items": [
+            "i17"
+          ],
+          "delivered_by_grade": {
+            "2": [],
+            "1": [],
+            "0": [
+              "i17"
+            ]
+          },
+          "delivered_bytes": 319,
+          "grade2_delivered_bytes": 0,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 319,
+          "delivered_head_recall": null,
+          "delivered_head_recall_denominator": 0,
+          "delivered_recall_all_grade2": null,
+          "grade2_denominator": 0,
+          "covered": false,
+          "grade1_only_query": true,
+          "revisions_discovered": 2,
+          "history_memories_used": 1,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "selection"
+        },
+        {
+          "query_id": "q15",
+          "text": "what was the deploy schedule before it changed",
+          "pool_size": 20,
+          "selected_items": 11,
+          "delivered": 5,
+          "delivered_items": [
+            "i03",
+            "i09",
+            "i10",
+            "i15",
+            "i24"
+          ],
+          "delivered_by_grade": {
+            "2": [],
+            "1": [
+              "i09"
+            ],
+            "0": [
+              "i03",
+              "i10",
+              "i15",
+              "i24"
+            ]
+          },
+          "delivered_bytes": 1505,
+          "grade2_delivered_bytes": 0,
+          "grade1_delivered_bytes": 280,
+          "grade0_delivered_bytes": 1225,
+          "delivered_head_recall": null,
+          "delivered_head_recall_denominator": 0,
+          "delivered_recall_all_grade2": 0.0,
+          "grade2_denominator": 1,
+          "covered": false,
+          "grade1_only_query": false,
+          "revisions_discovered": 8,
+          "history_memories_used": 4,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "delivered_item_cap"
+        },
+        {
+          "query_id": "q16",
+          "text": "nightflow",
+          "pool_size": 0,
+          "selected_items": 0,
+          "delivered": 0,
+          "delivered_items": [],
+          "delivered_by_grade": {
+            "2": [],
+            "1": [],
+            "0": []
+          },
+          "delivered_bytes": 0,
+          "grade2_delivered_bytes": 0,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 0,
+          "delivered_head_recall": 0.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 0.0,
+          "grade2_denominator": 2,
+          "covered": false,
+          "grade1_only_query": false,
+          "revisions_discovered": 0,
+          "history_memories_used": 0,
+          "max_revisions_for_one_memory": 0,
+          "stopped_by": null
+        },
+        {
+          "query_id": "q17",
+          "text": "how many times does search retry the index",
+          "pool_size": 20,
+          "selected_items": 2,
+          "delivered": 2,
+          "delivered_items": [
+            "i12",
+            "i25"
+          ],
+          "delivered_by_grade": {
+            "2": [
+              "i25"
+            ],
+            "1": [],
+            "0": [
+              "i12"
+            ]
+          },
+          "delivered_bytes": 596,
+          "grade2_delivered_bytes": 287,
+          "grade1_delivered_bytes": 0,
+          "grade0_delivered_bytes": 309,
+          "delivered_head_recall": 1.0,
+          "delivered_head_recall_denominator": 1,
+          "delivered_recall_all_grade2": 1.0,
+          "grade2_denominator": 1,
+          "covered": true,
+          "grade1_only_query": false,
+          "revisions_discovered": 8,
+          "history_memories_used": 4,
+          "max_revisions_for_one_memory": 2,
+          "stopped_by": "selection"
+        }
+      ],
+      "controls": {
+        "empty_index": {
+          "fixture": "independent",
+          "index_profile": "stem",
+          "policy": "baseline",
+          "selection": "cutoff_40",
+          "memories_retained": 21,
+          "head_projection_retained": 21,
+          "pool_members": 0,
+          "delivered_items": 0,
+          "delivered_bytes": 0,
+          "verdict": "PASS",
+          "note": "Only head postings were cleared, under the profile being assessed. Delivered evidence with no postings would prove delivery bypasses the index; a zero head projection would mean the control proved less than it claims."
+        },
+        "forget_relevant": {
+          "fixture": "independent",
+          "index_profile": "stem",
+          "policy": "baseline",
+          "selection": "cutoff_40",
+          "memories_forgotten": 15,
+          "forgotten_memories_reached": 0,
+          "detail": [],
+          "verdict": "PASS",
+          "note": "Asserts no forgotten memory is delivered or expanded anywhere in the budgeted path, regardless of its grade for the query at hand."
+        }
+      }
+    }
+  },
+  "by_partition": {
+    "all": {
+      "clean": {
+        "queries": 11,
+        "delivered_head_recall_mean": 0.909,
+        "delivered_head_recall_n": "11/11",
+        "task_coverage": "10/11",
+        "grade0_delivered_bytes": 6404,
+        "grade1_delivered_bytes": 1252,
+        "grade2_delivered_bytes": 4644,
+        "delivered_items": 40
+      },
+      "flagged_post_result_authoring": {
+        "queries": 3,
+        "delivered_head_recall_mean": 0.5,
+        "delivered_head_recall_n": "2/3",
+        "task_coverage": "1/3",
+        "grade0_delivered_bytes": 2533,
+        "grade1_delivered_bytes": 280,
+        "grade2_delivered_bytes": 287,
+        "delivered_items": 10
+      },
+      "no_direct_answer": {
+        "queries": 3,
+        "delivered_head_recall_mean": null,
+        "delivered_head_recall_n": "0/3",
+        "task_coverage": "0/3",
+        "grade0_delivered_bytes": 3537,
+        "grade1_delivered_bytes": 290,
+        "grade2_delivered_bytes": 0,
+        "delivered_items": 13
+      }
+    },
+    "cutoff_40": {
+      "clean": {
+        "queries": 11,
+        "delivered_head_recall_mean": 0.879,
+        "delivered_head_recall_n": "11/11",
+        "task_coverage": "10/11",
+        "grade0_delivered_bytes": 3104,
+        "grade1_delivered_bytes": 330,
+        "grade2_delivered_bytes": 4335,
+        "delivered_items": 25
+      },
+      "flagged_post_result_authoring": {
+        "queries": 3,
+        "delivered_head_recall_mean": 0.5,
+        "delivered_head_recall_n": "2/3",
+        "task_coverage": "1/3",
+        "grade0_delivered_bytes": 1534,
+        "grade1_delivered_bytes": 280,
+        "grade2_delivered_bytes": 287,
+        "delivered_items": 7
+      },
+      "no_direct_answer": {
+        "queries": 3,
+        "delivered_head_recall_mean": null,
+        "delivered_head_recall_n": "0/3",
+        "task_coverage": "0/3",
+        "grade0_delivered_bytes": 1680,
+        "grade1_delivered_bytes": 290,
+        "grade2_delivered_bytes": 0,
+        "delivered_items": 7
+      }
+    }
+  },
+  "losses_against_baseline": {
+    "grade2_recall_losses": [
+      "q02"
+    ],
+    "task_coverage_losses": [],
+    "grade1_only_support_losses": [],
+    "grade0_delivered_bytes": 6318,
+    "grade0_baseline_bytes": 12474,
+    "grade0_reduction": 0.4935,
+    "grade2_delivered_bytes_unchanged": false,
+    "grade1_delivered_bytes_unchanged": false,
+    "queries_whose_delivery_changed": [
+      "q01",
+      "q02",
+      "q03",
+      "q05",
+      "q08",
+      "q09",
+      "q11",
+      "q13",
+      "q14",
+      "q17"
+    ],
+    "gate": null,
+    "gate_note": "No gate. The 50% grade-0 reduction is a development target measured against T3's own pinned baseline on the development corpus. Restating it here would turn the regression check into a second target to tune toward on frozen evaluation data."
+  }
+}

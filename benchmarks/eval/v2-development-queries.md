@@ -14,6 +14,8 @@ This build has **no abstention behaviour at all**: disjunctive token matching me
 
 v2 also sharpened what "correct" looks like here. q11 returned exactly one result — the supporting item, nothing else — and that is the wanted behaviour, not abstention. A rule that demands an empty result set for every unanswerable query would score q11 as a failure.
 
+**T3 did not move this, and could not have.** Every selection tested there keeps rank 1 whenever the pool is nonempty, so all of them reduce irrelevant context and none can reject an entirely irrelevant pool. The v2 delivery regression shows the shape of it: `q07`, which has no relevant evidence of any grade, was delivered **identically** under `all` and `cutoff_40` — five items, 1,361 grade-0 bytes — because its hits score close enough together that a fractional cutoff removes nothing. Abstention remains unsolved and unproposed.
+
 ## T1 — Morphology (from q02)
 
 `retry` does not match `retries`; FTS5's default tokenizer does not stem. Two of q02's three grade-2 items were never candidates, and q17 finds the same item only by routing around the gap on other discriminative tokens.
@@ -363,9 +365,30 @@ Every rule preserved everything it had to: grade-2 delivered bytes 5,212 and gra
 
 **The winning constant is fitted, as declared before the run.** 0.40 preserves `dq13` by 0.0067 BM25 units — 0.45%. The pass establishes that the 50% target is reachable here and by what margin; it is not evidence that the rule generalises, and both unfitted rules fell short (28.58%, 43.81%) while preserving everything.
 
-**Selection's own latency effect was not resolvable**: the variant measured a median 1.05x (1,000) and 1.02x (10,000) against the stage baseline, spanning 0.72x–1.41x. `cutoff_40` costs nothing extra; it was not shown to save time.
+**Selection's own latency effect was not resolvable**: the variant measured a median 1.05x (1,000) and 1.02x (10,000) against the stage baseline, spanning 0.72x–1.41x. `cutoff_40` **met the registered ceilings; its incremental latency remains unresolved** — a span of 0.72x–1.41x around 1.0 rules out neither a small cost nor a small saving. The ceilings were met, not met comfortably: the worst paired retrieval ratio is 1.4730x against a ≤1.5x limit.
 
-**Not run:** the v2 regression check that carries the chosen configuration into v2 unchanged. That step inspects frozen evaluation data and is a separate authorisation.
+**The 92.3% "floor" is an oracle bound, not an attainable target.** 1,395 grade-0 bytes is what a per-query prefix chosen with the labels in hand would leave. It bounds what any prefix rule could do; no label-free rule is entitled to it, and none of the three came near it.
+
+### v2 delivery regression — run 2026-09-06, after T3
+
+**`cutoff_40` carried unchanged onto frozen v2 lost a grade-2 answer.** Full report: [results-v2-delivery-regression.md](results-v2-delivery-regression.md); machine record `results-v2-delivery-regression.json`. Pinned at `a362f7c`, application and harness committed before the run, clean tree at start.
+
+| | `stem`/`all` | `stem`/`cutoff_40` |
+| --- | ---: | ---: |
+| Grade-2 delivered bytes | 4,931 | 4,622 |
+| Grade-1 delivered bytes | 1,822 | 900 |
+| Grade-0 delivered bytes | 12,474 | 6,318 (−49.35%) |
+| Grade-2 delivered-recall loss | — | **`q02` 1.000 → 0.667** |
+| Task coverage / grade-1-only support | — | no loss |
+
+`q02` is the query `stem` was promoted for: `exact` delivered one of its three answers, `stem` delivered all three, and `cutoff_40` cuts `i12` back out at **0.3091** of the top hit — below the constant fitted to `dq13`'s 0.4018. The failure mode T3 registered as hypothetical is now observed on the first set the rule was carried to.
+
+**This check carries no gate and 0.40 was not retuned.** The 50% target belongs to T3, against T3's own baseline. Searching for a constant that keeps `q02` would be fitting to evaluation data.
+
+Two measurement corrections were made before the run, and neither is optional for reading the older records:
+
+- **`run_v2.py` never exercises a selection.** It calls `service.search` directly and measures discovery at k=5/10/20, so no `--profile` run of it says anything about `cutoff_40`. Delivered-evidence figures are measured by `run_v2_delivery.py` through the shared `budgeted_retrieval.retrieve` and live in their own record; v2's discovery figures are untouched.
+- **Both v2 controls ignored the profile.** They called `build_fixture` without it and therefore always ran `exact`. The controls in `results-v2-regression-stem.json` exercised `exact`, not `stem`, and are not evidence about the stem configuration; that record is kept unedited. Both controls now run under the profile *and* selection being assessed, and both pass.
 
 ### T2 and T3 — authorised to run, 2026-09-06
 
@@ -374,7 +397,7 @@ Limits registered in both rows. The full contracts are in [T2 and T3 — authori
 | # | Target | Configuration | What it changes | Baseline | Registered limits | Registered on | Outcome |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 4 | T2 | Historical-term discovery with matched-revision and current-head provenance | Candidate generation over non-head revisions; result shape | Pinned `stem`, existing selection policy unchanged | Pool **20 distinct eligible memories** · history **5 memories × 20 revisions** · delivered **5 items / 8,192 UTF-8 bytes** incl. provenance · **≤3 predeclared variants** per stage · **no network or model calls** · **fusion input ≤40 raw index hits** (20 current-head + 20 historical) | 2026-09-06 | **[Run once 2026-09-06](#t2--outcome-run-once-on-2026-09-06). No variant promoted.** `history_cued` cleared every quality clause — all three historical cases delivered with provenance, both controls held, no recall lost — and failed the storage ceiling at **2.70x** against ≤2x. `stem` head-only stands; T3's baseline is `stem`. |
-| 5 | T3 | Ordering and weak-match rejection under a fixed expansion budget | Ranking and cutoff only; candidate generation **frozen** | **`stem`, head-only** (no T2 variant passed) | Pool **20 distinct eligible memories** · history **5 memories × 20 revisions**, selection choosing which five · delivered **5 items / 8,192 UTF-8 bytes** incl. provenance · **≤3 predeclared variants** per stage · **no network or model calls** · grade-0 gate **≤9,092 bytes** | 2026-09-06 | **[Run once 2026-09-06](#t3--outcome-run-once-on-2026-09-06). `cutoff_40` pinned:** 8,140 grade-0 bytes (55.24% reduction) with grade-2 and grade-1 delivery unchanged, and 4/4 ceiling cells. Constant declared fitted: it preserves `dq13` by 0.45%. |
+| 5 | T3 | Ordering and weak-match rejection under a fixed expansion budget | Ranking and cutoff only; candidate generation **frozen** | **`stem`, head-only** (no T2 variant passed) | Pool **20 distinct eligible memories** · history **5 memories × 20 revisions**, selection choosing which five · delivered **5 items / 8,192 UTF-8 bytes** incl. provenance · **≤3 predeclared variants** per stage · **no network or model calls** · grade-0 gate **≤9,092 bytes** | 2026-09-06 | **[Run once 2026-09-06](#t3--outcome-run-once-on-2026-09-06). `cutoff_40` pinned:** 8,140 grade-0 bytes (55.24% reduction) with grade-2 and grade-1 delivery unchanged, and 4/4 ceiling cells. Constant declared fitted: it preserves `dq13` by 0.45%. **[v2 delivery regression run 2026-09-06](#v2-delivery-regression--run-2026-09-06-after-t3): carried unchanged onto v2 it lost `q02`'s third grade-2 answer (1.000 → 0.667) while cutting grade-0 volume 49.35%. 0.40 not retuned.** |
 
 ### T0 — not authorised to run
 

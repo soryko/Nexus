@@ -75,8 +75,11 @@ whose answer sits at **0.401814** of its top hit — a margin of **0.0067 BM25 u
 
 Three things follow, and the third is the one that matters.
 
-- The 50% target is **reachable** on this corpus without losing anything: 55.24% measured,
-  against a computed floor of 92.3% for any prefix rule that loses nothing.
+- The 50% target is **reachable** on this corpus without losing anything: 55.24% measured.
+  The 92.3% figure it is often set against is an **oracle bound, not an attainable result**:
+  1,395 grade-0 bytes is what a per-query prefix chosen *with the labels in hand* would
+  leave. No label-free rule is entitled to it, none of the three came near it, and it bounds
+  what any prefix rule could do rather than describing what one did.
 - The two **unfitted** rules both fall short — 28.58% and 43.81% — while preserving
   everything. Nothing here shows that an unfitted rule can clear 50%.
 - A constant tuned to one query's margin in a 24-query corpus, passing by 0.45% on that
@@ -114,8 +117,9 @@ the twelve block sets the variant measured a median 1.05× the stage baseline at
 1.02× at 10,000, spanning 0.72×–1.41×. Delivering 49 items instead of 85 did not produce a
 measurable speed-up here, and the perf workload is the synthetic query set rather than the
 development corpus, so the number of items selection cuts there is not the number it cuts
-above. What the run establishes is that `cutoff_40` costs nothing extra, not that it saves
-time.
+above. What the run establishes is that **`cutoff_40` met the registered ceilings; its
+incremental latency remains unresolved** — a span from 0.72× to 1.41× around 1.0 does not
+separate a small cost from a small saving, and neither is ruled out.
 
 This run's anchor arm measured 16.2–18.0 ms at 10,000, close to T1-C's 19.0476 ms and far
 from the 37.2549 ms seen during the T2 ceiling run. Why those two runs differed is still
@@ -146,9 +150,12 @@ top hit's BM25 magnitude.
 
 ## What T3 established, and what it did not
 
-- **The gate is achievable on this corpus and the winner clears it with resources to
-  spare.** 55.24% against a 50% target, with grade-2 and grade-1 delivery byte-identical to
-  the baseline, and every ceiling passed under both statistics.
+- **The gate is achievable on this corpus and the winner met every registered ceiling.**
+  55.24% against a 50% target, with grade-2 and grade-1 delivery byte-identical to the
+  baseline, and every ceiling passed under both statistics. *Met*, not comfortably: the
+  worst paired retrieval ratio is **1.4730× against a ≤1.5× limit** — 1.8% of headroom on a
+  quantity whose block-to-block spread is larger than that. "Resources to spare" is not
+  supported by these numbers and is not claimed.
 - **The winning constant is fitted, and its margin is 0.45% on one query.** That was
   declared before the run and is not softened by the pass. `dq13`'s answer sits at 0.401814
   of its top hit; at 0.41 the rule would lose it. No claim is made that 0.40 transfers to
@@ -163,6 +170,30 @@ top hit's BM25 magnitude.
   the 8,192-byte delivery budget, so this stage measured item selection only.
 - **A prefix is all these rules can cut.** Reordering the pool, or dropping an item from
   the middle of it, is a different mechanism and would need its own registration.
-- **No v2 regression check has been run.** The charter carries a stage's chosen
-  configuration into v2 unchanged, and that step inspects frozen evaluation data; it is not
-  part of this run.
+- **T0 abstention is untouched.** Every selection tested here keeps rank 1 whenever the pool
+  is nonempty — `all` by definition, both cutoffs because the top hit is the fraction
+  everything else is measured against, and `dominant_top_2x` because its whole judgment is
+  about which single hit to keep. They reduce irrelevant context; none of them can reject an
+  entirely irrelevant pool, which is what abstention means. `dq12`, the unanswerable query,
+  still received two items under `cutoff_40`.
+
+## Addendum — the v2 delivery regression, run afterwards
+
+The line below said no v2 regression check had been run. One has since been run and it
+found a loss, so the statement is superseded rather than deleted:
+
+> **No v2 regression check has been run.** The charter carries a stage's chosen
+> configuration into v2 unchanged, and that step inspects frozen evaluation data; it is not
+> part of this run.
+
+`stem`/`cutoff_40` carried unchanged onto frozen v2 **lost a grade-2 answer on `q02`**
+(delivered head recall 1.000 → 0.667): its third answer `i12` scores 0.3091 of the top hit,
+below the constant fitted to `dq13`'s 0.4018. Grade-0 volume fell 49.35%. Full report:
+[../eval/results-v2-delivery-regression.md](../eval/results-v2-delivery-regression.md).
+
+Nothing in this file is restated by that outcome — T3's measurements on development data
+stand exactly as recorded, including the pass under the registered decision rule. What
+changes is the standing of the constant: the failure mode registered in this report as
+hypothetical ("a single answer sitting one place lower … would turn the pass into a recall
+loss") is now observed. 0.40 was **not** retuned in response, and must not be: searching for
+a constant that keeps `q02` would be fitting to evaluation data.

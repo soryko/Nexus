@@ -1,0 +1,76 @@
+cutoff_40 on v2: where the cut fell, per query whose delivery changed
+profile stem · head-only · fraction 0.4 of the top hit's BM25 magnitude
+pinned record: a362f7c
+
+q01  'how many times do we re-attempt a failed card charge'   grade-2 ['i20']  grade-1 []
+   rank 1  i20  grade 2  score  5.9306  fraction 1.0000  KEPT 
+   rank 2  i15  grade 0  score  3.5229  fraction 0.5940  KEPT 
+   rank 3  i12  grade 0  score  2.4399  fraction 0.4114  KEPT 
+   rank 4  i17  grade 0  score  2.4040  fraction 0.4053  KEPT 
+   rank 5  i21  grade 0  score  2.0715  fraction 0.3493  CUT  
+   rank 6  i04  grade 0  score  1.4659  fraction 0.2472  CUT  
+
+q02  'retry policy'   grade-2 ['i12', 'i20', 'i25']  grade-1 ['i10', 'i15', 'i16']
+   rank 1  i20  grade 2  score  3.3162  fraction 1.0000  KEPT 
+   rank 2  i25  grade 2  score  1.5364  fraction 0.4633  KEPT 
+   rank 3  i10  grade 1  score  1.5194  fraction 0.4582  KEPT 
+   rank 4  i15  grade 1  score  1.0406  fraction 0.3138  CUT  
+   rank 5  i12  grade 2  score  1.0251  fraction 0.3091  CUT  
+
+q03  'payments integration suite'   grade-2 ['i10']  grade-1 ['i23']
+   rank 1  i10  grade 2  score  7.9906  fraction 1.0000  KEPT 
+   rank 2  i23  grade 1  score  1.9166  fraction 0.2399  CUT  
+   rank 3  i18  grade 0  score  1.7952  fraction 0.2247  CUT  
+   rank 4  i21  grade 0  score  1.6791  fraction 0.2101  CUT  
+
+q05  'why did the retry cap change from three attempts'   grade-2 ['i20']  grade-1 ['i16']
+   rank 1  i20  grade 2  score  7.7600  fraction 1.0000  KEPT 
+   rank 2  i15  grade 0  score  4.5635  fraction 0.5881  KEPT 
+   rank 3  i10  grade 0  score  3.5909  fraction 0.4627  KEPT 
+   rank 4  i12  grade 0  score  2.9417  fraction 0.3791  CUT  
+   rank 5  i24  grade 0  score  2.1055  fraction 0.2713  CUT  
+   rank 6  i05  grade 0  score  1.7067  fraction 0.2199  CUT  
+
+q08  'migration backfill same deploy'   grade-2 ['i17', 'i24']  grade-1 ['i03']
+   rank 1  i17  grade 2  score  8.4723  fraction 1.0000  KEPT 
+   rank 2  i24  grade 2  score  5.2044  fraction 0.6143  KEPT 
+   rank 3  i04  grade 0  score  3.0135  fraction 0.3557  CUT  
+   rank 4  i09  grade 0  score  1.9208  fraction 0.2267  CUT  
+   rank 5  i03  grade 1  score  1.6265  fraction 0.1920  CUT  
+   rank 6  i18  grade 0  score  1.4643  fraction 0.1728  CUT  
+
+q09  'never write secrets to logs'   grade-2 ['i08', 'i21']  grade-1 []
+   rank 1  i21  grade 2  score  3.8771  fraction 1.0000  KEPT 
+   rank 2  i08  grade 2  score  3.6030  fraction 0.9293  KEPT 
+   rank 3  i14  grade 0  score  1.6524  fraction 0.4262  KEPT 
+   rank 4  i19  grade 0  score  1.2493  fraction 0.3222  CUT  
+   rank 5  i13  grade 0  score  1.2053  fraction 0.3109  CUT  
+   rank 6  i17  grade 0  score  1.0100  fraction 0.2605  CUT  
+
+q11  'payment terminal firmware'   grade-2 []  grade-1 ['i18']
+   rank 1  i18  grade 1  score  8.3988  fraction 1.0000  KEPT 
+   rank 2  i10  grade 0  score  2.3027  fraction 0.2742  CUT  
+   rank 3  i21  grade 0  score  1.6791  fraction 0.1999  CUT  
+
+q13  'append only ledger'   grade-2 ['i19']  grade-1 []
+   rank 1  i19  grade 2  score  6.7602  fraction 1.0000  KEPT 
+   rank 2  i23  grade 0  score  3.1071  fraction 0.4596  KEPT 
+   rank 3  i11  grade 0  score  1.7067  fraction 0.2525  CUT  
+   rank 4  i21  grade 0  score  1.6791  fraction 0.2484  CUT  
+
+q14  'how do we roll back a failed canary'   grade-2 []  grade-1 []
+   rank 1  i17  grade 0  score  7.2119  fraction 1.0000  KEPT 
+   rank 2  i03  grade 0  score  0.0000  fraction 0.0000  CUT  
+   rank 3  i08  grade 0  score  0.0000  fraction 0.0000  CUT  
+   rank 4  i15  grade 0  score  0.0000  fraction 0.0000  CUT  
+   rank 5  i04  grade 0  score  0.0000  fraction 0.0000  CUT  
+   rank 6  i24  grade 0  score  0.0000  fraction 0.0000  CUT  
+
+q17  'how many times does search retry the index'   grade-2 ['i25']  grade-1 []
+   rank 1  i25  grade 2  score  7.2989  fraction 1.0000  KEPT 
+   rank 2  i12  grade 0  score  5.3816  fraction 0.7373  KEPT 
+   rank 3  i10  grade 0  score  1.5194  fraction 0.2082  CUT  
+   rank 4  i15  grade 0  score  1.0406  fraction 0.1426  CUT  
+   rank 5  i20  grade 0  score  0.9811  fraction 0.1344  CUT  
+   rank 6  i17  grade 0  score  0.0000  fraction 0.0000  CUT  
+
