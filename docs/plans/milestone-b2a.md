@@ -12,8 +12,22 @@ Git behaviour recorded here was measured on **git 2.54.0, darwin 25.1.0, 2026-09
 
 - Launch takes an optional `--repo PATH` naming a local checkout. One repository per server process.
 - The binding has an explicit, persisted **`repository_id`**: an opaque identifier minted once and stored in the database under the launch scope. It is the identity that references record. Neither a path, nor a namespace, nor a remote URL, nor a commit is that identity.
-- The **association key** is the canonicalised absolute Git common directory (`git rev-parse --path-format=absolute --git-common-dir`, then `realpath`). A checkout whose key matches an existing row binds to that `repository_id`; an unknown key mints a new one.
+- The canonicalised absolute Git common directory (`git rev-parse --path-format=absolute --git-common-dir`, then `realpath`) is a **locator, not an identity**. It answers "which checkouts are the same repository right now"; it does not survive a move, and it is reused by whatever is put at that path next. Identity is the persisted row; the locator is one mutable attribute of it.
 - **Measured:** the main worktree and a linked worktree agree on the common directory and disagree on both `--show-toplevel` and `--absolute-git-dir`. **Measured, and new:** raw `--git-common-dir` returns `.git` from the main worktree and an absolute path from the linked one, so comparing its raw output equates nothing. `--path-format=absolute` is mandatory, and `realpath` on top of it, because a canonical string is the whole mechanism.
+- A **discriminator** is recorded beside the locator at first bind: the root commit OID of `HEAD`'s first-parent history (`git rev-list --max-parents=0 --first-parent HEAD`, last line). An empty repository records no discriminator and acquires one at the first successful verification.
+
+Binding rules, and every one of them errs toward minting a new identity rather than inheriting another repository's evidence:
+
+| Situation | Result |
+| --- | --- |
+| Locator unknown | Mint a new `repository_id`. First bind and a moved repository are indistinguishable from the outside, so neither silently inherits |
+| Locator known, discriminator matches | Bind to that `repository_id` |
+| Locator known, discriminator differs | Refuse to start with `repository_mismatch`. A different repository now sits where a bound one was, and guessing which the operator meant is not available |
+| Repository moved | New locator, so a new identity by default. To carry the old one, launch with `--repo-id <id>`, which checks the discriminator and then updates the stored locator |
+| Additional clone | Always a distinct `repository_id`. Association is `--repo-id`, an operator action, with the consequence stated: evidence recorded under one checkout is thereafter presented as belonging to the same repository |
+
+**Known limit, stated rather than engineered around:** no observational discriminator distinguishes "the same repository, moved" from "a fresh clone of the same upstream". A re-clone placed at the old locator matches the discriminator and binds to the existing identity. That is why the discriminator's job is narrow — it catches an *unrelated* repository at a reused path — and why every other case requires `--repo-id`.
+
 - **Independent clones never merge automatically.** A matching remote URL, a shared commit OID, an identical tree, or a similar path is not evidence of the same project. Two clones of the same upstream are two repositories until an operator says otherwise, and the association is an explicit local action, never an inference.
 - **No tool call can select, override or create a repository binding.** The MCP schemas carry no repository, commit-scope or path-root argument, and injected fields are rejected the way injected `namespace` already is.
 - Launch without `--repo`, or with `git` unavailable, is a supported mode: verification is **unavailable**, and `status` says so. Nothing is labelled verified in that mode.
@@ -43,12 +57,28 @@ Git behaviour recorded here was measured on **git 2.54.0, darwin 25.1.0, 2026-09
 2. For each path, `git ls-tree --full-tree -z <commit_oid> -- <path>`, reading mode, type, object OID and the exact path back.
 3. Nothing re-reads the ref. A ref that moves between step 1 and step 3 cannot split one request across two commits.
 
-Two mandatory flags, both for correctness:
+**`--full-tree` fixes the coordinate system; it does not make the argument a literal path.** `ls-tree` takes *pathspecs*, and a pathspec matches by prefix: **measured**, `ls-tree -r --full-tree HEAD -- sub` returned `sub/file.txt`. A successful exit with non-empty output therefore proves only that *something* matched. Acceptance requires all four of:
 
-- **`--full-tree` is mandatory. Measured:** without it, `ls-tree` resolves the pathspec relative to the process working directory. From inside `sub/`, `-- file.txt` matched `sub/file.txt` and `-- sub/file.txt` matched nothing. That is a silent wrong answer in both directions — a false verification and a false absence — and it depends on where the server happened to be launched.
-- **`-z` is mandatory**, so paths arrive NUL-terminated and unquoted rather than through git's quoting rules.
+1. **Exactly one record** in the `-z` NUL-delimited output. `-z` is mandatory so paths arrive unquoted rather than through git's quoting rules.
+2. **Byte-equal pathname.** The returned path must equal the requested path exactly. This, not reasoning about pathspec semantics, is what rejects a directory prefix, a stray wildcard character and a quoting surprise alike.
+3. **Type `blob`.**
+4. **Mode `100644` or `100755`.** Everything else is [unsupported](#5-unsupported-reference-types).
+
+- **`--full-tree` is still mandatory. Measured:** without it, `ls-tree` resolves the pathspec relative to the process working directory. From inside `sub/`, `-- file.txt` matched `sub/file.txt` and `-- sub/file.txt` matched nothing. That is a silent wrong answer in both directions — a false verification and a false absence — and it depends on where the server happened to be launched.
 
 **Measured, and the reason absence is not read from exit status:** `ls-tree` for a path that is not in the commit exits **0 with empty output**; only a rejected pathspec exits non-zero (128). Absence is empty output. An implementation that keys on the exit code reports every missing path as success.
+
+### Execution controls
+
+Every git invocation carries `--no-replace-objects --no-lazy-fetch --literal-pathspecs`, with `GIT_TERMINAL_PROMPT=0` in the environment. **Measured** (git 2.54.0, all three flags accepted together): these are not hygiene, they are two of the guarantees.
+
+- **Replacement objects substitute silently.** With a `refs/replace/` ref mapping commit `C1` to a later commit, `ls-tree --full-tree C1 -- sub/file.txt` returned the *tampered* blob OID, while `--no-replace-objects` returned the true one. `rev-parse --verify C1^{commit}` reported `C1` either way, so the substitution is invisible in the commit id and would have been recorded as evidence about a commit whose real tree says otherwise.
+- **"We never invoke `fetch`" does not establish local-only.** In a partial clone a missing object is fetched lazily by the read itself. `--no-lazy-fetch` makes a missing object an error, which is the answer this contract wants: verification fails rather than reaching the network. `GIT_TERMINAL_PROMPT=0` ensures it fails instead of blocking on a credential prompt.
+- **`--literal-pathspecs`** removes pathspec magic (`:(glob)`, `:(exclude)`, …) from caller-supplied text, so a path is a path. It is belt-and-braces behind rule 2 above, which is what actually decides acceptance.
+
+### Concurrency
+
+Two requests under the same key can both miss the receipt pre-check, and — resolving `HEAD` independently — can verify against **different commits**. That is expected and harmless, because the pre-check decides nothing. The authoritative `(scope, key, digest)` check inside the write transaction is unchanged from milestone A and still decides: one request commits its revision and its evidence, the loser observes the committed receipt and replays it. The loser's verification result is **discarded, never merged** into the winner's revision, so evidence always describes the single observation made by the write that committed.
 
 **Measured:** the blob OID from `ls-tree` equals `git hash-object` of the file's bytes, so `object_oid` is a stable content identity a later freshness check can compare against.
 
@@ -85,13 +115,14 @@ These are the promises milestone A and B1 already made, and this slice must not 
 - **The version-1 digest is byte-stable.** A request carrying no references keeps hashing through the frozen `MemoryService._digest`, producing the same value it produced before this migration. A request carrying references uses a version-2 digest under a new function and a new `DIGEST_VERSION`; `receipts.digest_version` already exists to record which.
 - **The digest covers caller-supplied reference input, never resolved OIDs.** This is not a detail. If a resolved commit entered the digest, a retry of `{path, commit: "HEAD"}` after `HEAD` moved would hash differently and raise an idempotency conflict instead of replaying — breaking milestone A's core promise through nothing the caller did.
 - **A retry never invokes git.** Before verification, a read checks for a receipt under the same `(scope, key)` with the same digest and returns it directly. The authoritative replay check remains inside the write transaction, unchanged; the pre-check can only short-circuit to an already-committed receipt, so G1 is untouched. Consequence, and the obligation stated in the plan: a retry succeeds and returns its original receipt after `HEAD` has moved, after the object has been garbage-collected, with the repository detached, or with `git` missing entirely.
-- **Original evidence is recoverable from a retry.** The replayed receipt names the original `revision_id`, and evidence is stored on the revision, so `get` returns exactly the evidence recorded at the original write. Receipt shape is unchanged; evidence was deliberately not added to `WriteReceipt`, which would have duplicated it into the receipts table and changed a stable structured output.
+- **Original evidence is recoverable from a retry, subject to G3.** The replayed receipt names the original `revision_id`, and evidence is stored on the revision, so `get` returns exactly the evidence recorded at the original write. The qualification matters: after `forget`, the receipt still replays — milestone A requires that — while `get` on that memory refuses, tombstone rules unchanged. A receipt carries no evidence and no content, so replay after deletion returns identifiers and resurrects nothing. Receipt shape is unchanged; evidence was deliberately not added to `WriteReceipt`, which would have duplicated it into the receipts table and changed a stable structured output.
+- **Verification is never a startup dependency.** A missing, broken or unbound git leaves the server startable and every non-reference path working: `get`, `search`, `history`, `status` and receipt replay all read the database and never shell out. Bindings are persisted, so after a restart with git gone the `repository_id` and every stored reference are still readable, and evidence recorded earlier is still returned verbatim. Only *new* reference-carrying writes are refused, with `verification_unavailable`. A verifier that cannot run must never be able to make committed memories unreachable.
 - **A new reference under an old key still conflicts.** Same key, genuinely different payload, different digest, `idempotency_conflict` — as before.
 - **Outbox history keeps its meaning.** Reference-carrying writes emit the same event kinds, carrying IDs and not content. Events written under milestone A are not redefined.
 - **Migration `004` is additive and transactional**, creating tables only, with rollback leaving the database at version 3. It rewrites no existing row. Its cost is reported rather than assumed, even though an additive migration with no backfill is expected to be cheap — *expected* is not *measured*.
 - **B2b's filters change the search cursor fingerprint.** Adding `path` and `commit` to the query changes `_fingerprint`, so a cursor minted before the change is rejected as `cursor_expired`. That is the documented behaviour of an invalidated cursor, not a broken promise, and it is stated here so it is not discovered as a bug.
 - **`status` gains repository and verification-mode fields.** Existing fields keep their names and meanings.
-- **New error codes are stable and sanitized**, extending `NexusError`: `repository_unbound`, `verification_unavailable`, `commit_not_found`, `path_not_in_commit`, `unsupported_reference_type`, `invalid_reference`. As before, public errors carry no SQL, no database or checkout paths, no content, no other scope's details and no stack traces.
+- **New error codes are stable and sanitized**, extending `NexusError`: `repository_unbound`, `repository_mismatch`, `verification_unavailable`, `commit_not_found`, `path_not_in_commit`, `unsupported_reference_type`, `invalid_reference`. As before, public errors carry no SQL, no database or checkout paths, no content, no other scope's details and no stack traces.
 
 ## 7. Components and storage
 
@@ -113,17 +144,21 @@ Frozen with this contract, over temporary Git repositories created by the tests:
 1. **Repository isolation.** Two clones of the same source, identical trees and commit OIDs, bound separately: distinct `repository_id`s, no automatic association from a shared remote URL or shared commits, and a reference recorded under one is not visible to a service bound to the other.
 2. **Worktree association.** A main worktree and a linked worktree map to one `repository_id`, exercising the measured relative-versus-absolute `--git-common-dir` hazard rather than assuming it away.
 3. **Changing refs.** A reference given a branch name records the resolved OID; moving the branch afterwards changes no stored evidence, and re-verification against the recorded OID still passes. A single resolution per request is asserted by counting verifier calls, not inferred.
-4. **Dirty working tree.** Modify, delete and add files on disk without committing: evidence is unchanged, because the working tree is never consulted.
-5. **Missing objects.** An unknown commit OID gives `commit_not_found`; a path absent from a real commit gives `path_not_in_commit` — and the test asserts the absence is detected from empty output, since the measured exit status is 0.
-6. **Unsafe paths.** Absolute, `..` traversal, leading and trailing slash, empty segment, NUL: each refused in the application, and the surfaced error asserted to contain no on-disk path and no git text.
-7. **Unsupported types.** Symlink, gitlink and directory each give `unsupported_reference_type`, distinguishable from not-found.
-8. **Migration and retry.** Replay a receipt written before migration `004`; assert a reference-free request still produces the pinned version-1 digest by byte equality; same key plus a new reference conflicts; and a retry returns the original receipt and original evidence with a verifier that **raises if called at all**, after `HEAD` has moved and with the object unavailable.
-9. **Verification unavailable.** Launched without `--repo` and with `git` absent: reference-carrying writes are refused with `verification_unavailable`, plain writes still succeed, and `status` reports the mode.
-10. **One real MCP round trip.** Record with a reference over subprocess stdio, read the evidence back, and assert no repository, commit-root or path-root argument is accepted in any tool schema.
+4. **Identity beyond the locator.** A bound repository moved to a new path mints a new identity by default and carries the old one under `--repo-id`; an unrelated repository created at a bound path is refused with `repository_mismatch`; a second clone is a distinct identity until `--repo-id` associates it.
+5. **Dirty working tree.** Modify, delete and add files on disk without committing: evidence is unchanged, because the working tree is never consulted.
+6. **Missing objects.** An unknown commit OID gives `commit_not_found`; a path absent from a real commit gives `path_not_in_commit` — and the test asserts the absence is detected from empty output, since the measured exit status is 0.
+7. **Unsafe paths.** Absolute, `..` traversal, leading and trailing slash, empty segment, NUL: each refused in the application, and the surfaced error asserted to contain no on-disk path and no git text.
+8. **Unsupported types.** Symlink, gitlink and directory each give `unsupported_reference_type`, distinguishable from not-found.
+9. **One literal entry.** A directory path whose prefix matches a file is refused on byte-equality, not accepted because output was non-empty; a path containing pathspec-magic or wildcard characters matches only a file of exactly that name; a `refs/replace/` ref pointing a bound commit at another commit does **not** change the recorded object OID.
+10. **Concurrent double resolution.** Two writers under one key, racing across independent connections with `HEAD` moving between them, commit exactly one revision and one evidence record; the loser replays the winner's receipt, and no evidence from the losing verification is stored.
+11. **Migration and retry.** Replay a receipt written before migration `004`; assert a reference-free request still produces the pinned version-1 digest by byte equality; same key plus a new reference conflicts; and a retry returns the original receipt and original evidence with a verifier that **raises if called at all**, after `HEAD` has moved and with the object unavailable.
+12. **Verification unavailable.** Launched without `--repo` and with `git` absent: the server starts, reference-carrying writes are refused with `verification_unavailable`, plain writes still succeed, and `status` reports the mode.
+13. **Restart without git.** Write references with a working verifier, restart with git unavailable: bindings and evidence are still readable through `get` and `search`, receipts still replay, and a `forget`-then-replay returns the original receipt while `get` refuses.
+14. **One real MCP round trip.** Record with a reference over subprocess stdio, read the evidence back, and assert no repository, commit-root or path-root argument is accepted in any tool schema.
 
 **Negative controls, wired from the first test** — as with retrieval, a suite that cannot fail measures nothing:
 
-- A stub verifier that approves everything must make tests 1–7 **fail**. If they still pass, they are not testing verification.
+- A stub verifier that approves everything must make tests 1–9 **fail**. If they still pass, they are not testing verification.
 - A repository with no commits, and a bound repository with the reference tables empty, must fail every assertion that claims evidence exists, catching assertions that pass vacuously.
 
 ## Measured git behaviour
@@ -147,6 +182,40 @@ git merge-base --is-ancestor <commit> HEAD              # resolvable is not reac
 | Blob OID equals `hash-object` of the bytes | `object_oid` is a stable content identity |
 | `ls-tree` and `cat-file` stderr disclose the checkout path and on-disk existence | Validate paths in the application; never surface git stderr |
 | Another branch's commit resolves but is not an ancestor of `HEAD` | Resolvable is not reachable, and neither implies current |
+| `ls-tree -r --full-tree HEAD -- sub` returned `sub/file.txt` | A pathspec is not a literal path; acceptance needs byte-equal pathname, one record, blob, supported mode |
+| A `refs/replace/` ref made `ls-tree` report a tampered blob OID for an unchanged commit id; `--no-replace-objects` reported the true one | Every invocation carries `--no-replace-objects` |
+| git 2.54.0 accepts `--no-replace-objects --no-lazy-fetch --literal-pathspecs` together | A partial clone would otherwise fetch lazily on read, so local-only needs the flag, not a promise |
+
+## Development environment
+
+B2a is developed and measured in the environment below, not in the project `.venv`. Recorded here because a result without its interpreter and SQLite version is not a result.
+
+| | |
+| --- | --- |
+| Interpreter | CPython 3.13.15, Homebrew `python@3.13` |
+| SQLite | 3.53.4 — above the 3.51.3 floor |
+| Dependencies | `uv.lock`, unchanged: mcp 2.1.1, pytest 9.1.1, Hypothesis 6.167.1 |
+| Baseline result | **89 passed**, whole suite, at `d97f09d` |
+| Host | darwin 25.1.0, git 2.54.0 |
+
+Recreate it by making a venv on that interpreter and pointing it at the locked dependencies already resolved in `.venv`:
+
+```bash
+/opt/homebrew/bin/python3.13 -m venv --without-pip <env>
+echo "$PWD/.venv/lib/python3.13/site-packages" > <env>/lib/python3.13/site-packages/deps.pth
+PYTHONPATH="$PWD/src" <env>/bin/python -m pytest -q
+```
+
+The project `.venv` links SQLite 3.50.4 and cannot run the suite — every storage test raises `unsupported_runtime`. `uv` additionally refuses the Homebrew interpreters here (`platform.mac_ver()` returns empty). Both are environment faults, tracked separately, and **neither is a reason to lower the SQLite floor**.
+
+## Amendments
+
+**2026-09-06, after review, before implementation.** Recorded rather than edited in place, per the freeze rule at the top.
+
+1. The transactional receipt check is stated as authoritative for concurrent retries, including the case where both requests miss the pre-check and resolve `HEAD` to different commits.
+2. "Git missing" is defined across restart: never a startup dependency, bindings and evidence readable without git, and receipt replay after `forget` qualified against G3.
+3. The canonical common directory is demoted from identity to locator, with a discriminator, explicit rules for moved, replaced and cloned repositories, a `repository_mismatch` error, and the limit that a re-clone at the old locator is indistinguishable from a move.
+4. Tree-entry acceptance is specified as one NUL-delimited record with a byte-equal pathname, `blob` type and a supported regular-file mode — non-empty output is no longer sufficient. Execution controls added for replacement objects, lazy fetching and pathspec magic, with the replacement-object substitution measured.
 
 ## Explicitly out of scope
 
