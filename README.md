@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 [![SQLite](https://img.shields.io/badge/sqlite-3.51.3%2B-blue)](https://www.sqlite.org/)
 [![MCP](https://img.shields.io/badge/mcp-2.1.1-blue)](https://modelcontextprotocol.io/)
-[![Status](https://img.shields.io/badge/milestone-B1%3A%20lexical%20search-orange)](docs/plans/milestone-a.md)
+[![Status](https://img.shields.io/badge/milestone-B2a%3A%20Git--verified%20references-orange)](docs/plans/milestone-b2a.md)
 
 An agent stores a fact once and reads it back in a later session, on a different process, with the same bytes it wrote. Everything runs locally against one SQLite file. No model call, network request or external service touches the write path.
 

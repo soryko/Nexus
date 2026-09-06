@@ -91,16 +91,24 @@ The reason is §1: resolving a spec requires git, on a read path that must work 
 | `repository: "any"` | no restriction — identical to absent |
 | `reference_paths: []` | no restriction — identical to absent |
 | `reference_commits: []` | no restriction — identical to absent |
-| `reference_path_prefix: null` | no restriction — identical to absent |
+| any of the four explicitly `null` | no restriction — identical to absent (**new policy**; see below) |
 | `reference_path_prefix: ""` | `invalid_reference` — `validate_reference_path` requires nonempty |
 
 **Decided.** *Identical to absent* is the whole claim, not just "returns the same rows": same result set, same `match_reasons` (no `references`; see §7), and **the same cursor fingerprint**, so a cursor minted with `reference_paths: []` is accepted when the argument is absent and vice versa. A definition that agreed on rows but disagreed on the fingerprint would turn a client's choice of JSON encoding into a `cursor_expired`.
 
-**Measured, at `2a88052`.** This is what the existing filters already do. `_normalized_tags` maps an empty input to `()`; `_fingerprint` serialises it as `[]` for absent and empty alike; `_reasons` tests truthiness, so an empty `tags_all` contributes no reason. Reference filters follow that behaviour rather than inventing a second convention next to it.
+**Measured, at `2a88052`.** For *omission and empty collections*, this is what the existing filters already do. `_normalized_tags` maps `[]` and `()` alike to `()`; `_fingerprint` serialises both as `[]`, the same as absent; `_reasons` tests truthiness, so an empty `tags_all` contributes no reason. Reference filters follow that behaviour rather than inventing a second convention next to it.
+
+**Decided: accepting `null` is new policy, not inherited behaviour.** The existing filters reject it. `SearchQuery(tags_all=None)` raises `invalid_input` — `_normalized_tags` iterates its argument and converts the `TypeError` — and the MCP schema declares `tags_all: tuple[str, ...] = ()`, a non-optional type, so a JSON `null` is refused at the schema boundary before it reaches the domain. Measured at `2a88052`: `None` → `invalid_input`, `[]` and `()` → `()`.
+
+The four reference filters are declared optional instead, and normalise an explicit `null` to "absent". The reasons are narrow and worth stating so this is not later mistaken for the existing convention:
+
+- MCP clients routinely serialise an unset optional field as `null`, and a caller who omits a filter should not get a different answer depending on how its client encodes "unset". The failure this avoids is `invalid_reference` on a query the caller believes carries no filter at all.
+- These arguments are new surface. There is no caller relying on `null` being refused, so the choice costs no compatibility.
+- **`tags_all`, `tags_any` and `kinds` are not changed by this slice.** They keep rejecting `null`. The inconsistency is deliberate and bounded: reconciling it means changing shipped behaviour on arguments B2b does not own, which is its own decision and not one to smuggle in here. It is recorded as a known divergence, not as an oversight.
+
+**Decided.** `repository` admits `"any"`, `"bound"` and `null`. `null` means absent, per the rule above; every other value — including `""`, `"Bound"` and any repository identifier — is `invalid_reference`. Absence of the key remains the ordinary way to say "no restriction".
 
 **Rejected: `[]` means "match nothing".** It is defensible — a caller that computed a filter list and got zero entries arguably wants zero results — but it makes an empty page the *correct* answer for an argument many MCP clients cannot reliably distinguish from omission, and it would contradict the shipped meaning of `tags_all: []` in the same call. A caller that wants "match nothing" can ask for a path that cannot exist; a caller surprised by "match nothing" gets no signal at all.
-
-**Decided.** `repository` admits exactly `"any"` and `"bound"`. Any other value, including `null` where the client means absent, is `invalid_reference`; absence of the key is the way to say "no restriction".
 
 ## 4. Matching semantics
 
@@ -184,7 +192,11 @@ Returning only matching references was rejected: evidence is a property of the r
 
 **Decided: measure the existing-index approach before adding storage.** The implementation first writes the §4 predicate against the schema as it stands and records `EXPLAIN QUERY PLAN` for each of the four filter shapes — path-exact, path-prefix, commit-exact, and repository-restricted. Migration `005` is written **only for the shapes the measurement shows the existing indexes cannot serve**, with its columns chosen against that plan. If the measurement clears all four, `005` is not written, and the plans are recorded as an amendment instead. Fixing DDL before measuring a query plan is how an index that is never used gets written down as a decision; this project has already declined a 2.70x storage cost on measured grounds, and paying a smaller one on unmeasured grounds would be the same error in the other direction.
 
-**Decided: the measurement carries a negative control.** A query plan read off a table of a few dozen rows proves nothing — SQLite will scan a small table whatever indexes exist, so a "scan" verdict there is uninformative and an "index" verdict is luck. The plans are taken on a corpus large enough that the planner's choice is meaningful, and the same plans are taken with the candidate index absent, so the comparison shows the index changed the plan rather than that the plan was already fine. A candidate index whose presence does not change any of the four plans is not added.
+**Decided: the existing-index baseline is the control.** A query plan read off a table of a few dozen rows proves nothing — SQLite will scan a small table whatever indexes exist, so a "scan" verdict there is uninformative and an "index" verdict is luck. All measurement is therefore taken on a corpus large enough for the planner's choice to be meaningful, and the schema as it stands is measured first: plan, query work and latency for each of the four shapes, recorded before any candidate index exists.
+
+**Decided: a changed query plan does not establish benefit, and is not accepted as the justification for an index.** The planner switching to a new index says only that it preferred it on its own cost estimates; it can prefer an index that is no faster, and it can prefer one that is slower. The evidence that justifies adding an index is a **measured reduction in query work or latency against the existing-index baseline** — rows examined and full-scan/sort counters alongside wall-clock, since latency alone on a warm small corpus is noise.
+
+**Decided: the cost side is measured too, not assumed.** An added index is paid for on every referenced write and in storage for the life of the database. Its size and its write-path cost are measured against the same baseline and recorded next to the benefit, so the trade is visible rather than implied. An index whose measured benefit does not justify its measured storage and write cost is not added, whatever the plan says; and if the baseline already satisfies the invariant, `005` is not written at all.
 
 ## 10. Acceptance tests
 
@@ -205,11 +217,12 @@ Temporary repositories, real `git`, one real MCP round trip, as in B2a.
 13. **Evidence is complete in a hit.** A filtered hit carries every reference of its revision, not only the matching ones.
 14. **Rejections.** Each row of §8's table, asserted through the service and through the MCP schema.
 15. **One real MCP round trip.** Record two referenced memories over subprocess stdio, filter for one, and assert no `repository_id`, verification target or pattern argument is accepted in any tool schema.
-16. **Query plans.** No filter shape full-scans `revision_references`; asserted with `EXPLAIN QUERY PLAN` on a corpus large enough for the plan to be meaningful, whichever index serves it. §9's obligation cannot be quietly dropped, and the test does not presuppose that a new index exists.
+16. **Query plans.** No filter shape full-scans `revision_references`; asserted with `EXPLAIN QUERY PLAN` on a corpus large enough for the plan to be meaningful, whichever index serves it. §9's obligation cannot be quietly dropped, and the test does not presuppose that a new index exists. The existing-index baseline and, for any index `005` does add, its measured query-work or latency benefit and its measured storage and write cost, are recorded as an amendment — a plan change alone does not discharge this.
 17. **A binding without git still answers `"bound"`.** A process bound to a registered checkout with `git` unavailable returns that repository's evidence for `repository: "bound"`, does not raise `repository_unbound`, and reports `verification: "unavailable"` from `status` in the same run.
 18. **Cursors are bound to the resolved repository.** A cursor minted with `repository: "bound"` in a process bound to one repository is `cursor_expired` when presented to a process in the same scope bound to another; the same cursor under `repository: "any"` is unaffected by the binding. With no binding at all, `repository: "bound"` plus that cursor is `repository_unbound`, not `cursor_expired`.
 19. **Mixed commit formats.** Under `repository: "any"`, a `reference_commits` list holding a 40-hex and a 64-hex value is accepted and matches evidence of either format recorded in the scope. Under `repository: "bound"`, a value of the width the bound repository does not use is `invalid_reference`, and a mixed list is rejected whole rather than reduced.
 20. **Empty is absent.** For each argument, the empty form of §3 returns the same hits, the same `match_reasons` and the same cursor as omitting it — asserted by minting a cursor with the empty form and spending it with the argument absent — while `reference_path_prefix: ""` and an unrecognised `repository` value are `invalid_reference`.
+21. **`null` is absent, for the four reference filters only.** Each of the four accepts an explicit `null` through the MCP schema and answers as if omitted. Asserted in the same test that `tags_all: null` is still refused, so the divergence in §3 is pinned as deliberate and cannot drift in either direction unnoticed.
 
 ## 11. Negative controls
 
@@ -233,6 +246,8 @@ As in B2a, each mutation must fail at least its designated test. A mutation that
 | Treat an empty list as an unsatisfiable predicate instead of as absent | 20 |
 | Fingerprint an empty list differently from an absent argument | 20 |
 | Add `references` to `match_reasons` for a non-restricting argument | 20 |
+| Reject an explicit `null` on a reference filter the way `tags_all` does | 21 |
+| Accept `null` on `tags_all`, `tags_any` or `kinds` as well | 21 |
 | Check the cursor before the `repository` argument | 18 |
 
 ## 12. Explicitly out of scope
@@ -252,3 +267,11 @@ Reviewed against the implementation at `2a88052` (unchanged at `6e71d12`). §2's
 5. **Empty and default filters are defined once (§3, §7).** Absent, `"any"`, `[]` and `null` are identical in result set, `match_reasons` and cursor fingerprint; `reference_path_prefix: ""` and an unrecognised `repository` value are `invalid_reference`. This matches the shipped behaviour of `tags_all` rather than introducing a second convention beside it. `[]` as "match nothing" was considered and rejected.
 
 Acceptance tests 17–20 and nine mutation controls were added to cover the five. Later changes are recorded as further amendments, never as edits in place.
+
+### 2 — 2026-09-06, two corrections to amendment 1
+
+Raised on review of amendment 1, before any implementation existed against it. Both were wrong in the body text, so both are corrected in §3 and §9 in place and the superseded claims are quoted here; nothing had been built on either.
+
+1. **`null` was miscredited as existing behaviour (§3).** Amendment 1's table listed `reference_path_prefix: null` as "identical to absent" and justified the whole rule with "this is what the existing filters already do". Only omission and empty collections normalise alike. Measured at `2a88052`: `SearchQuery(tags_all=None)` raises `invalid_input`, and the MCP schema's non-optional `tuple[str, ...]` refuses a JSON `null` before the domain sees it. Accepting `null` on the four reference filters is kept — clients serialise unset optional fields as `null`, and this is new surface with no caller depending on the refusal — but it is now marked **new policy**, extended to all four arguments for internal consistency, and recorded as a deliberate divergence from `tags_all`, `tags_any` and `kinds`, which this slice does not change. Test 21 and two mutation controls pin the divergence in both directions.
+
+2. **A changed query plan was treated as evidence of benefit (§9).** Amendment 1's negative control was "the same plans taken with the candidate index absent … a candidate index whose presence does not change any of the four plans is not added". That control distinguishes only "the plan was already fine" from "the plan changed"; it does not show the index helped, because the planner can prefer an index that is no faster or slower. The existing-index baseline is kept as the control, and the justification for adding an index is now a measured reduction in query work or latency against it, weighed against the index's measured storage and write-path cost. A plan change alone no longer discharges anything.
