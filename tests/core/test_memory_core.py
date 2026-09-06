@@ -436,9 +436,14 @@ def test_a_diagnosis_is_preserved_outside_the_tmp_rotation_under_a_unique_name(t
 
     first = preserve("initialization", {"workers": [{"pid": 1, "exitcode": None}]})
     second = preserve("initialization", {"workers": [{"pid": 2, "exitcode": 1}]})
-    written = sorted((tmp_path / "diagnoses").iterdir())
-    assert len(written) == 2 and str(written[0]) in first and str(written[1]) in second
-    assert json.loads(written[0].read_text())["workers"][0]["pid"] == 1
+
+    written = list((tmp_path / "diagnoses").iterdir())
+    assert len(written) == 2                      # two names, so neither overwrote the other
+    # Not by sort order: the names carry a random suffix and a timestamp only to the second,
+    # so two writes in one second have no defined order. Each file is found by its contents.
+    by_pid = {json.loads(path.read_text())["workers"][0]["pid"]: path for path in written}
+    assert set(by_pid) == {1, 2}
+    assert str(by_pid[1]) in first and str(by_pid[2]) in second
 
 
 def test_a_diagnosis_that_cannot_be_written_does_not_replace_the_failure_it_explains(tmp_path: Path, monkeypatch) -> None:
