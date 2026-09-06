@@ -15,6 +15,8 @@ Git behaviour recorded here was measured on **git 2.54.0, darwin 25.1.0, 2026-09
 - The canonicalised absolute Git common directory (`git rev-parse --path-format=absolute --git-common-dir`, then `realpath`) is a **locator, not an identity**. It answers "which checkouts are the same repository right now"; it does not survive a move, and it is reused by whatever is put at that path next. Identity is the persisted row; the locator is one mutable attribute of it.
 - **Measured:** the main worktree and a linked worktree agree on the common directory and disagree on both `--show-toplevel` and `--absolute-git-dir`. **Measured, and new:** raw `--git-common-dir` returns `.git` from the main worktree and an absolute path from the linked one, so comparing its raw output equates nothing. `--path-format=absolute` is mandatory, and `realpath` on top of it, because a canonical string is the whole mechanism.
 - Identity is carried by a **checkout token**: opaque random bytes written once to `<common-dir>/nexus/checkout-token`, with `(repository_id, token)` persisted in the database. The token is a registration, not an observation. **History is never consulted for identity** — see [why the first design was withdrawn](#why-history-derived-identity-was-withdrawn).
+- **Registration is safe under concurrency and interruption.** Two processes can encounter an absent token at the same moment. The token is *published*, never written in place: the complete token is written to a private temporary file inside `<common-dir>/nexus/`, flushed, and then hard-linked to `checkout-token`. **Measured:** `link(2)` refuses an existing target, so the first publisher wins and the loser reads the winner's token; a token at the final path is therefore always complete. Publication is followed by one immediate database transaction that inserts the mapping, or returns the existing mapping when another process registered that token first. Interruption between the two steps leaves a published token with no row, which the next launch recovers by adoption. A token that is present but invalid — not 64 lowercase hex characters, truncated, or otherwise malformed — is a clear `repository_registration_failed` naming the token as the cause; it is neither replaced nor silently followed by a fresh identity. Removing it is the operator's decision.
+- **Cardinality.** Within a scope, one token maps to exactly one `repository_id`. Deliberate clone association with `--repo-id` adds a second token mapping to the same `repository_id`, so several tokens may map to one identity, but a token never maps to two.
 - **Registration writes local metadata.** It creates a file inside the shared Git directory. **Measured:** every worktree of a repository reads the same token, including a linked worktree on an orphan branch with an unborn `HEAD`; `git clone` does **not** carry it, so a clone registers as a new identity by default; `cp -R` of the checkout **does** carry it, so a filesystem copy or a restored backup claims the original's identity until its token is deleted. That is the documented limit, and deleting the token in the copy re-registers it as new.
 
 Binding rules:
@@ -24,7 +26,11 @@ Binding rules:
 | Token present, row exists | Bind that `repository_id`, updating the stored locator if the checkout moved |
 | Token present, no row in *this* database | Adopt: mint a `repository_id` for that token here. Databases hold independent opinions about the same checkout |
 | Token absent | Register: mint a `repository_id` and write the token |
-| Shared Git directory not writable | Refuse to start with `repository_registration_failed`, naming no path |
+| Token present and readable, Git directory not writable | Bind normally. Binding requires no write to the Git directory; the locator update is a database write |
+| Token absent, required metadata write cannot happen | Refuse to start with `repository_registration_failed`, naming no path |
+| Token present but invalid or truncated | Refuse to start with `repository_registration_failed` naming the token as the cause; no identity is minted and the token is left in place |
+| Two processes find the token absent at once | One token is published; both bind the same `repository_id` |
+| Token published, process interrupted before the row was written | Adopt on the next launch, exactly as a token present with no row |
 | `--repo-id <id>` supplied, token maps elsewhere | Refuse with `repository_mismatch` |
 | Additional clone | A distinct identity, because a clone has no token. `--repo-id` associates it deliberately, with the consequence that evidence recorded under one checkout is thereafter presented as belonging to the same repository |
 
@@ -42,14 +48,15 @@ So: a `repository_id` distinguishes and labels evidence; it does **not** partiti
 
 ### Why history-derived identity was withdrawn
 
-The first draft derived a discriminator from the root commit of `HEAD`'s first-parent history. **Measured on git 2.54.0, both cases rejecting a legitimate repository:**
+The first draft derived a discriminator from the root commit of `HEAD`'s first-parent history. **Measured on git 2.54.0, three cases rejecting a legitimate repository.** The two orphan cases are separate failures: the review's probe committed on the orphan branch and got a different root; the second probe left `HEAD` unborn and got no root at all.
 
 | Operation | Unchanged | Discriminator |
 | --- | --- | --- |
-| Linked worktree added on an orphan branch | Shared common directory | **Uncomputable** — `rev-list` on an unborn `HEAD` fails outright, so the check cannot even run |
+| Linked worktree added on an orphan branch, with a commit of its own | Shared common directory | **Changed** — a different root commit (`8ee056c…` on the main worktree, `ba13e6a…` on the orphan one) |
+| Linked worktree added on an orphan branch, `HEAD` still unborn | Shared common directory | **Uncomputable** — `rev-list` on an unborn `HEAD` fails outright, so the check cannot even run |
 | Shallow clone deepened by one commit | Common directory **and `HEAD`** (`d1c062a…` before and after) | **Changed** — `d1c062a…` to `2615b49…` |
 
-Both would have produced `repository_mismatch` with no repository replaced. Git gives each worktree its own `HEAD` by design, and history depth is a fetch decision, so neither is a defect in the reproduction — they are what the design asked for. Branch history is not identity, and a token that is written rather than inferred cannot make this class of mistake.
+All three would have produced `repository_mismatch` with no repository replaced. Git gives each worktree its own `HEAD` by design, and history depth is a fetch decision, so neither is a defect in the reproduction — they are what the design asked for. Branch history is not identity, and a token that is written rather than inferred cannot make this class of mistake.
 
 ## 2. Reference values
 
@@ -58,7 +65,7 @@ Both would have produced `repository_mismatch` with no repository replaced. Git 
 | Field | Meaning | Rule |
 | --- | --- | --- |
 | `path` | Repository-relative path | Required. Validated in the application before git is invoked |
-| `commit` | Commit spec: a 40-hex OID or a ref name | Optional. Absent means the bound repository's `HEAD` |
+| `commit` | Commit spec: an OID in the bound repository's object format — 40 hex for `sha1`, 64 for `sha256` — or a ref name | Optional. Absent means the bound repository's `HEAD` |
 
 - At most **8** references per revision. Normalised by `(commit, path)`, deduplicated, sorted. `revise` replaces the whole set; omitting it resets to empty, exactly like `tags`.
 - **All or none.** If any reference in a request fails to verify, the whole write is refused. A revision never carries a partially checked set.
@@ -122,7 +129,7 @@ And, as plainly, what it does **not** establish:
 
 - **Not the working tree.** The checkout on disk is never consulted. A dirty, stale or absent working file changes no evidence, and evidence implies nothing about what is on disk now.
 - **Not currency.** Unchanged bytes do not mean the advice still holds. **Measured:** a commit from another branch resolved with `rev-parse --verify` while `merge-base --is-ancestor` reported it was **not necessarily an ancestor of `HEAD`**. That is the exact claim, and it is not the same as unreachable: `HEAD` moves, other refs may reach the commit, and ancestry between two fixed commits is a different question from ancestry relative to a moving ref. Resolvable implies neither, and neither implies current.
-- **Not continuing.** Evidence is an observation, not a property. A commit can later be garbage-collected or rewritten; that a re-check would now fail does not retract what was recorded. Ancestry is deliberately not recorded, because it is mutable and would therefore be evidence about the repository's present state rather than about the commit.
+- **Not continuing.** Evidence is an observation, not a property. A commit can later be garbage-collected or rewritten; that a re-check would now fail does not retract what was recorded. Reachability is deliberately not recorded. Reachability relative to a moving ref such as `HEAD` changes as the ref moves; the parent relationships between two fixed commit objects do not. A recorded reachability claim would be evidence about the repository's present state rather than about the commit.
 - **Not authority.** A verified reference does not make the memory more trustworthy, and stored content remains data, never instructions.
 
 ## 5. Unsupported reference types
@@ -166,14 +173,14 @@ Frozen with this contract, over temporary Git repositories created by the tests:
 1. **Distinct repository identities.** Two clones of the same source, identical trees and commit OIDs, bound separately: distinct `repository_id`s, no automatic association from a shared remote URL or shared commits, and evidence labelled with the identity that recorded it. **Invisibility is asserted with different scopes, never with different bindings** — within one scope the repository is not an isolation boundary, and a test claiming otherwise would encode a promise this contract does not make.
 2. **Worktree association.** A main worktree and a linked worktree map to one `repository_id`, exercising the measured relative-versus-absolute `--git-common-dir` hazard rather than assuming it away.
 3. **Changing refs, and resolution per distinct spec.** A reference given a branch name records the resolved OID; moving the branch afterwards changes no stored evidence, and re-verification against the recorded OID still passes. Resolution counts are asserted, not inferred: a request whose references name one spec — including a mix of omitted and literal `HEAD` — resolves **once**; a request naming three distinct specs resolves **three times**, and references sharing a spec share its OID.
-4. **Registered identity.** A worktree on an orphan branch with an unborn `HEAD` binds to its repository's identity; deepening a shallow clone changes nothing; a moved checkout keeps its identity because the token moved with it; a fresh `git clone` is a new identity; a `cp -R` copy claims the original's identity, asserted as the documented limit rather than left to be discovered. A read-only Git directory gives `repository_registration_failed`, and `--repo-id` against a token that maps elsewhere gives `repository_mismatch`.
+4. **Registered identity.** A worktree on an orphan branch — both with a commit of its own and with an unborn `HEAD` — binds to its repository's identity; deepening a shallow clone changes nothing; a moved checkout keeps its identity because the token moved with it; a fresh `git clone` is a new identity; a `cp -R` copy claims the original's identity, asserted as the documented limit rather than left to be discovered. Registration under concurrency and interruption: two processes that find the token absent together end up with one token on disk and one `repository_id` between them; a token published without a row is adopted on the next launch; a leftover temporary file from an interrupted publication is harmless; an invalid or truncated token gives `repository_registration_failed`, mints no identity and is not replaced. A read-only Git directory gives `repository_registration_failed` only when the token is absent; an existing readable token binds without write permission. `--repo-id` against a token that maps elsewhere gives `repository_mismatch`.
 5. **Object format.** A SHA-256 repository records 64-hex OIDs end to end; a 40-hex assumption anywhere in the path fails the test.
 6. **Dirty working tree.** Modify, delete and add files on disk without committing: evidence is unchanged, because the working tree is never consulted.
 7. **Missing objects.** An unknown commit OID gives `commit_not_found`; a path absent from a real commit gives `path_not_in_commit` — and the test asserts the absence is detected from empty output, since the measured exit status is 0.
 8. **Unsafe paths.** Absolute, `..` traversal, leading and trailing slash, empty segment, NUL: each refused in the application, and the surfaced error asserted to contain no on-disk path and no git text.
 9. **Unsupported types.** Symlink, gitlink and directory each give `unsupported_reference_type`, distinguishable from not-found.
 10. **One literal entry.** A directory path whose prefix matches a file is refused on byte-equality, not accepted because output was non-empty; a path containing pathspec-magic or wildcard characters matches only a file of exactly that name; a `refs/replace/` ref pointing a bound commit at another commit does **not** change the recorded object OID.
-11. **Concurrent double resolution.** Two writers under one key, racing across independent connections with `HEAD` moving between them, commit exactly one revision and one evidence record; the loser replays the winner's receipt, and no evidence from the losing verification is stored.
+11. **Concurrent double resolution, and the lock boundary.** Two writers under one key, racing across independent connections with `HEAD` moving between them, commit exactly one revision and one evidence record; the loser replays the winner's receipt, and no evidence from the losing verification is stored. Those final-state assertions do not by themselves show that verification ran outside the transaction, so the lock boundary is checked directly: while one write's verification is paused, an independent reference-free write on another connection completes; the paused write then commits normally. A verifier running inside the write transaction would hold the paused write's lock and the independent write would time out.
 12. **Migration and retry.** Replay a receipt written before migration `004`; assert a reference-free request still produces the pinned version-1 digest by byte equality; same key plus a new reference conflicts; and a retry returns the original receipt and original evidence with a verifier that **raises if called at all**, after `HEAD` has moved and with the object unavailable.
 13. **Verification unavailable.** Launched without `--repo` and with `git` absent: the server starts, reference-carrying writes are refused with `verification_unavailable`, plain writes still succeed, and `status` reports the mode.
 14. **Restart without git.** Write references with a working verifier, restart with git unavailable: bindings and evidence are still readable through `get` and `search`, receipts still replay, and a `forget`-then-replay returns the original receipt while `get` refuses.
@@ -181,7 +188,7 @@ Frozen with this contract, over temporary Git repositories created by the tests:
 
 **Negative controls, wired from the first test** — as with retrieval, a suite that cannot fail measures nothing:
 
-A blanket "approve everything and watch it all fail" control was **withdrawn as invalid**: unsafe paths are rejected by application validation *before* the verifier runs, and the worktree and dirty-tree cases are supposed to succeed, so a stub that approves everything would leave several tests legitimately green and the control would prove nothing. Each mutation instead disables exactly one invariant and must fail exactly the test that protects it:
+A blanket "approve everything and watch it all fail" control was **withdrawn as invalid**: unsafe paths are rejected by application validation *before* the verifier runs, and the worktree and dirty-tree cases are supposed to succeed, so a stub that approves everything would leave several tests legitimately green and the control would prove nothing. Each mutation instead disables exactly one invariant and must fail **at least** the test that protects it:
 
 | Mutation | Must fail |
 | --- | --- |
@@ -194,7 +201,7 @@ A blanket "approve everything and watch it all fail" control was **withdrawn as 
 | Re-resolve a spec per reference | Changing refs (3) |
 | Verify inside the write transaction instead of before it | Concurrent double resolution (11) |
 
-A mutation that fails *nothing* means the invariant is unguarded; a mutation that fails *everything* means the tests are coupled and are not isolating what they claim to.
+Several tests failing under one mutation is legitimate when they share the invariant, and is recorded rather than treated as a defect. A mutation that fails *nothing* is not yet proof that the invariant is unguarded: it is first checked for equivalence — the mutated code behaves identically on every input the suite exercises — and for execution coverage — the mutated line was never reached. Only a live, reached mutation that no test catches means the invariant is unguarded. **Measured, and it changes test 10:** from inside `sub/` without `--full-tree`, `ls-tree HEAD -- file.txt` returned the name `file.txt` with the blob OID of `sub/file.txt`, so the returned pathname is byte-equal to the request and byte-equality cannot detect a dropped `--full-tree`. Test 10 therefore asserts the recorded `object_oid` against `hash-object` of the intended file, and the `--full-tree` mutation is caught by that assertion, not by the pathname rule.
 
 ## Measured git behaviour
 
@@ -221,6 +228,9 @@ git merge-base --is-ancestor <commit> HEAD              # ancestry relative to a
 | A `refs/replace/` ref made `ls-tree` report a tampered blob OID for an unchanged commit id; `--no-replace-objects` reported the true one | Every invocation carries `--no-replace-objects` |
 | git 2.54.0 accepts `--no-replace-objects --no-lazy-fetch --literal-pathspecs` together | A partial clone would otherwise fetch lazily on read, so local-only needs the flag, not a promise |
 | A worktree on an orphan branch shares the common directory; `rev-list` on its unborn `HEAD` fails | History cannot be identity — a legitimate worktree could not even be checked |
+| A worktree on an orphan branch with a commit shares the common directory and has a different root commit | The same conclusion by a separate failure: history that *can* be computed is still not identity |
+| From `sub/` without `--full-tree`, `-- file.txt` returned the name `file.txt` with `sub/file.txt`'s blob OID | Byte-equal pathname cannot detect the missing flag; test 10 asserts the object OID |
+| `link(2)` refuses to overwrite an existing target | Token publication is temp-file-then-link, so a published token is complete and a winner is never overwritten |
 | Deepening a shallow clone left `HEAD` at `d1c062a…` and moved the root commit to `2615b49…` | Identity is registered, not observed |
 | Every worktree reads one `<common-dir>/nexus/checkout-token`; `git clone` does not carry it; `cp -R` does | Worktrees associate for free, clones are new by default, filesystem copies are the documented limit |
 | `git init --object-format=sha256` gives 64-character commit and blob OIDs | Record the object format at bind; validate 40 or 64 hex against it |
@@ -264,6 +274,15 @@ The project `.venv` links SQLite 3.50.4 and cannot run the suite — every stora
 8. **The blanket negative control is withdrawn as invalid** — path validation precedes the verifier and several cases are meant to succeed — and replaced by a table of targeted mutations, each required to fail one named test.
 9. **Object format is recorded** rather than assumed: `sha1` or `sha256`, with OID width validated against it. A SHA-256 repository's 64-hex OIDs were measured.
 10. **Reachability wording corrected** to *not necessarily an ancestor of `HEAD`*, which is a claim about a moving ref and not a claim of unreachability.
+
+**2026-09-06, third review, before implementation.**
+
+11. **Token registration is specified under concurrency and interruption.** Publication is temp-file-then-link, so one complete token wins and is never overwritten; the mapping is inserted in one immediate transaction that returns the existing mapping when another process registered first; a published token with no row is recovered by adoption; an invalid or truncated token is a clear `repository_registration_failed` that mints nothing and replaces nothing. Cardinality is explicit: one token, one `repository_id` within a scope; deliberate association may map several tokens to one identity. Folded into acceptance test 4.
+12. **The read-only rule is narrowed.** Registration fails only when a required metadata write cannot happen. An existing readable token binds without write permission on the Git directory; the earlier table and test 4 rejected that case unnecessarily.
+13. **Mutation criteria corrected.** A mutation must fail at least its designated test, not exactly one; shared failures can reflect a shared invariant. A surviving mutation is investigated for equivalence and execution coverage before an invariant is declared unguarded.
+14. **The lock boundary is tested directly.** Test 11's final-state assertions cannot establish where verification ran; a paused verification during which an independent reference-free write completes can.
+15. **Textual corrections.** The reference table no longer fixes a 40-hex OID; §4 states the reachability-versus-parentage distinction instead of calling ancestry mutable; both orphan-branch probes are preserved as separate failures of the withdrawn discriminator, one with a committed orphan branch and a different root, one with an unborn `HEAD` and no root at all.
+16. **Measured while recording this amendment:** the committed orphan branch's root (`ba13e6a…` against `8ee056c…`, common directory shared); `ls-tree` from a subdirectory without `--full-tree` reporting a byte-equal name for the wrong blob, which moves test 10's `--full-tree` guard onto the object OID; and `link(2)` refusing an existing target, which is what makes publication safe.
 
 ## Explicitly out of scope
 
