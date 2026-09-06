@@ -97,9 +97,56 @@ Narrow on purpose.
 | T1 morphology, T2 historical vocabulary | Recover the **predeclared missing candidates** while preserving exact identifier and path checks. Per-query recall losses are reported, not netted out. |
 | T0 abstention, T3 selection | **At least 50% fewer grade-0 context bytes**, with no reduction in grade-2 recall or task coverage on the development set. Useful grade-1-only evidence is preserved. |
 
+## T1-C — performance confirmation (registered 2026-09-06)
+
+**A prospective measurement amendment, not a fourth tokenizer configuration.** It does not consume a slot from the three-variant configuration-search budget: no new configuration is proposed, and nothing about `stem` or `exact` changes. It re-measures two profiles already registered, under a corrected harness and a schedule designed to test order sensitivity directly.
+
+### Why it exists
+
+`stem` exceeded the registered retrieval gate at 1,000 memories in forward order:
+
+| Order | `stem` p95 | `exact` p95 | Ratio | Against ≤1.5× |
+| --- | ---: | ---: | ---: | --- |
+| Forward | 25.9749 ms | 13.9946 ms | **1.8561×** | **fail** |
+| Reversed | 16.0233 ms | 17.9944 ms | 0.8905× | pass |
+
+This charter says that **exceeding a gate prevents promotion**. `stem` was nonetheless promoted on 2026-09-06 by selecting the 10,000-memory result and treating the 1,000-memory disagreement as run position. That **changes the rule rather than satisfying it**, and the promotion is withdrawn.
+
+What the disagreement between orders licenses is an investigation into measurement instability. **It does not establish that run position explains the failure** — that is a hypothesis, and T1-C is the measurement that tests it.
+
+### Harness defect fixed first
+
+The two T1 harnesses enforced **different delivery budgets**, so they timed and gated different paths:
+
+- The **quality** harness counted `len(content) + len(serialized provenance)` against the 8,192-byte budget.
+- The **performance** harness counted **body bytes only**.
+
+Different byte accounting yields a different number of delivered items, hence a different number of `get()` calls inside the timed region. The measurement therefore did not time the path the gate governs.
+
+The fix is a **single label-free, budgeted retrieval function shared by both harnesses**, with provenance counted in both. Diagnostics (the over-budget probe that separates "never a candidate" from "cut off by the pool limit") and relevance scoring stay **outside** the timed section and outside the shared function. **This discrepancy does not establish the cause of the timing swing**; it is fixed because measuring the wrong path invalidates the measurement either way.
+
+### The decision rule — registered before the run
+
+1. **Profiles: `exact` and unchanged `stem` only.** No third profile. `dual` and `split` are already rejected on 10,000-memory figures that are stable across orders; neither needs another run to resolve this decision.
+2. **Both fixture sizes retained** — 1,000 and 10,000 — with workload generation, seed, interpreter, durability settings and fixture construction unchanged from T1.
+3. **Application and harness revisions are pinned** in the result record.
+4. **Six paired blocks per fixture: three `exact→stem` and three `stem→exact`, interleaved** in the schedule rather than run as two consecutive runs. Each pair uses **identical queries**: 50 warm-up queries followed by 200 measured queries per profile, from equivalently prepared database copies.
+5. **Retrieval only.** Writes are excluded from this experiment; the write gate is not under review here.
+6. **Decision rule:** within each order, take **each profile's worst block p95**. `stem` passes only if it is **≤50 ms and ≤1.5× `exact` in both orders at both fixture sizes** — four ratios, all of which must hold. Individual query durations and per-block results are retained.
+7. **The complete schedule runs once.** No early stopping, no dropping blocks, no additional retries until a pass appears. The first complete run is the result.
+
+### Outcome binding
+
+- **If `stem` clears the rule**, it is promoted on the new evidence, and T2's baseline is pinned `stem`.
+- **If it does not**, `exact` is T2's baseline, and T3's fallback is amended to `exact` accordingly.
+
+Either way, **the original failure and both original records are preserved**. T1-C adds evidence; it does not replace `results-dev-t1-perf.json` or `results-dev-t1-perf-reversed.json`, and it does not edit the numbers already reported.
+
 ## T2 and T3 — authorisation (2026-09-06)
 
-`stem` is accepted as the **development baseline** and T1 is closed. T2 and T3 are authorised to run under the limits below. The limits apply to both stages; the differences between the stages are the fusion-input limit (T2 only), the baselines, and the success contracts.
+**T2 and T3 scope and budgets are authorised. Their runs wait on one thing: the T1 baseline decision.**
+
+`stem` is **not** the development baseline. Its promotion was withdrawn on 2026-09-06 — see [T1-C](#t1-c--performance-confirmation-registered-2026-09-06). Until T1-C resolves, `exact` is the standing baseline and the shipped default. The limits below apply to both stages regardless of which profile the baseline turns out to be; the differences between the stages are the fusion-input limit (T2 only), the baselines, and the success contracts.
 
 ### Budgets — identical for T2 and T3
 
@@ -128,8 +175,10 @@ A T2 variant may take **at most 40 raw index hits in total**. For a two-channel 
 
 | Stage | Baseline |
 | --- | --- |
-| T2 | Pinned `stem`, with the existing selection policy unchanged |
-| T3 | The pinned T2 winner, or **`stem` if no T2 variant passes** |
+| T2 | **Pending the T1-C outcome.** Pinned `stem` with the existing selection policy unchanged **if `stem` clears T1-C**; otherwise pinned `exact`. |
+| T3 | The pinned T2 winner; if no T2 variant passes, **whichever profile T1-C left as the T2 baseline** — `stem` if it cleared, `exact` if it did not. |
+
+Neither baseline may be pinned before T1-C reports. A T2 variant measured against an unpinned baseline is not a result.
 
 T3 **freezes candidate generation.** Selection may choose which five candidate histories to expand; it may not change what becomes a candidate. A T3 variant that alters candidate generation is a different experiment and voids the comparison.
 
@@ -199,14 +248,14 @@ Every configuration considered gets a row **before** it is run, and the budget i
 
 The configuration-search budget is **baseline plus at most three predeclared variants per experiment**. A row with no configuration named has not been authorised to run.
 
-### T1 — morphology (complete)
+### T1 — morphology (quality complete; performance qualification pending)
 
 Index profile is the only thing that varies. Every variant is run against the same development corpus, the same queries and the same budgets as the baseline.
 
 | # | Profile | Configuration | What it changes | Registered on | Outcome |
 | --- | --- | --- | --- | --- | --- |
 | B | `exact` | Current build: one FTS5 index, default `unicode61`, no stemming | *(nothing — the paired baseline)* | 2026-09-06 | Baseline. Morphology candidate recall 0.714. |
-| 1 | `stem` | One FTS5 index, `porter unicode61`, applied to the whole body | Tokenizer for every token, prose and code alike | 2026-09-06 | **Promoted.** Recall 1.000; retrieval 1.02–1.04x at 10,000, storage 0.99x. **Recorded failure: 1.86x at 1,000 in forward order** (0.89x reversed), judged to be run position rather than profile. Costs identifier-query precision. |
+| 1 | `stem` | One FTS5 index, `porter unicode61`, applied to the whole body | Tokenizer for every token, prose and code alike | 2026-09-06 | **Not promoted — quality passed, performance qualification pending.** Recall 1.000; retrieval 1.02–1.04x at 10,000, storage 0.99x. **Gate failure: 1.8561x at 1,000 in forward order** (0.8905x reversed). Promotion recorded 2026-09-06 and **withdrawn the same day**; see [T1-C](#t1-c--performance-confirmation-registered-2026-09-06). Costs identifier-query precision. |
 | 2 | `dual` | Two indexes over the same bodies — exact and porter — matched disjunctively, ranked best-of | Adds a second index; exact matching preserved by construction | 2026-09-06 | Not promoted. Recall 1.000, storage 1.26x, but retrieval p95 **8.6–8.9x** baseline at 10,000 memories — and already over the 1.5x ratio gate at 1,000 in both orders (1.74x / 1.63x). |
 | 3 | `split` | Exact index over everything, porter index over **prose tokens only**; code-shaped tokens are routed to the exact index on both the index and the query side | As `dual`, but stemming never sees identifiers, paths or symbols | 2026-09-06 | Not promoted. Recall 1.000 **and** the only variant preserving identifier-query precision, but retrieval p95 **7.9–9.2x** at 10,000 and storage **2.27x**. At 1,000 it measured 2.04x forward and 0.99x reversed. |
 

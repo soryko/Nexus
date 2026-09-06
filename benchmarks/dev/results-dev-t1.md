@@ -2,6 +2,14 @@
 
 Development data. **Nothing here is a v2 evaluation result.** The final section reports a regression check against v2, and says plainly what that check can and cannot mean.
 
+> **Status, amended 2026-09-06: `stem` is NOT promoted.**
+>
+> `stem` is **quality passed; performance qualification pending.** An earlier revision of this report recorded it as promoted. That acceptance rested on an incomplete summary and has been withdrawn.
+>
+> `stem` exceeded the registered retrieval gate at 1,000 memories in forward order — 25.9749 / 13.9946 = **1.8561×**, against a **≤1.5×** limit — and passed reversed at 0.8905×. The registered charter says exceeding a gate prevents promotion. **The disagreement between orders supports investigating measurement instability; it does not establish that run position explains the failure**, and selecting the 10,000-memory result after the fact would change the rule rather than satisfy it.
+>
+> A bounded performance confirmation is registered in [t1c-predeclaration.md](t1c-predeclaration.md) and reported in [results-dev-t1c.md](results-dev-t1c.md). Until it resolves, `exact` remains both the shipped default and the standing baseline. **Every number below stands as recorded**; nothing in the original measurement is withdrawn or replaced.
+
 | | |
 | --- | --- |
 | Registered in | [v2-development-queries.md](../eval/v2-development-queries.md) — budgets, gates and the three variants, all recorded before the first run |
@@ -121,17 +129,23 @@ All figures sit between 1.514 and 3.640 ms across every profile, size and order.
 
 | Profile | Quality gate | Retrieval @10k | Retrieval @1k | Writes | Storage | Verdict |
 | --- | --- | --- | --- | --- | --- | --- |
-| stem | pass | pass (1.04× / 1.02×) | **fail forward (1.86×)**, pass reversed | pass | pass | **promoted** |
+| stem | pass | pass (1.04× / 1.02×) | **fail forward (1.8561×)**, pass reversed (0.8905×) | pass | pass | **not promoted — quality passed, performance qualification pending** |
 | dual | pass | fail (8.88× / 8.65×) | fail both (1.74× / 1.63×) | pass | pass | not promoted |
 | split | pass | fail (7.93× / 9.18×) | fail forward (2.04×), pass reversed | pass | fail | not promoted |
 
-`stem` is the one configuration carried forward. Exceeding a gate does not delete a result: `dual` and `split` stay in the registration table with their numbers, and `stem`'s own 1,000-memory forward failure stays in this table rather than being summarised away. The promotion is a judgment that the 1,000-memory ratios measure run position — argued above, and open to disagreement — not a claim that `stem` cleared every measurement taken.
+No configuration is promoted by this experiment. `stem` is the only candidate still open, on quality: it recovered every predeclared morphological miss with no per-query recall loss. **Its performance qualification is pending** — it exceeded the registered ratio gate at 1,000 memories in forward order, and the charter's own rule is that exceeding a gate prevents promotion.
 
-Promoting `stem` **accepts a measured cost**: identifier queries widen (dq09 3→5, dq10 7→11) and grade-0 delivered bytes rise 24%. `split` was the variant that avoided the first of those, and it is not viable as built: its two-index union is where the eight-fold slowdown appears, and its standalone prose index is what busts the storage gate. A profile with `split`'s selectivity and one index — selective stemming inside a single tokenizer rather than a second table — would be a **new registered configuration**, not a rerun of this one.
+An earlier revision of this report promoted `stem` on the reasoning that the 1,000-memory ratios measure run position rather than profile. That reasoning is retained above as the hypothesis it is. **It is not evidence, and it was not a sufficient basis for promotion.** Resolving it requires a measurement designed to test order sensitivity directly, which is what [T1-C](t1c-predeclaration.md) does.
+
+Exceeding a gate does not delete a result: `dual` and `split` stay in the registration table with their numbers, and `stem`'s 1,000-memory forward failure stays in the table above rather than being summarised away.
+
+Were `stem` to be promoted on the strength of a later confirmation, it would **accept a measured cost**: identifier queries widen (dq09 3→5, dq10 7→11) and grade-0 delivered bytes rise 24%. `split` was the variant that avoided the first of those, and it is not viable as built: its two-index union is where the eight-fold slowdown appears, and its standalone prose index is what busts the storage gate. A profile with `split`'s selectivity and one index — selective stemming inside a single tokenizer rather than a second table — would be a **new registered configuration**, not a rerun of this one.
 
 ## v2 regression check — what it is and is not
 
-`stem`, unchanged, run through the frozen v2 protocol. **This is not a fresh evaluation of v2.** The configuration was chosen on development data with v2's failure modes already known; the run says whether a known failure moved. The two figures below must never be presented side by side as an improvement measurement.
+`stem`, unchanged, run through the frozen v2 protocol. **This is not a fresh evaluation of v2.** The configuration was chosen on development data with v2's failure modes already known; the run says whether a known failure moved.
+
+**This run predates the withdrawal of `stem`'s promotion and is retained exactly as recorded.** It is a regression check on a candidate profile, not on a promoted one. Nothing here changes because the promotion was withdrawn — and nothing here counts toward reinstating it, since a v2 regression check says nothing about the retrieval gate that `stem` failed. The two figures below must never be presented side by side as an improvement measurement.
 
 | | exact (frozen) | stem (regression) |
 | --- | --- | --- |
