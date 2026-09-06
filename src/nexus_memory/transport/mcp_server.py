@@ -350,10 +350,22 @@ def create_server(service: MemoryService) -> MCPServer:
         # repository is declared str, not a Literal: B2b §8 makes an unrecognised value
         # invalid_reference from the domain, and a Literal would turn it into a schema-level
         # invalid_input instead. It still names no repository — two constants, no identifier.
+        #
+        # The other three carry no size constraint here for that same reason, and it is the
+        # same mistake made twice: §8 assigns "more than 32 values" and "path is too long"
+        # to invalid_reference, and a schema max_length returns invalid_input before the
+        # domain is ever reached. The limits are unchanged and still enforced — 32 by
+        # _normalized_reference_filter, 1024 by validate_reference_path — which is also the
+        # stricter reading: the domain bounds a path at 1024 *bytes*, where the schema
+        # bounded reference_path_prefix at 1024 *characters* and so admitted multi-byte
+        # values the domain rejects. Both limits are stated in the description instead, so
+        # a client still learns them from the schema.
         repository: str | None = Field(default=None, description='"any" or "bound"; names no repository'),
-        reference_paths: tuple[str, ...] | None = Field(default=None, max_length=MAX_REFERENCE_FILTER_VALUES),
-        reference_path_prefix: str | None = Field(default=None, max_length=1024),
-        reference_commits: tuple[str, ...] | None = Field(default=None, max_length=MAX_REFERENCE_FILTER_VALUES),
+        reference_paths: tuple[str, ...] | None = Field(
+            default=None, description=f"at most {MAX_REFERENCE_FILTER_VALUES} paths, each at most 1024 bytes"),
+        reference_path_prefix: str | None = Field(default=None, description="at most 1024 bytes"),
+        reference_commits: tuple[str, ...] | None = Field(
+            default=None, description=f"at most {MAX_REFERENCE_FILTER_VALUES} object ids"),
     ) -> SearchOutput:
         return _run(
             lambda: service.search(

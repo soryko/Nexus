@@ -322,7 +322,10 @@ Raised on review of the document at `a2cf1cc`, again before any implementation e
 
 Measured against the implementation at `8563758` with
 [`tools/measure_reference_filters.py`](../../tools/measure_reference_filters.py); the raw
-output is [`docs/measurements/b2b-reference-filter-plans.txt`](../measurements/b2b-reference-filter-plans.txt).
+output is [`docs/measurements/b2b-reference-filter-plans-as-run.txt`](../measurements/b2b-reference-filter-plans-as-run.txt).
+**Four of the measurements below are withdrawn or restated by amendment 5; the decision they
+support is unchanged.** Read that amendment before citing any latency, storage or write figure
+from this one.
 Corpus: 20,000 memories, 40,000 reference rows, three `repository_id`s, one scope, on
 CPython 3.13.15 with SQLite 3.53.4 — the B2a development environment. Query work is VDBE
 steps counted through `set_progress_handler`, which is a counter rather than an estimate;
@@ -398,3 +401,99 @@ it predates this slice, it changes ordering behaviour for queries B2b does not o
 adopting it means deciding when statistics are collected and refreshed. It belongs to its
 own slice with its own measurements, and is written down here only so the observation is not
 lost with the harness that produced it.
+
+### 5 — 2026-09-06, four measurement corrections and one contract defect; the decision stands
+
+Amendment 4's conclusion is unchanged and its central evidence survives: no filter shape
+full-scans `revision_references`, no candidate index was chosen by the planner in any arm,
+and no candidate reduced measured query work. Migration `005` stays unwritten. What follows
+corrects how four of its supporting numbers were produced, and fixes one defect in the
+shipped MCP surface. The original output is retained verbatim at
+[`b2b-reference-filter-plans-as-run.txt`](../measurements/b2b-reference-filter-plans-as-run.txt)
+with its defects listed at the head; the re-measured record is
+[`b2b-reference-filter-plans-corrected.txt`](../measurements/b2b-reference-filter-plans-corrected.txt).
+
+**1 — Oversized MCP arguments returned the wrong error code.** §8 assigns "more than 32
+values" and "path is too long" to `invalid_reference`. They returned `invalid_input`,
+because the limits were declared twice: once in the domain, where §8's code is raised, and
+again as Pydantic `max_length` constraints on the `search` tool, which reject the request at
+the schema boundary before any domain rule runs. Reproduced over real stdio at `03294b5` —
+33 paths, 33 commits and a 1,025-character `reference_path_prefix` each returned
+`invalid_input`. This is the mistake the `repository` argument had already avoided, and for
+the reason written beside it: that field is declared `str` rather than a `Literal` precisely
+so §8's code comes from the domain. The three size constraints are removed from the schema.
+The limits are unchanged — 32 by `_normalized_reference_filter`, 1024 by
+`validate_reference_path` — and are now stated in each field's description so a client still
+learns them. Removing them is also the stricter reading: `validate_reference_path` bounds a
+path at 1024 **bytes**, where the schema bounded `reference_path_prefix` at 1024
+**characters** and so admitted multi-byte values the domain rejects. Test 15 now asserts all
+three oversized shapes, the multi-byte case, and the three at-cap shapes that must still be
+accepted — over the round trip, since the domain called directly always raised the right
+error and only the transport ever showed the defect.
+
+**2 — The `ANALYZE` gain is in a stage the recorded plans never showed.** The harness's
+`plan()` reconstructed a simplified candidate query. It dropped the `blobs` join and omitted
+`_hit_references` entirely, while the `steps` column beside it counted the real
+`search()` including both — so the plans and the step counts in the as-run file describe
+different queries. Measured per stage, the reduction is almost entirely one of them:
+
+| path-exact, per stage | baseline | after `ANALYZE` |
+|---|---:|---:|
+| candidate selection | 361,244 | 364,774 (+1.0%) |
+| evidence loading (`_hit_references`) | 1,719,981 | 3,546 (485×) |
+
+Evidence loading is 1,719,981 steps in **every** baseline shape, filtered or not: it is a
+function of the page size and the corpus, not of the filter. Its plan is what moves —
+`SEARCH revision_references … (namespace=? AND actor=?)`, a range scan of the whole scope
+partition, becomes a `MULTI-INDEX OR` of twenty point lookups on the same autoindex. So
+amendment 4's attribution of the gain to "the planner reordering the existing joins to lead
+with `head_index_recent`" names a real but minor effect and misses the dominant one.
+Candidate selection barely moves, and moves the wrong way. The harness now plans and counts
+each executed stage separately; the reconstruction agrees with the instrumented total to
+within about 1%.
+
+**3 — The recorded latencies measured the instrument.** `work_and_latency` left
+`set_progress_handler(count, 1)` — a Python call per VDBE instruction — installed across the
+timing loop. Every `best ms` and `med ms` in the as-run file is inflated by it. A
+counterbalanced check (off, on, on, off; fifteen timings each after a discarded warm-up) put
+the median inflation at **3.8×**; re-measured with the counter removed, path-exact's baseline
+best falls from 120.33 ms to 25.37 ms. The counter is now installed for one execution to
+collect steps, removed, and only then is anything timed. The step counts were never affected
+and are unchanged to the digit.
+
+**4 — The repository index's storage was overstated, and the write-cost ratios are
+withdrawn.** Candidates were created and dropped on one database, and `PRAGMA page_count` is
+a high-water mark that includes the freelist, so each arm was charged the largest arm before
+it. Measured on a fresh baseline copy and confirmed against `dbstat`: `path` 438 pages
+(7.9%) and `commit` 618 (11.2%) were right, but `repository` occupies **279 pages (5.1%)**,
+not the 618 (11.2%) reported — the other 339 were pages the commit arm left behind.
+
+The write-cost figures are withdrawn outright rather than restated. Amendment 4 reported
+12.33×, 8.28× and 1.75× without ever asking what the instrument returns when nothing
+changes. It was asked: the same database, no schema change, the whole measurement repeated,
+moves **1.73× to 2.32×** across identical runs, and the baseline median moved 2.6× between
+sessions. Re-measured, the three candidates come back at 0.95×, 1.38× and 0.34× — two of
+them below 1.0, which would mean an index makes inserts faster. Nothing here reproduces; the
+1.75× was inside the noise floor from the start. That control now runs first and prints
+before any ratio is taken against it. The microbenchmark is also relabelled: it inserts
+reference rows 2,000 to a transaction with `foreign_keys=OFF` and no service call, so it
+measures index maintenance on a row insert — a fair question to ask of a candidate index —
+and is **not** the cost of `record` or `revise`, which do far more per call.
+
+**Also corrected, in the prose rather than the instrument.** "Query work is unchanged by
+every candidate" is too strong: under the repository index, repository-bound rises from
+2,247,280 to 2,520,439 steps, **+12.16%**. The supportable claim, and the one the decision
+rests on, is that *no candidate reduced* measured query work. And the recorded `ANALYZE`
+observation should be read with its scope attached — all five shapes are **browse queries
+carrying no text**, so nothing measured describes the FTS branch of `search`, which is a
+different statement with a different plan. Across those five the baseline-to-analyzed ratio
+is **4.23× to 7.48×**, so "every search" in amendment 4's closing note means every browse
+search in this corpus.
+
+**Unchanged: `005` is not written.** Every correction above is to a cost figure or to the
+explanation of a gain that was already recorded as belonging to its own slice. The load-
+bearing findings — no full scan, no candidate chosen, no candidate reducing work — rest on
+step and row counts, which none of these defects touched. **The next performance slice
+should compare bounded evidence loading against statistics-only optimisation**: this
+audit gives that work a specific target, and adopting an automatic `ANALYZE` policy should
+be decided against it rather than before it.

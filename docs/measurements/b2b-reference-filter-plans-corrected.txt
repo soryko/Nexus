@@ -1,0 +1,611 @@
+corpus: 20000 memories, 40000 reference rows, 3 repositories, one scope
+write-cost noise floor (identical runs, no schema change): 0.00529 to 0.01225 ms median, a 2.32x spread. Ratios below smaller than this are not results.
+baseline: 5524 pages, 0.00875 ms median / 0.00293 ms best per reference-row insert (batched microbenchmark, foreign keys off)
+
+--- baseline (existing indexes only) ---
+shape                 rows  hits      steps    select      evid  best ms   med ms  plan
+path_exact              20    20    2080995    361244   1719981    25.37    64.28  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+path_prefix             20    20    2201049    481298   1719981    26.44    42.99  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+commit_exact            20    20    1981157    261406   1719981    19.29    27.03  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=? AND commit_oid=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+repository_bound      6667    20    2247280    527529   1719981    27.65    42.68  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+unfiltered           20000    20    2500218    780467   1719981    24.20    35.39  [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH h USING INDEX sqlite_autoindex_head_index_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+
+candidate path: +438 pages (7.9% of baseline), index occupies 438 pages (7.9%); index-maintenance microbenchmark 0.00835 ms median (0.95x baseline), 0.00561 ms best (1.91x) per reference row -- not a record/revise cost
+
+--- with path index ---
+shape                 rows  hits      steps    select      evid  best ms   med ms  plan
+path_exact              20    20    2081139    361269   1720107    23.26    35.08  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+path_prefix             20    20    2201205    481335   1720107    22.11    33.59  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+commit_exact            20    20    1981297    261427   1720107    20.58    26.71  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=? AND commit_oid=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+repository_bound      6667    20    2247420    527550   1720107    28.30    43.23  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+unfiltered           20000    20    2500344    780474   1720107    23.82    27.70  [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH h USING INDEX sqlite_autoindex_head_index_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+
+candidate commit: +618 pages (11.2% of baseline), index occupies 618 pages (11.2%); index-maintenance microbenchmark 0.01212 ms median (1.38x baseline), 0.00612 ms best (2.09x) per reference row -- not a record/revise cost
+
+--- with commit index ---
+shape                 rows  hits      steps    select      evid  best ms   med ms  plan
+path_exact              20    20    2081135    361265   1720107    20.91    26.07  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+path_prefix             20    20    2201201    481331   1720107    23.82    33.12  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+commit_exact            20    20    1981301    261431   1720107    20.27    28.08  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=? AND commit_oid=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+repository_bound      6667    20    2247420    527550   1720107    28.06    30.39  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+unfiltered           20000    20    2500344    780474   1720107    24.11    35.84  [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH h USING INDEX sqlite_autoindex_head_index_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+
+candidate repository: +279 pages (5.1% of baseline), index occupies 279 pages (5.1%); index-maintenance microbenchmark 0.00297 ms median (0.34x baseline), 0.00254 ms best (0.87x) per reference row -- not a record/revise cost
+
+--- with repository index ---
+shape                 rows  hits      steps    select      evid  best ms   med ms  plan
+path_exact              20    20    2081092    361265   1720064    29.42    34.70  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+path_prefix             20    20    2201158    481331   1720064    27.03    43.92  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+commit_exact            20    20    1981254    261427   1720064    21.93    31.58  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=? AND commit_oid=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+repository_bound      6667    20    2520439    800612   1720064    30.01    33.20  [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH h USING INDEX sqlite_autoindex_head_index_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] SEARCH r EXISTS USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+unfiltered           20000    20    2500301    780474   1720064    22.51    25.61  [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH h USING INDEX sqlite_autoindex_head_index_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+
+--- statistics only: ANALYZE, existing indexes ---
+shape                 rows  hits      steps    select      evid  best ms   med ms  plan
+path_exact              20    20     364742    364774      3546    12.23    16.40  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] MULTI-INDEX OR
+                                                                                 [evidence] INDEX 1
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 2
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 3
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 4
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 5
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 6
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 7
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 8
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 9
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 10
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 11
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 12
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 13
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 14
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 15
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 16
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 17
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 18
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 19
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 20
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] USE TEMP B-TREE FOR ORDER BY
+path_prefix             20    20     484862    484894      3546    12.55    15.65  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] MULTI-INDEX OR
+                                                                                 [evidence] INDEX 1
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 2
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 3
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 4
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 5
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 6
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 7
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 8
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 9
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 10
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 11
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 12
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 13
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 14
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 15
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 16
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 17
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 18
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 19
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 20
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] USE TEMP B-TREE FOR ORDER BY
+commit_exact            20    20     264925    264957      3546    10.22    17.82  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=? AND commit_oid=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] MULTI-INDEX OR
+                                                                                 [evidence] INDEX 1
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 2
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 3
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 4
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 5
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 6
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 7
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 8
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 9
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 10
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 11
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 12
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 13
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 14
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 15
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 16
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 17
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 18
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 19
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 20
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] USE TEMP B-TREE FOR ORDER BY
+repository_bound      6667    20     531022    531054      3546    18.45    23.88  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] MULTI-INDEX OR
+                                                                                 [evidence] INDEX 1
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 2
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 3
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 4
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 5
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 6
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 7
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 8
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 9
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 10
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 11
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 12
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 13
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 14
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 15
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 16
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 17
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 18
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 19
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 20
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] USE TEMP B-TREE FOR ORDER BY
+unfiltered           20000    20     504121    504154      3545    11.59    13.99  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] MULTI-INDEX OR
+                                                                                 [evidence] INDEX 1
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 2
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 3
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 4
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 5
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 6
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 7
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 8
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 9
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 10
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 11
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 12
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 13
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 14
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 15
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 16
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 17
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 18
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 19
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 20
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] USE TEMP B-TREE FOR ORDER BY
+
+--- statistics and all three candidates ---
+shape                 rows  hits      steps    select      evid  best ms   med ms  plan
+path_exact              20    20     666853    665737      5889    19.04    22.09  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] MULTI-INDEX OR
+                                                                                 [evidence] INDEX 1
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 2
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 3
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 4
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 5
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 6
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 7
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 8
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 9
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 10
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 11
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 12
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 13
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 14
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 15
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 16
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 17
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 18
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 19
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 20
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] USE TEMP B-TREE FOR ORDER BY
+path_prefix             20    20     487328    486212      5889    11.66    12.02  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] MULTI-INDEX OR
+                                                                                 [evidence] INDEX 1
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 2
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 3
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 4
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 5
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 6
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 7
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 8
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 9
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 10
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 11
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 12
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 13
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 14
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 15
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 16
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 17
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 18
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 19
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 20
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] USE TEMP B-TREE FOR ORDER BY
+commit_exact            20    20     267337    266221      5889     9.33     9.83  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH r EXISTS USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=? AND commit_oid=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] MULTI-INDEX OR
+                                                                                 [evidence] INDEX 1
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 2
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 3
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 4
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 5
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 6
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 7
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 8
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 9
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 10
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 11
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 12
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 13
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 14
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 15
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 16
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 17
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 18
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 19
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 20
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] USE TEMP B-TREE FOR ORDER BY
+repository_bound      6667    20     853139    852023      5889    23.43    23.99  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] SEARCH r EXISTS USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] MULTI-INDEX OR
+                                                                                 [evidence] INDEX 1
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 2
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 3
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 4
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 5
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 6
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 7
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 8
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 9
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 10
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 11
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 12
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 13
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 14
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 15
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 16
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 17
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 18
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 19
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 20
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] USE TEMP B-TREE FOR ORDER BY
+unfiltered           20000    20     506464    505349      5888    11.75    13.67  [selection] SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+                                                                                 [selection] SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+                                                                                 [selection] SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+                                                                                 [selection] USE TEMP B-TREE FOR ORDER BY
+                                                                                 [evidence] MULTI-INDEX OR
+                                                                                 [evidence] INDEX 1
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 2
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 3
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 4
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 5
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 6
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 7
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 8
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 9
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 10
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 11
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 12
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 13
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 14
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 15
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 16
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 17
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 18
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 19
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] INDEX 20
+                                                                                 [evidence] SEARCH revision_references USING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=? AND memory_id=? AND revision_id=?)
+                                                                                 [evidence] USE TEMP B-TREE FOR ORDER BY

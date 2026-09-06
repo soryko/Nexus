@@ -1,3 +1,27 @@
+SUPERSEDED — retained as the original record behind amendment 4. Do not cite these
+numbers. See b2b-reference-filter-plans-corrected.txt and amendment 5 in
+docs/plans/milestone-b2b.md.
+
+Four defects in the harness that produced this file:
+
+  1. The "plan" column is a reconstruction, not the statements that ran. It omitted the
+     blobs join and left out evidence loading (_hit_references) entirely, while the
+     "steps" column counted the real search including both. The plans and the steps in
+     this file therefore describe different queries.
+  2. Every "best ms" and "med ms" below was measured with set_progress_handler installed,
+     which calls into Python once per VDBE instruction. They are roughly 4x the real
+     latencies and are not comparable to anything.
+  3. Candidate indexes were created and dropped on one database, and PRAGMA page_count is
+     a high-water mark that includes the freelist. The repository index is reported here
+     at +618 pages (11.2%); it occupies 279 (5.1%).
+  4. The write-cost ratios come from an instrument whose noise floor was never measured.
+     It returns a 1.73x spread across identical runs on an unchanged database, so the
+     1.75x figure is indistinguishable from noise and none of the multiples reproduce.
+
+What survives unchanged: the step counts, the row counts, and the finding they support --
+no filter shape full-scans revision_references, and no candidate index was chosen by the
+planner or reduced query work in any arm.
+
 corpus: 20000 memories, 40000 reference rows, 3 repositories, one scope
 baseline: 5524 pages, 0.00244 ms median / 0.00195 ms best per referenced-row write
 

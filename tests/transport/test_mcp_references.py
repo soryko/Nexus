@@ -141,17 +141,36 @@ def test_stdio_reference_round_trip_and_no_binding_argument(tmp_path: Path) -> N
                 refused = await client.call_tool("search", {"repository": value})
                 assert refused.is_error, value
                 assert refused.content[0].text.startswith("invalid_reference:"), value
-            # No pattern language, and no revision spec.
+            # No pattern language, and no revision spec. The oversized shapes are here
+            # because a size limit declared on the MCP schema is enforced by the schema:
+            # it returns invalid_input before the domain rules run, and B2b §8 assigns
+            # every one of these to invalid_reference. Asserting the code over a real
+            # round trip is the only way to catch that -- the domain, called directly,
+            # raises the right error either way.
             for arguments in (
                 {"reference_path_prefix": ""},
                 {"reference_commits": ["HEAD"]},
                 {"reference_commits": ["abc123"]},
                 {"reference_paths": ["../etc/passwd"]},
+                {"reference_paths": [f"a/{index}.txt" for index in range(33)]},
+                {"reference_commits": ["0" * 40] * 33},
+                {"reference_path_prefix": "a" * 1025},
+                # 1024 characters, but 2048 bytes: the limit is on the encoding, so a
+                # character-counting schema constraint would wrongly admit this one.
+                {"reference_path_prefix": "\u00e9" * 1024},
             ):
                 refused = await client.call_tool("search", arguments)
                 assert refused.is_error, arguments
                 assert refused.content[0].text.startswith("invalid_reference:"), arguments
                 assert str(tmp_path) not in refused.content[0].text
+            # The caps themselves are unchanged: the largest accepted form still answers.
+            for arguments in (
+                {"reference_paths": [f"a/{index}.txt" for index in range(32)]},
+                {"reference_commits": ["0" * 40] * 32},
+                {"reference_path_prefix": "a" * 1024},
+            ):
+                accepted = await client.call_tool("search", arguments)
+                assert not accepted.is_error, arguments
             # An explicit null on each of the four is "absent", and answers as omitted.
             omitted = await client.call_tool("search", {})
             nulled = await client.call_tool("search", {
