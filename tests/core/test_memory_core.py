@@ -299,6 +299,11 @@ def _initialize_together(path: str, start, results) -> None:
     repetition cannot identify a cause it does not record, so the worker now returns the
     traceback, the exception chain and its own pid, and the next ordinary failure carries
     the evidence with it.
+
+    The reporting path itself has been exercised on a forced failure (an unopenable path,
+    which surfaced the chained `SQLITE_CANTOPEN` the old code flattened away). That
+    establishes that the diagnostics work. **It does not identify the original flake's
+    cause, which remains unknown**; only an ordinary failure can do that.
     """
     import traceback
 

@@ -187,13 +187,38 @@ found a loss, so the statement is superseded rather than deleted:
 > part of this run.
 
 `stem`/`cutoff_40` carried unchanged onto frozen v2 **lost a grade-2 answer on `q02`**
-(delivered head recall 1.000 → 0.667): its third answer `i12` scores 0.3091 of the top hit,
-below the constant fitted to `dq13`'s 0.4018. Grade-0 volume fell 49.35%. Full report:
+(delivered head recall 1.000 → 0.667): its third answer `i12` scores 0.3091 of the top hit.
+Grade-0 volume fell 49.35%. Full report:
 [../eval/results-v2-delivery-regression.md](../eval/results-v2-delivery-regression.md).
+
+**Both margins, in one unit.** As fractions of a query's top BM25 magnitude, `dq13` clears
+0.40 by **0.001814** and `q02`'s `i12` misses it by **0.0909** — fifty times as far. The
+0.0067 BM25 units / 0.45% quoted above is that same `dq13` margin in raw score units and
+relative to the score; a relative percentage and an absolute difference are not comparable
+quantities and are not to be set side by side.
+
+**On `q02` the cut removed no irrelevant volume at all.** The baseline delivered five items
+— three grade-2 and two grade-1, **zero grade-0**. `cutoff_40` removed one direct answer
+(`i12`, 309 B) and one supporting item (`i15`, 316 B) for a grade-0 saving of zero. Task
+coverage did not register it, because two other answers remain: a coverage clause cannot see
+a completeness loss on any query with more than one answer.
 
 Nothing in this file is restated by that outcome — T3's measurements on development data
 stand exactly as recorded, including the pass under the registered decision rule. What
-changes is the standing of the constant: the failure mode registered in this report as
-hypothetical ("a single answer sitting one place lower … would turn the pass into a recall
-loss") is now observed. 0.40 was **not** retuned in response, and must not be: searching for
-a constant that keeps `q02` would be fitting to evaluation data.
+changes is not the measurement but the configuration decision: the failure mode registered
+in this report as hypothetical ("a single answer sitting one place lower … would turn the
+pass into a recall loss") is now observed.
+
+## Carry-forward decision, recorded 2026-09-06
+
+- **`stem`/`all` remains the development baseline** — head-only, deliver the pool in rank
+  order until a budget stops it.
+- **`cutoff_40` is not carried forward as the selected configuration.**
+- **The shipped default is unchanged: `exact`.** Nothing from this stage has been shipped.
+- **0.40 was not retuned and must not be.** A constant chosen to keep `q02` would be chosen
+  by looking at v2, and v2 has now exposed this failure: it cannot serve as fresh validation
+  of a repair for it.
+- The next selection experiment is to be registered against **preserving multiple answers
+  whose lexical scores are widely separated**, and measured on **separately held-out
+  development cases** authored for that shape. **T0 abstention stays a separate unresolved
+  problem.**

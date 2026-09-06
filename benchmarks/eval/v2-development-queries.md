@@ -381,9 +381,21 @@ Every rule preserved everything it had to: grade-2 delivered bytes 5,212 and gra
 | Grade-2 delivered-recall loss | — | **`q02` 1.000 → 0.667** |
 | Task coverage / grade-1-only support | — | no loss |
 
-`q02` is the query `stem` was promoted for: `exact` delivered one of its three answers, `stem` delivered all three, and `cutoff_40` cuts `i12` back out at **0.3091** of the top hit — below the constant fitted to `dq13`'s 0.4018. The failure mode T3 registered as hypothetical is now observed on the first set the rule was carried to.
+`q02` is the query `stem` was promoted for. Its familiar `exact` 0.333 and `stem` 1.000 are **discovery** figures — head recall at k=5 from `run_v2.py`, which delivers nothing — and are quoted as the history of the query, never as rows of the delivery harness. What the delivery harness measures: `stem`/`all` delivers all three answers, and `cutoff_40` cuts `i12` out at **0.3091** of the top hit.
 
-**This check carries no gate and 0.40 was not retuned.** The 50% target belongs to T3, against T3's own baseline. Searching for a constant that keeps `q02` would be fitting to evaluation data.
+**Both margins in one unit.** As fractions of a query's top BM25 magnitude, `dq13` clears 0.40 by **0.001814**; `q02`'s `i12` misses it by **0.0909**, fifty times as far. The 0.45% quoted for `dq13` is that same margin expressed relative to the score, and a relative percentage must not be set beside an absolute difference.
+
+**On `q02` the cut bought nothing.** The baseline delivered five items — three grade-2, two grade-1, **zero grade-0**. The rule removed one direct answer and one supporting item for a grade-0 saving of zero. Task coverage did not register it because two answers remain: a coverage clause cannot see a completeness loss on any query with more than one answer. The 49.35% aggregate reduction therefore carries a demonstrated completeness cost.
+
+**This check carries no gate and 0.40 was not retuned.** The 50% target belongs to T3, against T3's own baseline. Searching for a constant that keeps `q02` would be fitting to evaluation data, and v2 has now exposed this failure: it cannot serve as fresh validation of a repair for it.
+
+#### Carry-forward decision — recorded 2026-09-06
+
+- **`stem`/`all` remains the development baseline.** Head-only candidate generation, deliver the pool in rank order until a budget stops it.
+- **`cutoff_40` is not carried forward as the selected configuration.**
+- **The shipped default is unchanged: `exact`.** Nothing from T1–T3 has been shipped.
+- **T3's development pass stays recorded exactly as measured.** This is a configuration decision informed by a separate reason against adoption — the rule removes a known directly relevant answer — not a retroactive v2 gate, and it re-scores nothing.
+- **Next selection experiment:** register it against **preserving multiple answers whose lexical scores are widely separated** — `q02` spreads three answers from 1.0000 to 0.3091 with supporting items interleaved — and measure it on **separately held-out development cases** authored for that shape, not on `corpus-dev2` and not on v2. **T0 abstention stays a separate unresolved problem.**
 
 Two measurement corrections were made before the run, and neither is optional for reading the older records:
 
@@ -397,7 +409,7 @@ Limits registered in both rows. The full contracts are in [T2 and T3 — authori
 | # | Target | Configuration | What it changes | Baseline | Registered limits | Registered on | Outcome |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 4 | T2 | Historical-term discovery with matched-revision and current-head provenance | Candidate generation over non-head revisions; result shape | Pinned `stem`, existing selection policy unchanged | Pool **20 distinct eligible memories** · history **5 memories × 20 revisions** · delivered **5 items / 8,192 UTF-8 bytes** incl. provenance · **≤3 predeclared variants** per stage · **no network or model calls** · **fusion input ≤40 raw index hits** (20 current-head + 20 historical) | 2026-09-06 | **[Run once 2026-09-06](#t2--outcome-run-once-on-2026-09-06). No variant promoted.** `history_cued` cleared every quality clause — all three historical cases delivered with provenance, both controls held, no recall lost — and failed the storage ceiling at **2.70x** against ≤2x. `stem` head-only stands; T3's baseline is `stem`. |
-| 5 | T3 | Ordering and weak-match rejection under a fixed expansion budget | Ranking and cutoff only; candidate generation **frozen** | **`stem`, head-only** (no T2 variant passed) | Pool **20 distinct eligible memories** · history **5 memories × 20 revisions**, selection choosing which five · delivered **5 items / 8,192 UTF-8 bytes** incl. provenance · **≤3 predeclared variants** per stage · **no network or model calls** · grade-0 gate **≤9,092 bytes** | 2026-09-06 | **[Run once 2026-09-06](#t3--outcome-run-once-on-2026-09-06). `cutoff_40` pinned:** 8,140 grade-0 bytes (55.24% reduction) with grade-2 and grade-1 delivery unchanged, and 4/4 ceiling cells. Constant declared fitted: it preserves `dq13` by 0.45%. **[v2 delivery regression run 2026-09-06](#v2-delivery-regression--run-2026-09-06-after-t3): carried unchanged onto v2 it lost `q02`'s third grade-2 answer (1.000 → 0.667) while cutting grade-0 volume 49.35%. 0.40 not retuned.** |
+| 5 | T3 | Ordering and weak-match rejection under a fixed expansion budget | Ranking and cutoff only; candidate generation **frozen** | **`stem`, head-only** (no T2 variant passed) | Pool **20 distinct eligible memories** · history **5 memories × 20 revisions**, selection choosing which five · delivered **5 items / 8,192 UTF-8 bytes** incl. provenance · **≤3 predeclared variants** per stage · **no network or model calls** · grade-0 gate **≤9,092 bytes** | 2026-09-06 | **[Run once 2026-09-06](#t3--outcome-run-once-on-2026-09-06). `cutoff_40` pinned:** 8,140 grade-0 bytes (55.24% reduction) with grade-2 and grade-1 delivery unchanged, and 4/4 ceiling cells. Constant declared fitted: it preserves `dq13` by 0.45%. **[v2 delivery regression run 2026-09-06](#v2-delivery-regression--run-2026-09-06-after-t3): carried unchanged onto v2 it lost `q02`'s third grade-2 answer (1.000 → 0.667) while cutting grade-0 volume 49.35%, saving zero grade-0 bytes on `q02` itself. 0.40 not retuned. **Not carried forward** — `stem`/`all` remains the development baseline; shipped default stays `exact`.** |
 
 ### T0 — not authorised to run
 

@@ -39,8 +39,14 @@ Grade-0 volume falls 49.35%. It does not come for free, which is the finding:
 | Grade-1 supporting evidence lost elsewhere | `q02` (`i15`), `q03` (`i23`), `q08` (`i03`) — 922 bytes |
 
 **`q02` is the query the whole `stem` promotion was for.** Its three grade-2 items are
-`i12`, `i20`, `i25`. Frozen `exact` delivered one of them (head recall 0.333 at k=5);
-`stem` recovered all three (1.000). `cutoff_40` now cuts `i12` back out:
+`i12`, `i20`, `i25`.
+
+*Keep the two measurements apart.* The familiar `exact` 0.333 and `stem` 1.000 for `q02`
+are **discovery** figures — head recall at k=5 from `run_v2.py`, which calls `service.search`
+and delivers nothing — recorded in `results-v2.json` and `results-v2-regression-stem.json`.
+They are quoted here as the history of the query, not as rows of this harness. What this
+harness measures is delivery: the `stem`/`all` baseline **delivers** all three answers, and
+`cutoff_40` cuts `i12` back out.
 
 ```
 q02  'retry policy'   grade-2 [i12, i20, i25]  grade-1 [i10, i15, i16]
@@ -51,13 +57,36 @@ q02  'retry policy'   grade-2 [i12, i20, i25]  grade-1 [i10, i15, i16]
    rank 5  i12  grade 2  score  1.0251  fraction 0.3091  CUT
 ```
 
-`i12` sits at **0.3091** of the top hit — inside `dq13`'s shape and below the constant
-fitted to `dq13`'s 0.4018. The margin that made `cutoff_40` work on the development corpus
-is 0.45%; the margin by which it fails here is 9 points of the same quantity. This is the
-predicted failure mode arriving on the first set the rule was carried to, not a surprise:
-T3's report registered that "a single answer sitting one place lower, or scoring a fraction
-less, would move `dq13` below the cutoff and turn the pass into a recall loss." The same
-sentence, applied to v2, is what happened — with `q02`'s `i12` in `dq13`'s place.
+`i12` sits at **0.3091** of the top hit, below the 0.40 constant fitted to `dq13`'s 0.4018.
+
+*Compare the margins in one unit.* Both are fractions of a query's top BM25 magnitude, so
+state both as differences in that fraction: `dq13` clears the threshold by
+**0.401814 − 0.40 = 0.001814**; `q02`'s `i12` falls short of it by
+**0.40 − 0.3091 = 0.0909**, fifty times as far. The "0.45%" quoted for `dq13` in T3 is that
+same 0.001814 expressed relative to the score itself, and a percentage against one
+denominator must not be set beside a difference against another.
+
+This is the predicted failure mode arriving on the first set the rule was carried to, not a
+surprise: T3's report registered that "a single answer sitting one place lower, or scoring a
+fraction less, would move `dq13` below the cutoff and turn the pass into a recall loss." The
+same sentence, applied to v2, is what happened — with `q02`'s `i12` in `dq13`'s place.
+
+### On `q02` the cut bought nothing at all
+
+| `q02` delivered | grade 2 | grade 1 | grade 0 |
+| --- | --- | --- | ---: |
+| `stem`/`all` (5 items) | `i12`, `i20`, `i25` — 949 B | `i10`, `i15` — 646 B | **0 B** |
+| `stem`/`cutoff_40` (3 items) | `i20`, `i25` — 640 B | `i10` — 330 B | **0 B** |
+
+The baseline delivered **no irrelevant item on this query**. Every byte the cut removed was
+relevant: one direct answer (`i12`, 309 B) and one supporting item (`i15`, 316 B), for a
+grade-0 saving of **zero**. A rule whose entire justification is removing irrelevant volume
+removed none here and took evidence instead.
+
+Task coverage — the clause that asks whether a query still receives *some* grade-2 evidence
+— is unchanged on `q02`, because `i20` and `i25` remain. That is exactly what the clause
+cannot see: completeness loss hides behind a coverage test whenever more than one answer
+exists.
 
 ## By partition — flagged queries reported, never averaged into a headline
 
@@ -116,10 +145,32 @@ the mismatch.
 - **Labels are AI-assessed, AI-audited twice, human-authorised.** No human audit at label
   level. That provenance applies to every figure above.
 
-## Consequence for the pinned configuration
+## Decision — `cutoff_40` is not carried forward
 
-T3 pinned `cutoff_40` on development data under a registered decision rule, and that
-outcome stands as what T3 measured. What this check adds is that the first time the rule
-was carried to a set it was not fitted on, it lost a grade-2 answer — on the query that
-motivated the preceding stage. The configuration to carry forward is a decision for the
-next registration, not something this run may make by picking a different constant.
+Recorded 2026-09-06, after this run.
+
+- **The development baseline stays `stem`/`all`.** Head-only candidate generation, deliver
+  the pool in rank order until a budget stops it.
+- **`cutoff_40` is not carried forward as the selected configuration.**
+- **The shipped default is unchanged: `exact`.** Nothing in this stage has been shipped.
+- **T3's development pass stays recorded exactly as measured** — 55.24%, all four clauses,
+  4/4 ceiling cells, under its registered decision rule. This is not a retroactive v2 gate
+  and nothing here re-scores T3. It is a separate reason against adoption: on a set the
+  constant was not fitted to, the rule removes a known directly relevant answer, and on the
+  query where it does so it saves no irrelevant volume at all.
+- **The threshold is not lowered to rescue `q02`.** A constant chosen to keep `i12` would be
+  chosen by looking at v2, and v2 has now exposed this failure: it can no longer serve as
+  fresh validation of a repair for it. Whatever comes next is validated on development data
+  held out from this result.
+
+### What the next selection experiment has to handle
+
+A prefix cutoff assumes a query's relevant items cluster near the top. `q02` is the
+counter-case: three direct answers spread from 1.0000 to 0.3091 of the top score, with
+supporting items interleaved among them. The next experiment should be registered against
+**preserving multiple answers whose lexical scores are widely separated**, and measured on
+**separately held-out development cases** authored for that shape — not on `corpus-dev2`,
+whose margins are already spent, and not on v2.
+
+**T0 abstention remains a separate unresolved problem.** Rejecting an entirely irrelevant
+pool is not the same mechanism as keeping scattered answers, and neither result moves it.
