@@ -211,11 +211,16 @@ def aggregate(report: dict, clean: list[str]) -> dict:
 
 # ----------------------------------------------------------------------------- controls
 
-def control_empty_index(corpus: dict) -> dict:
-    """Clear ONLY the FTS postings. Authoritative rows and the head projection stay."""
+def control_empty_index(corpus: dict, profile: str = "exact") -> dict:
+    """Clear ONLY the FTS postings. Authoritative rows and the head projection stay.
+
+    The control runs under **the profile being checked**. A control built on `exact`
+    while the run it accompanies uses `stem` establishes nothing about the configuration
+    that was actually measured: the index it empties is not the index that was queried.
+    """
     with tempfile.TemporaryDirectory() as work:
         path = Path(work) / "control1.sqlite3"
-        service, _, _ = build_fixture(path, corpus)
+        service, _, _ = build_fixture(path, corpus, profile)
         db = sqlite3.connect(path)
         try:
             try:
@@ -235,16 +240,20 @@ def control_empty_index(corpus: dict) -> dict:
             "head_projection_retained": projection,
             "fts_postings": postings,
             "results_returned": returned,
+            "index_profile": profile,
             "verdict": "PASS" if returned == 0 and projection > 0 and memories > 0 else "FAIL",
             "note": "Only FTS postings were cleared. A non-zero result would prove retrieval bypasses the index; a zero head projection would mean the control proved less than it claims.",
         }
 
 
-def control_forget_relevant(corpus: dict, judgments: dict) -> dict:
-    """Forget every memory holding a grade-2 item; no revision of one may reappear."""
+def control_forget_relevant(corpus: dict, judgments: dict, profile: str = "exact") -> dict:
+    """Forget every memory holding a grade-2 item; no revision of one may reappear.
+
+    Runs under the profile being checked, for the reason given on the control above.
+    """
     with tempfile.TemporaryDirectory() as work:
         path = Path(work) / "control2.sqlite3"
-        service, live, _ = build_fixture(path, corpus)
+        service, live, _ = build_fixture(path, corpus, profile)
         items = item_map(corpus)
         targets = {i for j in judgments["judgments"].values() for i in j["2"]}
         forgotten = set()
@@ -264,6 +273,7 @@ def control_forget_relevant(corpus: dict, judgments: dict) -> dict:
                     reappeared.append({"query": qid, "memory": memory_id, "revision": revision_id, "where": "history"})
         return {
             "fixture": "independent",
+            "index_profile": profile,
             "memories_forgotten": len(forgotten),
             "revisions_of_forgotten_memories_returned": len(reappeared),
             "detail": reappeared[:10],
@@ -309,8 +319,8 @@ def main() -> None:
         "per_query": report,
         "headline_clean_unweighted_mean": headline,
         "controls": {
-            "empty_index": control_empty_index(corpus),
-            "forget_relevant": control_forget_relevant(corpus, judgments),
+            "empty_index": control_empty_index(corpus, profile),
+            "forget_relevant": control_forget_relevant(corpus, judgments, profile),
         },
     }
     record["index_profile"] = profile
@@ -319,6 +329,13 @@ def main() -> None:
             "Not a fresh evaluation of v2. This configuration was chosen on development data "
             "with v2's failure modes already known; the run says whether a known failure moved."
         )
+    record["controls_provenance_correction"] = (
+        "Both controls now build their independent fixtures under the profile being checked. "
+        "Before 2026-09-06 they omitted the argument and therefore ran under `exact` whatever "
+        "profile the run used: the controls in `results-v2-regression-stem.json` (build "
+        "2c7eaa49) exercised `exact`, not `stem`, and are not evidence about the stem "
+        "configuration. That record is kept unedited; this is the correction."
+    )
     destination.write_text(json.dumps(record, indent=2) + "\n")
 
     # ------------------------------------------------------------------ readable summary

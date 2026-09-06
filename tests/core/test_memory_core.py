@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import multiprocessing
 import os
+import queue
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -274,13 +275,46 @@ def test_status_reads_one_committed_snapshot(tmp_path: Path) -> None:
     assert (status.active_memories, status.revisions, status.pending_outbox) in {(0, 0, 0), (1, 1, 1)}
 
 
+def _chain(error: BaseException) -> list[dict]:
+    """The exception and everything it was raised from or during."""
+    links, seen, current = [], set(), error
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        links.append({
+            "type": type(current).__name__,
+            "message": str(current),
+            "sqlite_errorname": getattr(current, "sqlite_errorname", None),
+            "errno": getattr(current, "errno", None),
+        })
+        current = current.__cause__ or current.__context__
+    return links
+
+
 def _initialize_together(path: str, start, results) -> None:
+    """One worker racing the others to initialize the same database.
+
+    This used to report `type(error).__name__` and nothing else, which is why repeated
+    runs have never explained the initialization flake: `OperationalError` alone names
+    neither the statement, nor the chained cause, nor the worker it happened in. Blind
+    repetition cannot identify a cause it does not record, so the worker now returns the
+    traceback, the exception chain and its own pid, and the next ordinary failure carries
+    the evidence with it.
+    """
+    import traceback
+
     start.wait()
     try:
         SQLiteRepository(path)
-        results.put("ok")
-    except Exception as error:
-        results.put(type(error).__name__)
+        results.put({"pid": os.getpid(), "outcome": "ok"})
+    except BaseException as error:  # noqa: BLE001 - a worker must report anything it hits
+        results.put({
+            "pid": os.getpid(),
+            "outcome": "error",
+            "type": type(error).__name__,
+            "message": str(error),
+            "chain": _chain(error),
+            "traceback": traceback.format_exc(),
+        })
 
 
 def test_simultaneous_process_initialization_is_safe(tmp_path: Path) -> None:
@@ -291,10 +325,52 @@ def test_simultaneous_process_initialization_is_safe(tmp_path: Path) -> None:
     for process in processes:
         process.start()
     start.set()
+
+    # Join every process before asserting anything, so one worker's exit code cannot hide
+    # the state of the other seven, and record *why* each one is being reported.
+    workers = []
     for process in processes:
         process.join(10)
-        assert process.exitcode == 0
-    assert [results.get(timeout=1) for _ in processes] == ["ok"] * len(processes)
+        workers.append({
+            "pid": process.pid,
+            "exitcode": process.exitcode,
+            "still_alive_after_join": process.is_alive(),
+            "join_timed_out": process.exitcode is None,
+        })
+    for process in processes:
+        if process.is_alive():
+            process.kill()
+            process.join(5)
+
+    # Drain what the workers actually reported. A missing message is itself evidence —
+    # a worker that died before `put` leaves the queue short — so the shortfall is
+    # recorded rather than raised as a bare Empty from inside the assertion.
+    reports, queue_failures = [], []
+    for _ in processes:
+        try:
+            reports.append(results.get(timeout=5))
+        except queue.Empty:
+            queue_failures.append("no message within 5s: a worker died before reporting")
+            break
+
+    diagnosis = {
+        "database": str(tmp_path / "new.db"),
+        "workers": workers,
+        "reports": reports,
+        "queue_failures": queue_failures,
+        "messages_expected": len(processes),
+        "messages_received": len(reports),
+    }
+    healthy = (all(w["exitcode"] == 0 for w in workers)
+               and not queue_failures
+               and [r["outcome"] for r in reports] == ["ok"] * len(processes))
+    if not healthy:
+        # Preserve the evidence: pytest keeps this directory for the last three runs, so a
+        # flake that fires once in fifty is readable afterwards instead of being gone.
+        log = tmp_path / "initialization-diagnosis.json"
+        log.write_text(json.dumps(diagnosis, indent=2, default=str))
+        pytest.fail(f"simultaneous initialization failed; diagnosis written to {log}\n"
+                    f"{json.dumps(diagnosis, indent=2, default=str)}")
 
 
 class LifecycleMachine(RuleBasedStateMachine):

@@ -244,16 +244,20 @@ def retrieve(service, text: str, policy: str = "baseline", selection: str = "all
     for memory_id in out.expanded:
         # The budget has two dimensions and both bind: at most five distinct memories,
         # and at most twenty revisions of any one of them.
-        entries = [entry.revision_id
-                   for entry in service.history(memory_id, limit=HISTORY_REVISIONS).entries]
+        #
+        # The revision dimension binds the **reads**, not the recorded list. A directly
+        # matched revision is reachable when it lies outside the twenty most recent, and
+        # it consumes that memory's allowance, so its slot is reserved *before*
+        # enumeration: nineteen enumerated plus the match is twenty distinct revisions
+        # touched. Enumerating twenty and then fetching an older one touches twenty-one,
+        # whatever the list is afterwards truncated to.
         matched = (out.pool_provenance.get(memory_id) if memory_id in out.pool_from_history
                    else out.paired_revisions.get(memory_id))
+        reserved = 1 if matched is not None else 0
+        entries = [entry.revision_id for entry in
+                   service.history(memory_id, limit=HISTORY_REVISIONS - reserved).entries]
         if matched is not None and matched not in entries:
-            # A directly matched revision is reachable when it lies outside the twenty
-            # most recent, and it **consumes that memory's revision allowance**: the
-            # oldest enumerated revision gives up its place rather than the query
-            # touching a twenty-first.
-            entries = entries[:HISTORY_REVISIONS - 1] + [matched]
+            entries = entries + [matched]
         assert len(entries) <= HISTORY_REVISIONS
         out.revisions_by_memory[memory_id] = entries
         out.discovered_revisions.extend(entries)
