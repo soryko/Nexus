@@ -1,0 +1,72 @@
+corpus: 20,000 memories, 40,000 reference rows, 3 repositories, one scope, no statistics
+  path_exact         selects     20 memories (  0.1%)
+  path_prefix        selects     20 memories (  0.1%)
+  commit_exact       selects     20 memories (  0.1%)
+  repository_bound   selects  6,667 memories ( 33.3%)
+  unfiltered         selects 20,000 memories (100.0%)  <- control arm, matches everything
+
+repeatability control (identical configuration, separate fresh copies):
+  path_exact         evidence steps  1,719,772 vs  1,719,772  (1.000x)
+  path_prefix        evidence steps  1,719,772 vs  1,719,772  (1.000x)
+  commit_exact       evidence steps  1,719,772 vs  1,719,772  (1.000x)
+  repository_bound   evidence steps  1,719,772 vs  1,719,772  (1.000x)
+  unfiltered         evidence steps  1,719,772 vs  1,719,772  (1.000x)
+  latency spread across identical runs: 1.64x. Latency ratios below smaller than this are not results.
+
+--- current (bounded=False, statistics=False) ---
+shape                  select       evid   other   sel ms  evid ms  e2e best  e2e med
+path_exact            361,054  1,719,772     319   10.488   12.606    23.290   28.681
+path_prefix           480,976  1,719,772     451   10.502    9.645    22.128   30.218
+commit_exact          261,174  1,719,772     361    8.396    9.572    18.798   23.440
+repository_bound      527,349  1,719,772     309   16.150    9.109    29.228   38.500
+unfiltered            780,397  1,719,772     199   10.742    9.081    21.049   23.058
+
+--- statistics only (bounded=False, statistics=True) ---
+shape                  select       evid   other   sel ms  evid ms  e2e best  e2e med
+path_exact            362,798      1,593     507    9.657    0.045    10.948   12.185
+path_prefix           482,720      1,593     705   10.283    0.045    11.299   12.206
+commit_exact          262,918      1,593     570    8.348    0.045     9.870   12.067
+repository_bound      529,093      1,593     492   16.151    0.044    17.084   22.778
+unfiltered            502,415      1,592     270   10.981    0.045    11.932   15.902
+
+--- bounded only (bounded=True, statistics=False) ---
+shape                  select       evid   other   sel ms  evid ms  e2e best  e2e med
+path_exact            360,860      1,353     319    9.868    0.042    10.754   13.522
+path_prefix           480,782      1,353     451   10.624    0.043    11.608   13.985
+commit_exact          260,980      1,353     361    8.405    0.043     9.149   10.189
+repository_bound      527,155      1,353     309   16.124    0.042    16.914   24.615
+unfiltered            780,203      1,352     199   10.732    0.039    12.319   18.532
+
+--- both (bounded=True, statistics=True) ---
+shape                  select       evid   other   sel ms  evid ms  e2e best  e2e med
+path_exact            360,929      1,353     507   10.282    0.045    11.002   14.299
+path_prefix           480,851      1,353     705   10.590    0.043    11.500   14.616
+commit_exact          261,049      1,353     570    8.261    0.042     9.049   11.228
+repository_bound      527,224      1,353     492   16.116    0.042    17.133   21.319
+unfiltered            500,546      1,352     270   11.081    0.040    11.628   12.118
+
+result identity (hits, order, evidence, pagination), vs 'current' over up to 4 pages:
+  current            identical
+  statistics only    identical
+  bounded only       identical
+  both               identical
+  discrimination    unfiltered selection 780,397 steps differs from every filtered shape
+
+evidence-loading summary (steps, then best replayed ms):
+shape                          current     statistics only        bounded only                both
+path_exact                   1,719,772               1,593               1,353               1,353
+                                12.606               0.045               0.042               0.045
+path_prefix                  1,719,772               1,593               1,353               1,353
+                                 9.645               0.045               0.043               0.043
+commit_exact                 1,719,772               1,593               1,353               1,353
+                                 9.572               0.045               0.043               0.042
+repository_bound             1,719,772               1,593               1,353               1,353
+                                 9.109               0.044               0.042               0.042
+unfiltered                   1,719,772               1,592               1,352               1,352
+                                 9.081               0.045               0.039               0.040
+
+the evidence-loading statement each configuration actually executed (path_exact, truncated):
+  current            SELECT memory_id,revision_id,repository_id,commit_oid,path,object_oid,entry_type,mode,checked_at FROM revision_references WHERE namespace='measure' AN
+  statistics only    SELECT memory_id,revision_id,repository_id,commit_oid,path,object_oid,entry_type,mode,checked_at FROM revision_references WHERE namespace='measure' AN
+  bounded only       WITH pairs(memory_id,revision_id) AS (VALUES ('m019500','r019500'),('m018500','r018500'),('m017500','r017500'),('m016500','r016500'),('m015500','r0155
+  both               WITH pairs(memory_id,revision_id) AS (VALUES ('m019500','r019500'),('m018500','r018500'),('m017500','r017500'),('m016500','r016500'),('m015500','r0155
