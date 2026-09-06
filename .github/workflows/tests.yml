@@ -38,7 +38,7 @@ jobs:
     steps:
       # Consider pinning these two to commit SHAs rather than major tags if the threat
       # model includes a compromised tag being moved.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv ${{ env.UV_VERSION }}
         run: |
@@ -65,7 +65,7 @@ jobs:
 
       - name: Collect failure evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-evidence-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/
