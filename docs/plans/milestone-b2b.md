@@ -1,10 +1,13 @@
 # B2b — reference filters on `search`
 
-**Status: closed 2026-09-06 at `d72a093`.** Implemented at `8563758`, section 9 discharged by
-measurement at `03294b5`, and the error code plus four measurement defects corrected at `d72a093`
-(amendment 5). Migration `005` is not written. The one deferred finding is recorded in amendment 5
-and belongs to its own slice: **bounded evidence loading measured against statistics-only
-optimisation**, which is the comparison an automatic `ANALYZE` policy should be decided against.
+**Status: closed 2026-09-06.** Implemented at `8563758`, section 9 discharged by measurement at
+`03294b5`, the error code plus four measurement defects corrected at `d72a093` (amendment 5), and
+three of amendment 5's *claims about its own evidence* corrected on review (amendment 6). No
+measured number and no decision changed between 5 and 6. Migration `005` is not written. The one
+deferred finding belongs to its own slice: **bounded evidence loading measured against a
+statistics-only control, with candidate selection measured separately** — the comparison an
+automatic `ANALYZE` policy should be decided against, and which the current evidence does not
+itself justify.
 
 **Status while open: reviewed 2026-09-06 and frozen for implementation.** This document fixes the semantics of the second B2 slice *before* its tests are written, so the acceptance tests check a contract rather than describe an implementation.
 
@@ -329,9 +332,9 @@ Raised on review of the document at `a2cf1cc`, again before any implementation e
 Measured against the implementation at `8563758` with
 [`tools/measure_reference_filters.py`](../../tools/measure_reference_filters.py); the raw
 output is [`docs/measurements/b2b-reference-filter-plans-as-run.txt`](../measurements/b2b-reference-filter-plans-as-run.txt).
-**Four of the measurements below are withdrawn or restated by amendment 5; the decision they
-support is unchanged.** Read that amendment before citing any latency, storage or write figure
-from this one.
+**Four of the measurements below are withdrawn or restated by amendment 5, whose reasoning is
+in turn corrected by amendment 6; the decision they support is unchanged.** Read both before
+citing any latency, storage or write figure from this one.
 Corpus: 20,000 memories, 40,000 reference rows, three `repository_id`s, one scope, on
 CPython 3.13.15 with SQLite 3.53.4 — the B2a development environment. Query work is VDBE
 steps counted through `set_progress_handler`, which is a counter rather than an estimate;
@@ -430,12 +433,18 @@ the reason written beside it: that field is declared `str` rather than a `Litera
 so §8's code comes from the domain. The three size constraints are removed from the schema.
 The limits are unchanged — 32 by `_normalized_reference_filter`, 1024 by
 `validate_reference_path` — and are now stated in each field's description so a client still
-learns them. Removing them is also the stricter reading: `validate_reference_path` bounds a
-path at 1024 **bytes**, where the schema bounded `reference_path_prefix` at 1024
-**characters** and so admitted multi-byte values the domain rejects. Test 15 now asserts all
-three oversized shapes, the multi-byte case, and the three at-cap shapes that must still be
-accepted — over the round trip, since the domain called directly always raised the right
-error and only the transport ever showed the defect.
+learns them. **The set of accepted inputs is unchanged by this fix.** The two limits are not
+the same limit — `validate_reference_path` bounds a path at 1024 **bytes**, where the schema
+bounded `reference_path_prefix` at 1024 **characters** — but the schema was the looser of the
+two and the domain still ran behind it, so a multi-byte prefix over 1024 bytes was admitted
+*to domain validation*, which already rejected it. Measured over real stdio: 1,024 ASCII
+characters (1,024 bytes) accepted, 512 `é` (1,024 bytes) accepted, 1,024 `é` (2,048 bytes)
+refused `invalid_reference`. Removing the schema constraints therefore repairs **error
+routing** and nothing else; it does not tighten what the tool accepts. Test 15 now asserts
+all three oversized shapes, the multi-byte case, and the four at-cap shapes that must still
+be accepted — the fourth being 512 `é`, exactly 1,024 bytes — over the round trip, since the domain called directly always raised the right
+error and only the transport ever showed the defect. The multi-byte case is a boundary test
+holding the byte-versus-character distinction, not evidence of a hole that was closed.
 
 **2 — The `ANALYZE` gain is in a stage the recorded plans never showed.** The harness's
 `plan()` reconstructed a simplified candidate query. It dropped the `blobs` join and omitted
@@ -474,13 +483,19 @@ it. Measured on a fresh baseline copy and confirmed against `dbstat`: `path` 438
 (7.9%) and `commit` 618 (11.2%) were right, but `repository` occupies **279 pages (5.1%)**,
 not the 618 (11.2%) reported — the other 339 were pages the commit arm left behind.
 
-The write-cost figures are withdrawn outright rather than restated. Amendment 4 reported
+The write-cost figures are withdrawn outright rather than restated, and the reason is
+**failed repeatability, not the direction of any single ratio**. Amendment 4 reported
 12.33×, 8.28× and 1.75× without ever asking what the instrument returns when nothing
-changes. It was asked: the same database, no schema change, the whole measurement repeated,
-moves **1.73× to 2.32×** across identical runs, and the baseline median moved 2.6× between
-sessions. Re-measured, the three candidates come back at 0.95×, 1.38× and 0.34× — two of
-them below 1.0, which would mean an index makes inserts faster. Nothing here reproduces; the
-1.75× was inside the noise floor from the start. That control now runs first and prints
+changes. It was asked, and that identical-configuration control is the substantive evidence:
+the same database, no schema change, the whole measurement repeated, moves **1.73× to 2.32×**
+across identical runs, and the baseline median moved 2.6× between sessions. A spread that
+wide on an unchanged database means this instrument cannot resolve the effect it was being
+used to claim — every candidate ratio, including the 1.75×, sits inside it. Re-measurement
+returns 0.95×, 1.38× and 0.34×. Two are below 1.0, and that is reported as a further symptom
+of the same instability rather than as the ground for withdrawal: an index-bearing
+configuration measuring faster than one without is not inherently impossible, so a
+sub-unit ratio is not by itself a defect. What disqualifies these numbers is that the
+control does not hold still. That control now runs first and prints
 before any ratio is taken against it. The microbenchmark is also relabelled: it inserts
 reference rows 2,000 to a transaction with `foreign_keys=OFF` and no service call, so it
 measures index maintenance on a row insert — a fair question to ask of a candidate index —
@@ -503,3 +518,79 @@ step and row counts, which none of these defects touched. **The next performance
 should compare bounded evidence loading against statistics-only optimisation**: this
 audit gives that work a specific target, and adopting an automatic `ANALYZE` policy should
 be decided against it rather than before it.
+
+
+### 6 — 2026-09-06, three corrections to amendment 5's reasoning; every decision stands
+
+Raised on review of `d72a093` before that checkpoint reached the audit. None of these
+touches a measured number or a decision: each corrects a claim amendment 5 made *about* what
+its evidence showed. Under the change policy the wording is corrected in place above and the
+superseded text is quoted here verbatim.
+
+**1 — The multi-byte prefix was never wrongly accepted, and the fix is not a tightening.**
+Amendment 5 said:
+
+> Removing them is also the stricter reading: `validate_reference_path` bounds a path at 1024
+> **bytes**, where the schema bounded `reference_path_prefix` at 1024 **characters** and so
+> admitted multi-byte values the domain rejects.
+
+"Admitted" was doing unearned work. The schema admitted such a value **to domain validation**,
+which rejected it — the accepted input set is the intersection of the two checks, and the
+domain's is the tighter one. Measured over real MCP stdio against the pre-fix build:
+
+| prefix | UTF-8 bytes | result at `03294b5` |
+|---|---:|---|
+| 1,024 ASCII characters | 1,024 | accepted |
+| 512 `é` characters | 1,024 | accepted |
+| 1,024 `é` characters | 2,048 | `invalid_reference` |
+
+The third row already carried §8's code before the fix, because the schema's character count
+let it reach the domain. So removing the three constraints repairs **error routing** — the
+oversized ASCII case, which returned `invalid_input` — and changes nothing about which
+inputs are accepted. Test 15 keeps the 1,024-`é` case as a boundary test of the
+byte-versus-character distinction, and now also asserts the 512-`é` case is accepted at
+exactly 1,024 bytes.
+
+**2 — The rule against schema constraints was stated too broadly.** Amendment 5 and the
+comment beside the fix generalised from one defect toward keeping domain constraints off the
+MCP schema. Schema constraints are useful, and several stay untouched: `query` keeps
+`max_length` 1024 and `cursor` keeps 4096. Nothing in the contract promises a particular
+error code for those, so rejecting them at the boundary costs nothing and buys an earlier,
+cheaper refusal. The requirement is narrower and has three parts: schema and domain must
+agree on the **accepted inputs**, agree on the **unit** each limit counts (this defect was
+partly a bytes-versus-characters disagreement), and schema validation must not **preempt an
+error code the contract assigns**. Only the third was violated here, and only by the three
+reference filters.
+
+**3 — The write ratios are withdrawn for failed repeatability, not for falling below 1.0.**
+Amendment 5 said:
+
+> Re-measured, the three candidates come back at 0.95×, 1.38× and 0.34× — two of them below
+> 1.0, which would mean an index makes inserts faster.
+
+That sentence treats a sub-unit ratio as self-evidently absurd. It is not: an index-bearing
+configuration measuring faster than one without is not inherently impossible, and page
+layout, cache state and freelist reuse can all produce it. Leaning on the direction of the
+ratio makes the withdrawal look like an appeal to intuition. The substantive evidence is the
+**identical-configuration control**: the same database, no schema change, the whole
+measurement repeated, moving 1.73× to 2.32× across runs, with the baseline median moving
+2.6× between sessions. A control that wide means this instrument cannot resolve the effect
+being claimed, whichever side of 1.0 a candidate lands on. The sub-unit ratios are a further
+symptom of that instability, reported as such.
+
+**Not reconciled, deliberately.** The 3.8× instrumentation overhead measured here and the
+roughly 6× measured in the B2a work are not in conflict and no attempt is made to reconcile
+them. `set_progress_handler` overhead is a function of instructions executed per unit of
+real work, which differs by query shape, corpus and machine; neither multiplier generalises.
+Both are evidence for the same operational rule, which is the only thing carried forward:
+**instruction counting and latency measurement run in separate passes**, never one
+instrumented loop serving both.
+
+**Unchanged.** `005` stays unwritten. The load-bearing findings still rest on step and row
+counts: no filter shape full-scans `revision_references`, no candidate index was chosen by
+the planner, and no candidate reduced measured query work. The deferred finding is also
+unchanged — evidence loading, not candidate selection, carries the `ANALYZE` gain, and the
+next performance slice should measure **bounded evidence loading against a statistics-only
+control, with candidate selection measured separately**. The current evidence supports
+investigating that bottleneck; it does not yet justify a blanket automatic `ANALYZE` policy,
+which should be decided against that comparison.

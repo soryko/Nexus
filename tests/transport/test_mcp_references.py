@@ -155,8 +155,11 @@ def test_stdio_reference_round_trip_and_no_binding_argument(tmp_path: Path) -> N
                 {"reference_paths": [f"a/{index}.txt" for index in range(33)]},
                 {"reference_commits": ["0" * 40] * 33},
                 {"reference_path_prefix": "a" * 1025},
-                # 1024 characters, but 2048 bytes: the limit is on the encoding, so a
-                # character-counting schema constraint would wrongly admit this one.
+                # 1024 characters, but 2048 bytes: the limit is on the encoding. The
+                # character-counting schema constraint passed this one through to the
+                # domain, which refused it — so this asserts the byte-versus-character
+                # boundary, not a hole the schema change closed. 512 of these (1024
+                # bytes) is accepted, and is asserted below with the other at-cap shapes.
                 {"reference_path_prefix": "\u00e9" * 1024},
             ):
                 refused = await client.call_tool("search", arguments)
@@ -168,6 +171,8 @@ def test_stdio_reference_round_trip_and_no_binding_argument(tmp_path: Path) -> N
                 {"reference_paths": [f"a/{index}.txt" for index in range(32)]},
                 {"reference_commits": ["0" * 40] * 32},
                 {"reference_path_prefix": "a" * 1024},
+                # 512 multi-byte characters is exactly 1024 bytes: at the cap, accepted.
+                {"reference_path_prefix": "\u00e9" * 512},
             ):
                 accepted = await client.call_tool("search", arguments)
                 assert not accepted.is_error, arguments

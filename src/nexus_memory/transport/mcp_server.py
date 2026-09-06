@@ -355,11 +355,23 @@ def create_server(service: MemoryService) -> MCPServer:
         # same mistake made twice: §8 assigns "more than 32 values" and "path is too long"
         # to invalid_reference, and a schema max_length returns invalid_input before the
         # domain is ever reached. The limits are unchanged and still enforced — 32 by
-        # _normalized_reference_filter, 1024 by validate_reference_path — which is also the
-        # stricter reading: the domain bounds a path at 1024 *bytes*, where the schema
-        # bounded reference_path_prefix at 1024 *characters* and so admitted multi-byte
-        # values the domain rejects. Both limits are stated in the description instead, so
-        # a client still learns them from the schema.
+        # _normalized_reference_filter, 1024 by validate_reference_path — and are stated in
+        # the description instead, so a client still learns them from the schema.
+        #
+        # The rule this follows is narrow, and is not "keep domain constraints off the MCP
+        # schema". Schema constraints are useful and several stay: query keeps max_length
+        # 1024 and cursor max_length 4096, because no contract clause promises a particular
+        # code for those, so refusing them at the boundary costs nothing. The requirement is
+        # that schema and domain agree on the accepted inputs and on the unit each limit
+        # counts, and that schema validation must not preempt an error code the contract
+        # assigns — here, §8's invalid_reference.
+        #
+        # Removing these three does not tighten what is accepted. The schema counted 1024
+        # *characters* where validate_reference_path counts 1024 *bytes*, so it was the
+        # looser of the two and the domain still ran behind it: an oversized multi-byte
+        # prefix was admitted to domain validation, which already refused it with the right
+        # code. What changes is the code returned for the oversized ASCII case, not the set
+        # of inputs the tool accepts.
         repository: str | None = Field(default=None, description='"any" or "bound"; names no repository'),
         reference_paths: tuple[str, ...] | None = Field(
             default=None, description=f"at most {MAX_REFERENCE_FILTER_VALUES} paths, each at most 1024 bytes"),
