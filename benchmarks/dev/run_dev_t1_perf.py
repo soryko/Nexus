@@ -66,12 +66,14 @@ IDENTIFIERS = ["transcode_worker.py", "caption_track_id", "AssetState.PUBLISHED"
 def percentile(values: list[float], fraction: float) -> float:
     ordered = sorted(values)
     index = min(len(ordered) - 1, max(0, int(round(fraction * (len(ordered) - 1)))))
-    return round(ordered[index] * 1000, 4)  # milliseconds
+    # Milliseconds, unrounded. Gates compare percentiles and ratios at full precision;
+    # rounding belongs to the report, not to the decision.
+    return ordered[index] * 1000.0
 
 
 def summarise(values: list[float]) -> dict:
     return {"n": len(values), "p50": percentile(values, 0.50), "p95": percentile(values, 0.95),
-            "p99": percentile(values, 0.99), "mean_ms": round(statistics.fmean(values) * 1000, 4)}
+            "p99": percentile(values, 0.99), "mean_ms": statistics.fmean(values) * 1000.0}
 
 
 def body(rng: random.Random, index: int) -> str:

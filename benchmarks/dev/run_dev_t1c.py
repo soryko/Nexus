@@ -181,7 +181,8 @@ def main() -> None:
             pairs = [p for p in record["pairs"] if p["fixture_size"] == size and p["order"] == order]
             exact_p95 = worst_block_p95([p["exact"] for p in pairs])
             stem_p95 = worst_block_p95([p["stem"] for p in pairs])
-            ratio = round(stem_p95 / exact_p95, 4)
+            # Unrounded: the gate is applied to the exact ratio. The report rounds for display.
+            ratio = stem_p95 / exact_p95
             summary[f"{size}|{order}"] = {
                 "blocks": len(pairs),
                 "exact_worst_block_p95_ms": exact_p95,

@@ -23,7 +23,13 @@ The rule, registered before the run: within each order, take each profile's wors
 
 **4 of 4 cells pass.** The schedule ran once, complete, with no early stopping, no dropped blocks and no retries.
 
-The result does not depend on which of two defensible statistics is used. Computing the ratio **within each pair** instead — the more conservative reading, since it never compares blocks measured minutes apart — the worst of all twelve pairs is **1.3611×**, and the worst in any single cell is 1.3611× (10,000, `exact→stem`). Both readings clear 1.5×; neither clears it by a large margin.
+The verdict also holds under the stricter of the two defensible statistics. Computing the ratio **within each pair** — never comparing blocks measured minutes apart — the worst of all twelve pairs is **1.3611×** (10,000, `exact→stem`, pair 5). Both readings clear 1.5×; neither clears it by a large margin.
+
+The paired statistic is stricter as arithmetic, not as luck. For positive paired block p95s `s_i` (`stem`) and `e_i` (`exact`),
+
+> max(s_i) / max(e_i)  ≤  max(s_i / e_i),
+
+because if every pair satisfies `s_i ≤ r·e_i` then the maxima satisfy `max(s_i) ≤ r·max(e_i)` as well. Selecting each profile's maximum independently can therefore **mask a bad pair** — which is exactly what the original 1.8561× did, against a 3.35× paired gap on the very block it drew from. And because both statistics are computed from the same 4,800 durations, their agreement is a **sensitivity check on one dataset, not independent replication**.
 
 ## What the original 1.8561× actually was
 
@@ -36,11 +42,11 @@ T1's per-block figures, which the original report did not print, identify it.
 
 The registered statistic takes each profile's worst block independently and then divides. Here that **compared two different blocks** — `stem`'s block 1 against `exact`'s block 3 — which ran **different query sets**. It is not a paired comparison, and a ratio of two independently selected maxima compounds two tail draws.
 
-Underneath that, there is a real paired anomaly. On block 1's queries, which both profiles ran, T1 measured `stem` at 25.9749 ms against `exact` at 7.7502 ms — a **3.35× gap on identical queries**. T1-C's measured block is **exactly T1's block 1** (verified: the query generator is seeded identically, so T1-C's 250 queries are T1's first 250). Across six fresh blocks on those same queries, `stem`'s worst is **8.9346 ms**. The spike does not recur.
+Underneath that, there is a real paired anomaly. On block 1's queries, which both profiles ran, T1 measured `stem` at 25.9749 ms against `exact` at 7.7502 ms — a **3.35× gap on identical queries**. T1-C's measured block is **exactly T1's block 1** (verified: the query generator is seeded identically, so T1-C's 250 queries are T1's first 250). Across six fresh blocks on those same queries, `stem`'s worst is **8.9346 ms**.
 
-The best-supported reading is that `stem`'s 25.9749 ms was a first-touch cost on the very first stem measurement of that run, not absorbed by the 50 warm-up queries — opening a copied `exact` fixture under `stem` rebuilds the FTS index, which `exact` does not do. **This is now an evidenced explanation rather than the assertion it was.** The original report claimed run position explained the failure without measuring it; that claim was not licensed by the evidence then, and the promotion built on it was correctly withdrawn.
+**The spike did not recur; its cause remains unresolved.** One candidate mechanism is a first-touch cost on the very first stem measurement of that run, not absorbed by the 50 warm-up queries — opening a copied `exact` fixture under `stem` rebuilds the FTS index, which `exact` does not do. That mechanism is plausible but untested by this measurement: **every T1-C block rebuilds the same index, and none of the twelve spiked**, so a design that reproduces the supposed cause without reproducing the effect cannot be what identifies it. Failure to reproduce a spike shows non-recurrence, nothing more. Neither cache causation nor an absence of production impact was established here. The original report claimed run position explained the failure without measuring it; that claim was not licensed by the evidence then, and the promotion built on it was correctly withdrawn.
 
-It also explains the absolute drop from T1: T1's `exact` worst at 1,000 was 13.9946 ms, drawn from block 3, whose heavier query set T1-C does not use. On block 1's queries T1 measured `exact` at 7.7502 and 8.4340 ms in the two orders, against T1-C's 7.4948 and 7.5304. Those agree. **T1-C is not comparable to T1 in absolute terms** — different query mix, a fresh database copy and service per block — and no such comparison is made here.
+Separately, the query mix explains the absolute drop from T1: T1's `exact` worst at 1,000 was 13.9946 ms, drawn from block 3, whose heavier query set T1-C does not use. On block 1's queries T1 measured `exact` at 7.7502 and 8.4340 ms in the two orders, against T1-C's 7.4948 and 7.5304. Those agree. **T1-C is not comparable to T1 in absolute terms** — different query mix, a fresh database copy and service per block — and no such comparison is made here.
 
 ## Per-block results
 
@@ -61,15 +67,16 @@ It also explains the absolute drop from T1: T1's `exact` worst at 1,000 was 13.9
 
 Pairs are interleaved `EF, FE, EF, FE, EF, FE`, not run as two consecutive campaigns, so order is not confounded with drift in machine state.
 
-**Position within a pair does not predict the outcome.** `stem` measured first in six pairs and second in six; its ratio exceeds 1.2× in three of each. Whatever produces the ±35% spread, it is not a systematic first-position penalty at this design.
+**No consistent first-position penalty is apparent in this schedule.** `stem` measured first in six pairs and second in six; the pair ratio exceeds 1.2× in **two `stem→exact` pairs and three `exact→stem` pairs** — five pairs, not three of each. Twelve pairs cannot separate position from anything else at that margin. Interleaving removes the confound between order and one-directional drift; it does not eliminate every time-dependent influence, and the ±35% spread is not attributed here.
 
 ## What this measurement does not establish
 
 - **It does not remove the spread.** Per-pair ratios range 0.9001× to 1.3611×. `stem` clears a 1.5× gate against that spread, but not with room to spare, and a rerun could plausibly produce a pair above 1.4×.
-- **The registered statistic still compounds tails.** Worst-block-per-profile-then-ratio is the rule that was registered and the rule that was applied; it is also the rule that produced 1.8561× from two unrelated blocks. It passed here because no extreme block was drawn, not because the statistic was repaired. Applying the paired statistic as a cross-check is what makes this verdict robust to that.
+- **The registered statistic still selects its maxima independently.** Worst-block-per-profile-then-ratio is the rule that was registered and the rule that was applied; it is also the rule that produced 1.8561× while a 3.35× paired gap sat inside the same blocks. It passed here because no extreme block was drawn, not because the statistic was repaired. The paired cross-check bounds that masking on **this** data; it is not a second measurement of it.
 - **It says nothing about writes.** Writes were excluded by design. `stem`'s write and storage results stand on the T1 measurement.
 - **It says nothing about `dual` or `split`.** Neither was re-measured; neither needed to be.
-- **Two properties were recorded rather than corrected**: every block uses the same 200 measured queries, so block spread reflects machine state rather than query mix; and opening a copied fixture under `stem` rebuilds the FTS index while `exact` does not, leaving the profiles with different page-cache state before warm-up. The second is the likely source of the original spike, and it is a property of the harness design, not of the profile in production.
+- **Two properties were recorded rather than corrected**: every block uses the same 200 measured queries, so block spread reflects machine state rather than query mix; and opening a copied fixture under `stem` rebuilds the FTS index while `exact` does not, leaving the profiles with different page-cache state before warm-up. The second is a **candidate** mechanism for the original spike, not a demonstrated one, and this measurement says nothing about whether it has a production analogue.
+- **It does not explain the original spike.** T1's 25.9749 ms block remains unexplained. What is established is that it did not recur across six fresh blocks on the same queries.
 
 ## Harness correction applied before this ran
 
@@ -78,6 +85,10 @@ The two T1 harnesses enforced different delivery budgets: the performance harnes
 Both now call one label-free budgeted function, [`budgeted_retrieval.retrieve`](budgeted_retrieval.py), with provenance counted. Grading, miss attribution and the over-budget diagnostic probe run outside it. Re-running the quality harness under the shared function reproduces `results-dev-t1.json` with **every per-query field, per-class recall, delivered-byte total and index size identical** — only `build_commit` differs.
 
 **This correction does not establish the cause of the timing swing**, and is not offered as one. It was made because a measurement that does not time the path the gate governs is not evidence either way.
+
+## Harness correction applied after this ran
+
+The harness rounded percentiles to 4 decimal places and the ratio to 4 decimal places **before** comparing them to the gates. Percentiles and ratios are now compared unrounded, and rounding is left to this report. No T1 or T1-C figure sits near enough to a gate for this to change any outcome — the closest cell is 1.1865× against 1.5× — so nothing above is re-decided. The change binds T2 and T3.
 
 ## Consequence
 
