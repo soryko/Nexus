@@ -1,6 +1,12 @@
 # B2b — reference filters on `search`
 
-**Status: reviewed 2026-09-06 and frozen for implementation.** This document fixes the semantics of the second B2 slice *before* its tests are written, so the acceptance tests check a contract rather than describe an implementation.
+**Status: closed 2026-09-06 at `d72a093`.** Implemented at `8563758`, section 9 discharged by
+measurement at `03294b5`, and the error code plus four measurement defects corrected at `d72a093`
+(amendment 5). Migration `005` is not written. The one deferred finding is recorded in amendment 5
+and belongs to its own slice: **bounded evidence loading measured against statistics-only
+optimisation**, which is the comparison an automatic `ANALYZE` policy should be decided against.
+
+**Status while open: reviewed 2026-09-06 and frozen for implementation.** This document fixes the semantics of the second B2 slice *before* its tests are written, so the acceptance tests check a contract rather than describe an implementation.
 
 **Change policy.** After approval the body is kept *currently correct*, and every change to it is preserved. A correction is applied in place, and the wording it supersedes is quoted verbatim in a dated amendment below together with the reason it was wrong. The body is the contract and is read alone; the amendments are the history and are read to find out how it got that way. The two rules are equally binding: nothing knowingly wrong is left standing in the body for an implementer to build against, and nothing is rewritten without its predecessor surviving in an amendment. This replaces the original rule that changes are "recorded as dated amendments below, never as edits in place", which amendments 2 and 3 did not follow — they corrected the body and quoted what they replaced, which is the method in use and now the method on record.
 
