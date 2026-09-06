@@ -387,3 +387,72 @@ def test_a_repository_that_moved_with_its_git_directory_still_verifies(tmp_path:
     link.symlink_to(init_repo(tmp_path / "impostor"))       # a different repository, same path
     with pytest.raises(RepositoryMismatch):
         svc.verifier.check_identity()
+
+
+# --- 5: from the audit of 6e2e0d6 ------------------------------------------------------------
+
+
+def git_accepts(checkout: Path) -> bool:
+    """What the installed git actually decides, so the table below cannot drift from it."""
+    return subprocess.run(["git", "-C", str(checkout), "rev-parse", "--git-common-dir"],
+                          capture_output=True).returncode == 0
+
+
+@pytest.mark.parametrize(("head", "accepted"), [
+    ("ref: refs/heads/main\n", True),                 # born branch
+    ("ref: refs/heads/nothing-yet\n", True),          # unborn: well-formed before the ref exists
+    ("ref: refs/heads/main", True),                   # no trailing newline
+    ("ref:   refs/heads/main\n", True),               # whitespace after the prefix
+    ("9" * 39 + "a\n", True),                         # detached
+    ("9" * 39 + "A\n", True),                         # detached, uppercase
+    ("b" * 64 + "\n", True),                          # detached, sha256 width
+    ("this is not a ref\n", False),
+    ("", False),
+    ("ref: heads/main\n", False),                     # symbolic, but not into refs/
+    ("abc123\n", False),                              # hex, but no object id width
+])
+def test_discovery_accepts_the_head_forms_git_accepts_and_no_others(tmp_path: Path, head: str, accepted: bool) -> None:
+    """Existence was never the question git asks about HEAD.
+
+    A HEAD holding arbitrary text is rejected by git with exit 128 while discovery accepted
+    it, so a checkout git refuses was still reported discoverable — the same disagreement the
+    empty ``.git`` had, one field further in. Each case asserts against the installed git as
+    well as against the expectation, so this cannot quietly drift from the thing it mirrors.
+    """
+    repo = init_repo(tmp_path / "repo")
+    (repo / ".git" / "HEAD").write_text(head)
+    assert git_accepts(repo) is accepted           # the expectation still matches git itself
+    assert (locate_without_git(repo) is not None) is accepted
+
+
+def test_discovery_accepts_a_symlinked_head(tmp_path: Path) -> None:
+    """The historical form: HEAD as a symlink into refs/, which git still validates."""
+    repo = init_repo(tmp_path / "repo")
+    head = repo / ".git" / "HEAD"
+    head.unlink()
+    head.symlink_to("refs/heads/main")
+    assert git_accepts(repo)
+    assert locate_without_git(repo) == common_dir(repo)
+
+
+def test_a_git_directory_whose_head_is_unparsable_is_not_a_degraded_launch(tmp_path: Path) -> None:
+    """The store and the ref store are present; only HEAD is wrong, and git still refuses.
+
+    Reproduced through the CLI: git exited 128 on this directory while the server started
+    unbound with exit 0. Correcting HEAD alone, to an unborn branch, makes both accept it.
+    """
+    db = tmp_path / "memory.sqlite3"
+    hollow = tmp_path / "hollow"
+    (hollow / ".git" / "objects").mkdir(parents=True)
+    (hollow / ".git" / "refs").mkdir()
+    (hollow / ".git" / "HEAD").write_text("not a ref\n")
+
+    assert not git_accepts(hollow)
+    assert locate_without_git(hollow) is None
+    for git_cli in (GIT, failing_git(tmp_path / "broken")):
+        with pytest.raises(RepositoryUnbound):
+            bind_repository(SQLiteRepository(db), SCOPE, hollow, None, git_cli)
+
+    (hollow / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+    assert git_accepts(hollow)
+    assert locate_without_git(hollow) is not None   # only HEAD changed

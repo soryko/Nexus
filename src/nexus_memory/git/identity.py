@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from nexus_memory.domain.errors import (
@@ -8,7 +9,7 @@ from nexus_memory.domain.errors import (
     RepositoryUnbound,
     VerificationUnavailable,
 )
-from nexus_memory.domain.models import RepositoryBinding, Scope
+from nexus_memory.domain.models import HEX, OBJECT_FORMATS, RepositoryBinding, Scope
 from nexus_memory.storage.repository import MemoryRepository
 
 from .cli import GitCli, GitCliVerifier
@@ -20,16 +21,51 @@ __all__ = [
 ]
 
 
+# git validates HEAD through a 256-byte buffer and decides on what fits; so do we.
+_HEAD_BYTES = 256
+
+
+def _valid_head(head: Path) -> bool:
+    """Whether ``HEAD`` holds a form git accepts, not merely that something is there.
+
+    git will not call a directory a repository until HEAD parses as a symbolic ref into
+    ``refs/`` — a file, or historically a symlink — or as a detached object id. Testing only
+    for existence left the same disagreement the empty ``.git`` had: a HEAD holding
+    arbitrary text is rejected by git with exit 128 while discovery accepted it. An unborn
+    branch stays valid, because ``ref: refs/heads/main`` is well-formed before that ref
+    exists; that case is exactly why identity is not derived from history.
+    """
+    try:
+        if head.is_symlink():
+            return os.readlink(head).startswith("refs/")
+        with head.open("rb") as handle:
+            content = handle.read(_HEAD_BYTES)
+    except OSError:
+        return False
+    if content.startswith(b"ref:"):
+        return content[len(b"ref:"):].lstrip().startswith(b"refs/")
+    # Detached: git reads the leading object id and disregards what follows it, in either
+    # case, so the widths are tried against the head of the buffer rather than the whole.
+    return any(HEX.fullmatch(content[:width].decode("ascii", "ignore").lower())
+               for width in OBJECT_FORMATS.values())
+
+
 def _holds_repository_metadata(git_dir: Path) -> bool:
     """Whether a directory carries the metadata git requires before calling it a repository.
 
     That a ``.git`` exists proves nothing: a freshly created empty one makes git exit 128,
     and accepting it here reports the checkout as discoverable — which is the one thing
-    that licenses :func:`bind_repository` to suppress git's own rejection. git looks for an
-    object store, a ref store and a HEAD before it accepts a directory; so do we, so that
-    "discoverable without git" cannot be true where git itself says no.
+    that licenses :func:`bind_repository` to suppress git's own rejection. git wants an
+    object store, a ref store and a HEAD it can parse, so those are what is asked for here.
+
+    This narrows the disagreement with git; it does not end it, and the claim should not be
+    made that it does. git also reads ``core.repositoryformatversion`` and refuses a
+    repository whose extensions it does not know, and it tests the two directories for
+    access rather than for being directories. A launch is refused where git refuses for a
+    reason visible here, and where it refuses for one that is not, the degraded path can
+    still bind a checkout git would reject.
     """
-    return (git_dir / "objects").is_dir() and (git_dir / "refs").is_dir() and (git_dir / "HEAD").is_file()
+    return (git_dir / "objects").is_dir() and (git_dir / "refs").is_dir() and _valid_head(git_dir / "HEAD")
 
 
 def _git_directory_at(directory: Path) -> Path | None:

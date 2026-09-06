@@ -19,3 +19,6 @@ pytest-of-*/
 # internal: unapproved planning draft and build metadata
 docs/plans/milestone-b.md
 BUILD.json
+
+# failure diagnoses written outside pytest's tmp rotation
+artifacts/

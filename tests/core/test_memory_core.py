@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
+from diagnostics import diagnostics_directory, preserve
 from hypothesis import HealthCheck, settings
 from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 
@@ -376,12 +377,10 @@ def test_simultaneous_process_initialization_is_safe(tmp_path: Path) -> None:
                and not queue_failures
                and [r["outcome"] for r in reports] == ["ok"] * len(processes))
     if not healthy:
-        # Preserve the evidence: pytest keeps this directory for the last three runs, so a
-        # flake that fires once in fifty is readable afterwards instead of being gone.
-        log = tmp_path / "initialization-diagnosis.json"
-        log.write_text(json.dumps(diagnosis, indent=2, default=str))
-        pytest.fail(f"simultaneous initialization failed; diagnosis written to {log}\n"
-                    f"{json.dumps(diagnosis, indent=2, default=str)}")
+        # Preserve the evidence outside pytest's three-run rotation, and inline it too: the
+        # failure must survive a diagnostics directory that cannot be written to.
+        report = json.dumps(diagnosis, indent=2, default=str)
+        pytest.fail(f"simultaneous initialization failed; {preserve('initialization', diagnosis)}\n{report}")
 
 
 class LifecycleMachine(RuleBasedStateMachine):
@@ -428,3 +427,29 @@ class LifecycleMachine(RuleBasedStateMachine):
 
 TestLifecycle = LifecycleMachine.TestCase
 TestLifecycle.settings = settings(max_examples=12, stateful_step_count=8, suppress_health_check=[HealthCheck.too_slow])
+
+
+def test_a_diagnosis_is_preserved_outside_the_tmp_rotation_under_a_unique_name(tmp_path: Path, monkeypatch) -> None:
+    """Unique per write, so a second failure never overwrites the first one's evidence."""
+    monkeypatch.setenv("NEXUS_DIAGNOSTICS_DIR", str(tmp_path / "diagnoses"))
+    assert diagnostics_directory() == tmp_path / "diagnoses"
+
+    first = preserve("initialization", {"workers": [{"pid": 1, "exitcode": None}]})
+    second = preserve("initialization", {"workers": [{"pid": 2, "exitcode": 1}]})
+    written = sorted((tmp_path / "diagnoses").iterdir())
+    assert len(written) == 2 and str(written[0]) in first and str(written[1]) in second
+    assert json.loads(written[0].read_text())["workers"][0]["pid"] == 1
+
+
+def test_a_diagnosis_that_cannot_be_written_does_not_replace_the_failure_it_explains(tmp_path: Path, monkeypatch) -> None:
+    """The evidence is a courtesy; the failure is the point.
+
+    A diagnostics directory that cannot be created — read-only checkout, wrong permissions,
+    a path that is a file — must not turn a real failure into an error about writing files.
+    """
+    blocked = tmp_path / "not-a-directory"
+    blocked.write_text("this is a file, so mkdir underneath it cannot succeed")
+    monkeypatch.setenv("NEXUS_DIAGNOSTICS_DIR", str(blocked / "diagnoses"))
+
+    note = preserve("initialization", {"workers": []})
+    assert "could not be written" in note and "reproduced below" in note
