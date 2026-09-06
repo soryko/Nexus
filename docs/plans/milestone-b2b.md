@@ -1,6 +1,8 @@
 # B2b — reference filters on `search`
 
-**Status: reviewed 2026-09-06 and frozen for implementation.** This document fixes the semantics of the second B2 slice *before* its tests are written, so the acceptance tests check a contract rather than describe an implementation. Changes after approval are recorded as dated amendments below, never as edits in place.
+**Status: reviewed 2026-09-06 and frozen for implementation.** This document fixes the semantics of the second B2 slice *before* its tests are written, so the acceptance tests check a contract rather than describe an implementation.
+
+**Change policy.** After approval the body is kept *currently correct*, and every change to it is preserved. A correction is applied in place, and the wording it supersedes is quoted verbatim in a dated amendment below together with the reason it was wrong. The body is the contract and is read alone; the amendments are the history and are read to find out how it got that way. The two rules are equally binding: nothing knowingly wrong is left standing in the body for an implementer to build against, and nothing is rewritten without its predecessor surviving in an amendment. This replaces the original rule that changes are "recorded as dated amendments below, never as edits in place", which amendments 2 and 3 did not follow — they corrected the body and quoted what they replaced, which is the method in use and now the method on record.
 
 B2b adds **filters over recorded reference evidence** to `search`. It adds no new evidence, no new verification, and no new isolation. Ordering in B2: [B2a](milestone-b2a.md) is repository identity plus commit/path verification and is closed at `79e0a0d`; symbol-aware retrieval comes after this slice and B2b accepts no symbols.
 
@@ -63,7 +65,9 @@ Matching is **byte equality against the stored pathname**, which is stored as gi
 
 **Decided.** `src/api` matches `src/api/handler.py` and matches the exact path `src/api`. It does **not** match `src/apiary.py`. The comparison is against `prefix + "/"`, plus the exact-equality case, never a bare string prefix.
 
-**Decided.** No globs, no wildcards, no pathspec magic, no regular expressions. B2a strips pathspec magic before git sees a value precisely so caller text cannot become a pattern; introducing a pattern language on the read side would reintroduce that class of surprise on the other end, in a place where the blast radius is "wrong results" rather than "wrong evidence" — quieter, and therefore worse.
+**Decided.** No globs, no wildcards, no pathspec magic, no regular expressions. B2a passes `--literal-pathspecs`, which **preserves the caller's text and disables its interpretation as a pattern** — the bytes reach git unchanged and no magic prefix or wildcard in them is given meaning — precisely so caller text cannot become a pattern. Introducing a pattern language on the read side would reintroduce that class of surprise on the other end, in a place where the blast radius is "wrong results" rather than "wrong evidence" — quieter, and therefore worse.
+
+**Decided: the comparison is over bytes, and every byte in the value is ordinary.** The prefix is compared case-sensitively, with no Unicode normalisation, and `%`, `_`, `[`, `]`, `*` and `?` match only themselves. This is stated rather than left implied because the obvious SQL spelling of a prefix test has neither property: SQLite's `LIKE` treats `%` and `_` as wildcards and folds ASCII case by default, so a `LIKE` prefix would match `SRC/APIARY.py` for `src/api` and would make a recorded path containing a literal `%` unfilterable; `GLOB` is byte- and case-exact but gives `*`, `?` and `[...]` meaning instead. Whichever operator the implementation reaches for, the observable behaviour is byte-exact, and test 2 asserts that directly rather than trusting the spelling.
 
 `reference_path_prefix` and `reference_paths` may both be supplied; see §4 for how they combine.
 
@@ -173,7 +177,7 @@ Returning only matching references was rejected: evidence is a property of the r
 | Path fails `validate_reference_path`, including `reference_path_prefix: ""` | `invalid_reference` |
 | Commit is not 40 or 64 lowercase hex | `invalid_reference` |
 | Commit width disagrees with the bound `object_format`, **under `repository: "bound"` only** | `invalid_reference` |
-| `repository` is any value other than `"any"` or `"bound"` | `invalid_reference` |
+| `repository` is any value other than `"any"`, `"bound"` or `null` | `invalid_reference` |
 | More than 32 values in `reference_paths` or `reference_commits` | `invalid_reference` |
 | `repository: "bound"` with **no binding** — not merely with verification unavailable | `repository_unbound` |
 | Cursor presented with different filters, or minted under a different resolved `repository_id` | `cursor_expired` |
@@ -192,7 +196,7 @@ Returning only matching references was rejected: evidence is a property of the r
 
 **Decided: measure the existing-index approach before adding storage.** The implementation first writes the §4 predicate against the schema as it stands and records `EXPLAIN QUERY PLAN` for each of the four filter shapes — path-exact, path-prefix, commit-exact, and repository-restricted. Migration `005` is written **only for the shapes the measurement shows the existing indexes cannot serve**, with its columns chosen against that plan. If the measurement clears all four, `005` is not written, and the plans are recorded as an amendment instead. Fixing DDL before measuring a query plan is how an index that is never used gets written down as a decision; this project has already declined a 2.70x storage cost on measured grounds, and paying a smaller one on unmeasured grounds would be the same error in the other direction.
 
-**Decided: the existing-index baseline is the control.** A query plan read off a table of a few dozen rows proves nothing — SQLite will scan a small table whatever indexes exist, so a "scan" verdict there is uninformative and an "index" verdict is luck. All measurement is therefore taken on a corpus large enough for the planner's choice to be meaningful, and the schema as it stands is measured first: plan, query work and latency for each of the four shapes, recorded before any candidate index exists.
+**Decided: the existing-index baseline is the control, and a small fixture answers a narrower question than it appears to.** A plan taken on a table of a few dozen rows is a real plan and is not discarded: SQLite does not always scan a small table, and this project's earlier small-fixture probe returned **indexed** access, so an indexed verdict there is a fact about that fixture rather than luck. What it establishes is the **access strategy the planner chose for that fixture** — which is enough to catch a predicate written so that no index can serve it at all, and that is what §9's invariant asks about. It establishes nothing about performance or scaling, because [`EXPLAIN QUERY PLAN` describes the strategy the planner chose, not the runtime benefit of choosing it](https://www.sqlite.org/eqp.html), and the choice itself can change as row counts and `sqlite_stat1` change. Performance and scaling are therefore addressed by their own measurements, on a corpus large enough for the planner's choice to be load-bearing: plan, query work and latency for each of the four shapes against the schema as it stands, recorded before any candidate index exists.
 
 **Decided: a changed query plan does not establish benefit, and is not accepted as the justification for an index.** The planner switching to a new index says only that it preferred it on its own cost estimates; it can prefer an index that is no faster, and it can prefer one that is slower. The evidence that justifies adding an index is a **measured reduction in query work or latency against the existing-index baseline** — rows examined and full-scan/sort counters alongside wall-clock, since latency alone on a warm small corpus is noise.
 
@@ -203,7 +207,7 @@ Returning only matching references was rejected: evidence is a property of the r
 Temporary repositories, real `git`, one real MCP round trip, as in B2a.
 
 1. **Each matcher alone.** Exact path, segment-aligned prefix, exact commit, and `repository: "bound"` each return exactly the memories whose head revision carries a matching reference, and no others.
-2. **The prefix boundary.** `src/api` matches `src/api/handler.py` and `src/api`; it does not match `src/apiary.py`. Asserted in both directions, because a bare string prefix passes the first half.
+2. **The prefix boundary, and the prefix is not a pattern.** `src/api` matches `src/api/handler.py` and the exact path `src/api`; it does not match `src/apiary.py`. Asserted in both directions, because a bare string prefix passes the first half. Asserted on the same fixture, because §3's byte-exact comparison and `LIKE`'s defaults disagree on every one of them: `SRC/api` and `src/API` match nothing, so case is not folded; a recorded path holding a literal `%` or `_` is returned by a prefix naming those bytes; and a prefix holding `%` or `_` matches only the literal — `a%c` does not match `abc/f.py` and `a_c` does not match `abc/f.py`, while each matches the path named literally by its own bytes.
 3. **One reference satisfies everything.** A memory referencing `a.py` at `X` and `b.py` at `Y` is not returned for `paths=["a.py"], commits=["Y"]`, and is returned for `paths=["a.py"], commits=["X"]`.
 4. **Multiplicity does not duplicate.** A memory with three references matching the filter appears once, at one position.
 5. **Filters precede the limit.** With 30 eligible memories and 30 ineligible ones interleaved by rank, `limit=20` returns 20 eligible hits — not 20 candidates of which some are eligible.
@@ -219,10 +223,10 @@ Temporary repositories, real `git`, one real MCP round trip, as in B2a.
 15. **One real MCP round trip.** Record two referenced memories over subprocess stdio, filter for one, and assert no `repository_id`, verification target or pattern argument is accepted in any tool schema.
 16. **Query plans.** No filter shape full-scans `revision_references`; asserted with `EXPLAIN QUERY PLAN` on a corpus large enough for the plan to be meaningful, whichever index serves it. §9's obligation cannot be quietly dropped, and the test does not presuppose that a new index exists. The existing-index baseline and, for any index `005` does add, its measured query-work or latency benefit and its measured storage and write cost, are recorded as an amendment — a plan change alone does not discharge this.
 17. **A binding without git still answers `"bound"`.** A process bound to a registered checkout with `git` unavailable returns that repository's evidence for `repository: "bound"`, does not raise `repository_unbound`, and reports `verification: "unavailable"` from `status` in the same run.
-18. **Cursors are bound to the resolved repository.** A cursor minted with `repository: "bound"` in a process bound to one repository is `cursor_expired` when presented to a process in the same scope bound to another; the same cursor under `repository: "any"` is unaffected by the binding. With no binding at all, `repository: "bound"` plus that cursor is `repository_unbound`, not `cursor_expired`.
+18. **Cursors are bound to the resolved repository.** **Two cursors are minted separately**, because the two halves of this test are different questions and one cursor cannot ask both. A cursor minted under `repository: "bound"` expires outside the binding it was minted under: presented to a process in the same scope bound to a *different* repository it is `cursor_expired`, and presented under `repository: "any"` it is `cursor_expired` as well, because the argument changed and its resolved identity was fingerprinted. A **separately minted** cursor, minted under `repository: "any"`, transfers: it is spent successfully by a process in the same scope bound to a different repository, and by an unbound process, provided the generation and every other filter are unchanged. With no binding at all, `repository: "bound"` is `repository_unbound` with either cursor, never `cursor_expired`.
 19. **Mixed commit formats.** Under `repository: "any"`, a `reference_commits` list holding a 40-hex and a 64-hex value is accepted and matches evidence of either format recorded in the scope. Under `repository: "bound"`, a value of the width the bound repository does not use is `invalid_reference`, and a mixed list is rejected whole rather than reduced.
 20. **Empty is absent.** For each argument, the empty form of §3 returns the same hits, the same `match_reasons` and the same cursor as omitting it — asserted by minting a cursor with the empty form and spending it with the argument absent — while `reference_path_prefix: ""` and an unrecognised `repository` value are `invalid_reference`.
-21. **`null` is absent, for the four reference filters only.** Each of the four accepts an explicit `null` through the MCP schema and answers as if omitted. Asserted in the same test that `tags_all: null` is still refused, so the divergence in §3 is pinned as deliberate and cannot drift in either direction unnoticed.
+21. **`null` is absent, for the four reference filters only.** Each of the four accepts an explicit `null` through the MCP schema and answers as if omitted, `repository: null` included. Asserted in the same test that `tags_all: null`, `tags_any: null` **and** `kinds: null` are each still refused, so the divergence in §3 is pinned as deliberate on every argument it covers, and cannot drift in either direction unnoticed on any of the three.
 
 ## 11. Negative controls
 
@@ -233,6 +237,7 @@ As in B2a, each mutation must fail at least its designated test. A mutation that
 | Apply reference filters after the limit instead of before | 5 |
 | Omit reference filters from the cursor fingerprint | 7 |
 | Match the path prefix as a bare string prefix, without the segment boundary | 2 |
+| Spell the path prefix as SQL `LIKE`, so `%` and `_` become wildcards and ASCII case folds | 2 |
 | Satisfy conditions across different references instead of one | 3 |
 | Join `revision_references` instead of testing existence | 4, 6 |
 | Resolve a commit value through `git` instead of matching stored bytes | 12, 14 |
@@ -241,12 +246,15 @@ As in B2a, each mutation must fail at least its designated test. A mutation that
 | Apply the filter to any revision rather than the head revision | 10 |
 | Answer `repository: "bound"` with `repository_unbound` when a binding exists but verification does not | 17 |
 | Fingerprint the literal `"bound"` instead of the resolved `repository_id` | 18 |
+| Accept a `"bound"`-minted cursor when it is presented under `repository: "any"` | 18 |
+| Expire an `"any"`-minted cursor because the process binding differs | 18 |
 | Check commit width against the bound `object_format` under `repository: "any"` | 19 |
 | Drop the non-matching widths from a mixed list instead of rejecting the request | 19 |
 | Treat an empty list as an unsatisfiable predicate instead of as absent | 20 |
 | Fingerprint an empty list differently from an absent argument | 20 |
 | Add `references` to `match_reasons` for a non-restricting argument | 20 |
 | Reject an explicit `null` on a reference filter the way `tags_all` does | 21 |
+| Reject `repository: null` as an unrecognised value instead of as absent | 21 |
 | Accept `null` on `tags_all`, `tags_any` or `kinds` as well | 21 |
 | Check the cursor before the `repository` argument | 18 |
 
@@ -266,7 +274,7 @@ Reviewed against the implementation at `2a88052` (unchanged at `6e71d12`). §2's
 4. **New indexes are conditional on measurement (§9, test 16).** The unconditional migration `005` is withdrawn. The obligation is the invariant — no filtered search full-scans `revision_references` — discharged first by measuring the existing indexes, with `005` written only for the shapes they cannot serve, and a negative control (plans taken with the candidate index absent, on a corpus large enough for the planner's choice to be meaningful) so an index that changes no plan is not added.
 5. **Empty and default filters are defined once (§3, §7).** Absent, `"any"`, `[]` and `null` are identical in result set, `match_reasons` and cursor fingerprint; `reference_path_prefix: ""` and an unrecognised `repository` value are `invalid_reference`. This matches the shipped behaviour of `tags_all` rather than introducing a second convention beside it. `[]` as "match nothing" was considered and rejected.
 
-Acceptance tests 17–20 and nine mutation controls were added to cover the five. Later changes are recorded as further amendments, never as edits in place.
+Acceptance tests 17–20 and nine mutation controls were added to cover the five. Later changes follow the change policy at the top of this document; the sentence that stood here, "Later changes are recorded as further amendments, never as edits in place", is superseded by it (amendment 3).
 
 ### 2 — 2026-09-06, two corrections to amendment 1
 
@@ -275,3 +283,37 @@ Raised on review of amendment 1, before any implementation existed against it. B
 1. **`null` was miscredited as existing behaviour (§3).** Amendment 1's table listed `reference_path_prefix: null` as "identical to absent" and justified the whole rule with "this is what the existing filters already do". Only omission and empty collections normalise alike. Measured at `2a88052`: `SearchQuery(tags_all=None)` raises `invalid_input`, and the MCP schema's non-optional `tuple[str, ...]` refuses a JSON `null` before the domain sees it. Accepting `null` on the four reference filters is kept — clients serialise unset optional fields as `null`, and this is new surface with no caller depending on the refusal — but it is now marked **new policy**, extended to all four arguments for internal consistency, and recorded as a deliberate divergence from `tags_all`, `tags_any` and `kinds`, which this slice does not change. Test 21 and two mutation controls pin the divergence in both directions.
 
 2. **A changed query plan was treated as evidence of benefit (§9).** Amendment 1's negative control was "the same plans taken with the candidate index absent … a candidate index whose presence does not change any of the four plans is not added". That control distinguishes only "the plan was already fine" from "the plan changed"; it does not show the index helped, because the planner can prefer an index that is no faster or slower. The existing-index baseline is kept as the control, and the justification for adding an index is now a measured reduction in query work or latency against it, weighed against the index's measured storage and write-path cost. A plan change alone no longer discharges anything.
+
+### 3 — 2026-09-06, four corrections to the frozen contract
+
+Raised on review of the document at `a2cf1cc`, again before any implementation existed against it, so nothing had been built on any of the four. Each is corrected in the body and the wording it supersedes is quoted here, per the change policy at the top — which this amendment also makes explicit, because amendments 2 and 3 both work that way while the original rule said changes are "recorded as dated amendments below, never as edits in place". The method is kept and the rule is corrected to describe it: the body stays currently correct, and no superseded wording is lost.
+
+1. **`repository: null` was accepted in §3 and rejected in §8.** Amendment 1 extended `null`-means-absent to all four reference filters, but §8's error table still read:
+
+   > | `repository` is any value other than `"any"` or `"bound"` | `invalid_reference` |
+
+   Read against §3, which says `repository` "admits `"any"`, `"bound"` and `null`", the two sections specify opposite answers for the same request, and an implementer following the error table alone would reject exactly the encoding amendment 1 exists to accept. The row now names `null` among the accepted values. **Test 21 is extended in the other direction at the same time**: it asserted the preserved rejection on `tags_all` only, which pins one of the three arguments §3 declares unchanged. It now asserts `tags_all: null`, `tags_any: null` and `kinds: null` are each still refused, so the deliberate divergence is pinned on every argument it covers rather than on a sample of them, and a change to `tags_any` or `kinds` cannot pass unnoticed. A mutation control for rejecting `repository: null` is added.
+
+2. **Test 18 permitted the wrong reading, from one cursor asked to answer two questions.** It read:
+
+   > A cursor minted with `repository: "bound"` in a process bound to one repository is `cursor_expired` when presented to a process in the same scope bound to another; the same cursor under `repository: "any"` is unaffected by the binding.
+
+   "The same cursor under `repository: "any"`" is satisfiable by taking the `"bound"`-minted cursor and re-presenting it with `repository: "any"`, and asserting it still pages. That is the opposite of the contract: §6 expires a cursor presented with **any** different filter value, and a `"bound"`-minted cursor additionally carries a resolved `repository_id` in its fingerprint, so this reading would require accepting a cursor across a filter change *and* across a binding change — precisely the §6 failure the amendment-1 correction was written to prevent. A test written to it would pass against an implementation that ignores the repository argument in the fingerprint entirely, and mutation control "fingerprint the literal `"bound"`" would survive it.
+
+   The test now mints **two cursors separately**, one under each value, and states what each is for. A `"bound"`-minted cursor is `cursor_expired` both when presented to a differently bound process in the same scope and when presented under `"any"`. An `"any"`-minted cursor **transfers** between differently bound services in the same scope, and to an unbound process, provided the generation and every other filter are unchanged — which is the property §6 actually claims, that under `"any"` the result set does not depend on the binding and so neither does the fingerprint. Two mutation controls are added, one for each direction of getting this wrong.
+
+3. **§9 overstated what a small fixture means, twice over.** It read:
+
+   > A query plan read off a table of a few dozen rows proves nothing — SQLite will scan a small table whatever indexes exist, so a "scan" verdict there is uninformative and an "index" verdict is luck.
+
+   Both halves are wrong. SQLite does not always scan a small table — the planner chooses on estimated cost, and with no `ANALYZE` data it uses built-in assumptions that regularly select an index regardless of the real row count — and this project's own earlier small-fixture probe **demonstrated indexed access**, which the sentence would have had us dismiss as luck. Calling that result luck would have discarded real evidence, and the wording was also on its way to justifying the corpus-size requirement with an argument that does not hold.
+
+   What a small-fixture plan does establish is narrower than "the index works" and wider than "nothing": it establishes the **access strategy the planner chose for that fixture**, which is enough to catch a predicate written so that no index can serve it at all — §9's invariant. It establishes nothing about performance or scaling, for a reason that is about `EXPLAIN QUERY PLAN` rather than about fixture size: [EQP describes the strategy the planner chose, not the runtime benefit of choosing it](https://www.sqlite.org/eqp.html). The corpus-size requirement is therefore kept but re-justified — it belongs to the performance and scaling measurements, not to the invariant — and it now sits alongside, rather than in place of, the separate rule already in §9 that a changed plan is not evidence of benefit.
+
+4. **The prefix tightening promised in review was missing from both the body and test 2.** The body read:
+
+   > B2a strips pathspec magic before git sees a value precisely so caller text cannot become a pattern
+
+   `--literal-pathspecs` strips nothing. It **preserves the caller's text and disables its interpretation as a pattern** — the bytes reach git unchanged and magic prefixes in them are simply not given meaning. The distinction matters here because B2b is citing B2a as the precedent for its own rule, and the precedent is "the caller's bytes survive and are not interpreted", not "the caller's bytes are edited". Corrected in place.
+
+   Test 2 then asserted only the segment boundary, which leaves the whole metacharacter and case surface untested. §3 now states that the comparison is case-sensitive, without Unicode normalisation, and that `%`, `_`, `[`, `]`, `*` and `?` match only themselves — stated because the obvious SQL spelling does not have those properties: SQLite's `LIKE` folds ASCII case and treats `%` and `_` as wildcards, so a `LIKE` prefix would match `SRC/APIARY.py` for `src/api` and would leave a recorded path containing a literal `%` unfilterable, while `GLOB` is byte-exact but gives `*`, `?` and `[...]` meaning instead. Test 2 now asserts case differences (`SRC/api`, `src/API` match nothing) and literal `%` and `_` in both positions — in a recorded path that must be matchable, and in a prefix that must not behave as a wildcard. A mutation control spelling the prefix as `LIKE` is added, and must fail test 2.
