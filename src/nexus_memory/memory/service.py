@@ -11,6 +11,7 @@ from nexus_memory.domain.errors import (
     InvalidReference,
     PathNotInCommit,
     RepositoryMismatch,
+    RepositoryUnbound,
     UnsupportedReferenceType,
     VerificationUnavailable,
 )
@@ -19,6 +20,7 @@ from nexus_memory.domain.models import (
     HEX,
     OBJECT_FORMATS,
     REFERENCE_DIGEST_VERSION,
+    REPOSITORY_BOUND,
     SUPPORTED_MODES,
     HistoryPage,
     RevisionHit,
@@ -227,9 +229,38 @@ class MemoryService:
         return self.repository.get(self.scope, memory_id, revision_id)
 
     def search(self, query: SearchQuery) -> SearchPage:
+        """Reference filters are answered from recorded evidence; nothing here reads a repository.
+
+        The two checks that need the binding live here rather than in the domain, which holds
+        no binding, or in storage, which is handed an already-resolved identity. Both run
+        **before** the cursor is looked at: an unbound process asking for ``"bound"`` has a
+        binding problem, and ``cursor_expired`` would name the wrong one.
+        """
         if not isinstance(query, SearchQuery):
             raise InvalidInput("query must be a SearchQuery")
-        return self.repository.search(self.scope, query)
+        return self.repository.search(self.scope, query, self._filter_repository_id(query))
+
+    def _filter_repository_id(self, query: SearchQuery) -> str | None:
+        """Resolve ``repository: "bound"``, and apply the checks that need the binding.
+
+        A binding without git is still a binding: ``binding`` and ``verifier`` are independent,
+        ``--repo`` binds from an already-registered checkout token with ``git=None``, and B2b §1
+        forbids the read path from depending on git at all. So repository_unbound turns on the
+        binding alone, never on whether verification is available.
+        """
+        if query.repository != REPOSITORY_BOUND:
+            return None
+        if self.binding is None:
+            raise RepositoryUnbound("no repository is bound to this server")
+        # The width check is scoped to "bound" and applies nowhere else. Under "any" the filter
+        # reads evidence that may span repositories of different object_format, and checking a
+        # caller's value against *this process's* binding would hide sha256 evidence recorded in
+        # the same scope. A mixed list is rejected whole here rather than silently reduced to
+        # the values that happen to fit, which would answer a query the caller did not send.
+        width = OBJECT_FORMATS[self.binding.object_format]
+        if any(len(commit) != width for commit in query.reference_commits or ()):
+            raise InvalidReference("reference commit width does not match the bound repository's object format")
+        return self.binding.repository_id
 
     def search_history(self, query: SearchQuery) -> tuple[RevisionHit, ...]:
         """Candidate generation over non-head revisions.

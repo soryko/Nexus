@@ -26,6 +26,7 @@ from nexus_memory.domain.errors import (
     UnsupportedSchema,
 )
 from nexus_memory.domain.models import (
+    REPOSITORY_BOUND,
     DIGEST_VERSION,
     HistoryPage,
     RevisionHit,
@@ -779,11 +780,24 @@ class SQLiteRepository:
             raise StorageIntegrityError("storage operation failed") from error
 
     @staticmethod
-    def _fingerprint(scope: Scope, query: SearchQuery) -> str:
+    def _fingerprint(scope: Scope, query: SearchQuery, repository_id: str | None = None) -> str:
+        """Every eligibility argument enters the fingerprint, or page two answers a different question.
+
+        ``repository`` enters **resolved**, not literal: two processes in one scope bound to
+        different repositories both send ``"bound"``, and a literal fingerprint would let each
+        accept the other's cursor and page across a different repository's evidence with a
+        well-formed ``(rank, seq)``. Under ``"any"`` — and under absence, which is identical to
+        it — the result set does not depend on the binding, so neither does this payload, and
+        the two continue to fingerprint alike. The identity is only ever hashed, never carried.
+        """
         payload = {
             "namespace": scope.namespace, "actor": scope.actor, "query": query.query,
             "advanced": query.advanced, "tags_all": list(query.tags_all),
             "tags_any": list(query.tags_any), "kinds": list(query.kinds),
+            "repository": ["bound", repository_id] if query.repository == REPOSITORY_BOUND else None,
+            "reference_paths": list(query.reference_paths or ()),
+            "reference_path_prefix": query.reference_path_prefix,
+            "reference_commits": list(query.reference_commits or ()),
         }
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         return hashlib.sha256(encoded).hexdigest()
@@ -802,7 +816,74 @@ class SQLiteRepository:
             raise CursorExpired("cursor is not valid for this search")
         return decoded
 
-    def _filters(self, query: SearchQuery) -> tuple[str, list]:
+    # The correlation that ties an evidence row to the head revision already selected.
+    # ``revision_id`` is part of it, not decoration: without it the predicate would match a
+    # reference any revision of the memory ever carried, and B2b §4 is head revisions only.
+    REFERENCE_CORRELATION = (
+        "r.namespace=h.namespace AND r.actor=h.actor"
+        " AND r.memory_id=h.memory_id AND r.revision_id=h.revision_id"
+    )
+
+    @staticmethod
+    def _path_prefix_clause(prefix: str) -> tuple[str, list]:
+        """A segment-aligned prefix as a byte range, never as a pattern.
+
+        ``LIKE`` would fold ASCII case and read ``%`` and ``_`` as wildcards; ``GLOB`` would
+        read ``*``, ``?`` and ``[...]``. A BINARY comparison against ``[prefix + "/", prefix +
+        "0")`` is segment-aligned by construction — ``/`` is 0x2F and ``0`` is 0x30, so exactly
+        the paths whose next byte is a separator fall inside it — and it is sargable, which a
+        leading-wildcard pattern is not. The exact path is the separate equality.
+        """
+        return "r.path=? OR (r.path>=? AND r.path<?)", [prefix, prefix + "/", prefix + "0"]
+
+    @staticmethod
+    def _reference_conditions(query: SearchQuery, repository_id: str | None) -> tuple[list[str], list]:
+        """The conditions one reference row must satisfy, in the order their parameters bind."""
+        conditions: list[str] = []
+        parameters: list = []
+        if query.repository == REPOSITORY_BOUND:
+            conditions.append("AND r.repository_id=?")
+            parameters.append(repository_id)
+        paths = query.reference_paths or ()
+        prefix = query.reference_path_prefix
+        if paths or prefix is not None:
+            # Both ask the same question of the same column, so they are alternatives to each
+            # other while every other argument conjoins. B2b §4 calls this out as the one
+            # deliberate exception, because it is a surprise otherwise.
+            alternatives: list[str] = []
+            if paths:
+                alternatives.append(f"r.path IN ({','.join('?' * len(paths))})")
+                parameters.extend(paths)
+            if prefix is not None:
+                clause, prefix_parameters = SQLiteRepository._path_prefix_clause(prefix)
+                alternatives.append(clause)
+                parameters.extend(prefix_parameters)
+            conditions.append("AND (" + " OR ".join(alternatives) + ")")
+        commits = query.reference_commits or ()
+        if commits:
+            conditions.append(f"AND r.commit_oid IN ({','.join('?' * len(commits))})")
+            parameters.extend(commits)
+        return conditions, parameters
+
+    @staticmethod
+    def _reference_filter(query: SearchQuery, repository_id: str | None) -> tuple[str, list]:
+        """One EXISTS over ``revision_references``, correlated to the selected head revision.
+
+        Existence, not a join: a memory whose three references all match appears once, and the
+        ``(rank, seq)`` keyset stays a keyset. Every condition sits inside a **single**
+        subquery over a single row, which is what makes "a.py at commit X" mean what it reads
+        like rather than "a.py somewhere and X somewhere".
+        """
+        conditions, parameters = SQLiteRepository._reference_conditions(query, repository_id)
+        if not conditions:
+            return "", []
+        clause = (
+            "AND EXISTS(SELECT 1 FROM revision_references r WHERE "
+            + SQLiteRepository.REFERENCE_CORRELATION + " " + " ".join(conditions) + ")"
+        )
+        return clause, parameters
+
+    def _filters(self, query: SearchQuery, repository_id: str | None = None) -> tuple[str, list]:
         clauses: list[str] = []
         parameters: list = []
         if query.kinds:
@@ -823,6 +904,10 @@ class SQLiteRepository:
                 f" WHERE ht.seq=h.seq AND t.tag IN ({placeholders}))"
             )
             parameters.extend(query.tags_any)
+        reference_clause, reference_parameters = self._reference_filter(query, repository_id)
+        if reference_clause:
+            clauses.append(reference_clause)
+            parameters.extend(reference_parameters)
         return " ".join(clauses), parameters
 
     @staticmethod
@@ -896,16 +981,38 @@ class SQLiteRepository:
             reasons.append("tags_any")
         if query.kinds:
             reasons.append("kind")
+        if SQLiteRepository._restricts_references(query):
+            reasons.append("references")
         return tuple(reasons) or ("recent",)
 
-    def search(self, scope: Scope, query: SearchQuery) -> SearchPage:
+    @staticmethod
+    def _restricts_references(query: SearchQuery) -> bool:
+        """Only a *restricting* argument earns a reason, matching _reasons' truthiness test.
+
+        An empty list and an absent argument are the same query, so they must produce the same
+        match_reasons as well as the same rows and the same cursor.
+        """
+        return bool(
+            query.repository == REPOSITORY_BOUND
+            or query.reference_paths
+            or query.reference_path_prefix is not None
+            or query.reference_commits
+        )
+
+    def search(self, scope: Scope, query: SearchQuery, repository_id: str | None = None) -> SearchPage:
+        """``repository_id`` is the identity the *service* resolved for ``repository: "bound"``.
+
+        Storage never reads a binding and never learns one from a tool call: it is handed the
+        already-resolved identity, or None, and an unbound process never reaches here because
+        the service raises repository_unbound ahead of any cursor check.
+        """
         db = None
         try:
             db = self._connect()
             with closing(db):
                 db.execute("BEGIN")  # one read snapshot for generation, index and authority
                 generation = self._generation(db)
-                fingerprint = self._fingerprint(scope, query)
+                fingerprint = self._fingerprint(scope, query, repository_id)
                 after: tuple[float, int] | None = None
                 if query.cursor is not None:
                     payload = self._decode_cursor(query.cursor)
@@ -913,7 +1020,7 @@ class SQLiteRepository:
                         raise CursorExpired("cursor is not valid for this search")
                     after = (payload["rank"], payload["seq"])
 
-                filters, filter_parameters = self._filters(query)
+                filters, filter_parameters = self._filters(query, repository_id)
                 # The authoritative join is mandatory: external content does not self-synchronise,
                 # and every eligibility filter is applied before the limit, never after.
                 authority = (

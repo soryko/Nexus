@@ -41,7 +41,12 @@ def test_stdio_tools_enforce_contract_and_lifecycle(tmp_path: Path) -> None:
                     "kind", "tags", "source_uri", "snapshot", "references",
                 },
                 "forget": {"memory_id", "expected_revision_id", "idempotency_key"},
-                "search": {"query", "advanced", "tags_all", "tags_any", "kinds", "limit", "cursor"},
+                "search": {
+                    "query", "advanced", "tags_all", "tags_any", "kinds", "limit", "cursor",
+                    # B2b reference filters. They are query fields, not binding arguments: none of
+                    # them names a repository, a commit scope or a path root.
+                    "repository", "reference_paths", "reference_path_prefix", "reference_commits",
+                },
                 "history": {"memory_id", "limit", "cursor"},
                 "status": set(),
             }

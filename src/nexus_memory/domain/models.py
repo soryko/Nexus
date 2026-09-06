@@ -235,6 +235,59 @@ class StoreStatus:
     verification: str = "unavailable"
 
 
+REPOSITORY_ANY = "any"
+REPOSITORY_BOUND = "bound"
+# A filter is a set of alternatives asked of the whole corpus, not the reference set of
+# one revision, so this is deliberately not MAX_REFERENCES. It bounds the generated
+# predicate; see B2b §3.
+MAX_REFERENCE_FILTER_VALUES = 32
+REFERENCE_OID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
+
+
+def _normalized_repository(value: object) -> str:
+    """"any", "bound" or None. None means absent, which is identical to "any"."""
+    if value is None:
+        return REPOSITORY_ANY
+    if value in (REPOSITORY_ANY, REPOSITORY_BOUND):
+        return value  # type: ignore[return-value]
+    raise InvalidReference('repository must be "any" or "bound"')
+
+
+def _normalized_reference_filter(values: object, field: str) -> tuple[str, ...]:
+    if values is None:
+        return ()
+    if isinstance(values, str):  # a bare string is 32 one-character alternatives otherwise
+        raise InvalidReference(f"{field} must be a sequence of strings")
+    try:
+        items = tuple(values)  # type: ignore[arg-type]
+    except TypeError as error:
+        raise InvalidReference(f"{field} must be a sequence of strings") from error
+    if len(items) > MAX_REFERENCE_FILTER_VALUES:
+        raise InvalidReference(f"at most {MAX_REFERENCE_FILTER_VALUES} values in {field}")
+    return items
+
+
+def _normalized_reference_paths(values: object) -> tuple[str, ...]:
+    items = _normalized_reference_filter(values, "reference_paths")
+    return tuple(sorted({validate_reference_path(item) for item in items}))
+
+
+def _normalized_reference_commits(values: object) -> tuple[str, ...]:
+    """Stored object ids, never revision specs.
+
+    Resolving a spec needs git, on a read path B2b §1 forbids from spawning it, so the
+    shape is fixed here: 40 or 64 lowercase hex. The *format* check against a bound
+    repository's object_format is the service's, because only it holds the binding.
+    """
+    items = _normalized_reference_filter(values, "reference_commits")
+    for item in items:
+        if not isinstance(item, str):
+            raise InvalidReference("reference_commits must be strings")
+        if not REFERENCE_OID.fullmatch(item):
+            raise InvalidReference("reference commit must be a 40 or 64 character lowercase hex object id")
+    return tuple(sorted(set(items)))
+
+
 def _normalized_tags(values: object, field: str) -> tuple[str, ...]:
     try:
         normalized = tuple(sorted({tag.strip().lower() for tag in values}))  # type: ignore[union-attr]
@@ -254,6 +307,13 @@ class SearchQuery:
     kinds: tuple[str, ...] = ()
     limit: int = 20
     cursor: str | None = None
+    # B2b reference filters. All four accept an explicit None meaning "no restriction",
+    # which tags_all, tags_any and kinds deliberately do not — see B2b §3. They are
+    # predicates over recorded evidence: none of them binds, selects or reads a repository.
+    repository: str | None = REPOSITORY_ANY
+    reference_paths: tuple[str, ...] | None = ()
+    reference_path_prefix: str | None = None
+    reference_commits: tuple[str, ...] | None = ()
 
     def __post_init__(self) -> None:
         if self.query is not None:
@@ -262,6 +322,13 @@ class SearchQuery:
             raise InvalidInput("advanced must be a boolean")
         object.__setattr__(self, "tags_all", _normalized_tags(self.tags_all, "tags_all"))
         object.__setattr__(self, "tags_any", _normalized_tags(self.tags_any, "tags_any"))
+        object.__setattr__(self, "repository", _normalized_repository(self.repository))
+        object.__setattr__(self, "reference_paths", _normalized_reference_paths(self.reference_paths))
+        object.__setattr__(self, "reference_commits", _normalized_reference_commits(self.reference_commits))
+        if self.reference_path_prefix is not None:
+            # validate_reference_path already refuses the empty string, which is why B2b §8
+            # can name `reference_path_prefix: ""` as invalid_reference without a second rule.
+            object.__setattr__(self, "reference_path_prefix", validate_reference_path(self.reference_path_prefix))
         try:
             kinds = tuple(sorted(set(self.kinds)))
         except TypeError as error:
