@@ -173,13 +173,15 @@ Full text, with the baseline row every variant is scored against: [t2-predeclara
 
 **The three variants**, all sharing one new structure — `revision_fts`, an FTS5 index over non-current revision bodies, tokenised as the head index is, with the authoritative eligibility join applied inside the query so a filtered row never occupies a fusion slot:
 
-| # | Variant | Index scope | Fusion order |
-| --- | --- | --- | --- |
-| 1 | `history_headfirst` | every superseded revision | strict head priority, then history-only memories |
-| 2 | `history_interleaved` | every superseded revision | one fused BM25 ordering across both channels, head priority only as a tie-break |
-| 3 | `history_window3` | 3 most recent superseded revisions per memory | as variant 1 |
+| # | Variant | What a memory matched on **both** channels delivers |
+| --- | --- | --- |
+| 1 | `history_headfirst` | its head only; a superseded revision is delivered only for a memory the head channel never reached |
+| 2 | `history_paired` | its head **and** the matched superseded revision, as two items, always |
+| 3 | `history_cued` | as `history_paired`, but only when the query carries a registered prior-time cue and no present-time cue |
 
-Variant 3 is **predicted, before the run, to miss `dq22`**; it is run to price the full-history index against a bounded one.
+**Amended once, 2026-09-06, before any variant ran.** The first trio varied fusion order and index scope (`history_interleaved`, `history_window3`). Neither dimension can change what is delivered for a memory that *both* channels match — the shape of `dq18` — so all three would have missed a registered target for a reason none of them addressed. The replacement set varies that dimension instead; `history_window3` is deferred, not discarded. Predictions recorded before the run: variant 1 misses `dq18`; variant 2 recovers it and is predicted to fail the `dq23` control and to risk displacing `dq13`'s rank-5 answer; variant 3 is the only one that can pass all six clauses.
+
+Also registered before the run: **history-slot precedence** — a revision the query needs claims one of the five slots first (history-only pool members, then paired revisions), and generic head expansion takes the remainder; a claim with no slot left is not delivered and its miss is attributed `history_budget`.
 
 **Decision rule, registered before the run.** All six must hold: (1) `dq16` and `dq18` recovered as *delivered content* with matched-revision provenance resolved to the correct head; (2) `dq21` delivers nothing and `dq24` still answers at rank 1; (3) `dq17` and `dq23` still answer from the current head at rank 1; (4) no per-query recall loss on the dev1 queries and `dq08`–`dq11` still rank 1; (5) the resource ceilings against a fresh paired `exact`; (6) fusion input ≤40 raw hits with collapse, truncation and shortfall recorded. Among variants that pass, the winner is the one that also recovers `dq22`, then lowest added retrieval-structure bytes, then lowest retrieval p95 ratio. **If none passes, `stem` with head-only candidate generation stands as T2's outcome and T3's baseline is `stem`.**
 

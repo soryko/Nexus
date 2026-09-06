@@ -33,11 +33,41 @@ HISTORY_REVISIONS = 20      # revisions per expanded memory
 DELIVERED_ITEMS = 5         # evidence items delivered
 DELIVERED_BYTES = 8 * 1024  # 8,192 UTF-8 bytes of text *and* provenance
 FUSION_HITS = 40            # T2 only: raw index hits taken in total, 20 per channel
+HISTORY_HITS = 20           # T2 only: the historical channel's own half of that
 
 # Registered T2 policies. `baseline` is the pinned `stem` control and spends no
-# configuration-search slot; the others are the predeclared variants. A policy name that
-# is not here cannot be run, which is what stops a fourth variant appearing by accident.
-HISTORY_POLICIES = ("baseline",)
+# configuration-search slot; the other three are the predeclared variants. A policy name
+# that is not here cannot be run, which is what stops a fourth variant appearing by
+# accident. Registered in benchmarks/dev/t2-predeclaration.md, amended once — before any
+# variant ran — and never after.
+HISTORY_POLICIES = ("baseline", "history_headfirst", "history_paired", "history_cued")
+
+# The history index each policy requires. `none` builds and maintains nothing.
+POLICY_HISTORY_PROFILE = {
+    "baseline": "none",
+    "history_headfirst": "all",
+    "history_paired": "all",
+    "history_cued": "all",
+}
+
+# `history_cued` only. Fixed here before the run: a query asking what something *was*
+# may receive a superseded revision beside the head; a query asking what it is *now* may
+# not. These are properties of the query text — no label, no grade and no answer id is
+# consulted — and the list is English-specific and trivially gameable, which is a stated
+# weakness of the variant rather than a hidden one.
+PRIOR_CUES = frozenset({"was", "were", "before", "previously", "used", "former", "formerly",
+                        "old", "earlier", "originally", "changed", "past", "prior"})
+PRESENT_CUES = frozenset({"now", "current", "currently", "today", "latest"})
+
+
+def _tokens(text: str) -> set[str]:
+    return {token for token in "".join(c.lower() if c.isalnum() else " " for c in text).split()}
+
+
+def wants_prior_evidence(text: str) -> bool:
+    """Whether a query asks about a former state. Label-free by construction."""
+    tokens = _tokens(text)
+    return bool(tokens & PRIOR_CUES) and not (tokens & PRESENT_CUES)
 
 
 def provenance_bytes(view) -> int:
@@ -61,6 +91,8 @@ class Retrieval:
     pool: list[str] = field(default_factory=list)
     pool_provenance: dict[str, str] = field(default_factory=dict)
     pool_from_history: list[str] = field(default_factory=list)
+    paired_revisions: dict[str, str] = field(default_factory=dict)
+    history_budget_denied: list[str] = field(default_factory=list)
     fusion: dict = field(default_factory=dict)
     expanded: list[str] = field(default_factory=list)
     discovered_revisions: list[str] = field(default_factory=list)
@@ -76,56 +108,145 @@ def retrieve(service, text: str, policy: str = "baseline") -> Retrieval:
     """Pool, bounded history expansion, bounded delivery — the whole budgeted path.
 
     This is the function the retrieval gate governs and the only one the performance
-    harness times. `policy` selects candidate generation: `baseline` is head-only and is
-    what T1 measured; the T2 variants add a second channel over superseded revisions.
-    Delivery and the byte accounting below it are shared by every policy, so a variant
-    cannot win by spending a different budget.
+    harness times. `policy` selects candidate generation and delivery: `baseline` is
+    head-only and is what T1 measured; the three T2 variants add a second channel over
+    superseded revisions. The budgets below are shared by every policy, so a variant
+    cannot win by spending a different one.
+
+    Label-free throughout: no query id, grade, or known answer reaches this function.
     """
     if policy not in HISTORY_POLICIES:
         raise ValueError(f"unregistered retrieval policy: {policy}")
     out = Retrieval()
 
+    # --- channel one: current heads ---------------------------------------------------
     page = service.search(SearchQuery(query=text, limit=POOL_LIMIT))
     for hit in page.hits:
         if hit.memory_id not in out.pool:
             out.pool.append(hit.memory_id)
-            # Which revision matched. Head-only search always matches the current
-            # revision; a T2 variant records a superseded one here instead.
             out.pool_provenance[hit.memory_id] = hit.revision_id
+    head_memories = set(out.pool)
+
+    # --- channel two: superseded revisions --------------------------------------------
+    # Scope and forgotten-status filtering happen inside the query, so a row that would
+    # be filtered never occupies one of these slots.
+    history_hits = ()
+    if POLICY_HISTORY_PROFILE[policy] != "none":
+        history_hits = service.search_history(SearchQuery(query=text, limit=HISTORY_HITS))
+
+    collapse = 0
+    history_only: list[str] = []
+    best_historical: dict[str, str] = {}
+    for hit in history_hits:
+        if hit.memory_id in best_historical:
+            collapse += 1                      # a second revision of a memory already seen
+            continue
+        best_historical[hit.memory_id] = hit.revision_id
+        if hit.memory_id in head_memories:
+            collapse += 1                      # the same memory, reached down both channels
+        else:
+            history_only.append(hit.memory_id)
+
+    # Strict head priority: every head hit in rank order, then history-only memories in
+    # theirs. A short channel is never refilled from the other one.
+    for memory_id in history_only:
+        if len(out.pool) >= POOL_LIMIT:
+            break
+        out.pool.append(memory_id)
+        out.pool_from_history.append(memory_id)
+        out.pool_provenance[memory_id] = best_historical[memory_id]
+
+    # `history_paired` and `history_cued` may deliver a superseded revision *beside* the
+    # head of a memory both channels matched. `history_cued` does so only when the query
+    # asks about a former state.
+    paired_allowed = policy in ("history_paired", "history_cued") and (
+        policy != "history_cued" or wants_prior_evidence(text)
+    )
+    if paired_allowed:
+        for memory_id in out.pool:
+            if memory_id in head_memories and memory_id in best_historical:
+                out.paired_revisions[memory_id] = best_historical[memory_id]
+
     out.fusion = {
         "policy": policy,
         "head_hits": len(page.hits),
-        "history_hits": 0,
-        "history_channel": "absent",
-        "duplicate_collapse": 0,
+        "history_hits": len(history_hits),
+        "history_channel": POLICY_HISTORY_PROFILE[policy],
+        "duplicate_collapse": collapse,
         "head_truncated": page.cursor is not None,
-        "history_truncated": False,
+        "history_truncated": len(history_hits) == HISTORY_HITS,
+        "head_shortfall": max(0, POOL_LIMIT - len(page.hits)),
+        "history_shortfall": (max(0, HISTORY_HITS - len(history_hits))
+                              if POLICY_HISTORY_PROFILE[policy] != "none" else None),
+        "pool_from_history": len(out.pool_from_history),
+        "paired": len(out.paired_revisions),
     }
 
-    # Selection uses retrieved evidence only: rank order, and the has_earlier_revisions
-    # flag the search itself reports.
-    expandable = [hit.memory_id for hit in page.hits if hit.has_earlier_revisions]
-    out.expanded = expandable[:HISTORY_MEMORIES]
+    # --- history expansion, five memories deep ----------------------------------------
+    # A revision this query actually needs claims a slot before generic expansion does:
+    # a memory that reached the pool on a superseded match, and a paired revision that
+    # will be delivered beside its head, have already spent history to be here.
+    claims: list[str] = list(out.pool_from_history)
+    claims += [memory_id for memory_id in out.pool
+               if memory_id in out.paired_revisions and memory_id not in claims]
+    granted = claims[:HISTORY_MEMORIES]
+    out.history_budget_denied = claims[HISTORY_MEMORIES:]
+    remaining = HISTORY_MEMORIES - len(granted)
+    expandable = [hit.memory_id for hit in page.hits
+                  if hit.has_earlier_revisions and hit.memory_id not in granted]
+    out.expanded = granted + expandable[:remaining]
     for memory_id in out.expanded:
         history = service.history(memory_id, limit=HISTORY_REVISIONS)
         out.discovered_revisions.extend(entry.revision_id for entry in history.entries)
+    for memory_id in granted:
+        # A directly matched revision is reachable even when it lies outside the twenty
+        # most recent, and it is charged a slot exactly like any other history use.
+        revision_id = out.pool_provenance.get(memory_id) if memory_id in out.pool_from_history else out.paired_revisions.get(memory_id)
+        if revision_id is not None and revision_id not in out.discovered_revisions:
+            out.discovered_revisions.append(revision_id)
     out.history_slots_used = len(out.expanded)
 
+    # --- delivery ---------------------------------------------------------------------
+    denied = set(out.history_budget_denied)
     for memory_id in out.pool:
         if len(out.delivered) >= DELIVERED_ITEMS:
             out.stopped_by = "delivered_item_cap"
             break
         # A memory that entered the pool on a superseded match delivers *that* revision;
         # everything else delivers its head. `revision_id=None` means the head.
-        revision_id = out.pool_provenance.get(memory_id) if memory_id in out.pool_from_history else None
-        view = service.get(memory_id, revision_id)
-        size = len(view.content.encode("utf-8")) + provenance_bytes(view)
-        if out.delivered_bytes + size > DELIVERED_BYTES:
-            out.stopped_by = "delivered_byte_cap"
+        from_history = memory_id in out.pool_from_history
+        if from_history and memory_id in denied:
+            continue                            # no history slot left to pay for it
+        revision_id = out.pool_provenance.get(memory_id) if from_history else None
+        if not _deliver(service, out, memory_id, revision_id):
             break
-        out.delivered.append(memory_id)
-        out.delivered_provenance[memory_id] = view.revision_id
-        out.delivered_bytes += size
-        out.delivered_item_bytes[memory_id] = size
+        paired = out.paired_revisions.get(memory_id)
+        if paired is not None and memory_id not in denied:
+            if len(out.delivered) >= DELIVERED_ITEMS:
+                out.stopped_by = "delivered_item_cap"
+                break
+            if not _deliver(service, out, memory_id, paired, extra=True):
+                break
 
     return out
+
+
+def _deliver(service, out: Retrieval, memory_id: str, revision_id: str | None,
+             extra: bool = False) -> bool:
+    """Deliver one item under the byte budget. False means the budget stopped it.
+
+    A memory can be delivered twice — its head and one superseded revision — under the
+    paired policies, so items are keyed by the revision actually delivered rather than by
+    the memory, and both keys carry their own bytes.
+    """
+    view = service.get(memory_id, revision_id)
+    size = len(view.content.encode("utf-8")) + provenance_bytes(view)
+    if out.delivered_bytes + size > DELIVERED_BYTES:
+        out.stopped_by = "delivered_byte_cap"
+        return False
+    key = f"{memory_id}@{view.revision_id}" if extra else memory_id
+    out.delivered.append(memory_id if not extra else key)
+    out.delivered_provenance[key] = view.revision_id
+    out.delivered_bytes += size
+    out.delivered_item_bytes[key] = size
+    return True

@@ -36,7 +36,7 @@ from nexus_memory.memory import MemoryService  # noqa: E402
 import corpus as corpus_module  # noqa: E402
 from budgeted_retrieval import (  # noqa: E402
     DELIVERED_BYTES, DELIVERED_ITEMS, HISTORY_MEMORIES, HISTORY_REVISIONS, POOL_LIMIT,
-    HISTORY_POLICIES, retrieve,
+    HISTORY_HITS, HISTORY_POLICIES, POLICY_HISTORY_PROFILE, retrieve,
 )
 from run_dev_t1 import index_sizes  # noqa: E402
 
@@ -65,11 +65,24 @@ class QueryResult:
     delivered_provenance: dict[str, str] = field(default_factory=dict)
     delivered_bytes: int = 0
     delivered_bytes_by_grade: dict[str, int] = field(default_factory=lambda: {"2": 0, "1": 0, "0": 0})
+    paired_revisions: dict[str, str] = field(default_factory=dict)
+    history_budget_denied: list[str] = field(default_factory=list)
     history_slots_used: int = 0
     stopped_by: str | None = None
     misses: dict[str, str] = field(default_factory=dict)
 
-    def grade(self, memory_id: str) -> str:
+    def grade(self, key: str) -> str:
+        """Grade one delivered item.
+
+        A paired policy can deliver a memory's head *and* one superseded revision, so the
+        unit graded is the delivered item, not the memory. A superseded revision is
+        grade 2 only where the labels say that revision answers the query; delivering
+        obsolete text to a query that asked about the present is grade 0, which is what
+        makes the volume cost of paired delivery visible.
+        """
+        memory_id, _, revision_id = key.partition("@")
+        if revision_id:
+            return "2" if revision_id in self.grade2_revisions else "0"
         if memory_id in self.grade2_memories:
             return "2"
         if memory_id in self.grade1_memories:
@@ -87,6 +100,11 @@ class QueryResult:
             return None
         found = sum(1 for memory_id in self.grade2_memories if memory_id in self.delivered)
         return found / len(self.grade2_memories)
+
+    def obsolete_delivered(self) -> list[str]:
+        """Superseded revisions delivered that no label says answer this query."""
+        return [key for key in self.delivered_provenance
+                if "@" in key and self.delivered_provenance[key] not in self.grade2_revisions]
 
     def revision_discovery_recall(self) -> float | None:
         """A revision id that came back. Discovery, not evidence — reported separately."""
@@ -129,6 +147,8 @@ def run_query(service: MemoryService, query: dict, mapping: dict, policy: str) -
     result.delivered = budgeted.delivered
     result.delivered_provenance = budgeted.delivered_provenance
     result.delivered_bytes = budgeted.delivered_bytes
+    result.paired_revisions = budgeted.paired_revisions
+    result.history_budget_denied = budgeted.history_budget_denied
     result.history_slots_used = budgeted.history_slots_used
     result.stopped_by = budgeted.stopped_by
 
@@ -161,6 +181,14 @@ def run_query(service: MemoryService, query: dict, mapping: dict, policy: str) -
     return result
 
 
+def _label(label: dict, key: str) -> str:
+    """Fixture-facing name for a delivered item, which may be `memory@revision`."""
+    memory_id, _, revision_id = key.partition("@")
+    if revision_id:
+        return f"{label.get(memory_id, memory_id)}@{label.get(revision_id, revision_id)}"
+    return label.get(memory_id, memory_id)
+
+
 def mean(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
 
@@ -168,7 +196,8 @@ def mean(values: list[float]) -> float | None:
 def run_policy(corpus: dict, policy: str, profile: str) -> dict:
     with tempfile.TemporaryDirectory() as directory:
         path = Path(directory) / "memory.sqlite3"
-        service, mapping = corpus_module.build(path, corpus, profile)
+        service, mapping = corpus_module.build(path, corpus, profile,
+                                               POLICY_HISTORY_PROFILE[policy])
         results = [run_query(service, query, mapping, policy) for query in corpus["queries"]]
         sizes = index_sizes(path)
         label = mapping["to_fixture"]
@@ -194,6 +223,7 @@ def run_policy(corpus: dict, policy: str, profile: str) -> dict:
         },
         "revision_discovery_recall": mean(revision_discovery),
         "revision_delivered_recall": mean(revision_delivered),
+        "obsolete_revisions_delivered": sum(len(r.obsolete_delivered()) for r in results),
         "grade0_delivered_bytes": sum(r.delivered_bytes_by_grade["0"] for r in results),
         "grade1_delivered_bytes": sum(r.delivered_bytes_by_grade["1"] for r in results),
         "grade2_delivered_bytes": sum(r.delivered_bytes_by_grade["2"] for r in results),
@@ -202,8 +232,10 @@ def run_policy(corpus: dict, policy: str, profile: str) -> dict:
              "pool_size": len(r.pool), "pool_from_history": [label[m] for m in r.pool_from_history],
              "fusion": r.fusion,
              "delivered": len(r.delivered), "delivered_bytes": r.delivered_bytes,
-             "delivered_provenance": {label[m]: label.get(rev, rev)
-                                      for m, rev in r.delivered_provenance.items()},
+             "delivered_provenance": {_label(label, key): label.get(rev, rev)
+                                      for key, rev in r.delivered_provenance.items()},
+             "obsolete_delivered": [_label(label, key) for key in r.obsolete_delivered()],
+             "history_budget_denied": [label[m] for m in r.history_budget_denied],
              "candidate_recall": r.candidate_recall(), "delivered_recall": r.delivered_recall(),
              "revision_discovery_recall": r.revision_discovery_recall(),
              "revision_delivered_recall": r.revision_delivered_recall(),
@@ -236,6 +268,7 @@ def main() -> None:
         "corpus": CORPUS.name,
         "corpus_sha256": hashlib.sha256(CORPUS.read_bytes()).hexdigest(),
         "index_profile": BASELINE_PROFILE,
+        "fusion_hits": {"head": POOL_LIMIT, "history": HISTORY_HITS},
         "budgets": {"pool": POOL_LIMIT, "history_memories": HISTORY_MEMORIES,
                     "history_revisions": HISTORY_REVISIONS, "delivered_items": DELIVERED_ITEMS,
                     "delivered_bytes": DELIVERED_BYTES, "diagnostic_limit": DIAGNOSTIC_LIMIT},

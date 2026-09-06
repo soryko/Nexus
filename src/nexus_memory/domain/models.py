@@ -166,6 +166,25 @@ class SearchPage:
 
 
 @dataclass(frozen=True, slots=True)
+class RevisionHit:
+    """A match on a superseded revision, carried with the head it belongs to.
+
+    Provenance is not decoration here: a match on superseded text presented as a current
+    answer is worse than no match at all, so the revision that matched and the live head
+    it resolves to travel together and neither is optional.
+    """
+
+    memory_id: str
+    revision_id: str
+    current_revision_id: str
+    kind: str
+    tags: tuple[str, ...]
+    created_at: str
+    excerpt: str
+    lexical_rank: float | None
+
+
+@dataclass(frozen=True, slots=True)
 class RevisionEntry:
     revision_id: str
     parent_revision_id: str | None

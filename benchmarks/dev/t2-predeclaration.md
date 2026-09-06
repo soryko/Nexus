@@ -59,22 +59,71 @@ Effect of the extension on dev1 queries, measured: `dq12` pool 15→16 and `dq13
 
 ## The three variants — registered before any of them was written
 
-All three share one new persistent structure, `revision_fts`: an FTS5 index over the bodies of **non-current** revisions, tokenised exactly as the head index for the profile in force (porter, since the baseline is `stem`). Every hit passes the authoritative eligibility join — tombstoned memory, wrong scope, or a revision that is now the head is filtered **inside the query**, so a filtered row never occupies one of the 40 fusion slots.
+> **Amended 2026-09-06, before any variant was run.** The trio first registered here —
+> `history_headfirst`, `history_interleaved`, `history_window3` — varied *fusion order*
+> and *index scope*. Writing the fusion code made it plain that neither dimension can
+> change what is delivered for a memory that **both** channels match, and that is exactly
+> the shape of `dq18`: `d22`'s current head matches "caption turnaround" as strongly as
+> its superseded revision does, so under every member of the original trio `dq18` would
+> deliver the head and miss the registered target for a reason none of the three could
+> address. The replacement set varies the dimension that decides `dq18` instead. Nothing
+> had been run when this was changed; the baseline control is the only measurement that
+> existed, and `history_window3` is deferred rather than discarded — pricing a bounded
+> index is worth doing once the full one has a measured cost. The original trio is left
+> in the git history of this file, and the amendment is recorded rather than silently
+> applied.
 
-| # | Variant | Candidate generation | Fusion order |
-| --- | --- | --- | --- |
-| 1 | `history_headfirst` | head ≤20 hits + history ≤20 hits over **every** superseded revision | Strict head priority: all head hits in rank order, then history-only memories in theirs. |
-| 2 | `history_interleaved` | Same index, same channels | One fused ordering by BM25 rank across both channels, best-of per memory. Head priority applies only as a tie-break. |
-| 3 | `history_window3` | Index holds only the **3 most recent superseded revisions per memory** | `history_headfirst`'s ordering, unchanged. |
+All three share one new persistent structure, `revision_fts`: an FTS5 index over the
+bodies of **non-current** revisions, tokenised exactly as the head index for the profile
+in force (porter, since the baseline is `stem`). Every hit passes the authoritative
+eligibility join — tombstoned memory, wrong scope, or a revision that is now the head is
+filtered **inside the query**, so a filtered row never occupies one of the 40 fusion
+slots. All three use strict head priority in the pool: every head hit in rank order, then
+history-only memories in theirs.
 
-Variant 2 exists because best-of across two indexes combines BM25 scores computed over **different corpus statistics**; that is a stated heuristic, not a principled combination, and the same caveat already stands on the `dual` profile. Variant 3 exists to price the full-history index: it is **predicted to miss `dq22`**, because `beaconcast` lies twenty-one revisions back. That prediction is recorded here, before the run.
+| # | Variant | What a memory matched on **both** channels delivers |
+| --- | --- | --- |
+| 1 | `history_headfirst` | Its head only. A superseded revision is delivered only for a memory the head channel never reached. |
+| 2 | `history_paired` | Its head **and** the matched superseded revision, as two items with their own provenance, always. |
+| 3 | `history_cued` | As `history_paired`, but only when the query asks about a **former** state: a registered prior-time cue is present and no present-time cue is. |
 
-Shared delivery rules, identical across all three so that no variant wins by spending a different budget:
+`history_cued`'s cue lists are fixed in `budgeted_retrieval.py` before this run — prior:
+`was, were, before, previously, used, former, formerly, old, earlier, originally,
+changed, past, prior`; present: `now, current, currently, today, latest`. They are read
+from the query text alone; no label, grade or answer id is consulted. The list is
+English-specific, authored against a 24-query development corpus, and trivially gameable.
+That is a stated weakness of the variant, not a hidden one.
 
-- A memory that entered the pool **via head** delivers its head, as today.
-- A memory that entered **only via history** delivers the **matched revision's content**, with provenance `{memory_id, revision_id, current_revision_id}` — provenance counted against the 8,192-byte budget as always.
-- Delivering a matched superseded revision **consumes one of the five history-expansion slots**. With no slot left it is not delivered, and the miss is attributed `history_budget`.
-- Duplicate collapse, per-channel truncation and per-channel shortfall are recorded on every query. A short channel is **not** refilled from the other one.
+**Predictions, recorded before the run.**
+
+- `history_headfirst` recovers `dq16` and `dq22`, preserves every control, and **misses
+  `dq18`** — the case its design cannot reach.
+- `history_paired` recovers `dq18`, and is **predicted to fail the `dq23` control**: a
+  query asking what turnaround is *now* matches the obsolete 48-hour revision too, and
+  this variant delivers it. It also risks displacing `dq13`'s answer, which sits at
+  delivered rank 5, because every paired item costs one of the five delivered slots.
+- `history_cued` is the only variant that can pass all six clauses: it should recover
+  `dq16`, `dq18` and `dq22` and leave `dq17`, `dq23` and `dq13` untouched. If the cue
+  test is the wrong instrument, this is where that shows.
+
+Shared delivery and budget rules, identical across all three so that no variant wins by
+spending a different budget:
+
+- A memory that entered the pool **via head** delivers its head.
+- A memory that entered **only via history** delivers the **matched revision's content**,
+  with provenance `{memory_id, revision_id, current_revision_id}` — provenance counted
+  against the 8,192-byte budget as always.
+- A paired second item is a **separate delivered item**, with its own bytes and its own
+  provenance, counted against the same five-item and 8,192-byte budgets.
+- **History-slot precedence, registered here because the first draft did not say it:**
+  a revision this query actually needs claims a slot first — history-only pool members in
+  pool order, then paired revisions — and generic head expansion takes what remains of
+  the five. A claim with no slot left is not delivered and its miss is attributed
+  `history_budget`.
+- A directly matched revision is delivered even when it lies outside the twenty most
+  recent, and is charged one slot like any other history use.
+- Duplicate collapse, per-channel truncation and per-channel shortfall are recorded on
+  every query. A short channel is **not** refilled from the other one.
 
 ## Decision rule — registered before the run
 
@@ -89,7 +138,9 @@ A variant is eligible for promotion only if **all** of these hold. The complete 
 
 Among variants that pass all six, the pinned winner is chosen in this order:
 
-1. recovers `dq22` (the out-of-twenty case);
+1. recovers `dq22` (the out-of-twenty case) — after the amendment all three variants
+   index the whole history, so this tie-break is expected to be inert and is kept only
+   because it was registered;
 2. then **lowest added retrieval-structure bytes**;
 3. then **lowest retrieval p95 ratio** against `exact`.
 
@@ -103,5 +154,8 @@ From T2 the empty-index control clears **every candidate-generating index** — 
 
 - Labels and both corpus extensions are implementation-side and were not blind-assessed. It is development data and is treated as such.
 - Four historical cases and three controls are a smoke test. A variant that recovers `dq16`, `dq18` and `dq22` has been shown to recover *those three*.
+- The amendment replaced an index-scope variant with a delivery variant. Nothing here
+  prices a bounded historical index; `history_window3` is deferred, and the storage
+  figures below are for the full one.
 - `dq22`'s deep history is one memory with 22 revisions. It shows that a directly matched deep revision is reachable and charged; it says nothing about how cost scales with history depth in general.
 - BM25 fusion across two indexes with different corpus statistics is a heuristic, and variant 2's ordering rests on it.

@@ -7,6 +7,7 @@ from nexus_memory.domain.errors import InvalidInput
 from nexus_memory.domain.models import (
     DIGEST_VERSION,
     HistoryPage,
+    RevisionHit,
     MemoryInput,
     MemoryView,
     Scope,
@@ -86,6 +87,18 @@ class MemoryService:
         if not isinstance(query, SearchQuery):
             raise InvalidInput("query must be a SearchQuery")
         return self.repository.search(self.scope, query)
+
+    def search_history(self, query: SearchQuery) -> tuple[RevisionHit, ...]:
+        """Candidate generation over non-head revisions.
+
+        Returns nothing unless the repository was opened with a history index profile.
+        Every hit carries the revision that matched and the live head it resolves to;
+        ineligible memories are filtered inside the query, not afterwards, so a filtered
+        row never occupies one of the caller's hit slots.
+        """
+        if not isinstance(query, SearchQuery):
+            raise InvalidInput("query must be a SearchQuery")
+        return self.repository.search_history(self.scope, query)
 
     def history(self, memory_id: str, limit: int = 20, cursor: str | None = None) -> HistoryPage:
         memory_id = self._identifier(memory_id, "memory_id")

@@ -27,9 +27,17 @@ def load(name: str = "corpus-dev2.json") -> dict:
     return json.loads((HERE / name).read_text())
 
 
-def build(path: Path, corpus: dict, profile: str) -> tuple[MemoryService, dict]:
-    """Load every memory in file order, replaying revisions so history is real."""
-    service = MemoryService(SQLiteRepository(path, index_profile=profile), Scope("dev", "local"))
+def build(path: Path, corpus: dict, profile: str, history_profile: str = "none") -> tuple[MemoryService, dict]:
+    """Load every memory in file order, replaying revisions so history is real.
+
+    The database is opened under its history profile *before* anything is written, so the
+    historical index is maintained incrementally by `revise` — the path a running system
+    takes — rather than backfilled once at the end.
+    """
+    service = MemoryService(
+        SQLiteRepository(path, index_profile=profile, history_profile=history_profile),
+        Scope("dev", "local"),
+    )
     fixture_to_memory: dict[str, str] = {}
     revision_map: dict[str, str] = {}
     forgotten: list[str] = []

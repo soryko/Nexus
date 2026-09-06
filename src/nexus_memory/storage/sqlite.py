@@ -27,6 +27,7 @@ from nexus_memory.domain.errors import (
 from nexus_memory.domain.models import (
     DIGEST_VERSION,
     HistoryPage,
+    RevisionHit,
     MemoryInput,
     MemoryView,
     RevisionEntry,
@@ -81,8 +82,11 @@ class SQLiteRepository:
     MINIMUM_SQLITE = (3, 51, 3)
     EXCERPT_LIMIT = 240
     SEARCH_PROFILES = ("exact", "stem", "dual", "split")
+    HISTORY_PROFILES = ("none", "all", "window3")
+    HISTORY_WINDOW = 3          # superseded revisions kept per memory under ``window3``
 
-    def __init__(self, path: str | Path, index_profile: str = "exact") -> None:
+    def __init__(self, path: str | Path, index_profile: str = "exact",
+                 history_profile: str = "none") -> None:
         """``index_profile`` selects how bodies are tokenised for search.
 
         ``exact`` is the shipped behaviour and the default; the other three exist so a
@@ -90,13 +94,23 @@ class SQLiteRepository:
         is promoted. The profile is a property of the database, not of a call: it is
         recorded in ``search_profile`` and the auxiliary indexes are rebuilt when the
         requested profile differs from the stored one.
+
+        ``history_profile`` selects whether superseded revisions generate candidates at
+        all, and how many of them are indexed. ``none`` is the shipped behaviour and the
+        default: no historical index exists, nothing maintains one, and it costs nothing.
+        ``all`` indexes every superseded revision; ``window3`` keeps only the three most
+        recent per memory. Like the search profile it is a property of the database, and
+        a change to it drops and rebuilds the structure rather than altering it.
         """
         if sqlite3.sqlite_version_info < self.MINIMUM_SQLITE:
             raise UnsupportedRuntime("SQLite 3.51.3 or newer is required")
         if index_profile not in self.SEARCH_PROFILES:
             raise UnsupportedRuntime(f"unknown search index profile: {index_profile}")
+        if history_profile not in self.HISTORY_PROFILES:
+            raise UnsupportedRuntime(f"unknown history index profile: {history_profile}")
         self.path = str(path)
         self.index_profile = index_profile
+        self.history_profile = history_profile
         self._migrate()
 
     def _connect(self) -> sqlite3.Connection:
@@ -202,6 +216,171 @@ class SQLiteRepository:
                 )
         connection.execute("UPDATE search_profile SET profile=? WHERE id=1", (self.index_profile,))
 
+    def _history_tokenizer(self) -> str:
+        """The historical index is tokenised as the head index for the profile in force.
+
+        Matching the head tokenizer is the point: a query that reaches a current head
+        through the porter stemmer must reach a superseded body the same way, or the two
+        channels would disagree about what a term is and the comparison between them
+        would be a comparison of tokenisers.
+        """
+        return "" if self.index_profile == "exact" else f",tokenize='{self._STEM_TOKENIZER}'"
+
+    def _stored_history_profile(self, connection: sqlite3.Connection) -> str:
+        """The history profile this database was last opened under.
+
+        The table is created only when a history profile is actually asked for. A
+        database that never leaves the shipped default carries no trace of this feature —
+        not the index, not the state row, not the page that would hold it.
+        """
+        exists = connection.execute(
+            "SELECT count(*) FROM sqlite_master WHERE name='history_profile'"
+        ).fetchone()[0]
+        if not exists:
+            if self.history_profile == "none":
+                return "none"
+            connection.execute(
+                "CREATE TABLE history_profile("
+                "id INTEGER PRIMARY KEY CHECK(id = 1), profile TEXT NOT NULL)"
+            )
+            connection.execute("INSERT INTO history_profile(id,profile) VALUES(1,'none')")
+            return "none"
+        return connection.execute("SELECT profile FROM history_profile WHERE id=1").fetchone()[0]
+
+    def _apply_history_profile(self, connection: sqlite3.Connection) -> None:
+        """Bring the historical index into line with the requested profile.
+
+        Unconditional drop and rebuild on any change, for the same reason the search
+        profile rebuilds: an FTS5 tokenizer is fixed at creation, and a window profile
+        holds a different row set than a full one. A database opened under ``none``
+        carries no historical structure at all, so the shipped default pays nothing.
+        """
+        stored = self._stored_history_profile(connection)
+        if stored == self.history_profile and stored == "none":
+            return
+        if stored == self.history_profile and self._history_tokenizer_matches(connection):
+            return
+        connection.execute("DROP TABLE IF EXISTS revision_fts")
+        connection.execute("DROP VIEW IF EXISTS revision_body")
+        connection.execute("DROP TABLE IF EXISTS revision_index")
+        if self.history_profile != "none":
+            connection.execute(
+                "CREATE TABLE revision_index ("
+                "seq INTEGER PRIMARY KEY, namespace TEXT NOT NULL, actor TEXT NOT NULL,"
+                "memory_id TEXT NOT NULL, revision_id TEXT NOT NULL,"
+                "blob_id INTEGER NOT NULL REFERENCES blobs(id), kind TEXT NOT NULL,"
+                "tags_json TEXT NOT NULL, created_at TEXT NOT NULL,"
+                "UNIQUE(namespace, actor, memory_id, revision_id))"
+            )
+            connection.execute(
+                "CREATE INDEX revision_index_memory ON revision_index(namespace, actor, memory_id, seq)"
+            )
+            connection.execute(
+                "CREATE VIEW revision_body AS SELECT x.seq AS rowid, CAST(b.body AS TEXT) AS body"
+                " FROM revision_index x JOIN blobs b ON b.id = x.blob_id"
+            )
+            connection.execute(
+                "CREATE VIRTUAL TABLE revision_fts USING fts5(body,content='revision_body',"
+                "content_rowid='rowid'" + self._history_tokenizer() + ")"
+            )
+            self._backfill_history(connection)
+        connection.execute("UPDATE history_profile SET profile=? WHERE id=1", (self.history_profile,))
+
+    def _history_tokenizer_matches(self, connection: sqlite3.Connection) -> bool:
+        """Whether the existing historical index was built under the current tokenizer.
+
+        The search profile can change under a database whose history profile did not, and
+        that changes what the historical index should hold. Rebuilding on that is not
+        optional: an index built with one tokenizer answers a different question.
+        """
+        row = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE name='revision_fts'"
+        ).fetchone()
+        if row is None:
+            return self.history_profile == "none"
+        wanted = self._history_tokenizer().replace(",tokenize=", "").strip("'")
+        return (wanted in row[0]) if wanted else ("tokenize" not in row[0])
+
+    def _backfill_history(self, connection: sqlite3.Connection) -> None:
+        rows = connection.execute(
+            "SELECT r.namespace,r.actor,r.memory_id,r.revision_id,r.blob_id,r.kind,r.tags_json,"
+            "r.created_at,CAST(b.body AS TEXT)"
+            " FROM revisions r"
+            " JOIN memories m ON m.namespace=r.namespace AND m.actor=r.actor AND m.memory_id=r.memory_id"
+            " JOIN blobs b ON b.id=r.blob_id"
+            " WHERE m.tombstoned=0 AND m.current_revision_id<>r.revision_id"
+            " ORDER BY r.rowid"
+        ).fetchall()
+        for row in rows:
+            self._history_insert(connection, *row)
+        if self.history_profile == "window3":
+            for (namespace, actor, memory_id) in connection.execute(
+                "SELECT DISTINCT namespace,actor,memory_id FROM revision_index"
+            ).fetchall():
+                self._history_prune(connection, namespace, actor, memory_id)
+
+    def _history_insert(self, db: sqlite3.Connection, namespace: str, actor: str, memory_id: str,
+                        revision_id: str, blob_id: int, kind: str, tags_json: str,
+                        created_at: str, body: str) -> None:
+        cursor = db.execute(
+            "INSERT OR IGNORE INTO revision_index(namespace,actor,memory_id,revision_id,blob_id,"
+            "kind,tags_json,created_at) VALUES(?,?,?,?,?,?,?,?)",
+            (namespace, actor, memory_id, revision_id, blob_id, kind, tags_json, created_at),
+        )
+        if cursor.rowcount:  # an ignored duplicate must not write a second FTS row
+            db.execute("INSERT INTO revision_fts(rowid,body) VALUES(?,?)", (cursor.lastrowid, body))
+
+    def _history_prune(self, db: sqlite3.Connection, namespace: str, actor: str, memory_id: str) -> None:
+        """Keep only the most recent window of superseded revisions for one memory.
+
+        Insertion order is chronological, so ``seq`` orders history without consulting a
+        timestamp that a caller could have supplied.
+        """
+        stale = db.execute(
+            "SELECT x.seq,CAST(b.body AS TEXT) FROM revision_index x JOIN blobs b ON b.id=x.blob_id"
+            " WHERE x.namespace=? AND x.actor=? AND x.memory_id=? AND x.seq NOT IN ("
+            "SELECT seq FROM revision_index WHERE namespace=? AND actor=? AND memory_id=?"
+            " ORDER BY seq DESC LIMIT ?)",
+            (namespace, actor, memory_id, namespace, actor, memory_id, self.HISTORY_WINDOW),
+        ).fetchall()
+        for seq, body in stale:
+            db.execute("INSERT INTO revision_fts(revision_fts,rowid,body) VALUES('delete',?,?)", (seq, body))
+            db.execute("DELETE FROM revision_index WHERE seq=?", (seq,))
+
+    def _history_add(self, db: sqlite3.Connection, scope: Scope, memory_id: str, revision_id: str) -> None:
+        """Record the revision that has just stopped being the head."""
+        if self.history_profile == "none":
+            return
+        row = db.execute(
+            "SELECT r.blob_id,r.kind,r.tags_json,r.created_at,CAST(b.body AS TEXT) FROM revisions r"
+            " JOIN blobs b ON b.id=r.blob_id"
+            " WHERE r.namespace=? AND r.actor=? AND r.memory_id=? AND r.revision_id=?",
+            (scope.namespace, scope.actor, memory_id, revision_id),
+        ).fetchone()
+        if row is None:
+            return
+        self._history_insert(db, scope.namespace, scope.actor, memory_id, revision_id, *row)
+        if self.history_profile == "window3":
+            self._history_prune(db, scope.namespace, scope.actor, memory_id)
+
+    def _history_remove_memory(self, db: sqlite3.Connection, scope: Scope, memory_id: str) -> None:
+        """A forgotten memory leaves no historical rows behind.
+
+        The eligibility join in ``search_history`` would filter them anyway. Deleting
+        them as well is the same belt-and-braces the head index already uses: two
+        independent reasons why forgotten content cannot surface, not one.
+        """
+        if self.history_profile == "none":
+            return
+        rows = db.execute(
+            "SELECT x.seq,CAST(b.body AS TEXT) FROM revision_index x JOIN blobs b ON b.id=x.blob_id"
+            " WHERE x.namespace=? AND x.actor=? AND x.memory_id=?",
+            (scope.namespace, scope.actor, memory_id),
+        ).fetchall()
+        for seq, body in rows:
+            db.execute("INSERT INTO revision_fts(revision_fts,rowid,body) VALUES('delete',?,?)", (seq, body))
+            db.execute("DELETE FROM revision_index WHERE seq=?", (seq,))
+
     def _migrate(self) -> None:
         connection = None
         try:
@@ -229,6 +408,7 @@ class SQLiteRepository:
                 version = 3
             connection.execute(f"PRAGMA user_version = {version}")
             self._apply_profile(connection)
+            self._apply_history_profile(connection)
             connection.commit()
         except NexusError:
             if connection is not None and connection.in_transaction:
@@ -400,6 +580,7 @@ class SQLiteRepository:
             receipt = self._event_and_receipt(db, scope, key, digest, memory_id, revision_id, "revise")
             self._index_remove(db, scope, memory_id)
             self._index_add(db, scope, memory_id, revision_id, blob_id, item, created_at, receipt.durable_seq, True)
+            self._history_add(db, scope, memory_id, head)   # the outgoing head
             self._bump_generation(db)
             return receipt
 
@@ -413,6 +594,7 @@ class SQLiteRepository:
             db.execute("UPDATE memories SET tombstoned=1 WHERE namespace=? AND actor=? AND memory_id=?", (scope.namespace, scope.actor, memory_id))
             receipt = self._event_and_receipt(db, scope, key, digest, memory_id, head, "forget")
             self._index_remove(db, scope, memory_id)
+            self._history_remove_memory(db, scope, memory_id)
             self._bump_generation(db)
             return receipt
 
@@ -644,6 +826,56 @@ class SQLiteRepository:
                     })
                 db.commit()
                 return SearchPage(hits=hits, cursor=cursor, generation=generation)
+        except NexusError:
+            raise
+        except (sqlite3.Error, UnicodeError, ValueError) as error:
+            raise StorageIntegrityError("storage operation failed") from error
+
+    def search_history(self, scope: Scope, query: SearchQuery) -> tuple[RevisionHit, ...]:
+        """Candidate generation over non-head revisions — the T2 second channel.
+
+        Eligibility is enforced inside the statement, never after it: the authoritative
+        join to ``memories`` drops tombstoned rows, and ``current_revision_id<>x.revision_id``
+        drops anything that is now the head. A row that a caller would have filtered out
+        therefore never occupies one of that caller's hit slots, which is what makes a
+        limit on this channel mean what it says.
+
+        Returns nothing under the ``none`` history profile, where no such index exists.
+        """
+        if self.history_profile == "none":
+            return ()
+        db = None
+        try:
+            db = self._connect()
+            with closing(db):
+                db.execute("BEGIN")
+                expression = self._match_expression(query)
+                if expression is None:  # no indexable token: match nothing, never everything
+                    db.commit()
+                    return ()
+                self._validate_match_expression(expression)
+                rows = db.execute(
+                    "SELECT x.memory_id,x.revision_id,m.current_revision_id,x.kind,x.tags_json,"
+                    "x.created_at,bm25(revision_fts) AS rank,"
+                    f"snippet(revision_fts,0,'','','…',16) AS excerpt"
+                    " FROM revision_fts JOIN revision_index x ON x.seq=revision_fts.rowid"
+                    " JOIN memories m ON m.namespace=x.namespace AND m.actor=x.actor"
+                    "   AND m.memory_id=x.memory_id"
+                    " WHERE x.namespace=? AND x.actor=? AND m.tombstoned=0"
+                    "   AND m.current_revision_id<>x.revision_id AND revision_fts MATCH ?"
+                    " ORDER BY rank, x.seq LIMIT ?",
+                    (scope.namespace, scope.actor, expression, query.limit),
+                ).fetchall()
+                hits = tuple(
+                    RevisionHit(
+                        memory_id=row[0], revision_id=row[1], current_revision_id=row[2],
+                        kind=row[3], tags=tuple(json.loads(row[4])), created_at=row[5],
+                        excerpt=row[7], lexical_rank=row[6],
+                    )
+                    for row in rows
+                )
+                db.commit()
+                return hits
         except NexusError:
             raise
         except (sqlite3.Error, UnicodeError, ValueError) as error:
