@@ -59,6 +59,46 @@ PRIOR_CUES = frozenset({"was", "were", "before", "previously", "used", "former",
                         "old", "earlier", "originally", "changed", "past", "prior"})
 PRESENT_CUES = frozenset({"now", "current", "currently", "today", "latest"})
 
+# Registered T3 selections. `all` is the pinned baseline — deliver the pool in rank order
+# until a budget stops it — and spends no configuration-search slot. The other three are
+# the predeclared variants. Selection may reorder or reject; it may not change what became
+# a candidate, and it never sees a label.
+SELECTIONS = ("all", "cutoff_25", "cutoff_40", "dominant_top_2x")
+CUTOFF_FRACTION = {"cutoff_25": 0.25, "cutoff_40": 0.40}
+DOMINANCE = 2.0             # `dominant_top_2x`: how far ahead the best hit must be
+
+
+def selected_prefix(ranks: list[float | None], selection: str) -> int:
+    """How many of the pool's leading members selection is willing to deliver.
+
+    `ranks` are BM25 scores in pool order, most relevant first and negative — SQLite's
+    bm25() returns smaller numbers for better matches, so magnitude is quality. A pool
+    with no lexical scores at all (an empty-text query) is not something selection can
+    judge, and it is left alone.
+    """
+    if selection == "all":
+        return len(ranks)
+    usable = [rank for rank in ranks if rank is not None]
+    if len(usable) < 2:
+        return len(ranks)
+    best = abs(usable[0])
+    if best == 0:
+        return len(ranks)
+    if selection in CUTOFF_FRACTION:
+        floor = CUTOFF_FRACTION[selection] * best
+        keep = 1
+        for rank in usable[1:]:
+            if abs(rank) < floor:
+                break
+            keep += 1
+        return keep
+    # `dominant_top_2x`: a different shape of judgment. Rather than asking how good a hit
+    # is in absolute terms, ask whether the query had one clear winner. If the best hit is
+    # at least twice the second, deliver it alone; otherwise the query did not discriminate
+    # and nothing here licenses throwing candidates away.
+    second = abs(usable[1])
+    return 1 if second == 0 or best / second >= DOMINANCE else len(ranks)
+
 
 def _tokens(text: str) -> set[str]:
     return {token for token in "".join(c.lower() if c.isalnum() else " " for c in text).split()}
@@ -91,6 +131,8 @@ class Retrieval:
     pool: list[str] = field(default_factory=list)
     pool_provenance: dict[str, str] = field(default_factory=dict)
     pool_from_history: list[str] = field(default_factory=list)
+    pool_rank: dict[str, float | None] = field(default_factory=dict)
+    selected: int = 0
     paired_revisions: dict[str, str] = field(default_factory=dict)
     history_budget_denied: list[str] = field(default_factory=list)
     revisions_by_memory: dict[str, list[str]] = field(default_factory=dict)
@@ -105,7 +147,7 @@ class Retrieval:
     stopped_by: str | None = None
 
 
-def retrieve(service, text: str, policy: str = "baseline") -> Retrieval:
+def retrieve(service, text: str, policy: str = "baseline", selection: str = "all") -> Retrieval:
     """Pool, bounded history expansion, bounded delivery — the whole budgeted path.
 
     This is the function the retrieval gate governs and the only one the performance
@@ -118,6 +160,8 @@ def retrieve(service, text: str, policy: str = "baseline") -> Retrieval:
     """
     if policy not in HISTORY_POLICIES:
         raise ValueError(f"unregistered retrieval policy: {policy}")
+    if selection not in SELECTIONS:
+        raise ValueError(f"unregistered selection: {selection}")
     out = Retrieval()
 
     # --- channel one: current heads ---------------------------------------------------
@@ -126,6 +170,7 @@ def retrieve(service, text: str, policy: str = "baseline") -> Retrieval:
         if hit.memory_id not in out.pool:
             out.pool.append(hit.memory_id)
             out.pool_provenance[hit.memory_id] = hit.revision_id
+            out.pool_rank[hit.memory_id] = hit.lexical_rank
     head_memories = set(out.pool)
 
     # --- channel two: superseded revisions --------------------------------------------
@@ -215,9 +260,19 @@ def retrieve(service, text: str, policy: str = "baseline") -> Retrieval:
     out.history_slots_used = len(out.expanded)
     assert out.history_slots_used <= HISTORY_MEMORIES
 
-    # --- delivery ---------------------------------------------------------------------
+    # --- selection, then delivery -----------------------------------------------------
+    # Selection reads retrieved evidence only — the pool's own BM25 scores — and can only
+    # deliver less than the budget allows. It cannot add a candidate, reach past the pool,
+    # or consult anything a label touched.
+    out.selected = selected_prefix([out.pool_rank.get(memory_id) for memory_id in out.pool],
+                                   selection)
+    if out.selected < len(out.pool):
+        out.stopped_by = "selection"
+
     denied = set(out.history_budget_denied)
-    for memory_id in out.pool:
+    for position, memory_id in enumerate(out.pool):
+        if position >= out.selected:
+            break
         if len(out.delivered) >= DELIVERED_ITEMS:
             out.stopped_by = "delivered_item_cap"
             break

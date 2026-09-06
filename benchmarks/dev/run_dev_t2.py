@@ -123,7 +123,8 @@ class QueryResult:
         return found / len(self.grade2_revisions)
 
 
-def run_query(service: MemoryService, query: dict, mapping: dict, policy: str) -> QueryResult:
+def run_query(service: MemoryService, query: dict, mapping: dict, policy: str,
+              selection: str = "all") -> QueryResult:
     to_memory = mapping["memories"]
     to_revision = mapping["revisions"]
     result = QueryResult(
@@ -138,7 +139,7 @@ def run_query(service: MemoryService, query: dict, mapping: dict, policy: str) -
     # --- the budgeted path ------------------------------------------------------------
     # The same function the T2 performance harness times, and label-free by construction:
     # it never sees query["grade2"] or anything derived from it.
-    budgeted = retrieve(service, query["text"], policy=policy)
+    budgeted = retrieve(service, query["text"], policy=policy, selection=selection)
     result.pool = budgeted.pool
     result.pool_provenance = budgeted.pool_provenance
     result.pool_from_history = budgeted.pool_from_history
@@ -152,6 +153,8 @@ def run_query(service: MemoryService, query: dict, mapping: dict, policy: str) -
     result.revisions_by_memory = budgeted.revisions_by_memory
     result.history_budget_denied = budgeted.history_budget_denied
     result.history_slots_used = budgeted.history_slots_used
+    result.pool_rank = budgeted.pool_rank
+    result.selected = budgeted.selected
     result.stopped_by = budgeted.stopped_by
 
     # --- reporting, outside the budget and outside any timed section -------------------
@@ -195,12 +198,13 @@ def mean(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
 
 
-def run_policy(corpus: dict, policy: str, profile: str) -> dict:
+def run_policy(corpus: dict, policy: str, profile: str, selection: str = "all") -> dict:
     with tempfile.TemporaryDirectory() as directory:
         path = Path(directory) / "memory.sqlite3"
         service, mapping = corpus_module.build(path, corpus, profile,
                                                POLICY_HISTORY_PROFILE[policy])
-        results = [run_query(service, query, mapping, policy) for query in corpus["queries"]]
+        results = [run_query(service, query, mapping, policy, selection)
+                   for query in corpus["queries"]]
         sizes = index_sizes(path)
         label = mapping["to_fixture"]
 
@@ -215,6 +219,7 @@ def run_policy(corpus: dict, policy: str, profile: str) -> dict:
     revision_delivered = [r.revision_delivered_recall() for r in results if r.revision_delivered_recall() is not None]
     return {
         "policy": policy,
+        "selection": selection,
         "index_profile": profile,
         "index_bytes": sizes,
         "per_class": {
@@ -244,6 +249,11 @@ def run_policy(corpus: dict, policy: str, profile: str) -> dict:
              "rank_of_answers": {label[m]: (r.pool.index(m) + 1 if m in r.pool else None)
                                  for m in r.grade2_memories},
              "history_slots_used": r.history_slots_used,
+             "pool_ranks": [r.pool_rank.get(m) for m in r.pool],
+             "selected_items": r.selected,
+             "grade0_delivered_bytes": r.delivered_bytes_by_grade["0"],
+             "grade1_delivered_bytes": r.delivered_bytes_by_grade["1"],
+             "grade2_delivered_bytes": r.delivered_bytes_by_grade["2"],
              # Both dimensions of the history budget, recorded per query so the record
              # shows the limits binding rather than asserting that they did.
              "history_memories_used": len(r.revisions_by_memory),
