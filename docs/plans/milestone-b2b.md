@@ -4,10 +4,12 @@
 `03294b5`, the error code plus four measurement defects corrected at `d72a093` (amendment 5), and
 three of amendment 5's *claims about its own evidence* corrected on review (amendment 6). No
 measured number and no decision changed between 5 and 6. Migration `005` is not written. The one
-deferred finding belongs to its own slice: **bounded evidence loading measured against a
+deferred finding belonged to its own slice: **bounded evidence loading measured against a
 statistics-only control, with candidate selection measured separately** — the comparison an
-automatic `ANALYZE` policy should be decided against, and which the current evidence does not
-itself justify.
+automatic `ANALYZE` policy should be decided against. That slice is
+[B2 — bounded evidence loading](milestone-b2-evidence-loading.md), run and closed
+2026-09-06; amendment 7 records what it settled and what it left open. Nothing it found
+changes anything in this document.
 
 **Status while open: reviewed 2026-09-06 and frozen for implementation.** This document fixes the semantics of the second B2 slice *before* its tests are written, so the acceptance tests check a contract rather than describe an implementation.
 
@@ -594,3 +596,44 @@ next performance slice should measure **bounded evidence loading against a stati
 control, with candidate selection measured separately**. The current evidence supports
 investigating that bottleneck; it does not yet justify a blanket automatic `ANALYZE` policy,
 which should be decided against that comparison.
+
+### 7 — 2026-09-07, navigational: §9's deferred finding is discharged elsewhere
+
+**Nothing in this document changes.** No decision, measurement or contract clause is
+touched. This amendment exists so that a reader arriving at B2b's closing note can find
+where its deferred work went, rather than inferring from commit order that it was dropped.
+
+Two places named the deferred work. The status block said:
+
+> The one deferred finding belongs to its own slice: **bounded evidence loading measured
+> against a statistics-only control, with candidate selection measured separately** — the
+> comparison an automatic `ANALYZE` policy should be decided against, and which the current
+> evidence does not itself justify.
+
+and amendment 6 closed by naming the same piece of work:
+
+> The deferred finding is also unchanged — evidence loading, not candidate selection,
+> carries the `ANALYZE` gain, and the next performance slice should measure **bounded
+> evidence loading against a statistics-only control, with candidate selection measured
+> separately**. The current evidence supports investigating that bottleneck; it does not
+> yet justify a blanket automatic `ANALYZE` policy, which should be decided against that
+> comparison.
+
+That comparison was run and acted on in
+[B2 — bounded evidence loading](milestone-b2-evidence-loading.md), which is the successor
+slice. Three things a reader of B2b should carry forward from it:
+
+* **The deferred `ANALYZE` question is answered for evidence loading only.** Bounded
+  loading captures the gain amendment 5 located in that stage without statistics, so an
+  automatic policy has nothing left to buy there. The question stays open for candidate
+  selection, where statistics still measure a 35.84% reduction on the unfiltered browse
+  after bounding.
+* **B2b's storage decision is untouched.** Migration `005` remains unwritten and the
+  successor slice adds no index; it changes the shape of one statement.
+* **The B2b contract is unchanged and still enforced.** All nineteen acceptance scenarios
+  in §10 run against the successor's retained control form as well as the shipped one, so
+  the guarantees this document freezes are asserted under both loaders.
+
+B2b's own status is unaffected: it stays closed at `cdf51e7`, and this is a pointer, not a
+reopening.
+
