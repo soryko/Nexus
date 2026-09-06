@@ -121,6 +121,17 @@ This run's anchor arm measured 16.2–18.0 ms at 10,000, close to T1-C's 19.0476
 from the 37.2549 ms seen during the T2 ceiling run. Why those two runs differed is still
 unresolved; nothing here identifies it.
 
+### Disclosures about how this run was made
+
+- A **pilot** ran first at 1,000 memories only, to check the harness after selection was
+  threaded through it. Its record is kept as `results-dev-t3-perf-pilot-1000.json` rather
+  than deleted; it measured 2/2 cells passing and is not part of the verdict.
+- The complete ceiling schedule ran **once**, with no early stopping, no dropped blocks and
+  no retries. The quality run also ran once, with all four arms in one record.
+- The ceiling harness is T2's, extended with a `--selection` flag; the anchor and stage
+  baseline are defined exactly as they were there, so a T2 figure and a T3 figure mean the
+  same thing.
+
 ## Verdict — `cutoff_40` clears every registered clause
 
 | Selection | Grade-0 gate | Recall / coverage / support | Ceilings | Outcome |
