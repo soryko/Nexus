@@ -18,7 +18,10 @@ defaults:
     shell: bash
 
 env:
-  UV_VERSION: "0.9.5"
+  # The uv release pins the embedded interpreter download index, so this pins which builds
+  # exist at all, not merely which resolver runs. 0.11.21 is the version the interpreter
+  # below was verified against; an older one does not carry that build.
+  UV_VERSION: "0.11.21"
   # Pins the interpreter build, not merely the series. The suite's floor is a property of
   # the SQLite the interpreter is linked against, which varies between builds of one
   # version, so "3.13" would not be a pin of the thing that matters. This is not the
