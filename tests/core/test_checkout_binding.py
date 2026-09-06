@@ -1,7 +1,9 @@
 """Regressions for the checkout a bound process follows, from the audit of 0b0a217.
 
-The binding is made once at launch and the pathname is followed on every later call. What
-lives at that path can change, so what the process believes about it has to be re-read.
+Three defects, all in the gap between the binding made once at launch and the pathname
+followed on every later call: evidence stamped with the identity of a repository that had
+left the path, a startup a broken git could take down, and a degraded launch that quietly
+answered differently from the same arguments with git present.
 """
 from __future__ import annotations
 
@@ -21,7 +23,7 @@ from nexus_memory.domain.errors import (
     RepositoryUnbound,
     VerificationUnavailable,
 )
-from nexus_memory.domain.models import MemoryInput, ReferenceInput
+from nexus_memory.domain.models import MemoryInput, ReferenceInput, Scope
 from nexus_memory.git import GitCli, bind_repository
 from nexus_memory.git.identity import token_path
 from nexus_memory.memory import MemoryService
@@ -168,7 +170,7 @@ def test_a_git_that_cannot_answer_degrades_like_a_missing_one(tmp_path: Path, ma
     assert degraded.record(MemoryInput("plain writes still work"), "plain").operation == "record"
 
 
-def test_a_broken_git_does_not_swallow_a_wrong_path_or_a_bad_token(tmp_path: Path) -> None:
+def test_a_broken_git_does_not_swallow_a_wrong_path_a_conflict_or_a_bad_token(tmp_path: Path) -> None:
     """Degrading must not turn every launch into a success.
 
     The fallback applies where the checkout is discoverable without git; where it is not,
@@ -176,7 +178,7 @@ def test_a_broken_git_does_not_swallow_a_wrong_path_or_a_bad_token(tmp_path: Pat
     """
     db = tmp_path / "memory.sqlite3"
     repo = init_repo(tmp_path / "repo")
-    bind(db, repo)
+    identity = bind(db, repo).repository_id
     broken = failing_git(tmp_path / "broken")
     plain = tmp_path / "plain"
     plain.mkdir()
@@ -185,6 +187,9 @@ def test_a_broken_git_does_not_swallow_a_wrong_path_or_a_bad_token(tmp_path: Pat
         bind_repository(SQLiteRepository(db), SCOPE, plain, None, broken)
     with pytest.raises(RepositoryUnbound):
         bind_repository(SQLiteRepository(db), SCOPE, tmp_path / "missing", None, broken)
+    with pytest.raises(RepositoryMismatch):
+        bind_repository(SQLiteRepository(db), SCOPE, repo, "another-identity", broken)
+    assert bind_repository(SQLiteRepository(db), SCOPE, repo, identity, broken)[0].repository_id == identity
 
     token_path(common_dir(repo)).write_text("truncated")
     with pytest.raises(RepositoryRegistrationFailed):
@@ -210,3 +215,67 @@ def test_the_cli_starts_with_a_registered_checkout_and_a_git_that_cannot_answer(
     )
     assert started.returncode == 0, started.stderr
     assert "startup_error" not in started.stderr
+
+
+# --- 3: what a degraded launch means ---------------------------------------------------------
+
+
+def test_without_git_a_subdirectory_binds_the_same_identity_as_with_git(tmp_path: Path) -> None:
+    """`--repo repo/sub` is one argument, and it must not name two different bindings.
+
+    Reproduced at 0b0a217: a restart without git lost the registered identity for a
+    checkout named by a subdirectory, because discovery looked only at `sub/.git` and
+    never at its ancestors. Stored evidence stayed readable; the active binding `status`
+    reported did not.
+    """
+    db = tmp_path / "memory.sqlite3"
+    main = init_repo(tmp_path / "main")
+    linked = tmp_path / "linked"
+    git(main, "worktree", "add", "-q", str(linked), "-b", "feature")
+    identity = bind(db, main).repository_id
+
+    for checkout in (main, main / "sub", linked, linked / "sub"):
+        assert bind(db, checkout).repository_id == identity, checkout
+        found, verifier = bind_repository(SQLiteRepository(db), SCOPE, checkout, None, None)
+        assert found is not None and found.repository_id == identity, checkout
+        assert verifier is None
+        assert MemoryService(SQLiteRepository(db), SCOPE, found, verifier).status().repository_id == identity
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    assert bind_repository(SQLiteRepository(db), SCOPE, outside, None, None) == (None, None)
+    assert bind_repository(SQLiteRepository(db), SCOPE, main / "file.txt", None, None) == (None, None)
+
+
+def test_without_git_an_explicit_repository_id_is_still_checked(tmp_path: Path) -> None:
+    """`--repo-id` means the same thing in both modes.
+
+    Reproduced at 0b0a217: a conflicting `--repo-id` was silently ignored when git was
+    missing, while the same arguments failed with git present. A launch that names a
+    conflicting identity would have looked bound, and the disagreement would have surfaced
+    only in what later evidence claimed.
+    """
+    db = tmp_path / "memory.sqlite3"
+    repo = init_repo(tmp_path / "repo")
+    identity = bind(db, repo).repository_id
+
+    found, verifier = bind_repository(SQLiteRepository(db), SCOPE, repo, identity, None)
+    assert found is not None and found.repository_id == identity and verifier is None
+    for checkout in (repo, repo / "sub"):
+        with pytest.raises(RepositoryMismatch):
+            bind_repository(SQLiteRepository(db), SCOPE, checkout, "another-identity", None)
+        with pytest.raises(RepositoryMismatch):
+            bind_repository(SQLiteRepository(db), SCOPE, checkout, "another-identity", GIT)
+
+    unregistered = init_repo(tmp_path / "unregistered")
+    with pytest.raises(RepositoryRegistrationFailed):
+        bind_repository(SQLiteRepository(db), SCOPE, unregistered, identity, None)
+
+
+def test_scopes_do_not_share_a_degraded_binding(tmp_path: Path) -> None:
+    """Discovery is not authority: the token still has to map to a row in this scope."""
+    db = tmp_path / "memory.sqlite3"
+    repo = init_repo(tmp_path / "repo")
+    bind(db, repo)
+    elsewhere = Scope("another-namespace", "local")
+    assert bind_repository(SQLiteRepository(db), elsewhere, repo / "sub", None, None) == (None, None)
