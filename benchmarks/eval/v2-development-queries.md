@@ -163,6 +163,26 @@ The paired reading is stricter by arithmetic: for positive paired block p95s `s_
 
 **Harness correction carried into T2 and T3.** The T1 harnesses rounded percentiles and ratios to 4 decimal places before comparing them to the gates. Gates now compare unrounded values; rounding is for display only. No T1 or T1-C cell is close enough to a gate for this to change a recorded outcome.
 
+## T2 — predeclaration (registered 2026-09-06)
+
+Full text, with the baseline row every variant is scored against: [t2-predeclaration.md](../dev/t2-predeclaration.md). Committed **before the first variant existed as code**.
+
+**Corpus.** `corpus-dev2.json` = `corpus-dev1.json` **plus** two memories and four queries. Nothing in dev1 is edited, so dev1 stays frozen and `results-dev-t1.json` stays reproducible. The extension exists because three registered T2 requirements are untestable on dev1: resolution to an *eligible* head (dev1 has no forgotten memory), a revision outside the most recent twenty (dev1's deepest history is two), and the head-versus-history contest in prose rather than on an identifier. `dq21`/`dq24` restore the pairing rule for the new unanswerable case.
+
+**Registered interpretation of the out-of-twenty clause.** A revision matched directly by a historical index is reachable, and delivering it consumes one of the five history-expansion slots. The twenty-revision limit bounds *enumerating* a memory's history; it does not put a directly matched revision out of reach. The opposite reading would make `dq22` unrecoverable by construction.
+
+**The three variants**, all sharing one new structure — `revision_fts`, an FTS5 index over non-current revision bodies, tokenised as the head index is, with the authoritative eligibility join applied inside the query so a filtered row never occupies a fusion slot:
+
+| # | Variant | Index scope | Fusion order |
+| --- | --- | --- | --- |
+| 1 | `history_headfirst` | every superseded revision | strict head priority, then history-only memories |
+| 2 | `history_interleaved` | every superseded revision | one fused BM25 ordering across both channels, head priority only as a tie-break |
+| 3 | `history_window3` | 3 most recent superseded revisions per memory | as variant 1 |
+
+Variant 3 is **predicted, before the run, to miss `dq22`**; it is run to price the full-history index against a bounded one.
+
+**Decision rule, registered before the run.** All six must hold: (1) `dq16` and `dq18` recovered as *delivered content* with matched-revision provenance resolved to the correct head; (2) `dq21` delivers nothing and `dq24` still answers at rank 1; (3) `dq17` and `dq23` still answer from the current head at rank 1; (4) no per-query recall loss on the dev1 queries and `dq08`–`dq11` still rank 1; (5) the resource ceilings against a fresh paired `exact`; (6) fusion input ≤40 raw hits with collapse, truncation and shortfall recorded. Among variants that pass, the winner is the one that also recovers `dq22`, then lowest added retrieval-structure bytes, then lowest retrieval p95 ratio. **If none passes, `stem` with head-only candidate generation stands as T2's outcome and T3's baseline is `stem`.**
+
 ## T2 and T3 — authorisation (2026-09-06)
 
 **T2 and T3 are authorised and their baselines are now pinned.** `stem` was promoted on 2026-09-06 after clearing [T1-C](#t1-c--performance-confirmation-registered-2026-09-06) in all four cells — not on the T1 measurement, which it failed. T2's baseline is pinned `stem`.
@@ -290,7 +310,7 @@ Limits registered in both rows. The full contracts are in [T2 and T3 — authori
 
 | # | Target | Configuration | What it changes | Baseline | Registered limits | Registered on | Outcome |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 4 | T2 | Historical-term discovery with matched-revision and current-head provenance | Candidate generation over non-head revisions; result shape | Pinned `stem`, existing selection policy unchanged | Pool **20 distinct eligible memories** · history **5 memories × 20 revisions** · delivered **5 items / 8,192 UTF-8 bytes** incl. provenance · **≤3 predeclared variants** per stage · **no network or model calls** · **fusion input ≤40 raw index hits** (20 current-head + 20 historical) | 2026-09-06 | *authorised, not yet run* |
+| 4 | T2 | Historical-term discovery with matched-revision and current-head provenance | Candidate generation over non-head revisions; result shape | Pinned `stem`, existing selection policy unchanged | Pool **20 distinct eligible memories** · history **5 memories × 20 revisions** · delivered **5 items / 8,192 UTF-8 bytes** incl. provenance · **≤3 predeclared variants** per stage · **no network or model calls** · **fusion input ≤40 raw index hits** (20 current-head + 20 historical) | 2026-09-06 | *[predeclared](#t2--predeclaration-registered-2026-09-06) 2026-09-06 on `corpus-dev2.json`; baseline control measured; variants not yet run* |
 | 5 | T3 | Ordering and weak-match rejection under a fixed expansion budget | Ranking and cutoff only; candidate generation **frozen** | Pinned T2 winner, or `stem` if no T2 variant passes | Pool **20 distinct eligible memories** · history **5 memories × 20 revisions**, selection choosing which five · delivered **5 items / 8,192 UTF-8 bytes** incl. provenance · **≤3 predeclared variants** per stage · **no network or model calls** | 2026-09-06 | *authorised, not yet run* |
 
 ### T0 — not authorised to run
