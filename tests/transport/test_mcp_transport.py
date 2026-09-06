@@ -34,11 +34,11 @@ def test_stdio_tools_enforce_contract_and_lifecycle(tmp_path: Path) -> None:
             assert set(tools) == {"record", "get", "revise", "forget", "search", "history", "status"}
 
             expected_properties = {
-                "record": {"content", "idempotency_key", "kind", "tags", "source_uri", "snapshot"},
+                "record": {"content", "idempotency_key", "kind", "tags", "source_uri", "snapshot", "references"},
                 "get": {"memory_id", "revision_id"},
                 "revise": {
                     "memory_id", "expected_revision_id", "content", "idempotency_key",
-                    "kind", "tags", "source_uri", "snapshot",
+                    "kind", "tags", "source_uri", "snapshot", "references",
                 },
                 "forget": {"memory_id", "expected_revision_id", "idempotency_key"},
                 "search": {"query", "advanced", "tags_all", "tags_any", "kinds", "limit", "cursor"},

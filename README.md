@@ -22,6 +22,7 @@ An agent stores a fact once and reads it back in a later session, on a different
 - **Conflict detection** — compare-and-set on the head revision; a stale write is refused, never merged silently
 - **Logical deletion** — a tombstone makes a memory unreachable through every normal read
 - **Scoped isolation** — namespace and actor bind at launch, and no tool call can override them
+- **Verified references** — a memory can cite paths at commits in a Git checkout bound at launch; each reference records the resolved commit, the object ID and the entry type as evidence that the object existed there, and nothing more
 
 ## Requirements
 
@@ -62,6 +63,14 @@ uv run --frozen nexus-memory --namespace my-repo --db /absolute/path/nexus.sqlit
 
 Use a private directory on a local disk. This milestone trusts the OS user who can read the database and launch the service. There is no remote authentication and no encryption at rest.
 
+To let memories cite files at commits, bind one local checkout:
+
+```bash
+uv run --frozen nexus-memory --namespace my-repo --repo /absolute/path/to/checkout
+```
+
+The checkout registers an opaque identity in `<git-dir>/nexus/checkout-token`, so every worktree of the repository binds to the same identity and a fresh clone is a new one; `--repo-id` associates a clone deliberately. References are verified with `git` at write time and never touch the working tree. Without `--repo`, or with `git` missing, everything else works and reference-carrying writes are refused with `verification_unavailable`; `status` reports the mode. See the [B2a contract](docs/plans/milestone-b2a.md) for exactly what a verified reference does and does not establish.
+
 ## Connect an agent
 
 Add a stdio server entry to your MCP client's configuration, substituting your absolute project path:
@@ -86,13 +95,13 @@ On Windows the installed command is `.venv/Scripts/nexus-memory.exe`. Your clien
 
 | Tool | Purpose | Required fields |
 | --- | --- | --- |
-| `record` | Store the first immutable revision | `content`, `idempotency_key` |
+| `record` | Store the first immutable revision, optionally with verified references | `content`, `idempotency_key` |
 | `get` | Read current content, or a specified revision | `memory_id` |
-| `revise` | Replace all revision fields if the head still matches | `memory_id`, `expected_revision_id`, `content`, `idempotency_key` |
+| `revise` | Replace all revision fields, references included, if the head still matches | `memory_id`, `expected_revision_id`, `content`, `idempotency_key` |
 | `forget` | Tombstone a memory if the head still matches | `memory_id`, `expected_revision_id`, `idempotency_key` |
 | `search` | Find current memories by terms, tags and kinds | none |
 | `history` | List a memory's revision chain, newest first | `memory_id` |
-| `status` | Inspect scoped durability and index state | none |
+| `status` | Inspect scoped durability, index state, the bound repository and the verification mode | none |
 
 A `record` call looks like this:
 
@@ -213,4 +222,4 @@ Use SQLite's backup API, or shut every client down cleanly before copying. **Do 
 
 Retrieval work done since B1 is measured but **not shipped**: the [development charter](benchmarks/eval/v2-development-queries.md) records `stem` morphology qualified as the development baseline, a historical-discovery prototype built and rejected at ~2.70x storage against a 2x ceiling, and an evidence-selection rule rejected after it removed a directly relevant answer on v2. The shipped default remains `exact` current-head search, and abstention remains unsolved.
 
-**B2** adds repository context, in two slices. **B2a** — [contract frozen](docs/plans/milestone-b2a.md) — is a launch-bound repository identity that no tool call can override, and commit and path verification against committed Git objects, recording the resolved commit, repository-relative path, object ID and entry type. A verified reference establishes that the object existed at that path in that commit: not that the memory's prose is true, not that the working tree matches, not that the advice is current. **B2b** adds reference filters. Symbol-aware retrieval comes after both. Cross-revision search — finding a term that only ever appeared in a superseded revision — is a separate follow-up with distinct current and history modes, so outdated instructions are never mixed into ordinary results. Embeddings come after a lexical baseline has been measured, not before.
+**B2** adds repository context, in two slices. **B2a** — [contract](docs/plans/milestone-b2a.md) implemented, with its fifteen acceptance tests and eight mutation controls passing, and awaiting review of the working behaviour against the contract — is a launch-bound repository identity that no tool call can override, and commit and path verification against committed Git objects, recording the resolved commit, repository-relative path, object ID and entry type. A verified reference establishes that the object existed at that path in that commit: not that the memory's prose is true, not that the working tree matches, not that the advice is current. **B2b** adds reference filters. Symbol-aware retrieval comes after both. Cross-revision search — finding a term that only ever appeared in a superseded revision — is a separate follow-up with distinct current and history modes, so outdated instructions are never mixed into ordinary results. Embeddings come after a lexical baseline has been measured, not before.
