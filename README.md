@@ -10,7 +10,7 @@
 An agent stores a fact once and reads it back in a later session, on a different process, with the same bytes it wrote. Everything runs locally against one SQLite file. No model call, network request or external service touches the write path.
 
 > [!IMPORTANT]
-> **Search covers current revisions only.** A term that appears solely in a superseded revision will not find that memory — use `history` to browse a memory's revisions and `get` to read an older one. Ranking is BM25 lexical ordering, not relevance: there is no semantic similarity, no embeddings and no learned ranking. Repository-verified commits, symbol indexing, automatic extraction and context-budget packing are later milestones. **No retrieval-quality advantage over existing tools has been measured or is claimed** — the evaluation set is not yet judged.
+> **Search covers current revisions only.** A term that appears solely in a superseded revision will not find that memory — use `history` to browse a memory's revisions and `get` to read an older one. Ranking is BM25 lexical ordering, not relevance: there is no semantic similarity, no embeddings and no learned ranking. Repository-verified commits, symbol indexing, automatic extraction and context-budget packing are later milestones. **No retrieval-quality advantage over any other tool has been measured or is claimed.** The v2 evaluation set *is* now judged and this build is measured against it ([results](benchmarks/eval/results-v2.md)) — but that is one 17-query set scoring this build alone, with labels that are AI-assessed, AI-audited twice and human-authorised, with no human audit at label level. No comparison against another system has been run.
 
 ## What it gives you
 
@@ -210,5 +210,7 @@ Identical body bytes are stored once per scope, while revisions keep their own m
 Use SQLite's backup API, or shut every client down cleanly before copying. **Do not copy the main database file alone while it is live** — the WAL can hold committed state.
 
 ## Roadmap
+
+Retrieval work done since B1 is measured but **not shipped**: the [development charter](benchmarks/eval/v2-development-queries.md) records `stem` morphology qualified as the development baseline, a historical-discovery prototype built and rejected at ~2.70x storage against a 2x ceiling, and an evidence-selection rule rejected after it removed a directly relevant answer on v2. The shipped default remains `exact` current-head search, and abstention remains unsolved.
 
 **B2** adds repository context: a launch-bound repository identity, commit and path verification with explicit evidence, and reference filters. Cross-revision search — finding a term that only ever appeared in a superseded revision — is a separate follow-up with distinct current and history modes, so outdated instructions are never mixed into ordinary results. Embeddings come after a lexical baseline has been measured, not before.
