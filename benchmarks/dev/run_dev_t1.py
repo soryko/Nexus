@@ -25,14 +25,15 @@ from nexus_memory.domain.models import MemoryInput, Scope, SearchQuery  # noqa: 
 from nexus_memory.memory import MemoryService  # noqa: E402
 from nexus_memory.storage import SQLiteRepository  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from budgeted_retrieval import (  # noqa: E402
+    DELIVERED_BYTES, DELIVERED_ITEMS, HISTORY_MEMORIES, HISTORY_REVISIONS, POOL_LIMIT, retrieve,
+)
+
 CORPUS = Path(__file__).resolve().parent / "corpus-dev1.json"
 
-# Registered budgets. Changing any of these invalidates the comparison.
-POOL_LIMIT = 20            # distinct eligible memories in the candidate pool
-HISTORY_MEMORIES = 5       # candidate memories whose history may be expanded
-HISTORY_REVISIONS = 20     # revisions per expanded memory
-DELIVERED_ITEMS = 5        # evidence items delivered
-DELIVERED_BYTES = 8 * 1024 # UTF-8 bytes of text and provenance delivered
+# Budgets live in budgeted_retrieval, which both harnesses import, so the quality and
+# performance runs cannot enforce different limits on the same registered budget.
 DIAGNOSTIC_LIMIT = 100     # outside the budget: used only to separate "never a candidate"
                            # from "a candidate that the pool limit cut off"
 
@@ -118,43 +119,26 @@ def run_query(service: MemoryService, query: dict, mapping: dict) -> QueryResult
         grade1_memories=[to_memory[m] for m in query.get("grade1", [])],
     )
 
-    # --- candidate pool -------------------------------------------------------------
-    page = service.search(SearchQuery(query=query["text"], limit=POOL_LIMIT))
-    for hit in page.hits:
-        if hit.memory_id not in result.pool:
-            result.pool.append(hit.memory_id)
-            # Provenance of the match. Head-only search in this build always matches the
-            # current revision; the field exists so T2 can record a superseded match here
-            # without changing the accounting.
-            result.pool_provenance[hit.memory_id] = hit.revision_id
+    # --- the budgeted path ----------------------------------------------------------
+    # Identical to the function the performance harness times. Label-free by
+    # construction: it never sees query["grade2"] or anything derived from it.
+    budgeted = retrieve(service, query["text"])
+    result.pool = budgeted.pool
+    result.pool_provenance = budgeted.pool_provenance
+    result.expanded = budgeted.expanded
+    result.discovered_revisions = budgeted.discovered_revisions
+    result.delivered = budgeted.delivered
+    result.delivered_bytes = budgeted.delivered_bytes
+    result.stopped_by = budgeted.stopped_by
+
+    # --- reporting, outside the budget and outside the timed path --------------------
+    # Grading happens here, after retrieval has finished, so no judgment can reach a
+    # decision the budgeted path makes.
+    for memory_id, size in budgeted.delivered_item_bytes.items():
+        result.delivered_bytes_by_grade[result.grade(memory_id)] += size
 
     diagnostic = service.search(SearchQuery(query=query["text"], limit=DIAGNOSTIC_LIMIT))
     result.matched_beyond_pool = [h.memory_id for h in diagnostic.hits if h.memory_id not in result.pool]
-
-    # --- history expansion ----------------------------------------------------------
-    # Selection uses retrieved evidence only: rank order, and the has_earlier_revisions
-    # flag the search itself reports. Known answer ids are never consulted.
-    expandable = [hit.memory_id for hit in page.hits if hit.has_earlier_revisions]
-    result.expanded = expandable[:HISTORY_MEMORIES]
-    for memory_id in result.expanded:
-        history = service.history(memory_id, limit=HISTORY_REVISIONS)
-        result.discovered_revisions.extend(entry.revision_id for entry in history.entries)
-
-    # --- delivered context ----------------------------------------------------------
-    for memory_id in result.pool:
-        if len(result.delivered) >= DELIVERED_ITEMS:
-            result.stopped_by = "delivered_item_cap"
-            break
-        view = service.get(memory_id)
-        provenance = json.dumps({"memory_id": view.memory_id, "revision_id": view.revision_id,
-                                 "kind": view.kind, "tags": list(view.tags)}, separators=(",", ":"))
-        size = len(view.content.encode("utf-8")) + len(provenance.encode("utf-8"))
-        if result.delivered_bytes + size > DELIVERED_BYTES:
-            result.stopped_by = "delivered_byte_cap"
-            break
-        result.delivered.append(memory_id)
-        result.delivered_bytes += size
-        result.delivered_bytes_by_grade[result.grade(memory_id)] += size
 
     # --- miss attribution -----------------------------------------------------------
     for memory_id in result.grade2_memories:

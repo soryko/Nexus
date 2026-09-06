@@ -5,6 +5,16 @@ fixtures. The fixture is built once per size under the `exact` profile and then 
 for each profile, so load order, content and durability settings are identical across a
 pair by construction rather than by intention.
 
+Retrieval is timed through `budgeted_retrieval.retrieve`, the same function the quality
+harness runs, so the two cannot enforce different limits on the same registered budget.
+
+**Provenance note.** `results-dev-t1-perf.json` (build e17176b) and
+`results-dev-t1-perf-reversed.json` (build 2c7eaa4) were produced by an earlier version
+of this script whose own copy of the retrieval path counted body bytes only, omitting
+serialized provenance from the 8,192-byte delivery budget. Those records are retained
+unchanged; this script no longer reproduces them, and the corrected re-measurement is
+`run_dev_t1c.py`.
+
 Usage:  .venv-sqlite/bin/python benchmarks/dev/run_dev_t1_perf.py [--sizes 1000,10000]
 """
 from __future__ import annotations
@@ -24,12 +34,11 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from nexus_memory.domain.models import MemoryInput, Scope, SearchQuery  # noqa: E402
+from nexus_memory.domain.models import MemoryInput, Scope  # noqa: E402
 from nexus_memory.memory import MemoryService  # noqa: E402
 from nexus_memory.storage import SQLiteRepository  # noqa: E402
-from run_dev_t1 import (  # noqa: E402
-    DELIVERED_BYTES, DELIVERED_ITEMS, HISTORY_MEMORIES, HISTORY_REVISIONS, POOL_LIMIT, index_sizes,
-)
+from budgeted_retrieval import retrieve  # noqa: E402
+from run_dev_t1 import index_sizes  # noqa: E402
 
 SEED = 20260906
 PROFILES = ("exact", "stem", "dual", "split")
@@ -126,23 +135,6 @@ def query_set(count: int) -> list[str]:
         else:
             queries.append(f"{rng.choice(SUBJECTS)} {rng.choice(IDENTIFIERS)}")
     return queries
-
-
-def retrieve(service: MemoryService, text: str) -> None:
-    """The budgeted retrieval path: pool, bounded history expansion, bounded delivery."""
-    page = service.search(SearchQuery(query=text, limit=POOL_LIMIT))
-    expandable = [hit.memory_id for hit in page.hits if hit.has_earlier_revisions][:HISTORY_MEMORIES]
-    for memory_id in expandable:
-        service.history(memory_id, limit=HISTORY_REVISIONS)
-    delivered_bytes = 0
-    for count, hit in enumerate(page.hits):
-        if count >= DELIVERED_ITEMS:
-            break
-        view = service.get(hit.memory_id)
-        size = len(view.content.encode("utf-8"))
-        if delivered_bytes + size > DELIVERED_BYTES:
-            break
-        delivered_bytes += size
 
 
 def measure_profile(fixture: Path, profile: str, queries: list[str], size: int) -> dict:

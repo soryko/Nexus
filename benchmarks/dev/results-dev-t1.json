@@ -2,7 +2,7 @@
   "experiment": "T1 morphology",
   "development_data": true,
   "not_a_v2_result": true,
-  "build_commit": "e17176b",
+  "build_commit": "5e630ad",
   "interpreter": "/Users/soko/Cerebros/nexus-memory/.venv-sqlite/bin/python",
   "sqlite_version": "3.53.4",
   "corpus_sha256": "4c3bb1c9ac9404e32d6378c3c8154e17d12f3821b8c2c863c45fa65d7a4ecd97",
