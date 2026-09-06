@@ -271,13 +271,18 @@ def scenario_one_literal_entry(tmp_path: Path) -> None:
     pinned = svc.record(MemoryInput("x", references=(Ref("sub/file.txt", c1),)), "replaced")
     assert references(svc, pinned) == [(c1, "sub/file.txt", true_blob)]
 
-    # --full-tree: bound at a subdirectory, a path is still repository-relative.
+    # --full-tree: bound at a subdirectory, a path is still repository-relative. The two
+    # halves are recorded separately because they fail differently without the flag, and
+    # only the first distinguishes it: "file.txt" resolves against sub/ and comes back
+    # under the requested name carrying sub/file.txt's blob, which a byte-equal pathname
+    # cannot catch and only the object OID can. "sub/file.txt" is then simply not found,
+    # so combining them would hide the OID evidence behind that refusal.
     git(repo, "replace", "-d", c1)
     inner = bound(tmp_path / "inner.sqlite3", repo / "sub")
-    receipt = inner.record(MemoryInput("x", references=(Ref("file.txt"), Ref("sub/file.txt"))), "subdir")
-    assert references(inner, receipt) == [
-        (c2, "file.txt", hash_object(repo, "file.txt")), (c2, "sub/file.txt", tampered),
-    ]
+    at_root = inner.record(MemoryInput("x", references=(Ref("file.txt"),)), "subdir-root")
+    assert references(inner, at_root) == [(c2, "file.txt", hash_object(repo, "file.txt"))]
+    nested = inner.record(MemoryInput("x", references=(Ref("sub/file.txt"),)), "subdir-nested")
+    assert references(inner, nested) == [(c2, "sub/file.txt", tampered)]
 
 
 # --- 11: the lock boundary ----------------------------------------------------------------

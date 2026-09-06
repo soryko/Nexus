@@ -13,9 +13,11 @@ import pytest
 from b2a_scenarios import SCENARIOS
 
 from nexus_memory.domain import models
-from nexus_memory.domain.models import TreeEntry
+from nexus_memory.domain.errors import StorageIntegrityError
+from nexus_memory.domain.models import MemoryInput, Scope, TreeEntry
 from nexus_memory.git.cli import GitCli, GitCliVerifier
 from nexus_memory.memory.service import MemoryService
+from nexus_memory.storage import SQLiteRepository
 
 
 def skip_path_validation(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -69,33 +71,68 @@ def resolve_per_reference(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def verify_inside_the_transaction(monkeypatch: pytest.MonkeyPatch) -> None:
-    original = MemoryService.record
+    """Hold the writer transaction across verification, which is the invariant's negation.
 
-    def record(self, item, key):
+    One ``BEGIN IMMEDIATE`` is opened and it is the only one open while git runs, which is
+    what an implementation that had never separated verification from the write would do.
+    An earlier version wrapped ``record`` instead, so the storage write underneath opened
+    a second writer transaction on a second connection and blocked on the first. Measured
+    at 0b0a217: that mutation failed six of the eight scenarios, single-threaded and with
+    no verifier involved, surviving only the two whose writes are all meant to be refused
+    anyway. Its failure of the lock boundary said nothing about the lock boundary.
+    """
+    original = MemoryService._verify
+
+    def verify(self, references):
         with self.repository._transaction():
-            return original(self, item, key)
+            return original(self, references)
 
-    monkeypatch.setattr(MemoryService, "record", record)
+    monkeypatch.setattr(MemoryService, "_verify", verify)
 
+
+# A scenario detects a mutation by an assertion that no longer holds, or by a guard that
+# no longer raises - pytest reports the latter as ``Failed``, which is a BaseException and
+# not an Exception. Naming the expected outcome per mutation is the point: a bare
+# ``BaseException`` also accepts an interpreter error, a KeyboardInterrupt, or a mutation
+# that is simply broken code, none of which establish that the invariant was exercised.
+DETECTED = (AssertionError, pytest.fail.Exception)
 
 MUTATIONS = {
-    "skip_path_validation": (skip_path_validation, "unsafe_paths"),
-    "empty_output_is_success": (empty_output_is_success, "missing_objects"),
-    "drop_no_replace_objects": (drop_no_replace_objects, "one_literal_entry"),
-    "accept_differing_pathname": (accept_differing_pathname, "one_literal_entry"),
-    "drop_full_tree": (drop_full_tree, "one_literal_entry"),
-    "accept_any_mode_or_type": (accept_any_mode_or_type, "unsupported_types"),
-    "resolve_per_reference": (resolve_per_reference, "changing_refs"),
-    "verify_inside_the_transaction": (verify_inside_the_transaction, "lock_boundary"),
+    "skip_path_validation": (skip_path_validation, "unsafe_paths", DETECTED),
+    "empty_output_is_success": (empty_output_is_success, "missing_objects", DETECTED),
+    "drop_no_replace_objects": (drop_no_replace_objects, "one_literal_entry", DETECTED),
+    "accept_differing_pathname": (accept_differing_pathname, "one_literal_entry", DETECTED),
+    "drop_full_tree": (drop_full_tree, "one_literal_entry", DETECTED),
+    "accept_any_mode_or_type": (accept_any_mode_or_type, "unsupported_types", DETECTED),
+    "resolve_per_reference": (resolve_per_reference, "changing_refs", DETECTED),
+    # The blocked write itself, not merely "something went wrong": the independent writer
+    # waits out its busy timeout against the lock held across verification and the store
+    # reports the refusal. Reaching the scenario's own elapsed-time assertion instead
+    # would also be a detection, so both are accepted and nothing else is.
+    "verify_inside_the_transaction": (verify_inside_the_transaction, "lock_boundary",
+                                      (StorageIntegrityError, *DETECTED)),
 }
 
 
 @pytest.mark.parametrize("name", sorted(MUTATIONS))
 def test_mutation_fails_its_designated_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str) -> None:
-    mutate, designated = MUTATIONS[name]
+    mutate, designated, expected = MUTATIONS[name]
     mutate(monkeypatch)
-    with pytest.raises(BaseException):
+    with pytest.raises(expected):
         SCENARIOS[designated](tmp_path)
+
+
+def test_the_lock_mutation_leaves_an_unreferenced_write_alone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The mutation must change the lock boundary and nothing else.
+
+    A mutation that cannot complete an ordinary write fails its designated scenario for a
+    reason unrelated to the invariant, which is how the previous one passed while testing
+    nothing. This is the negative control on the control.
+    """
+    verify_inside_the_transaction(monkeypatch)
+    service = MemoryService(SQLiteRepository(tmp_path / "memory.sqlite3"), Scope("mutation", "local"))
+    receipt = service.record(MemoryInput("no references, no verifier"), "k")
+    assert service.get(receipt.memory_id).content == "no references, no verifier"
 
 
 @pytest.mark.skipif(not os.environ.get("NEXUS_MUTATION_MATRIX"), reason="development run: set NEXUS_MUTATION_MATRIX=1")
@@ -103,7 +140,7 @@ def test_mutation_matrix(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
     """Every mutation against every scenario, printed as a matrix for investigation."""
     lines = ["", f"{'mutation':32s} " + " ".join(f"{name[:12]:>12s}" for name in sorted(SCENARIOS))]
     for mutation in sorted(MUTATIONS):
-        mutate, designated = MUTATIONS[mutation]
+        mutate, designated, _ = MUTATIONS[mutation]
         cells = []
         for scenario in sorted(SCENARIOS):
             with monkeypatch.context() as context:
