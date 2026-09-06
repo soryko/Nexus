@@ -348,6 +348,25 @@ Full text: [t3-predeclaration.md](../dev/t3-predeclaration.md). Committed before
 
 **Decision rule:** eligible only if grade-0 ≤9,092 **and** no per-query grade-2 recall loss **and** no coverage loss **and** grade-1-only support preserved. Winner: lowest grade-0 bytes, then most grade-1 bytes preserved, then the resource ceilings against a fresh paired `exact`. If none passes, the baseline stands.
 
+### T3 — outcome, run once on 2026-09-06
+
+**`cutoff_40` clears every registered clause and is T3's outcome.** Full report: [results-dev-t3.md](../dev/results-dev-t3.md).
+
+| Selection | Grade-0 bytes | Reduction | Recall / coverage / grade-1 support | Ceilings | Outcome |
+| --- | ---: | ---: | --- | --- | --- |
+| `all` (baseline) | 18,185 | — | — | — | — |
+| `cutoff_25` | 12,988 | 28.58% | intact | not measured | short of the gate |
+| `cutoff_40` | **8,140** | **55.24%** | **intact** | **4/4 cells, paired statistic agrees** | **pinned** |
+| `dominant_top_2x` | 10,218 | 43.81% | intact | not measured | short of the gate |
+
+Every rule preserved everything it had to: grade-2 delivered bytes 5,212 and grade-1 bytes 785 in all four arms, no per-query recall loss, no coverage loss, no grade-1-only support loss. Ceilings for the winner: retrieval 1.0230x–1.2067x against ≤1.5x and 18.86 ms worst block against ≤50 ms; record and revise below 1.25x against ≤2x; storage **0.96x–0.98x** — selection adds no persistent structure. The paired statistic agrees in every cell, so this verdict does not turn on which reading is used.
+
+**The winning constant is fitted, as declared before the run.** 0.40 preserves `dq13` by 0.0067 BM25 units — 0.45%. The pass establishes that the 50% target is reachable here and by what margin; it is not evidence that the rule generalises, and both unfitted rules fell short (28.58%, 43.81%) while preserving everything.
+
+**Selection's own latency effect was not resolvable**: the variant measured a median 1.05x (1,000) and 1.02x (10,000) against the stage baseline, spanning 0.72x–1.41x. `cutoff_40` costs nothing extra; it was not shown to save time.
+
+**Not run:** the v2 regression check that carries the chosen configuration into v2 unchanged. That step inspects frozen evaluation data and is a separate authorisation.
+
 ### T2 and T3 — authorised to run, 2026-09-06
 
 Limits registered in both rows. The full contracts are in [T2 and T3 — authorisation](#t2-and-t3--authorisation-2026-09-06).
@@ -355,7 +374,7 @@ Limits registered in both rows. The full contracts are in [T2 and T3 — authori
 | # | Target | Configuration | What it changes | Baseline | Registered limits | Registered on | Outcome |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 4 | T2 | Historical-term discovery with matched-revision and current-head provenance | Candidate generation over non-head revisions; result shape | Pinned `stem`, existing selection policy unchanged | Pool **20 distinct eligible memories** · history **5 memories × 20 revisions** · delivered **5 items / 8,192 UTF-8 bytes** incl. provenance · **≤3 predeclared variants** per stage · **no network or model calls** · **fusion input ≤40 raw index hits** (20 current-head + 20 historical) | 2026-09-06 | **[Run once 2026-09-06](#t2--outcome-run-once-on-2026-09-06). No variant promoted.** `history_cued` cleared every quality clause — all three historical cases delivered with provenance, both controls held, no recall lost — and failed the storage ceiling at **2.70x** against ≤2x. `stem` head-only stands; T3's baseline is `stem`. |
-| 5 | T3 | Ordering and weak-match rejection under a fixed expansion budget | Ranking and cutoff only; candidate generation **frozen** | **`stem`, head-only** (no T2 variant passed) | Pool **20 distinct eligible memories** · history **5 memories × 20 revisions**, selection choosing which five · delivered **5 items / 8,192 UTF-8 bytes** incl. provenance · **≤3 predeclared variants** per stage · **no network or model calls** · grade-0 gate **≤9,092 bytes** | 2026-09-06 | *[predeclared](#t3--predeclaration-registered-2026-09-06); baseline control measured; selections not yet run* |
+| 5 | T3 | Ordering and weak-match rejection under a fixed expansion budget | Ranking and cutoff only; candidate generation **frozen** | **`stem`, head-only** (no T2 variant passed) | Pool **20 distinct eligible memories** · history **5 memories × 20 revisions**, selection choosing which five · delivered **5 items / 8,192 UTF-8 bytes** incl. provenance · **≤3 predeclared variants** per stage · **no network or model calls** · grade-0 gate **≤9,092 bytes** | 2026-09-06 | **[Run once 2026-09-06](#t3--outcome-run-once-on-2026-09-06). `cutoff_40` pinned:** 8,140 grade-0 bytes (55.24% reduction) with grade-2 and grade-1 delivery unchanged, and 4/4 ceiling cells. Constant declared fitted: it preserves `dq13` by 0.45%. |
 
 ### T0 — not authorised to run
 

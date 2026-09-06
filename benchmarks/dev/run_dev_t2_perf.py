@@ -54,7 +54,7 @@ sys.path.insert(0, str(HERE))
 from nexus_memory.domain.models import MemoryInput, Scope  # noqa: E402
 from nexus_memory.memory import MemoryService  # noqa: E402
 from nexus_memory.storage import SQLiteRepository  # noqa: E402
-from budgeted_retrieval import POLICY_HISTORY_PROFILE, retrieve  # noqa: E402
+from budgeted_retrieval import POLICY_HISTORY_PROFILE, SELECTIONS, retrieve  # noqa: E402
 from run_dev_t1 import index_sizes  # noqa: E402
 from run_dev_t1_perf import SEED, body, build_fixture, query_set, summarise  # noqa: E402
 
@@ -80,18 +80,25 @@ SCHEDULE = [
 ]
 
 
-def arm_configuration(arm: str, policy: str) -> tuple[str, str, str]:
-    """(index profile, history profile, retrieval policy) for one arm."""
+def arm_configuration(arm: str, policy: str, selection: str) -> tuple[str, str, str, str]:
+    """(index profile, history profile, retrieval policy, selection) for one arm.
+
+    The anchor is the pinned `exact` baseline in every stage. The stage baseline is what
+    the variant is being compared *against* for attribution — for T2 that was `stem` with
+    head-only generation, and for T3 it is the same configuration with the baseline
+    selection, so that the variant differs from it in exactly one thing.
+    """
     if arm == "anchor":
-        return "exact", "none", "baseline"
+        return "exact", "none", "baseline", "all"
     if arm == "stage_baseline":
-        return "stem", "none", "baseline"
-    return "stem", POLICY_HISTORY_PROFILE[policy], policy
+        return "stem", "none", "baseline", "all"
+    return "stem", POLICY_HISTORY_PROFILE[policy], policy, selection
 
 
-def measure_block(fixture: Path, arm: str, policy: str, queries: list[str]) -> dict:
+def measure_block(fixture: Path, arm: str, policy: str, queries: list[str],
+                  selection: str = "all") -> dict:
     """One arm, one block: fresh copy, open, warm up, 200 timed queries, then writes."""
-    profile, history_profile, arm_policy = arm_configuration(arm, policy)
+    profile, history_profile, arm_policy, arm_selection = arm_configuration(arm, policy, selection)
     with tempfile.TemporaryDirectory() as directory:
         path = Path(directory) / "memory.sqlite3"
         shutil.copy(fixture, path)
@@ -108,12 +115,12 @@ def measure_block(fixture: Path, arm: str, policy: str, queries: list[str]) -> d
         open_seconds = time.perf_counter() - started
 
         for text in queries[:WARMUP_QUERIES]:
-            retrieve(service, text, policy=arm_policy)
+            retrieve(service, text, policy=arm_policy, selection=arm_selection)
 
         timings = []
         for text in queries[WARMUP_QUERIES:WARMUP_QUERIES + QUERIES_PER_BLOCK]:
             started = time.perf_counter()
-            retrieve(service, text, policy=arm_policy)
+            retrieve(service, text, policy=arm_policy, selection=arm_selection)
             timings.append(time.perf_counter() - started)
 
         # Storage is read before any write, so the figure describes the fixture both arms
@@ -147,6 +154,7 @@ def measure_block(fixture: Path, arm: str, policy: str, queries: list[str]) -> d
     summary["index_profile"] = profile
     summary["history_profile"] = history_profile
     summary["policy"] = arm_policy
+    summary["selection"] = arm_selection
     summary["open_and_index_build_seconds"] = open_seconds
     summary["durations_ms"] = [value * 1000.0 for value in timings]
     summary["record"] = summarise(record_timings)
@@ -162,18 +170,23 @@ def worst(blocks: list[dict], key: str = "p95") -> float:
 def main() -> None:
     sizes = [1000, 10000]
     policy = "history_cued"
+    selection = "all"
     for argument in sys.argv[1:]:
         if argument.startswith("--sizes"):
             sizes = [int(value) for value in argument.split("=", 1)[1].split(",")]
         elif argument.startswith("--policy"):
             policy = argument.split("=", 1)[1]
+        elif argument.startswith("--selection"):
+            selection = argument.split("=", 1)[1]
+    if selection not in SELECTIONS:
+        raise SystemExit(f"unregistered selection: {selection}")
 
     commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
                             capture_output=True, text=True).stdout.strip()
     dirty = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT,
                            capture_output=True, text=True).stdout.strip()
     record = {
-        "experiment": f"T2 — performance and storage ({policy} against a fresh paired exact)",
+        "experiment": f"performance and storage — policy {policy}, selection {selection}, against a fresh paired exact",
         "development_data": True,
         "not_a_v2_result": True,
         "pinned_revision": commit,
@@ -186,7 +199,7 @@ def main() -> None:
         "protocol": {
             "arms": {"anchor": "exact / none / baseline",
                      "stage_baseline": "stem / none / baseline",
-                     "variant": f"stem / all / {policy}"},
+                     "variant": f"stem / {POLICY_HISTORY_PROFILE[policy]} / {policy} / {selection}"},
             "gate_computed": "variant against anchor",
             "third_arm_is_not_a_configuration": True,
             "anchored_to_exact_not_to_the_stage_baseline": True,
@@ -236,7 +249,7 @@ def main() -> None:
                 print(f"  block set {index + 1}/{len(SCHEDULE)} @ {size}: {order} ...", flush=True)
                 blocks = {}
                 for position, arm in enumerate(ordering, start=1):
-                    blocks[arm] = measure_block(fixture, arm, policy, queries)
+                    blocks[arm] = measure_block(fixture, arm, policy, queries, selection)
                     blocks[arm]["position_in_pair"] = position
                 record["pairs"].append({
                     "fixture_size": size, "pair_index": index, "order": order,
@@ -301,13 +314,15 @@ def main() -> None:
     record["paired_statistic"] = paired
     record["verdict"] = {
         "policy": policy,
+        "selection": selection,
         "cells_evaluated": len(summary),
         "cells_passed": sum(1 for cell in summary.values() if cell["cell_pass"]),
         "clears_every_ceiling": all(cell["cell_pass"] for cell in summary.values()),
         "failing_cells": [key for key, cell in summary.items() if not cell["cell_pass"]],
     }
 
-    out = HERE / f"results-dev-t2-perf-{policy}.json"
+    tag = policy if selection == "all" else f"{policy}-{selection}"
+    out = HERE / f"results-dev-t2-perf-{tag}.json"
     out.write_text(json.dumps(record, indent=2) + "\n")
     print("\n" + json.dumps({"summary": summary, "paired": paired, "verdict": record["verdict"]}, indent=2))
     print(f"\nwritten: {out}")
