@@ -36,9 +36,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      # Consider pinning these two to commit SHAs rather than major tags if the threat
-      # model includes a compromised tag being moved.
-      - uses: actions/checkout@v7
+      # Pinned to the commits the reviewed run executed, not to a tag: a tag is a movable
+      # name, so `@v7` is a promise that whatever it points at later is still what was
+      # reviewed. These SHAs are what `v7`/`v7.0.1` resolved to in the official repositories
+      # and what the green run actually downloaded. Upgrades are now an explicit edit here.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Install uv ${{ env.UV_VERSION }}
         run: |
@@ -65,7 +67,7 @@ jobs:
 
       - name: Collect failure evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: test-evidence-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/
