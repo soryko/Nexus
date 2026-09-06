@@ -59,11 +59,19 @@ import sqlite3
 import statistics
 import sys
 import time
+from contextlib import nullcontext
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+# The ``current`` arm is the loader that shipped through ``cdf51e7``. It is no longer in
+# ``SQLiteRepository`` -- production has one loader and no switch -- so it is imported from
+# the test support that retains it. Restating it here would make this harness measure a
+# copy, which is the defect its predecessor had.
+sys.path.insert(0, str(ROOT / "tests" / "core"))
 
+from evidence_control import installed  # noqa: E402
 from measure_reference_filters import (  # noqa: E402  the corpus of record, not a third copy
     MEMORIES, REFERENCES_PER_MEMORY, REPOSITORIES, SCOPE, SHAPES, build,
 )
@@ -125,8 +133,8 @@ def verify_stages(captured: list[tuple[str, str, int]], name: str) -> None:
         assert "head_index" not in sql, f"{name}: evidence statement also reads head_index"
 
 
-def capture(db: Path, query: SearchQuery, repository_id: str | None,
-            bounded: bool) -> list[tuple[str, str, int]]:
+def capture(db: Path, query: SearchQuery,
+            repository_id: str | None) -> list[tuple[str, str, int]]:
     """Run the real ``search()`` and return ``(stage, sql, steps)`` per executed statement.
 
     The statement text comes from SQLite with its parameters already expanded, so what is
@@ -153,7 +161,6 @@ def capture(db: Path, query: SearchQuery, repository_id: str | None,
         connection.set_progress_handler(progress, 1)
         return connection
 
-    SQLiteRepository.BOUNDED_EVIDENCE = bounded
     SQLiteRepository._connect = connect
     try:
         SQLiteRepository(db).search(SCOPE, query, repository_id)
@@ -181,13 +188,12 @@ def stage_sql(captured: list[tuple[str, str, int]], stage: str) -> str | None:
 
 # ---------------------------------------------------------------------------- timing ----
 
-def latency(db: Path, query: SearchQuery, repository_id: str | None,
-            bounded: bool) -> tuple[float, float]:
+def latency(db: Path, query: SearchQuery,
+            repository_id: str | None) -> tuple[float, float]:
     """End-to-end ``search()`` latency with every instrument removed.
 
     A fresh repository and a discarded warm-up, then ``TIMINGS`` timings; best and median.
     """
-    SQLiteRepository.BOUNDED_EVIDENCE = bounded
     repository = SQLiteRepository(db)
     for _ in range(3):
         repository.search(SCOPE, query, repository_id)
@@ -224,13 +230,12 @@ def replay_latency(db: Path, sql: str) -> float:
 # ---------------------------------------------------------------------------- results ---
 
 def walk(db: Path, query: SearchQuery, repository_id: str | None,
-         bounded: bool, pages: int = PAGES) -> list[tuple]:
+         pages: int = PAGES) -> list[tuple]:
     """The observable result of a pagination walk: hits, order, evidence, cursor presence.
 
     Ordering is carried by position and evidence by value, so a configuration that returned
     the right rows with the wrong evidence, or in the wrong order, compares unequal.
     """
-    SQLiteRepository.BOUNDED_EVIDENCE = bounded
     repository = SQLiteRepository(db)
     observed: list[tuple] = []
     cursor = None
@@ -295,25 +300,34 @@ def repository_for(query: SearchQuery) -> str | None:
 
 
 def measure(db: Path, bounded: bool) -> dict[str, dict]:
+    """Every shape under one arm's loader.
+
+    The loader is chosen once, here, and held for the whole arm: the unbounded arms run
+    with the retained control substituted over ``_evidence_sql`` and the bounded ones run
+    the shipped form untouched. It is a context manager so that an exception inside an arm
+    cannot leave the control installed for the arm after it -- which would report a
+    control's numbers under the shipped form's label.
+    """
     out: dict[str, dict] = {}
-    for name, query in SHAPES.items():
-        repository_id = repository_for(query)
-        captured = capture(db, query, repository_id, bounded)
-        verify_stages(captured, name)
-        steps = stage_steps(captured)
-        best, median = latency(db, query, repository_id, bounded)
-        evidence_sql = stage_sql(captured, "evidence")
-        selection_sql = stage_sql(captured, "selection")
-        out[name] = {
-            "captured": captured,
-            "steps": steps,
-            "best": best,
-            "median": median,
-            "selection_ms": replay_latency(db, selection_sql) if selection_sql else 0.0,
-            "evidence_ms": replay_latency(db, evidence_sql) if evidence_sql else 0.0,
-            "evidence_sql": evidence_sql,
-            "walk": walk(db, query, repository_id, bounded),
-        }
+    with nullcontext() if bounded else installed():
+        for name, query in SHAPES.items():
+            repository_id = repository_for(query)
+            captured = capture(db, query, repository_id)
+            verify_stages(captured, name)
+            steps = stage_steps(captured)
+            best, median = latency(db, query, repository_id)
+            evidence_sql = stage_sql(captured, "evidence")
+            selection_sql = stage_sql(captured, "selection")
+            out[name] = {
+                "captured": captured,
+                "steps": steps,
+                "best": best,
+                "median": median,
+                "selection_ms": replay_latency(db, selection_sql) if selection_sql else 0.0,
+                "evidence_ms": replay_latency(db, evidence_sql) if evidence_sql else 0.0,
+                "evidence_sql": evidence_sql,
+                "walk": walk(db, query, repository_id),
+            }
     return out
 
 

@@ -90,14 +90,6 @@ class SQLiteRepository:
     HISTORY_WINDOW = 3          # superseded revisions kept per memory under ``window3``
     REFERENCE_COLUMNS = "repository_id,commit_oid,path,object_oid,entry_type,mode,checked_at"
 
-    #: Evidence loading is bounded by the page. Set False to execute the form shipped
-    #: through ``cdf51e7`` instead: the control arm of the evidence-loading experiment in
-    #: ``docs/plans/milestone-b2-evidence-loading.md``, and the oracle that
-    #: ``tests/core/test_evidence_loading.py`` differentially tests the bounded form
-    #: against. Nothing in a request can reach this; it is a measurement and rollback
-    #: control, not configuration.
-    BOUNDED_EVIDENCE = True
-
     def __init__(self, path: str | Path, index_profile: str = "exact",
                  history_profile: str = "none") -> None:
         """``index_profile`` selects how bodies are tokenised for search.
@@ -600,27 +592,28 @@ class SQLiteRepository:
                         pairs: list[tuple[str, str]]) -> dict[tuple[str, str], tuple[VerifiedReference, ...]]:
         """Load the reference evidence for one page of hits.
 
-        The work this does is bounded by the page, not by the scope. Both forms below
-        return the same rows in the same order; they differ only in what the planner is
-        free to do with them, and on a large scope that difference is the whole cost.
+        The work this does is bounded by the page, not by the scope. The form shipped
+        through ``cdf51e7`` was not: it is retained outside production as
+        ``tests/core/evidence_control.py``, which substitutes itself for
+        ``_evidence_sql`` to serve as the control arm of the evidence-loading
+        experiment and as a differential-testing oracle. There is one production form.
         """
         if not pairs:
             return {}
         # Distinct pairs only. A page carries one row per memory so this changes nothing
-        # today, but the bounded form joins against these rows and would multiply a
-        # duplicate where the unbounded form's OR-list would absorb it. The two must not
+        # today, but the shipped form joins against these rows and would multiply a
+        # duplicate where the retained control's OR-list would absorb it. The two must not
         # be able to disagree for a reason as incidental as that.
         unique = list(dict.fromkeys(pairs))
-        builder = self._bounded_evidence_sql if self.BOUNDED_EVIDENCE else self._unbounded_evidence_sql
-        statement, parameters = builder(scope, unique)
+        statement, parameters = self._evidence_sql(scope, unique)
         rows = db.execute(statement, parameters).fetchall()
         grouped: dict[tuple[str, str], list[VerifiedReference]] = {}
         for row in rows:
             grouped.setdefault((row[0], row[1]), []).append(VerifiedReference(*row[2:]))
         return {pair: tuple(items) for pair, items in grouped.items()}
 
-    def _bounded_evidence_sql(self, scope: Scope,
-                              pairs: list[tuple[str, str]]) -> tuple[str, list]:
+    def _evidence_sql(self, scope: Scope,
+                      pairs: list[tuple[str, str]]) -> tuple[str, list]:
         """The page's pairs drive the lookup, one seek each on the primary key's autoindex.
 
         ``CROSS JOIN`` is a plan constraint, not a semantic one: in SQLite it is an inner
@@ -628,6 +621,9 @@ class SQLiteRepository:
         as a plain join, the planner is free to lead with ``revision_references`` and scan
         the whole ``(namespace, actor)`` partition instead -- which is what it does, and it
         was measured at roughly 4,800x the work of this form on a 20,000-memory scope.
+
+        This is the seam the retained control substitutes itself at. It is a method for
+        that reason and for no other; production selects nothing here.
         """
         values = ",".join("(?,?)" for _ in pairs)
         parameters: list = []
@@ -642,26 +638,6 @@ class SQLiteRepository:
             " ON r.namespace=? AND r.actor=? AND r.memory_id=p.memory_id"
             " AND r.revision_id=p.revision_id"
             " ORDER BY r.memory_id,r.revision_id,r.commit_oid,r.path",
-            parameters,
-        )
-
-    def _unbounded_evidence_sql(self, scope: Scope,
-                                pairs: list[tuple[str, str]]) -> tuple[str, list]:
-        """The form shipped through ``cdf51e7``, retained as a control and as a test oracle.
-
-        Its cost is a function of the scope, not of the page: with no statistics the
-        planner serves the OR-list by scanning the whole ``(namespace, actor)`` partition
-        rather than by point lookups, and ``ANALYZE`` is what changes its mind. That
-        dependence on statistics is the reason this is no longer the shipped path.
-        """
-        clauses = " OR ".join("(memory_id=? AND revision_id=?)" for _ in pairs)
-        parameters: list = [scope.namespace, scope.actor]
-        for memory_id, revision_id in pairs:
-            parameters.extend([memory_id, revision_id])
-        return (
-            f"SELECT memory_id,revision_id,{self.REFERENCE_COLUMNS}"
-            f" FROM revision_references WHERE namespace=? AND actor=? AND ({clauses})"
-            " ORDER BY memory_id,revision_id,commit_oid,path",
             parameters,
         )
 

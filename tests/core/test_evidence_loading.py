@@ -1,10 +1,11 @@
 """Bounded evidence loading: the two forms are interchangeable, and only one is bounded.
 
-``_hit_references`` loads the reference evidence for a page of hits. It has two forms.
-The bounded one drives the lookup from the page's pairs; the unbounded one -- shipped
-through ``cdf51e7`` -- hands the planner an OR-list whose cost is a function of the scope.
-Both are kept: the unbounded form is the control the evidence-loading experiment measures
-against, and keeping it correct is what makes it a control rather than a relic.
+``_hit_references`` loads the reference evidence for a page of hits. Production has one
+form, which drives the lookup from the page's pairs. The form shipped through ``cdf51e7``
+hands the planner an OR-list whose cost is a function of the scope; it is retained in
+``evidence_control.py``, which is test support rather than production code, and is
+installed over the seam for the duration of a test. Keeping it correct is what makes it a
+control rather than a relic.
 
 Two obligations, and they pull in opposite directions on purpose:
 
@@ -12,9 +13,9 @@ Two obligations, and they pull in opposite directions on purpose:
   ordering, pagination and evidence completeness must be identical. This is asserted by
   running the acceptance suite's own scenarios against the control form, so the oracle is
   the shipped semantics rather than a restatement of them.
-* **Not equivalent in cost.** The bounded form must reach ``revision_references`` through
+* **Not equivalent in cost.** The shipped form must reach ``revision_references`` through
   the full ``(namespace, actor, memory_id, revision_id)`` key in *both* statistics states.
-  The unbounded form must be shown not to, as-shipped, or the guard proves nothing.
+  The control must be shown not to, as-shipped, or the guard proves nothing.
 
 The measurement of record is ``tools/measure_evidence_loading.py``. This is the guard.
 """
@@ -26,6 +27,7 @@ from pathlib import Path
 
 import pytest
 from b2b_scenarios import SCENARIOS
+from evidence_control import is_installed, unbounded_evidence_sql
 # The corpus builder for acceptance test 16, reused rather than copied a third time: this
 # file asks a question about the same planner on the same rows.
 from test_reference_filter_plans import SCOPE, build
@@ -43,7 +45,12 @@ def corpus(tmp_path_factory) -> Path:
 
 @pytest.fixture
 def unbounded(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(SQLiteRepository, "BOUNDED_EVIDENCE", False)
+    """Install the retained control over the seam for one test.
+
+    ``monkeypatch`` rather than ``evidence_control.installed`` so that a test failing
+    mid-body cannot leave the control installed for whatever runs next.
+    """
+    monkeypatch.setattr(SQLiteRepository, "_evidence_sql", unbounded_evidence_sql)
 
 
 @pytest.mark.parametrize("name", sorted(SCENARIOS))
@@ -54,7 +61,7 @@ def test_every_b2b_scenario_holds_under_the_unbounded_control(tmp_path: Path, na
     Without this the retained form would be untested code that a refactor could break
     silently, and the experiment's control arm would stop being the thing it claims to be.
     """
-    assert SQLiteRepository.BOUNDED_EVIDENCE is False, "the control form is not installed"
+    assert is_installed(), "the control form is not installed"
     SCENARIOS[name](tmp_path)
 
 
@@ -97,9 +104,12 @@ QUERIES = {
 def test_both_forms_return_identical_pages(corpus: Path, name: str,
                                            monkeypatch: pytest.MonkeyPatch) -> None:
     query, pages = QUERIES[name]
-    monkeypatch.setattr(SQLiteRepository, "BOUNDED_EVIDENCE", True)
+    # The shipped form needs no installation, but saying so is what keeps the first walk
+    # from silently becoming a second run of the control.
+    assert not is_installed(), "the control form is installed over the shipped one"
     bounded = _walk(corpus, query, pages)
-    monkeypatch.setattr(SQLiteRepository, "BOUNDED_EVIDENCE", False)
+    monkeypatch.setattr(SQLiteRepository, "_evidence_sql", unbounded_evidence_sql)
+    assert is_installed(), "the control form is not installed"
     control = _walk(corpus, query, pages)
 
     assert bounded == control, name
@@ -113,11 +123,12 @@ def test_both_forms_return_identical_pages(corpus: Path, name: str,
 def _reference_plan(db: Path, bounded: bool, pairs: list[tuple[str, str]]) -> list[str]:
     """Plan lines for the statement the form under test actually builds.
 
-    The statement comes from the shipped builder, not from a restatement of it here.
+    The statement comes from the builder that runs -- the shipped one, or the retained
+    control -- not from a restatement of it here.
     """
     repository = SQLiteRepository(db)
-    builder = repository._bounded_evidence_sql if bounded else repository._unbounded_evidence_sql
-    statement, parameters = builder(SCOPE, pairs)
+    statement, parameters = (repository._evidence_sql(SCOPE, pairs) if bounded
+                             else unbounded_evidence_sql(repository, SCOPE, pairs))
     connection = sqlite3.connect(db)
     try:
         return [row[3] for row in connection.execute(
@@ -175,7 +186,7 @@ def test_bounded_evidence_loading_is_bounded_in_both_statistics_states(
 def test_the_control_form_is_not_bounded_as_shipped(corpus: Path) -> None:
     """The negative control for the test above.
 
-    If the unbounded form also reached ``revision_references`` through the full key with
+    If the control form also reached ``revision_references`` through the full key with
     no statistics, the assertion above would be satisfied by every form and would be
     measuring nothing. It does not: the OR-list is served by a scan of the whole
     ``(namespace, actor)`` partition, which is the cost this slice removes.
