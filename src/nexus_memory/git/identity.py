@@ -20,6 +20,18 @@ __all__ = [
 ]
 
 
+def _holds_repository_metadata(git_dir: Path) -> bool:
+    """Whether a directory carries the metadata git requires before calling it a repository.
+
+    That a ``.git`` exists proves nothing: a freshly created empty one makes git exit 128,
+    and accepting it here reports the checkout as discoverable — which is the one thing
+    that licenses :func:`bind_repository` to suppress git's own rejection. git looks for an
+    object store, a ref store and a HEAD before it accepts a directory; so do we, so that
+    "discoverable without git" cannot be true where git itself says no.
+    """
+    return (git_dir / "objects").is_dir() and (git_dir / "refs").is_dir() and (git_dir / "HEAD").is_file()
+
+
 def _git_directory_at(directory: Path) -> Path | None:
     """The shared Git directory for a ``.git`` entry in one directory, or ``None``.
 
@@ -42,7 +54,8 @@ def _git_directory_at(directory: Path) -> Path | None:
         common = git_dir / "commondir"
         if common.is_file():
             git_dir = (git_dir / common.read_text("utf-8").strip()).resolve()
-        return git_dir.resolve()
+        git_dir = git_dir.resolve()
+        return git_dir if _holds_repository_metadata(git_dir) else None
     except OSError:
         return None
 

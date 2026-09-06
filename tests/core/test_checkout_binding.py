@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 from reference_fakes import OID1, FakeVerifier, binding, entry, register
-from test_repository_identity import GIT, SCOPE, bind, common_dir, git, init_repo
+from test_repository_identity import GIT, SCOPE, bind, common_dir, git, init_repo, rows
 
 from nexus_memory.domain.errors import (
     RepositoryMismatch,
@@ -25,7 +25,7 @@ from nexus_memory.domain.errors import (
 )
 from nexus_memory.domain.models import MemoryInput, ReferenceInput, Scope
 from nexus_memory.git import GitCli, bind_repository
-from nexus_memory.git.identity import token_path
+from nexus_memory.git.identity import locate_without_git, token_path
 from nexus_memory.memory import MemoryService
 from nexus_memory.storage import SQLiteRepository
 
@@ -48,6 +48,16 @@ def failing_git(directory: Path) -> GitCli:
 
 def unusable_git(directory: Path) -> GitCli:
     return stub_git(directory, "#!/bin/sh\nexit 0\n", executable=False)
+
+
+def wrong_format_git(directory: Path) -> GitCli:
+    """Executable, but not something the kernel will load: no shebang, not a binary.
+
+    This one raises a bare ``OSError`` (ENOEXEC) out of the spawn rather than one of the
+    named subclasses, so it used to escape the adapter entirely and surface from the CLI as
+    a database that could not be opened.
+    """
+    return stub_git(directory, "this is not a program\n")
 
 
 def service(db: Path, checkout: Path, git_cli: GitCli | None = GIT) -> MemoryService:
@@ -120,7 +130,14 @@ def test_a_deleted_or_replaced_token_is_a_mismatch_not_a_fresh_identity(tmp_path
     assert svc.record(item, "before").operation == "record"  # the replay is unaffected
 
 
-def test_the_identity_check_runs_once_per_verifying_write_and_never_before_a_replay(tmp_path: Path) -> None:
+def test_the_identity_check_brackets_a_verifying_write_and_never_runs_before_a_replay(tmp_path: Path) -> None:
+    """Twice per verifying write, not once: the second is what makes the first worth taking.
+
+    Every git command resolves the bound pathname afresh, so one check up front proves only
+    what was there when it ran. It was once one check, and a checkout replaced immediately
+    after it passed had the replacement's commits stamped with the departed repository's
+    identity. Writes that resolve nothing still ask nothing.
+    """
     db = tmp_path / "memory.sqlite3"
     verifier = FakeVerifier({"HEAD": OID1}, {(OID1, "a"): (entry("a"),)})
     store = SQLiteRepository(db)          # migrates, so the identity row below has a table
@@ -129,11 +146,11 @@ def test_the_identity_check_runs_once_per_verifying_write_and_never_before_a_rep
     item = MemoryInput("one", references=(Ref("a"),))
 
     receipt = svc.record(item, "k")
-    assert verifier.identity_checks == 1
+    assert verifier.identity_checks == 2          # once before resolving, once before writing
     assert svc.record(item, "k") == receipt
-    assert verifier.identity_checks == 1          # the replay never asks the checkout
+    assert verifier.identity_checks == 2          # the replay never asks the checkout
     svc.record(MemoryInput("no references"), "plain")
-    assert verifier.identity_checks == 1          # neither does a write that carries none
+    assert verifier.identity_checks == 2          # neither does a write that carries none
 
     verifier.identity_error = RepositoryMismatch("the bound checkout now resolves to a different repository")
     with pytest.raises(RepositoryMismatch):
@@ -145,7 +162,10 @@ def test_the_identity_check_runs_once_per_verifying_write_and_never_before_a_rep
 # --- 2: a git that is present but cannot answer --------------------------------------------
 
 
-@pytest.mark.parametrize("make_git", [failing_git, unusable_git], ids=["exits-nonzero", "not-executable"])
+@pytest.mark.parametrize(
+    "make_git", [failing_git, unusable_git, wrong_format_git],
+    ids=["exits-nonzero", "not-executable", "wrong-binary-format"],
+)
 def test_a_git_that_cannot_answer_degrades_like_a_missing_one(tmp_path: Path, make_git) -> None:
     """Verification is never a startup dependency, and an unusable binary is not an exception.
 
@@ -279,3 +299,91 @@ def test_scopes_do_not_share_a_degraded_binding(tmp_path: Path) -> None:
     bind(db, repo)
     elsewhere = Scope("another-namespace", "local")
     assert bind_repository(SQLiteRepository(db), elsewhere, repo / "sub", None, None) == (None, None)
+
+
+# --- 4: from the audit of f74f07c ------------------------------------------------------------
+
+
+def test_a_checkout_replaced_inside_the_verification_window_writes_nothing(tmp_path: Path) -> None:
+    """The window between the identity check and the write, not the check itself.
+
+    The check passed and every git command after it resolved the bound pathname again, so a
+    checkout swapped in between had the replacement's commit and blob written under the
+    departed repository's id — a row that is wrong in exactly the way the check exists to
+    prevent, and wrong silently. Confirming again before the write refuses any replacement
+    still in place. A swap undone inside the window stays invisible; the binding assumes the
+    checkout is not relocated concurrently with a verifying write.
+    """
+    db = tmp_path / "memory.sqlite3"
+    other = init_repo(tmp_path / "other")
+    live = init_repo(tmp_path / "live")
+    svc = service(db, live)
+    assert svc.verifier is not None
+
+    passed_once = svc.verifier.check_identity
+
+    def swap_after_passing() -> None:
+        passed_once()                                     # still the repository we bound
+        shutil.rmtree(live)
+        shutil.copytree(other, live, symlinks=True)       # ...and now it is not
+        svc.verifier.check_identity = passed_once         # the swap happens once
+
+    svc.verifier.check_identity = swap_after_passing
+    with pytest.raises(RepositoryMismatch):
+        svc.record(MemoryInput("across the swap", references=(Ref("file.txt"),)), "race")
+    assert rows(db, "revision_references") == []
+
+
+def test_a_dot_git_without_repository_metadata_is_not_a_discovered_checkout(tmp_path: Path) -> None:
+    """An empty ``.git`` makes git exit 128; discovery must not disagree with it.
+
+    Being discoverable without git is the one thing that licenses a launch to suppress git's
+    own rejection, so accepting a directory that only *looks* like a Git directory turned an
+    invalid ``--repo`` into a silent unbound launch — with a working git, not merely a broken
+    one. git wants an object store, a ref store and a HEAD before it accepts a directory.
+    """
+    db = tmp_path / "memory.sqlite3"
+    hollow = tmp_path / "hollow"
+    (hollow / ".git").mkdir(parents=True)
+
+    assert locate_without_git(hollow) is None
+    for git_cli in (GIT, failing_git(tmp_path / "broken")):
+        with pytest.raises(RepositoryUnbound):
+            bind_repository(SQLiteRepository(db), SCOPE, hollow, None, git_cli)
+
+    partial = tmp_path / "partial"                        # objects and refs, no HEAD
+    (partial / ".git" / "objects").mkdir(parents=True)
+    (partial / ".git" / "refs").mkdir()
+    assert locate_without_git(partial) is None
+
+
+def test_a_repository_that_moved_with_its_git_directory_still_verifies(tmp_path: Path) -> None:
+    """The token is the registration; the common directory is only where it is kept.
+
+    Comparing the locator refused a repository that had merely been relocated — the one case
+    the check documents itself as not refusing — while rebinding recovered the same id, so
+    the same repository was and was not itself depending on which door it came through. What
+    must still be refused is a *different* repository at the bound path, and the token, not
+    the locator, is what refuses it.
+    """
+    db = tmp_path / "memory.sqlite3"
+    original = init_repo(tmp_path / "original")
+    link = tmp_path / "checkout"
+    link.symlink_to(original)
+    svc = service(db, link)
+    assert svc.binding is not None and svc.verifier is not None
+
+    moved = tmp_path / "elsewhere" / "moved"
+    moved.parent.mkdir()
+    shutil.move(str(original), str(moved))
+    link.unlink()
+    link.symlink_to(moved)
+
+    svc.verifier.check_identity()                          # relocation is not a mismatch
+    assert svc.verifier.common_dir == common_dir(moved)     # the locator follows the token
+    assert svc.record(MemoryInput("after the move", references=(Ref("file.txt"),)), "moved").operation == "record"
+
+    link.unlink()
+    link.symlink_to(init_repo(tmp_path / "impostor"))       # a different repository, same path
+    with pytest.raises(RepositoryMismatch):
+        svc.verifier.check_identity()

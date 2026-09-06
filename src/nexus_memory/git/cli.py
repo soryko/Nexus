@@ -63,7 +63,11 @@ class GitCli:
                 command, cwd=str(cwd), env=self._environment(), capture_output=True,
                 timeout=self.timeout, check=False, stdin=subprocess.DEVNULL,
             )
-        except (FileNotFoundError, PermissionError, NotADirectoryError) as error:
+        except OSError as error:
+            # Every way the spawn itself can fail, not the three that were named: an
+            # executable of the wrong binary format raises a bare OSError (ENOEXEC), which
+            # escaped to the CLI's own OSError handler and was reported as a database that
+            # could not be opened. A git that cannot be launched is one that cannot answer.
             raise VerificationUnavailable("git is unavailable") from error
         except subprocess.TimeoutExpired as error:
             raise VerificationUnavailable("git did not answer in time") from error
@@ -107,22 +111,31 @@ class GitCliVerifier:
         The binding is established once and the pathname is followed on every later
         invocation, so a checkout that is moved away and replaced would otherwise have the
         replacement's commits resolved here and stamped with the departed repository's
-        identity. The common directory is a locator, reused by whatever is put at that
-        path next; the token is the registration, so both are re-read. One ``rev-parse``
-        per verifying write is the price of the recorded ``repository_id`` being true at
-        the moment the evidence was taken.
+        identity. The token decides that question, because the token is the registration.
+        The common directory is only a locator — it is reused by whatever is put at that
+        path next, and it changes when a repository moves while staying the same
+        repository — so it is re-read to find the token and then updated, never compared.
+        Comparing it refused a repository that had merely been relocated, which is the one
+        case this is documented not to refuse. A ``rev-parse`` at each end of a verifying
+        write is the price of the recorded ``repository_id`` being true when the evidence
+        was taken.
 
         A checkout that merely moved with its Git directory still matches: this refuses a
         changed binding, not a changed path.
+
+        The confirmation holds for one instant. Commands issued afterwards resolve the
+        bound pathname again, so a caller that writes what they return brackets the window
+        with a second call rather than trusting a single one; see ``MemoryService._verify``.
         """
         try:
             info = self.git.inspect(self.checkout)
         except RepositoryUnbound as error:
             raise RepositoryMismatch("the bound checkout is no longer a git checkout") from error
-        if info.common_dir != self.common_dir or info.object_format != self.object_format:
+        if info.object_format != self.object_format:
             raise RepositoryMismatch("the bound checkout now resolves to a different repository")
         if read_token(info.common_dir) != self.token:
             raise RepositoryMismatch("the bound checkout now resolves to a different repository")
+        self.common_dir = info.common_dir
 
     def resolve_commit(self, spec: str) -> str | None:
         """Typed resolution: an annotated tag dereferences to its commit, a tree is refused."""

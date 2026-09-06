@@ -152,10 +152,21 @@ class MemoryService:
         Runs before the write transaction opens: no subprocess is ever spawned while the
         write lock is held. When the result is not the one that commits, it is discarded.
 
-        The binding is confirmed first, and only here. Every reference in this batch is
-        stamped with ``binding.repository_id``, so the identity has to be true now rather
-        than at launch; a retry is answered from its receipt before this runs, which is
-        what keeps a replay working after the checkout has changed underneath.
+        The binding is confirmed first and again last, and only here. Every reference in
+        this batch is stamped with ``binding.repository_id``, so the identity has to be
+        true now rather than at launch; a retry is answered from its receipt before this
+        runs, which is what keeps a replay working after the checkout has changed
+        underneath.
+
+        The window between those two confirmations is the contract's one assumption. Each
+        git command resolves the bound pathname afresh, so a single check up front only
+        proves what was there when it ran: a checkout replaced immediately after it was
+        observed had the replacement's commits stamped with the departed repository's
+        identity. Bracketing refuses any replacement still in place when the batch is
+        done, which is every relocation that is not undone within the window. It is not
+        atomicity, and no check here can be: a swap reverted inside the window stays
+        invisible, so the binding assumes the checkout is not relocated concurrently with
+        a verifying write.
         """
         if self.binding is None or self.verifier is None:
             raise VerificationUnavailable("reference verification is unavailable in this mode")
@@ -172,6 +183,9 @@ class MemoryService:
                 self.binding.repository_id, commit_oid, reference.path, entry.object_oid,
                 entry.entry_type, entry.mode, checked_at,
             )
+        # Nothing above is written until the checkout answers for itself a second time.
+        # Still before the write lock: no subprocess is spawned while it is held.
+        self.verifier.check_identity()
         return tuple(sorted(verified.values(), key=lambda item: (item.commit_oid, item.path)))
 
     def _prepare(self, operation: str, target: str | None, expected: str | None, item: MemoryInput,
