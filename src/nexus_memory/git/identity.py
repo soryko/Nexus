@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nexus_memory.domain.errors import RepositoryRegistrationFailed
+from nexus_memory.domain.errors import (
+    RepositoryRegistrationFailed,
+    RepositoryUnbound,
+    VerificationUnavailable,
+)
 from nexus_memory.domain.models import RepositoryBinding, Scope
 from nexus_memory.storage.repository import MemoryRepository
 
@@ -50,19 +54,33 @@ def bind_repository(store: MemoryRepository, scope: Scope, checkout: Path, repos
 
     The verifier is handed the locator and the token this binding was made against, so it
     can confirm before every later verification that the path still hosts this repository.
+
+    "Without git" covers a git that cannot answer as well as one that is not there:
+    verification is never a startup dependency, and an unusable binary is not an exception
+    to that.
     """
-    if git is None:
-        common_dir = locate_without_git(checkout)
-        if common_dir is None:
-            return None, None
-        token = read_token(common_dir)
-        binding = store.checkout_binding(scope, token) if token is not None else None
-        if binding is None and repository_id is not None:
-            raise RepositoryRegistrationFailed("git is unavailable, so the checkout cannot be registered")
-        return binding, None
-    info = git.inspect(checkout)
-    token = read_token(info.common_dir)
-    if token is None:
-        token = publish_token(info.common_dir)
-    binding = store.bind_checkout(scope, token, str(info.common_dir), info.object_format, repository_id)
-    return binding, GitCliVerifier(git, checkout, binding.object_format, info.common_dir, token)
+    if git is not None:
+        try:
+            info = git.inspect(checkout)
+        except (RepositoryUnbound, VerificationUnavailable):
+            # An executable that cannot answer is not evidence about the checkout: a git
+            # that is present but broken must degrade exactly like a missing one, or a
+            # single unusable binary takes the whole server down. It degrades only where
+            # the checkout is discoverable without git; where it is not, the path really
+            # may not be a checkout, and the operator hears the original error.
+            if locate_without_git(checkout) is None:
+                raise
+        else:
+            token = read_token(info.common_dir)
+            if token is None:
+                token = publish_token(info.common_dir)
+            binding = store.bind_checkout(scope, token, str(info.common_dir), info.object_format, repository_id)
+            return binding, GitCliVerifier(git, checkout, binding.object_format, info.common_dir, token)
+    common_dir = locate_without_git(checkout)
+    if common_dir is None:
+        return None, None
+    token = read_token(common_dir)
+    binding = store.checkout_binding(scope, token) if token is not None else None
+    if binding is None and repository_id is not None:
+        raise RepositoryRegistrationFailed("git is unavailable, so the checkout cannot be registered")
+    return binding, None

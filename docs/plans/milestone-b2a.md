@@ -32,6 +32,7 @@ Binding rules:
 | Two processes find the token absent at once | One token is published; both bind the same `repository_id` |
 | Token published, process interrupted before the row was written | Adopt on the next launch, exactly as a token present with no row |
 | `--repo-id <id>` supplied, token maps elsewhere | Refuse with `repository_mismatch` |
+| `git` present but unable to answer (non-zero exit, not executable, no answer in time) | Not evidence about the checkout. Degrade exactly as a missing `git` does, wherever the checkout is discoverable without it; where it is not, the original error stands |
 | Additional clone | A distinct identity, because a clone has no token. `--repo-id` associates it deliberately, with the consequence that evidence recorded under one checkout is thereafter presented as belonging to the same repository |
 
 - **Independent clones never merge automatically.** A matching remote URL, a shared commit OID, an identical tree, or a similar path is not evidence of the same project. Two clones of the same upstream are two repositories until an operator says otherwise, and the association is an explicit local action, never an inference.
@@ -185,8 +186,9 @@ Frozen with this contract, over temporary Git repositories created by the tests:
 12. **Migration and retry.** Replay a receipt written before migration `004`; assert a reference-free request still produces the pinned version-1 digest by byte equality; same key plus a new reference conflicts; and a retry returns the original receipt and original evidence with a verifier that **raises if called at all**, after `HEAD` has moved and with the object unavailable.
 13. **Verification unavailable.** Launched without `--repo` and with `git` absent: the server starts, reference-carrying writes are refused with `verification_unavailable`, plain writes still succeed, and `status` reports the mode.
 14. **Restart without git.** Write references with a working verifier, restart with git unavailable: bindings and evidence are still readable through `get` and `search`, receipts still replay, and a `forget`-then-replay returns the original receipt while `get` refuses.
-16. **The bound checkout, over time.** A repository moved away and replaced at its path by an independently registered one: new reference-carrying writes are refused with `repository_mismatch`, stored evidence is unchanged, the original receipt still replays, and restoring the repository restores verification under the identity it always had. A removed token is the same refusal, not a fresh identity. The identity check is asserted to run once per verifying write and never before a replay.
-17. **One real MCP round trip.** Record with a reference over subprocess stdio, read the evidence back, and assert no repository, commit-root or path-root argument is accepted in any tool schema.
+16. **A git that cannot answer.** With a registered checkout and existing memories, a `git` that exits non-zero and a `git` that cannot be executed each bind read-only and report verification unavailable, through `bind_repository` and through the CLI over stdio. Neither swallows a path that is not a checkout or a truncated token.
+17. **The bound checkout, over time.** A repository moved away and replaced at its path by an independently registered one: new reference-carrying writes are refused with `repository_mismatch`, stored evidence is unchanged, the original receipt still replays, and restoring the repository restores verification under the identity it always had. A removed token is the same refusal, not a fresh identity. The identity check is asserted to run once per verifying write and never before a replay.
+18. **One real MCP round trip.** Record with a reference over subprocess stdio, read the evidence back, and assert no repository, commit-root or path-root argument is accepted in any tool schema.
 
 **Negative controls, wired from the first test** — as with retrieval, a suite that cannot fail measures nothing:
 
@@ -289,6 +291,7 @@ The project `.venv` links SQLite 3.50.4 and cannot run the suite — every stora
 **2026-09-06, fourth review, against the implementation at `0b0a217`.** Each item was reproduced against that commit before anything was changed, and the regression written for it was confirmed to fail against it.
 
 17. **The binding is confirmed before every new verification, not only at launch.** A repository moved away and replaced at its path had the newcomer's commit — absent from the departed repository — recorded under the departed repository's `repository_id`, because git follows the saved pathname while the service stamps the saved identity. The verifier now re-reads the checkout's shared Git directory and token first and refuses a changed binding with `repository_mismatch`. Receipt replay stays ahead of the check.
+18. **A `git` that is present but cannot answer degrades like a missing one.** With a registered checkout and existing memories, an executable that exited non-zero gave `startup_error: repository_unbound` and exit 1 through the CLI, contradicting the compatibility promise that a *broken* git leaves the server startable. The degraded path now covers it wherever the checkout is discoverable without git, and still surfaces a path that is not a checkout and a truncated token.
 
 ## Explicitly out of scope
 

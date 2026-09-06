@@ -425,7 +425,9 @@ def main(argv: list[str] | None = None) -> int:
         binding = verifier = None
         if args.repo is not None:
             # git missing is a supported mode: an already-registered checkout still binds
-            # and verification is reported unavailable; nothing else depends on git.
+            # and verification is reported unavailable; nothing else depends on git. A git
+            # that is present but cannot answer degrades the same way, inside
+            # bind_repository, where the checkout can still be discovered without it.
             git = GitCli() if GitCli.available() else None
             binding, verifier = bind_repository(store, scope, args.repo.absolute(), args.repo_id, git)
         service = MemoryService(store, scope, binding, verifier)

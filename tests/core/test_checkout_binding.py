@@ -5,21 +5,47 @@ lives at that path can change, so what the process believes about it has to be r
 """
 from __future__ import annotations
 
+import os
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 from reference_fakes import OID1, FakeVerifier, binding, entry, register
 from test_repository_identity import GIT, SCOPE, bind, common_dir, git, init_repo
 
-from nexus_memory.domain.errors import RepositoryMismatch
+from nexus_memory.domain.errors import (
+    RepositoryMismatch,
+    RepositoryRegistrationFailed,
+    RepositoryUnbound,
+    VerificationUnavailable,
+)
 from nexus_memory.domain.models import MemoryInput, ReferenceInput
 from nexus_memory.git import GitCli, bind_repository
 from nexus_memory.git.identity import token_path
 from nexus_memory.memory import MemoryService
 from nexus_memory.storage import SQLiteRepository
 
+PROJECT_ROOT = Path(__file__).parents[2]
 Ref = ReferenceInput
+
+
+def stub_git(directory: Path, script: str, executable: bool = True) -> GitCli:
+    """A `git` that is present and runnable but cannot answer, or cannot be run at all."""
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "git"
+    path.write_text(script)
+    path.chmod(0o755 if executable else 0o644)
+    return GitCli(str(path))
+
+
+def failing_git(directory: Path) -> GitCli:
+    return stub_git(directory, "#!/bin/sh\necho 'fatal: cannot answer' >&2\nexit 128\n")
+
+
+def unusable_git(directory: Path) -> GitCli:
+    return stub_git(directory, "#!/bin/sh\nexit 0\n", executable=False)
 
 
 def service(db: Path, checkout: Path, git_cli: GitCli | None = GIT) -> MemoryService:
@@ -112,3 +138,75 @@ def test_the_identity_check_runs_once_per_verifying_write_and_never_before_a_rep
         svc.record(MemoryInput("two", references=(Ref("a"),)), "k2")
     assert verifier.resolutions == ["HEAD"]       # refused before any further resolution
     assert svc.record(item, "k") == receipt
+
+
+# --- 2: a git that is present but cannot answer --------------------------------------------
+
+
+@pytest.mark.parametrize("make_git", [failing_git, unusable_git], ids=["exits-nonzero", "not-executable"])
+def test_a_git_that_cannot_answer_degrades_like_a_missing_one(tmp_path: Path, make_git) -> None:
+    """Verification is never a startup dependency, and an unusable binary is not an exception.
+
+    Reproduced at 0b0a217 through the CLI: with a registered checkout and existing
+    memories, a `git` that exits non-zero gave `startup_error: repository_unbound` and exit
+    1, while a `git` that was simply absent started normally. One unusable binary took the
+    whole server down, including every path that never shells out.
+    """
+    db = tmp_path / "memory.sqlite3"
+    repo = init_repo(tmp_path / "repo")
+    identity = bind(db, repo).repository_id
+    service(db, repo).record(MemoryInput("written while git worked"), "existing")
+
+    degraded = service(db, repo, make_git(tmp_path / make_git.__name__))
+    assert degraded.binding is not None and degraded.binding.repository_id == identity
+    assert degraded.verifier is None
+    assert degraded.status().repository_id == identity
+    assert degraded.status().verification == "unavailable"
+    assert degraded.status().active_memories == 1
+    with pytest.raises(VerificationUnavailable):
+        degraded.record(MemoryInput("x", references=(Ref("file.txt"),)), "refs")
+    assert degraded.record(MemoryInput("plain writes still work"), "plain").operation == "record"
+
+
+def test_a_broken_git_does_not_swallow_a_wrong_path_or_a_bad_token(tmp_path: Path) -> None:
+    """Degrading must not turn every launch into a success.
+
+    The fallback applies where the checkout is discoverable without git; where it is not,
+    the path may really not be a checkout and the operator hears the original error.
+    """
+    db = tmp_path / "memory.sqlite3"
+    repo = init_repo(tmp_path / "repo")
+    bind(db, repo)
+    broken = failing_git(tmp_path / "broken")
+    plain = tmp_path / "plain"
+    plain.mkdir()
+
+    with pytest.raises(RepositoryUnbound):
+        bind_repository(SQLiteRepository(db), SCOPE, plain, None, broken)
+    with pytest.raises(RepositoryUnbound):
+        bind_repository(SQLiteRepository(db), SCOPE, tmp_path / "missing", None, broken)
+
+    token_path(common_dir(repo)).write_text("truncated")
+    with pytest.raises(RepositoryRegistrationFailed):
+        bind_repository(SQLiteRepository(db), SCOPE, repo, None, broken)
+
+
+def test_the_cli_starts_with_a_registered_checkout_and_a_git_that_cannot_answer(tmp_path: Path) -> None:
+    db = tmp_path / "memory.sqlite3"
+    repo = init_repo(tmp_path / "repo")
+    bind(db, repo)
+    service(db, repo).record(MemoryInput("existing"), "existing")
+
+    shadow = tmp_path / "shadow"
+    failing_git(shadow)
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
+    env["PATH"] = os.pathsep.join([str(shadow), env.get("PATH", "")])
+    started = subprocess.run(
+        [sys.executable, "-m", "nexus_memory", "--namespace", SCOPE.namespace, "--actor", SCOPE.actor,
+         "--db", str(db), "--repo", str(repo)],
+        cwd=PROJECT_ROOT, env=env, text=True, capture_output=True,
+        stdin=subprocess.DEVNULL, check=False,
+    )
+    assert started.returncode == 0, started.stderr
+    assert "startup_error" not in started.stderr
