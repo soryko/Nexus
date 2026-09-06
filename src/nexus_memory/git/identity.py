@@ -9,7 +9,7 @@ from nexus_memory.domain.errors import (
     RepositoryUnbound,
     VerificationUnavailable,
 )
-from nexus_memory.domain.models import HEX, OBJECT_FORMATS, RepositoryBinding, Scope
+from nexus_memory.domain.models import OBJECT_FORMATS, RepositoryBinding, Scope
 from nexus_memory.storage.repository import MemoryRepository
 
 from .cli import GitCli, GitCliVerifier
@@ -23,6 +23,10 @@ __all__ = [
 
 # git validates HEAD through a 256-byte buffer and decides on what fits; so do we.
 _HEAD_BYTES = 256
+# git's own hex table takes either case. Membership is tested on raw bytes, never on text:
+# decoding first, with anything but `strict`, can drop a byte and shorten a value into a
+# match it should not have made.
+_HEX_BYTES = frozenset(b"0123456789abcdefABCDEF")
 
 
 def _valid_head(head: Path) -> bool:
@@ -44,9 +48,11 @@ def _valid_head(head: Path) -> bool:
         return False
     if content.startswith(b"ref:"):
         return content[len(b"ref:"):].lstrip().startswith(b"refs/")
-    # Detached: git reads the leading object id and disregards what follows it, in either
-    # case, so the widths are tried against the head of the buffer rather than the whole.
-    return any(HEX.fullmatch(content[:width].decode("ascii", "ignore").lower())
+    # Detached: git reads an object id from the head of the buffer and disregards whatever
+    # follows, so its permitted trailing data is preserved by testing only the prefix. The
+    # id must nonetheless be present in full — a value shorter than a width is not a short
+    # object id, it is not an object id — and every byte of that prefix must be hex.
+    return any(len(content) >= width and all(byte in _HEX_BYTES for byte in content[:width])
                for width in OBJECT_FORMATS.values())
 
 

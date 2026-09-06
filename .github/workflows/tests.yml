@@ -1,0 +1,67 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # Naming bash explicitly is what turns on `-o pipefail`; the implicit default is `bash
+    # -e` without it, under which a piped command's failure is hidden by the exit status of
+    # whatever it is piped into. A push was made from this repository on a green `tail`
+    # masking a red pytest, so this is not a hypothetical.
+    shell: bash
+
+env:
+  UV_VERSION: "0.9.5"
+  # Pins the interpreter build, not merely the series. The suite's floor is a property of
+  # the SQLite the interpreter is linked against, which varies between builds of one
+  # version, so "3.13" would not be a pin of the thing that matters.
+  UV_PYTHON: "3.13.15"
+  NEXUS_DIAGNOSTICS_DIR: ${{ github.workspace }}/artifacts/diagnostics
+
+jobs:
+  suite:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      # Consider pinning these two to commit SHAs rather than major tags if the threat
+      # model includes a compromised tag being moved.
+      - uses: actions/checkout@v4
+
+      - name: Install uv ${{ env.UV_VERSION }}
+        run: |
+          curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install the pinned interpreter and the frozen dependencies
+        run: |
+          uv python install "$UV_PYTHON"
+          uv sync --frozen
+
+      - name: Record and verify the test runtime
+        run: uv run python .github/scripts/verify_runtime.py
+
+      - name: Suite
+        run: |
+          mkdir -p artifacts/junit
+          uv run pytest -q --junitxml=artifacts/junit/suite.xml
+
+      - name: Mutation matrix
+        env:
+          NEXUS_MUTATION_MATRIX: "1"
+        run: uv run pytest -q tests/core/test_b2a_mutations.py --junitxml=artifacts/junit/mutations.xml
+
+      - name: Collect failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/
+          retention-days: 14
+          if-no-files-found: warn

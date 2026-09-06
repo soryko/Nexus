@@ -399,28 +399,35 @@ def git_accepts(checkout: Path) -> bool:
 
 
 @pytest.mark.parametrize(("head", "accepted"), [
-    ("ref: refs/heads/main\n", True),                 # born branch
-    ("ref: refs/heads/nothing-yet\n", True),          # unborn: well-formed before the ref exists
-    ("ref: refs/heads/main", True),                   # no trailing newline
-    ("ref:   refs/heads/main\n", True),               # whitespace after the prefix
-    ("9" * 39 + "a\n", True),                         # detached
-    ("9" * 39 + "A\n", True),                         # detached, uppercase
-    ("b" * 64 + "\n", True),                          # detached, sha256 width
-    ("this is not a ref\n", False),
-    ("", False),
-    ("ref: heads/main\n", False),                     # symbolic, but not into refs/
-    ("abc123\n", False),                              # hex, but no object id width
+    (b"ref: refs/heads/main\n", True),                # born branch
+    (b"ref: refs/heads/nothing-yet\n", True),         # unborn: well-formed before the ref exists
+    (b"ref: refs/heads/main", True),                  # no trailing newline
+    (b"ref:   refs/heads/main\n", True),              # whitespace after the prefix
+    (b"9" * 39 + b"a\n", True),                       # detached
+    (b"9" * 39 + b"A\n", True),                       # detached, uppercase
+    (b"b" * 64 + b"\n", True),                        # detached, sha256 width
+    (b"a" * 40, True),                                # detached, with no trailing byte at all
+    (b"a" * 40 + b" junk\n", True),                   # git reads the id and permits the rest
+    (b"this is not a ref\n", False),
+    (b"", False),
+    (b"ref: heads/main\n", False),                    # symbolic, but not into refs/
+    (b"abc123\n", False),                             # hex, but far short of any id width
+    (b"abc123", False),                               # ...and the newline had been hiding that
+    (b"a" * 39 + b"\xff", False),                     # a width of bytes, not a width of hex
 ])
-def test_discovery_accepts_the_head_forms_git_accepts_and_no_others(tmp_path: Path, head: str, accepted: bool) -> None:
-    """Existence was never the question git asks about HEAD.
+def test_discovery_accepts_the_head_forms_git_accepts_and_no_others(tmp_path: Path, head: bytes, accepted: bool) -> None:
+    """Existence was never the question git asks about HEAD, and neither is plausibility.
 
     A HEAD holding arbitrary text is rejected by git with exit 128 while discovery accepted
     it, so a checkout git refuses was still reported discoverable — the same disagreement the
-    empty ``.git`` had, one field further in. Each case asserts against the installed git as
-    well as against the expectation, so this cannot quietly drift from the thing it mirrors.
+    empty ``.git`` had, one field further in. The cases are bytes rather than text because
+    two of them are not text: a value one byte short of an id width, which a trailing newline
+    had been concealing, and a width of bytes that is not a width of hex. Each case asserts
+    against the installed git as well as the expectation, so this cannot drift from what it
+    mirrors.
     """
     repo = init_repo(tmp_path / "repo")
-    (repo / ".git" / "HEAD").write_text(head)
+    (repo / ".git" / "HEAD").write_bytes(head)
     assert git_accepts(repo) is accepted           # the expectation still matches git itself
     assert (locate_without_git(repo) is not None) is accepted
 
