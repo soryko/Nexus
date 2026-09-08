@@ -445,6 +445,32 @@ MALFORMED_CURSOR_FIELDS = {
     "seq_is_absent": {"seq": _ABSENT},
 }
 
+# Being a number is not enough to be a *bindable, comparable* one, and the guard above --
+# shipped at dc75347 -- checked only the type. JSON integers are unbounded and ``json.loads``
+# accepts ``Infinity`` and ``NaN``, so each payload below decodes to a number and then either
+# fails at bind time or pages wrongly in silence:
+#
+# * ``10**100`` exceeds SQLite's signed 64-bit integer, and ``sqlite3`` raises
+#   ``OverflowError`` binding it -- the same uncaught, non-``NexusError`` route out of storage
+#   that the type check closed, so the caller is handed ``internal_error`` again.
+# * ``-2**63`` binds; ``-rank``, which is what the browse page actually binds, does not.
+# * ``-Infinity`` negates to ``+Infinity``, which no ``durable_seq`` exceeds, so a cursor
+#   promising the next page silently returns page one; ``Infinity`` and ``NaN`` compare false
+#   against every row and end the walk early. Neither raises.
+#
+# These are properties of the values, not of the reordering: unlike the type cases above they
+# do not arrive with B3 §1. They are closed here because this is the guard that owns the
+# question of what ``(rank, seq)`` may be.
+UNREPRESENTABLE_CURSOR_FIELDS = {
+    "rank_exceeds_sqlites_integer": {"rank": 10 ** 100},
+    "rank_below_sqlites_integer": {"rank": -(10 ** 100)},
+    "rank_negation_overflows": {"rank": -2 ** 63},   # binds; its negation does not
+    "seq_exceeds_sqlites_integer": {"seq": 10 ** 100},
+    "rank_is_infinite": {"rank": float("inf")},
+    "rank_is_negative_infinity": {"rank": float("-inf")},  # negates to +inf: page one again
+    "rank_is_nan": {"rank": float("nan")},
+}
+
 
 @pytest.mark.parametrize("field", MALFORMED_CURSOR_FIELDS.values(),
                          ids=list(MALFORMED_CURSOR_FIELDS))
@@ -459,6 +485,37 @@ def test_a_malformed_cursor_field_is_a_cursor_error_not_an_internal_one(
     tampered = _retamper(_cursor(corpus, query), field)
     with pytest.raises(CursorExpired):
         SQLiteRepository(corpus).search(SCOPE, dataclasses.replace(query, cursor=tampered))
+
+
+@pytest.mark.parametrize("field", UNREPRESENTABLE_CURSOR_FIELDS.values(),
+                         ids=list(UNREPRESENTABLE_CURSOR_FIELDS))
+def test_a_numeric_cursor_field_sqlite_cannot_carry_is_a_cursor_error(
+        corpus: Path, field: dict) -> None:
+    """A number SQLite cannot bind, or cannot order against, is as malformed as a string.
+
+    Split from the parametrisation above because the failure mode differs: four of these
+    raised ``OverflowError`` (``internal_error`` to the caller) and three returned a wrong
+    page without raising anything at all -- ``-Infinity`` returning page one verbatim under
+    a cursor that asked for the page after it. Both are answered as ``CursorExpired``.
+    """
+    query = SearchQuery(limit=20)
+    tampered = _retamper(_cursor(corpus, query), field)
+    with pytest.raises(CursorExpired):
+        SQLiteRepository(corpus).search(SCOPE, dataclasses.replace(query, cursor=tampered))
+
+
+def test_a_representable_rank_at_the_bound_is_still_accepted(corpus: Path) -> None:
+    """The bound rejects what SQLite cannot carry and not one value more.
+
+    ``2**63 - 1`` and its negation both bind, so the guard must let them through -- this is
+    the control that keeps the range check from being a blanket rejection of large numbers.
+    The page it returns is empty, which is the honest answer to a position past every row,
+    and is asserted as a page rather than as an error.
+    """
+    query = SearchQuery(limit=20)
+    tampered = _retamper(_cursor(corpus, query), {"rank": 2 ** 63 - 1})
+    page = SQLiteRepository(corpus).search(SCOPE, dataclasses.replace(query, cursor=tampered))
+    assert page.hits == ()
 
 
 def test_a_valid_cursor_still_pages_after_the_field_check(corpus: Path) -> None:

@@ -343,7 +343,11 @@ def test_stdio_reports_a_malformed_cursor_as_a_cursor_error(tmp_path: Path) -> N
             assert good.structured_content["hits"]
 
             payload = json.loads(base64.urlsafe_b64decode(cursor.encode()))
-            for label, value in (("text", "not-a-number"), ("null", None)):
+            # The third is the numeric case: it decodes to an integer, passes a type check,
+            # and raises ``OverflowError`` when SQLite is asked to bind it -- reaching the
+            # caller by the same uncaught route, as the same ``internal_error``.
+            for label, value in (("text", "not-a-number"), ("null", None),
+                                 ("beyond sqlite's integer range", 10 ** 100)):
                 tampered = dict(payload, rank=value)
                 token = base64.urlsafe_b64encode(
                     json.dumps(tampered, separators=(",", ":")).encode()).decode()

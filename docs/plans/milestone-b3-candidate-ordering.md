@@ -174,9 +174,9 @@ no schema; it changes the shape of one statement.
 
 **Decided**, and registered before the change was measured, informed by the pilot that
 found it. The retained wrapper ordering is the oracle: it is not wrong, it returns exactly
-the rows the shipped form returns, which is what makes it usable as one. Thirty-three
-tests, in two obligations that pull in opposite directions on purpose, plus one added in
-review that belongs to neither — the cursor's error contract.
+the rows the shipped form returns, which is what makes it usable as one. Forty-one
+tests, in two obligations that pull in opposite directions on purpose, plus a third added
+in review that belongs to neither — the cursor's error contract.
 
 **Interchangeable** — identical hits, identical order, identical cursor behaviour:
 
@@ -216,6 +216,29 @@ review that belongs to neither — the cursor's error contract.
   re-encoding a *minted* cursor so the fingerprint still matches and the tampered field is
   the only reason the call can fail, with a negative control asserting an untampered
   re-encode still pages.
+- **A number SQLite cannot carry is the same fault.** Added in the second review pass, which
+  found the guard above checked types and stopped there. JSON integers are unbounded and
+  `json.loads` accepts `Infinity` and `NaN`, so a field can pass a type check and still be
+  unusable: `10**100` in either field raises `OverflowError` when SQLite binds it — the same
+  uncaught, non-`NexusError` route to `internal_error` the type check had just closed — and
+  so does `rank: -2**63`, which binds until it is negated. A non-finite rank raises nothing
+  and pages wrongly instead: `-Infinity` negates to `+Infinity`, which no `durable_seq`
+  exceeds, so a cursor asking for the *next* page is handed page one again, while `Infinity`
+  and `NaN` compare false against every row and end the walk early. `rank` is now bounded to
+  what survives negation and required to be finite, `seq` to SQLite's signed 64-bit range,
+  and each is answered as `cursor_expired`. Seven payloads at the repository — the four that
+  raised and the three that paged silently, all seven failing without the bound — one of them
+  also over stdio, and a control asserting that `2**63 - 1`, which does bind, is still
+  accepted and answers with its empty page rather than an error. **These are not a
+  regression of §1.** Six of the seven behave identically under the retained wrapper form,
+  checked against it directly; only `rank: -2**63` needs the negation to fail. They are
+  closed here because this guard is what owns the question of what `(rank, seq)` may be.
+- **`history()` is not covered by either bullet and is not fixed here.** It reads
+  `created_at` and `revision_id` from its own payload the same way, so an absent field still
+  raises `KeyError` and an out-of-range integer still raises `OverflowError`, both leaving
+  storage as `internal_error`. That path negates nothing, predates this slice and is
+  unchanged at `c82939a`; it is a separate defect with its own follow-up, recorded here
+  rather than folded into a browse-ordering change.
 
 **Not equivalent in cost** — asserted structurally through `EXPLAIN QUERY PLAN`, never by
 timing, and each with a negative control without which it would assert nothing:
@@ -231,7 +254,7 @@ Statements under test are captured from a real `search()` at the call, never rec
 beside it. `tests/core/test_reference_filter_plans.py` reconstructs a browse statement for a
 different question and has been moved onto the shipped ordering for the same reason.
 
-Suite: **308 passed, 0 skipped** (`NEXUS_MUTATION_MATRIX=1`; 306 passed, 2 skipped
+Suite: **316 passed, 0 skipped** (`NEXUS_MUTATION_MATRIX=1`; 314 passed, 2 skipped
 without it, the two skips being the opt-in mutation matrices CI runs separately).
 
 ## 6. Recorded as motivation, not acted on: reference-driven candidate generation

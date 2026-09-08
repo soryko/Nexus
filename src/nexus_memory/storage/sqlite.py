@@ -4,6 +4,7 @@ import base64
 import binascii
 import hashlib
 import json
+import math
 import sqlite3
 import uuid
 from contextlib import closing, contextmanager
@@ -79,6 +80,15 @@ def _is_code_shaped(chunk: str) -> bool:
 def _prose_text(text: str) -> str:
     """The subset of a body that the ``split`` profile allows a stemmer to see."""
     return " ".join(chunk for chunk in text.split() if not _is_code_shaped(chunk))
+
+
+#: What ``sqlite3`` will bind as an integer: SQLite stores them as signed 64-bit, and a
+#: wider one raises ``OverflowError`` -- not a ``NexusError``, so not an answer any caller
+#: can act on. A cursor's ``seq`` binds as it arrives and carries the full range; its
+#: ``rank`` is bound negated on the browse page, so it is admitted only if ``-rank`` fits
+#: too, which is the symmetric bound ``_cursor_position`` applies.
+_SQLITE_INTEGER_MIN = -2 ** 63
+_SQLITE_INTEGER_MAX = 2 ** 63 - 1
 
 
 class SQLiteRepository:
@@ -866,6 +876,16 @@ class SQLiteRepository:
 
         ``bool`` is excluded deliberately. It is a subclass of ``int``, so ``rank: true``
         would otherwise negate to ``-1`` and silently page from the wrong position.
+
+        Being a number is necessary and not sufficient: the value has to be one SQLite can
+        bind and compare. JSON's integers are unbounded and ``json.loads`` accepts
+        ``Infinity`` and ``NaN``, so a decoded field can be numeric and still fail or
+        mislead downstream. ``10**100`` raises ``OverflowError`` at bind time -- the same
+        ``internal_error`` route the type check closed. A non-finite rank binds without
+        complaint and pages wrongly in silence: ``-Infinity`` negates to ``+Infinity``, which
+        no ``durable_seq`` exceeds, so the caller is handed page one again under a cursor
+        that promised the next page, while ``Infinity`` and ``NaN`` compare false against
+        every row and end the walk early. Both are answered here, in the cursor's domain.
         """
         try:
             rank, seq = payload["rank"], payload["seq"]
@@ -874,6 +894,13 @@ class SQLiteRepository:
         if isinstance(rank, bool) or not isinstance(rank, (int, float)):
             raise CursorExpired(message)
         if isinstance(seq, bool) or not isinstance(seq, int):
+            raise CursorExpired(message)
+        if isinstance(rank, float):
+            if not math.isfinite(rank):
+                raise CursorExpired(message)
+        elif not -_SQLITE_INTEGER_MAX <= rank <= _SQLITE_INTEGER_MAX:
+            raise CursorExpired(message)
+        if not _SQLITE_INTEGER_MIN <= seq <= _SQLITE_INTEGER_MAX:
             raise CursorExpired(message)
         return rank, seq
 
