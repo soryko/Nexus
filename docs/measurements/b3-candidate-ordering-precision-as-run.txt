@@ -1,38 +1,44 @@
-AS RUN — B3 candidate ordering, tools/measure_candidate_selection.py.
+AS RUN — B3 candidate ordering, tools/measure_candidate_selection.py, spread inputs unrounded.
 
-Produced during the B3 review, after the three harness corrections that review found:
+Run 2026-09-08 to verify one change: the "spread inputs" line now prints the paired
+per-shape latencies as measured, where it previously rounded them to three decimals. This
+is a verification run, not a re-measurement of B3. No figure in
+docs/plans/milestone-b3-candidate-ordering.md is restated from this file.
 
-  1. The result-identity assertion compared only the walk from page one, so the separately
-     measured deep page was checked by row count alone. A mutation that shifted the
-     10,000-depth page by 20 memories passed every check in this harness. Both measured
-     depths are now compared by value -- hits, order, complete evidence, pagination.
-  2. The identical-run latency spread took the maximum directional ratio across shapes and
-     reciprocated only that winner, understating the spread. Each pair is now made
-     symmetric before the maximum.
-  3. That spread was printed as a bare aggregate, so no run of this harness could be
-     rechecked once correction 2 changed the formula that produced it. Not this milestone's
-     own as-run file -- benchmarks/dev/results-candidate-ordering.txt exists and carries the
-     original 1.03x, but not the paired latencies behind it -- and not the three runs made
-     under the corrected formula either. The paired per-shape values the ratio is taken over
-     are now printed with it, per shape and once as a line of JSON. This is the first run of
-     this harness whose spread can be recomputed from the file it is archived in:
-     max over shapes of max(a/b, b/a) over the pairs in the "spread inputs" line, which is
-     commit_exact's 8.379 / 8.054 = 1.04. That line was printed rounded to three decimals,
-     so this file recomputes its spread only to that rounding; the tool now prints the
-     paired values unrounded, and runs archived after it recompute exactly. The first
-     such run is archived beside this one, in
-     docs/measurements/b3-candidate-ordering-precision-as-run.txt; its callback figures
-     reproduce this file's exactly, and only its latencies differ.
+Measured revision: 2257e66, "Archive the spread's inputs unrounded, and round only for the
+reader". The run predates that commit by minutes -- it was made from the working tree the
+commit was then taken from -- so the harness it exercised is the file at 2257e66 byte for
+byte, checked with `git diff --quiet HEAD -- tools/measure_candidate_selection.py` after
+committing rather than assumed.
 
-No correction moves a measurement. Every callback figure below matches the run that produced
-the tables in docs/plans/milestone-b3-candidate-ordering.md exactly, and those figures are
-deterministic -- the repeatability control asserts them equal across two fresh copies rather
-than observing that they were.
+Environment: CPython 3.13.15, SQLite 3.53.4 (.venv-sqlite), Darwin 25.1.0, arm64.
 
-The latency spread is per-run, and it describes this instrument's noise rather than bounding
-anything. Four runs on this machine have given 1.06x, 1.42x, 1.05x and 1.04x (this file); the
-plan cites 1.42x as the widest. Only this run's inputs survive, so the other three stand as
-reported and cannot be rechecked. Environment: CPython 3.13.15, SQLite 3.53.4 (.venv-sqlite).
+Three files now archive runs of this harness. They are not interchangeable:
+
+  benchmarks/dev/results-candidate-ordering.txt
+      the milestone's own as-run. Carries the original 1.03x spread as a bare aggregate,
+      without the paired latencies behind it. Not recomputable.
+  docs/measurements/b3-candidate-ordering-as-run.txt
+      the review as-run, after the three harness corrections. Carries its spread inputs,
+      rounded to three decimals, so it recomputes only to that rounding.
+  this file
+      the same harness with the inputs unrounded. The first archive of this harness whose
+      spread recomputes exactly.
+
+Recomputing from this file's own "spread inputs" line -- max over shapes of max(a/b, b/a) --
+gives 1.0698944772336325, printed as 1.07x, widest pair commit_exact. That is the printed
+aggregate exactly, not to a rounding.
+
+Against the review as-run: of 108 captured lines, 27 differ, and every one of them carries a
+millisecond figure. Every callback count, every skipped count, every end-to-end callback
+count and every sortedness verdict is identical across the two runs, including all four arms
+of the candidate-selection table. The callback figures are what the comparisons rest on, and
+they reproduced.
+
+The latency spread is per-run and describes this instrument's noise. Five runs on this
+machine have now given 1.06x, 1.42x, 1.05x, 1.04x and 1.07x (this file). The plan cites 1.42x
+as the widest; this run does not move that. Only this run's and the review run's inputs
+survive, and only this run's recompute exactly.
 
 ------------------------------------------------------------------------------------------
 
@@ -57,46 +63,46 @@ repeatability control (identical configuration, separate fresh copies):
   repository_bound   selection callbacks    527,284 vs    527,284  (1.000x)
   unfiltered         selection callbacks    780,222 vs    780,222  (1.000x)
   end-to-end best per shape (ms), the paired values the spread is taken over:
-  path_exact         e2e best     9.757 vs     9.831  (1.008x)
-  path_prefix        e2e best    10.399 vs    10.489  (1.009x)
-  commit_exact       e2e best     8.054 vs     8.379  (1.040x)
-  repository_bound   e2e best    15.626 vs    15.375  (1.016x)
-  unfiltered         e2e best    10.863 vs    11.019  (1.014x)
-  spread inputs (JSON, milliseconds, [run a, run b]): {"path_exact":[9.757,9.831],"path_prefix":[10.399,10.489],"commit_exact":[8.054,8.379],"repository_bound":[15.626,15.375],"unfiltered":[10.863,11.019]}
-  latency spread across identical runs: 1.04x -- what this instrument returns when nothing changes. A description of its noise, not a threshold:
+  path_exact         e2e best    10.084 vs    10.435  (1.035x)
+  path_prefix        e2e best    11.602 vs    11.948  (1.030x)
+  commit_exact       e2e best     8.719 vs     9.328  (1.070x)
+  repository_bound   e2e best    16.780 vs    16.484  (1.018x)
+  unfiltered         e2e best    12.291 vs    11.895  (1.033x)
+  spread inputs (JSON, milliseconds, [run a, run b]): {"path_exact":[10.08420900143392,10.435416999825975],"path_prefix":[11.6016669999226,11.94841599863139],"commit_exact":[8.718500001123175,9.327875000963104],"repository_bound":[16.78020800136437,16.483958999742754],"unfiltered":[12.290708000364248,11.894707999090315]}
+  latency spread across identical runs: 1.07x -- what this instrument returns when nothing changes. A description of its noise, not a threshold:
   a latency ratio inside it establishes neither a difference nor an equivalence. The comparisons rest on the callback counts.
 
 --- current ---
 shape               sel (page 1)   sel (deep)  skipped  e2e (page 1)   sel ms  e2e best  sorted?
-path_exact               360,999      360,999        0       362,382    9.220     9.800      YES
-path_prefix              481,053      481,053        0       482,436    9.653    10.402      YES
-commit_exact             261,161      261,161        0       262,544    7.686     8.304      YES
-repository_bound         527,284      180,978    6,660       528,667   15.048    15.786      YES
-unfiltered               780,222      370,517   10,000       781,604   10.480    11.208      YES
+path_exact               360,999      360,999        0       362,382   10.139    10.758      YES
+path_prefix              481,053      481,053        0       482,436   10.271    11.000      YES
+commit_exact             261,161      261,161        0       262,544    8.215     9.267      YES
+repository_bound         527,284      180,978    6,660       528,667   16.102    17.158      YES
+unfiltered               780,222      370,517   10,000       781,604   10.750    11.441      YES
 
 --- statistics only ---
 shape               sel (page 1)   sel (deep)  skipped  e2e (page 1)   sel ms  e2e best  sorted?
-path_exact               361,181      361,181        0       362,633    9.358    10.152      YES
-path_prefix              481,301      481,301        0       482,753   10.065    10.496      YES
-commit_exact             261,364      261,364        0       262,816    7.530     8.150      YES
-repository_bound         527,461      180,972    6,660       528,913   15.086    15.796      YES
-unfiltered               500,561      370,602   10,000       502,012   10.302    10.878      YES
+path_exact               361,181      361,181        0       362,633    9.873    10.805      YES
+path_prefix              481,301      481,301        0       482,753   10.884    11.830      YES
+commit_exact             261,364      261,364        0       262,816    7.912     8.751      YES
+repository_bound         527,461      180,972    6,660       528,913   16.232    17.191      YES
+unfiltered               500,561      370,602   10,000       502,012   10.768    12.001      YES
 
 --- ordered ---
 shape               sel (page 1)   sel (deep)  skipped  e2e (page 1)   sel ms  e2e best  sorted?
-path_exact               360,698      360,698        0       362,081    9.602    10.726       no
-path_prefix              480,752      480,752        0       482,135   10.297    11.135       no
-commit_exact             260,860      260,860        0       262,243    7.669     8.227       no
-repository_bound           1,932          897    6,660         3,315    0.071     0.502       no
-unfiltered                   704          828   10,000         2,086    0.034     0.452       no
+path_exact               360,698      360,698        0       362,081    9.599    10.164       no
+path_prefix              480,752      480,752        0       482,135   10.514    11.266       no
+commit_exact             260,860      260,860        0       262,243    8.416     9.665       no
+repository_bound           1,932          897    6,660         3,315    0.069     0.507       no
+unfiltered                   704          828   10,000         2,086    0.033     0.446       no
 
 --- both ---
 shape               sel (page 1)   sel (deep)  skipped  e2e (page 1)   sel ms  e2e best  sorted?
-path_exact               360,880      360,880        0       362,332    9.086    10.445       no
-path_prefix              481,000      481,000        0       482,452    9.944    10.603       no
-commit_exact             261,063      261,063        0       262,515    7.974     8.902       no
-repository_bound           2,109        1,422    6,660         3,561    0.077     0.655       no
-unfiltered                   769        1,003   10,000         2,220    0.038     0.607       no
+path_exact               360,880      360,880        0       362,332    9.322    10.349       no
+path_prefix              481,000      481,000        0       482,452   10.542    11.673       no
+commit_exact             261,063      261,063        0       262,515    8.033     9.671       no
+repository_bound           2,109        1,422    6,660         3,561    0.080     0.730       no
+unfiltered                   769        1,003   10,000         2,220    0.037     0.573       no
 
 result identity (hits, order, evidence, pagination), vs 'current':
   current            identical
