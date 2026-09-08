@@ -87,7 +87,27 @@ installed over.
 
 **Measured**, four configurations over five shapes, each on a fresh copy of a pristine
 20,000-memory corpus, each asserting its own statistics state. Callback counts repeated
-exactly across separate copies; the latency spread across identical runs was 1.03×.
+exactly across separate copies. The latency spread across identical runs is **1.42×**
+(measured; the widest of three runs, which gave 1.06×, 1.42× and 1.05×) — see the
+correction note below.
+
+> **Correction (B3 review).** This section first reported that spread as 1.03×. The
+> harness computed it by taking the maximum *directional* ratio across shapes and only then
+> reciprocating that single winner, so a shape that ran faster on the second copy was
+> discarded rather than counted: pairs of 0.50 and 1.03 reported 1.03×, when the widest
+> pair was 2×. The calculation now reciprocates within each pair before taking the maximum.
+> **The archived 1.03× could not be recomputed.** That run retained only the aggregate — the
+> per-shape timings the corrected formula needs were never printed — so the figure above is
+> a *new measurement on this machine*, not a re-derivation of the original run, and the two
+> are not strictly comparable. The as-run output is now archived at
+> `docs/measurements/b3-candidate-ordering-as-run.txt` so that the next such correction has
+> something to recompute from.
+>
+> **The callback comparisons are unaffected.** They are counts, not timings; they repeated
+> exactly across separate copies, and the reductions this section reports are three orders
+> of magnitude — far outside any spread this instrument shows. What the correction changes
+> is that the instrument's latency noise is wider than was stated, which *strengthens* the
+> refusal to make a latency claim below rather than weakening any conclusion drawn here.
 
 | candidate selection, page 1 | current | statistics only | ordered | both |
 |---|---:|---:|---:|---:|
@@ -250,8 +270,11 @@ establishes.
   repository-bound shapes.
 - **The lexical branch of `search` is a different statement with a different plan**, and
   nothing here describes it. Five browse shapes carrying no text is the whole fixture.
-- **No latency claim in either direction.** The spread across identical runs was 1.03× and
-  the millisecond figures are corroboration for the callback counts, not a substitute.
+- **No latency claim in either direction.** The spread across identical runs reached 1.42×
+  (three runs: 1.06×, 1.42×, 1.05×), and the millisecond figures are corroboration for the
+  callback counts, not a substitute. This spread is wide enough that the millisecond
+  figures corroborate only differences of the order the callback counts report, and nothing
+  finer; a millisecond ratio inside 1.42× says nothing in either direction.
   Where a change adds callbacks — statistics, in §4 — that is counted work in this fixture
   and not a general latency penalty.
 - **The callback count and the millisecond figure have different boundaries**: a stage's

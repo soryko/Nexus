@@ -1,0 +1,135 @@
+AS RUN — B3 candidate ordering, tools/measure_candidate_selection.py.
+
+Produced during the B3 review, after the two harness corrections that review found:
+
+  1. The result-identity assertion compared only the walk from page one, so the separately
+     measured deep page was checked by row count alone. A mutation that shifted the
+     10,000-depth page by 20 memories passed every check in this harness. Both measured
+     depths are now compared by value -- hits, order, complete evidence, pagination.
+  2. The identical-run latency spread took the maximum directional ratio across shapes and
+     reciprocated only that winner, understating the spread. Each pair is now made
+     symmetric before the maximum.
+
+Neither correction changes a measurement: every callback figure below matches the run that
+produced the tables in docs/plans/milestone-b3-candidate-ordering.md exactly. What changed
+is what the harness retains and asserts, and the latency-spread line.
+
+The latency spread is per-run. Three runs on this machine gave 1.06x (this file), 1.42x and
+1.05x; the plan cites 1.42x as the widest. Callback counts are deterministic and repeated
+exactly. Environment: CPython 3.13.15, SQLite 3.53.4 (.venv-sqlite).
+
+------------------------------------------------------------------------------------------
+
+corpus: 20,000 memories, 40,000 reference rows, 3 repositories, one scope, no statistics
+  path_exact         selects     20 memories (  0.1%)
+  path_prefix        selects     20 memories (  0.1%)
+  commit_exact       selects     20 memories (  0.1%)
+  repository_bound   selects  6,667 memories ( 33.3%)
+  unfiltered         selects 20,000 memories (100.0%)  <- control arm, matches everything
+
+deep page reached per shape (rows paged past before the measured page):
+  path_exact              0  <- result set exhausted; deep page is page 1
+  path_prefix             0  <- result set exhausted; deep page is page 1
+  commit_exact            0  <- result set exhausted; deep page is page 1
+  repository_bound    6,660
+  unfiltered         10,000
+
+repeatability control (identical configuration, separate fresh copies):
+  path_exact         selection callbacks    360,999 vs    360,999  (1.000x)
+  path_prefix        selection callbacks    481,053 vs    481,053  (1.000x)
+  commit_exact       selection callbacks    261,161 vs    261,161  (1.000x)
+  repository_bound   selection callbacks    527,284 vs    527,284  (1.000x)
+  unfiltered         selection callbacks    780,222 vs    780,222  (1.000x)
+  latency spread across identical runs: 1.06x -- what this instrument returns when nothing changes. A description of its noise, not a threshold:
+  a latency ratio inside it establishes neither a difference nor an equivalence. The comparisons rest on the callback counts.
+
+--- current ---
+shape               sel (page 1)   sel (deep)  skipped  e2e (page 1)   sel ms  e2e best  sorted?
+path_exact               360,999      360,999        0       362,382   10.360    11.064      YES
+path_prefix              481,053      481,053        0       482,436   11.333    11.749      YES
+commit_exact             261,161      261,161        0       262,544    8.806     9.571      YES
+repository_bound         527,284      180,978    6,660       528,667   15.962    16.592      YES
+unfiltered               780,222      370,517   10,000       781,604   10.846    11.188      YES
+
+--- statistics only ---
+shape               sel (page 1)   sel (deep)  skipped  e2e (page 1)   sel ms  e2e best  sorted?
+path_exact               361,181      361,181        0       362,633    9.593    10.631      YES
+path_prefix              481,301      481,301        0       482,753   10.233    11.332      YES
+commit_exact             261,364      261,364        0       262,816    8.543     9.415      YES
+repository_bound         527,461      180,972    6,660       528,913   16.788    17.197      YES
+unfiltered               500,561      370,602   10,000       502,012   10.557    11.419      YES
+
+--- ordered ---
+shape               sel (page 1)   sel (deep)  skipped  e2e (page 1)   sel ms  e2e best  sorted?
+path_exact               360,698      360,698        0       362,081    9.468    10.284       no
+path_prefix              480,752      480,752        0       482,135   10.502    11.086       no
+commit_exact             260,860      260,860        0       262,243    8.202     8.667       no
+repository_bound           1,932          897    6,660         3,315    0.069     0.511       no
+unfiltered                   704          828   10,000         2,086    0.033     0.456       no
+
+--- both ---
+shape               sel (page 1)   sel (deep)  skipped  e2e (page 1)   sel ms  e2e best  sorted?
+path_exact               360,880      360,880        0       362,332    9.469    10.402       no
+path_prefix              481,000      481,000        0       482,452   10.767    12.741       no
+commit_exact             261,063      261,063        0       262,515    8.589     9.593       no
+repository_bound           2,109        1,422    6,660         3,561    0.080     0.644       no
+unfiltered                   769        1,003   10,000         2,220    0.038     0.585       no
+
+result identity (hits, order, evidence, pagination), vs 'current':
+  current            identical
+  statistics only    identical
+  ordered            identical
+  both               identical
+  discrimination    unfiltered selection 704 callbacks differs from every filtered shape
+  attribution       byte-identical evidence SQL measures identically across arms
+  non-vacuity       every measured page returned hits
+
+candidate selection (callbacks, page 1 then deepest page):
+shape                          current     statistics only             ordered                both
+path_exact                     360,999             361,181             360,698             360,880
+                               360,999             361,181             360,698             360,880
+path_prefix                    481,053             481,301             480,752             481,000
+                               481,053             481,301             480,752             481,000
+commit_exact                   261,161             261,364             260,860             261,063
+                               261,161             261,364             260,860             261,063
+repository_bound               527,284             527,461               1,932               2,109
+                               180,978             180,972                 897               1,422
+unfiltered                     780,222             500,561                 704                 769
+                               370,517             370,602                 828               1,003
+
+the browse statement each configuration executed (unfiltered, page 1):
+  current            SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=?)
+  current            SEARCH h USING INDEX sqlite_autoindex_head_index_1 (namespace=? AND actor=? AND memory_id=?)
+  current            SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+  current            USE TEMP B-TREE FOR ORDER BY
+  statistics only    SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+  statistics only    SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+  statistics only    SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+  statistics only    USE TEMP B-TREE FOR ORDER BY
+  ordered            SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+  ordered            SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+  ordered            SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+  both               SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+  both               SEARCH m USING INDEX sqlite_autoindex_memories_1 (namespace=? AND actor=? AND memory_id=?)
+  both               SEARCH b USING INTEGER PRIMARY KEY (rowid=?)
+
+the deep-page plan (unfiltered) -- whether the cursor is a range the seek starts from:
+  current            SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+  statistics only    SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+  ordered            SEARCH h USING INDEX head_index_recent (namespace=? AND actor=? AND durable_seq<?)
+  both               SEARCH h USING INDEX head_index_recent (namespace=? AND actor=? AND durable_seq<?)
+
+--- the two load-bearing details (unfiltered, no statistics) ---
+  tiebreak ASC (shipped)               704   page 1
+  tiebreak DESC                    760,222   page 1  -- the index carries rowid ascending within a durable_seq, so DESC is a sort
+  cursor: range + disjunction          828   10,000 rows in
+  cursor: disjunction alone         70,821   10,000 rows in  -- same rows, no range constraint, walks the prefix
+    range + disjunction    SEARCH h USING INDEX head_index_recent (namespace=? AND actor=? AND durable_seq<?)
+    disjunction alone      SEARCH h USING INDEX head_index_recent (namespace=? AND actor=?)
+
+--- probe: reference-driven candidate generation (path_exact, page 1, does not ship) ---
+ statistics  path index    callbacks   plan
+      False       False      161,368   SEARCH r USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+      False        True      161,374   SEARCH r USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+       True       False      161,508   SEARCH r USING COVERING INDEX sqlite_autoindex_revision_references_1 (namespace=? AND actor=?)
+       True        True        1,614   SEARCH r USING INDEX revision_references_path (namespace=? AND actor=? AND path=?)

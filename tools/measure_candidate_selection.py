@@ -37,7 +37,10 @@ Six controls run alongside:
 2. **Repeatability.** The reference configuration is measured twice on separate copies
    before any ratio is taken. The spread is printed first, and it is a description of this
    instrument's noise, **not a significance threshold**: a ratio inside it establishes
-   neither a difference nor an equivalence.
+   neither a difference nor an equivalence. It is the widest disagreement between the two
+   runs in *either* direction -- each shape's pair is made symmetric before the maximum
+   across shapes, not after it, or a shape that ran faster on the second copy is dropped
+   and the reported noise is narrower than the instrument's.
 3. **Discrimination.** The unfiltered arm must do visibly different work from the filtered
    ones, or the corpus is not exercising the predicates.
 4. **Non-vacuity.** Each shape must select a minority of the corpus, and each measured
@@ -48,8 +51,12 @@ Six controls run alongside:
    statement here: this slice does not touch it, and a page of the same hits produces the
    same evidence text under either ordering.
 6. **Identity.** All four configurations must return the same hits in the same order with
-   the same evidence over a full pagination walk. A configuration that returned a page
-   faster by returning less of it is a defect, and the walk is what catches it.
+   the same evidence -- over a walk from page one, **and on each page this harness actually
+   measured**. A configuration that returned a page faster by returning less of it, or a
+   different slice of it, is a defect. The walk alone does not catch that: it starts at the
+   top and runs ``PAGES`` pages, while the deep page is thousands of rows past its end, so
+   for a while the deep page was compared only by row *count* -- which a page that shifted
+   wholesale still satisfies. Both depths are now compared by value.
 
 **One probe here is not part of the comparison and does not ship.** ``reference_driven``
 measures a different candidate-generation shape -- one that drives the statement from
@@ -145,8 +152,29 @@ def measure_page(db: Path, query: SearchQuery, repository_id: str | None,
         "best": best,
         "median": median,
         "plan": plan(db, selection.call, selection.parameters),
-        "rows": len(SQLiteRepository(db).search(SCOPE, paged, repository_id).hits),
+        # The page's complete observable result, in the shape ``walk`` records: hits in
+        # order, each with the evidence it carried, and whether a further page exists.
+        # Retaining only ``len(...)`` is what let a deep-page defect through -- a count
+        # survives a page that shifted, and the walk that *is* compared by value starts at
+        # the top of the result set and never reaches this page. See ``main``'s identity
+        # assertion.
+        "result": _observed(SQLiteRepository(db).search(SCOPE, paged, repository_id)),
     }
+
+
+def _first_hit(rows: dict, where: str) -> str:
+    """The first memory_id of a differing page, so the failure names what moved."""
+    name, _, part = where.partition("/")
+    observed = rows[name]["walk"][0] if part == "walk" else rows[name][part]["result"]
+    return observed[0][0][0] if observed[0] else "<empty>"
+
+
+def _observed(page) -> tuple:
+    """What a caller can see of one page: order by position, evidence by value."""
+    return (
+        tuple((hit.memory_id, hit.revision_id, hit.references) for hit in page.hits),
+        page.cursor is not None,
+    )
 
 
 def measure(db: Path, indexed: bool, cursors: dict[str, tuple[str | None, int]]) -> dict[str, dict]:
@@ -344,9 +372,17 @@ def main() -> None:
             a, b = first[name]["first"]["selection"], second[name]["first"]["selection"]
             print(f"  {name:18s} selection callbacks {a:10,d} vs {b:10,d}  ({b / a:.3f}x)")
             assert a == b, f"{name}: the callback counter is not deterministic"
-        spread = max(second[name]["first"]["best"] / first[name]["first"]["best"]
-                     for name in SHAPES)
-        print(f"  latency spread across identical runs: {max(spread, 1 / spread):.2f}x -- what this"
+        # Each pair is made symmetric *before* the maximum, not after it. Taking the
+        # directional ratio first and reciprocating the winner reports whichever shape ran
+        # slowest on the second copy, and silently discards any shape that ran slower on the
+        # first: pairs of 0.50 and 1.03 reported 1.03x, when the widest pair was 2x. The
+        # spread is the widest disagreement between two identical runs in either direction,
+        # so the reciprocal belongs inside the per-shape term.
+        spread = max(
+            max(second[name]["first"]["best"] / first[name]["first"]["best"],
+                first[name]["first"]["best"] / second[name]["first"]["best"])
+            for name in SHAPES)
+        print(f"  latency spread across identical runs: {spread:.2f}x -- what this"
               " instrument returns when nothing changes. A description of its noise, not a"
               " threshold:\n  a latency ratio inside it establishes neither a difference nor an"
               " equivalence. The comparisons rest on the callback counts.")
@@ -358,10 +394,26 @@ def main() -> None:
             report(label, results[label])
 
         print("\nresult identity (hits, order, evidence, pagination), vs 'current':")
+        # Every page this harness *measured*, compared by value, plus the walk from the top.
+        # The walk covers PAGES pages from page one; the deep page is thousands of rows past
+        # its end, so a walk-only comparison leaves the measured deep page unchecked -- and
+        # that page is the one the depth axis exists to report. Each entry compares hits,
+        # their order, the complete evidence each hit carried, and whether a further page
+        # exists, so a shift that preserves the row count still compares unequal.
         for label, rows in results.items():
-            same = all(rows[name]["walk"] == results[REFERENCE][name]["walk"] for name in SHAPES)
-            print(f"  {label:18s} {'identical' if same else 'DIFFERENT'}")
-            assert same, f"{label} did not return what {REFERENCE} returned"
+            differences = []
+            for name in SHAPES:
+                for part in ("first", "deep"):
+                    if rows[name][part]["result"] != results[REFERENCE][name][part]["result"]:
+                        differences.append(f"{name}/{part}")
+                if rows[name]["walk"] != results[REFERENCE][name]["walk"]:
+                    differences.append(f"{name}/walk")
+            print(f"  {label:18s} {'identical' if not differences else 'DIFFERENT: ' + ', '.join(differences)}")
+            assert not differences, (
+                f"{label} did not return what {REFERENCE} returned at: {', '.join(differences)}"
+                + "".join(
+                    f"\n    {where}: {_first_hit(results[REFERENCE], where)}"
+                    f" -> {_first_hit(rows, where)}" for where in differences))
 
         # Control 3.
         for name in SHAPES:
@@ -391,7 +443,8 @@ def main() -> None:
         for label, rows in results.items():
             for name in SHAPES:
                 for depth in ("first", "deep"):
-                    assert rows[name][depth]["rows"] > 0, f"{label}/{name}/{depth} returned no rows"
+                    assert rows[name][depth]["result"][0], \
+                        f"{label}/{name}/{depth} returned no rows"
         print("  non-vacuity       every measured page returned hits")
 
         print("\ncandidate selection (callbacks, page 1 then deepest page):")
