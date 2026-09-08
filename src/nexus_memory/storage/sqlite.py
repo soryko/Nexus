@@ -851,6 +851,32 @@ class SQLiteRepository:
             raise CursorExpired("cursor is not valid for this search")
         return decoded
 
+    @staticmethod
+    def _cursor_position(payload: dict, message: str) -> tuple[float, int]:
+        """The ``(rank, seq)`` a cursor carries, established as numbers before anything uses them.
+
+        A cursor is caller-supplied text, so its decoded fields are untrusted JSON of any
+        type. They used to reach SQLite as bind parameters and nothing else, where a string
+        rank compared false and returned a wrong page quietly. B3 §1 orders the browse page
+        on ``h.durable_seq`` and so negates ``rank`` in Python to recover it -- and ``-"x"``
+        is a ``TypeError``, which is not a ``NexusError`` and not in ``search``'s except
+        clause, so a hand-edited rank left the storage layer as ``internal_error``. A
+        malformed cursor is a cursor-domain fault; it is answered here, in the same terms as
+        an expired one, before any arithmetic sees the value.
+
+        ``bool`` is excluded deliberately. It is a subclass of ``int``, so ``rank: true``
+        would otherwise negate to ``-1`` and silently page from the wrong position.
+        """
+        try:
+            rank, seq = payload["rank"], payload["seq"]
+        except KeyError as error:
+            raise CursorExpired(message) from error
+        if isinstance(rank, bool) or not isinstance(rank, (int, float)):
+            raise CursorExpired(message)
+        if isinstance(seq, bool) or not isinstance(seq, int):
+            raise CursorExpired(message)
+        return rank, seq
+
     # The correlation that ties an evidence row to the head revision already selected.
     # ``revision_id`` is part of it, not decoration: without it the predicate would match a
     # reference any revision of the memory ever carried, and B2b §4 is head revisions only.
@@ -1099,7 +1125,7 @@ class SQLiteRepository:
                     payload = self._decode_cursor(query.cursor)
                     if payload.get("fingerprint") != fingerprint or payload.get("generation") != generation:
                         raise CursorExpired("cursor is not valid for this search")
-                    after = (payload["rank"], payload["seq"])
+                    after = self._cursor_position(payload, "cursor is not valid for this search")
 
                 filters, filter_parameters = self._filters(query, repository_id)
                 # The authoritative join is mandatory: external content does not self-synchronise,

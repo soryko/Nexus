@@ -28,7 +28,9 @@ constraint rather than asking a walk how it felt.
 """
 from __future__ import annotations
 
+import base64
 import dataclasses
+import json
 import sqlite3
 from pathlib import Path
 
@@ -38,8 +40,28 @@ from ordering_control import installed, is_installed, wrapped_browse_statement
 # about the same planner on the same rows.
 from test_reference_filter_plans import MEMORIES, SCOPE, build
 
+from nexus_memory.domain.errors import CursorExpired
 from nexus_memory.domain.models import SearchQuery
 from nexus_memory.storage import SQLiteRepository
+
+#: Sentinel for "delete this key", distinct from a JSON ``null``, which is its own case.
+_ABSENT = object()
+
+
+def _retamper(token: str, changes: dict) -> str:
+    """Decode a *minted* cursor, apply ``changes``, and re-encode it.
+
+    Built from a real cursor rather than from a hand-written payload so that the fingerprint
+    and generation still match: the tampered field is then the only reason the call can
+    fail, and the test cannot pass on an expiry it did not intend to provoke.
+    """
+    payload = json.loads(base64.urlsafe_b64decode(token.encode()))
+    for key, value in changes.items():
+        if value is _ABSENT:
+            payload.pop(key, None)
+        else:
+            payload[key] = value
+    return base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode()
 
 
 @pytest.fixture(scope="module")
@@ -401,3 +423,56 @@ def test_a_cursor_minted_under_either_ordering_is_accepted_by_the_other(
     monkeypatch.undo()
     native = SQLiteRepository(db).search(SCOPE, dataclasses.replace(query, cursor=control_cursor))
     assert [hit.memory_id for hit in native.hits] == [hit.memory_id for hit in crossed.hits]
+
+
+# A cursor is caller-supplied text. ``_browse_statement`` negates its ``rank`` in Python to
+# recover ``durable_seq`` -- the one place in this slice where a decoded payload reaches
+# arithmetic instead of a bind parameter -- so a malformed rank raised ``TypeError`` (or
+# ``KeyError`` when absent) rather than a cursor-domain error. Neither is a ``NexusError``
+# and neither is in ``search``'s except clause, so both left storage as ``internal_error``.
+# The wrapper form this replaced bound ``rank`` and never negated it, which is why the
+# defect arrived with the reordering and not before it.
+MALFORMED_CURSOR_FIELDS = {
+    "rank_is_text": {"rank": "not-a-number"},
+    "rank_is_null": {"rank": None},
+    "rank_is_a_list": {"rank": [1, 2]},
+    "rank_is_a_bool": {"rank": True},       # bool subclasses int; -True is -1, a silent page
+    "rank_is_absent": {"rank": _ABSENT},
+    "seq_is_text": {"seq": "not-a-number"},
+    "seq_is_null": {"seq": None},
+    "seq_is_a_float": {"seq": 1.5},
+    "seq_is_a_bool": {"seq": True},
+    "seq_is_absent": {"seq": _ABSENT},
+}
+
+
+@pytest.mark.parametrize("field", MALFORMED_CURSOR_FIELDS.values(),
+                         ids=list(MALFORMED_CURSOR_FIELDS))
+def test_a_malformed_cursor_field_is_a_cursor_error_not_an_internal_one(
+        corpus: Path, field: dict) -> None:
+    """Every malformed ``(rank, seq)`` is answered in the cursor's own domain.
+
+    Asserted as ``CursorExpired`` and not merely as "some ``NexusError``": the transport
+    renders the code, and the whole point of the finding is which code a caller is handed.
+    """
+    query = SearchQuery(limit=20)
+    tampered = _retamper(_cursor(corpus, query), field)
+    with pytest.raises(CursorExpired):
+        SQLiteRepository(corpus).search(SCOPE, dataclasses.replace(query, cursor=tampered))
+
+
+def test_a_valid_cursor_still_pages_after_the_field_check(corpus: Path) -> None:
+    """The negative control: the guard must reject malformed fields and nothing else.
+
+    Re-encoding an untampered payload exercises the same path the tampered cases take, so a
+    guard that rejected every re-encoded cursor -- or every cursor -- would fail here rather
+    than pass the parametrisation above vacuously.
+    """
+    query = SearchQuery(limit=20)
+    minted = _cursor(corpus, query)
+    repository = SQLiteRepository(corpus)
+    expected = repository.search(SCOPE, dataclasses.replace(query, cursor=minted))
+    reencoded = repository.search(
+        SCOPE, dataclasses.replace(query, cursor=_retamper(minted, {})))
+    assert [hit.memory_id for hit in reencoded.hits] == [hit.memory_id for hit in expected.hits]
+    assert expected.hits, "the control page is empty and asserts nothing"

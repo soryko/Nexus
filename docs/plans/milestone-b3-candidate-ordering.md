@@ -154,8 +154,9 @@ no schema; it changes the shape of one statement.
 
 **Decided**, and registered before the change was measured, informed by the pilot that
 found it. The retained wrapper ordering is the oracle: it is not wrong, it returns exactly
-the rows the shipped form returns, which is what makes it usable as one. Twenty-two tests,
-in two obligations that pull in opposite directions on purpose.
+the rows the shipped form returns, which is what makes it usable as one. Thirty-three
+tests, in two obligations that pull in opposite directions on purpose, plus one added in
+review that belongs to neither — the cursor's error contract.
 
 **Interchangeable** — identical hits, identical order, identical cursor behaviour:
 
@@ -179,6 +180,22 @@ in two obligations that pull in opposite directions on purpose.
 - **Cursor compatibility across the change.** Both forms mint the same cursor payload, and
   a cursor minted under either is asserted to page correctly under the other — the case of
   a caller holding a cursor across the deploy.
+- **Malformed cursor fields are a cursor-domain error.** Added in review, with the defect it
+  covers. Ordering on `h.durable_seq` means the cursor's `rank` is negated *in Python* to
+  recover the sequence — the one place in this slice where a decoded payload reaches
+  arithmetic instead of a bind parameter. The wrapper form bound `rank` and never negated
+  it, so a non-numeric value merely compared false; under the new form `-"not-a-number"`
+  raises `TypeError`, which is not a `NexusError` and is not in `search`'s except clause,
+  and a caller who edited their own cursor was handed `internal_error: operation failed`.
+  `(rank, seq)` is now established as numbers before any arithmetic sees it, and a bad one
+  is answered as `cursor_expired`, in the same terms as an expired cursor. Ten malformed
+  payloads — non-numeric, null, absent, wrong-typed, and `true`, which subclasses `int` and
+  would otherwise negate to `-1` and page silently from the wrong position — are asserted at
+  the repository, and the two that reproduced the original report are asserted end to end
+  over real MCP stdio, where the code a caller reads is actually produced. Each is built by
+  re-encoding a *minted* cursor so the fingerprint still matches and the tampered field is
+  the only reason the call can fail, with a negative control asserting an untampered
+  re-encode still pages.
 
 **Not equivalent in cost** — asserted structurally through `EXPLAIN QUERY PLAN`, never by
 timing, and each with a negative control without which it would assert nothing:
@@ -194,7 +211,8 @@ Statements under test are captured from a real `search()` at the call, never rec
 beside it. `tests/core/test_reference_filter_plans.py` reconstructs a browse statement for a
 different question and has been moved onto the shipped ordering for the same reason.
 
-Suite: **294 passed, 2 skipped.**
+Suite: **308 passed, 0 skipped** (`NEXUS_MUTATION_MATRIX=1`; 306 passed, 2 skipped
+without it, the two skips being the opt-in mutation matrices CI runs separately).
 
 ## 6. Recorded as motivation, not acted on: reference-driven candidate generation
 
