@@ -388,12 +388,14 @@ def main() -> None:
         # The inputs, not just the aggregate. An archived spread that kept only its result
         # cannot be rechecked when the formula that produced it turns out to be wrong -- which
         # is exactly what happened to this line's first three runs, none of which can now be
-        # recomputed. Per shape for a reader, and once as JSON for a machine.
+        # recomputed. Per shape for a reader, rounded to what the eye can use; once as JSON
+        # for a machine, unrounded, so a later reader can recompute the spread exactly
+        # rather than approximately from the archived line.
         print("  end-to-end best per shape (ms), the paired values the spread is taken over:")
         for name, (a, b) in pairs.items():
             print(f"  {name:18s} e2e best {a:9.3f} vs {b:9.3f}  ({max(a / b, b / a):.3f}x)")
         print("  spread inputs (JSON, milliseconds, [run a, run b]): "
-              + json.dumps({name: [round(a, 3), round(b, 3)] for name, (a, b) in pairs.items()},
+              + json.dumps({name: [a, b] for name, (a, b) in pairs.items()},
                            separators=(",", ":")))
         print(f"  latency spread across identical runs: {spread:.2f}x -- what this"
               " instrument returns when nothing changes. A description of its noise, not a"

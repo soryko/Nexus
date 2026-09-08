@@ -17,7 +17,9 @@ Produced during the B3 review, after the three harness corrections that review f
      are now printed with it, per shape and once as a line of JSON. This is the first run of
      this harness whose spread can be recomputed from the file it is archived in:
      max over shapes of max(a/b, b/a) over the pairs in the "spread inputs" line, which is
-     commit_exact's 8.379 / 8.054 = 1.04.
+     commit_exact's 8.379 / 8.054 = 1.04. That line was printed rounded to three decimals,
+     so this file recomputes its spread only to that rounding; the tool now prints the
+     paired values unrounded, and runs archived after it recompute exactly.
 
 No correction moves a measurement. Every callback figure below matches the run that produced
 the tables in docs/plans/milestone-b3-candidate-ordering.md exactly, and those figures are
