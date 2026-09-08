@@ -1,6 +1,6 @@
 AS RUN — B3 candidate ordering, tools/measure_candidate_selection.py.
 
-Produced during the B3 review, after the two harness corrections that review found:
+Produced during the B3 review, after the three harness corrections that review found:
 
   1. The result-identity assertion compared only the walk from page one, so the separately
      measured deep page was checked by row count alone. A mutation that shifted the
@@ -9,14 +9,25 @@ Produced during the B3 review, after the two harness corrections that review fou
   2. The identical-run latency spread took the maximum directional ratio across shapes and
      reciprocated only that winner, understating the spread. Each pair is now made
      symmetric before the maximum.
+  3. That spread was printed as a bare aggregate, so no run of this harness could be
+     rechecked once correction 2 changed the formula that produced it. Not this milestone's
+     own as-run file -- benchmarks/dev/results-candidate-ordering.txt exists and carries the
+     original 1.03x, but not the paired latencies behind it -- and not the three runs made
+     under the corrected formula either. The paired per-shape values the ratio is taken over
+     are now printed with it, per shape and once as a line of JSON. This is the first run of
+     this harness whose spread can be recomputed from the file it is archived in:
+     max over shapes of max(a/b, b/a) over the pairs in the "spread inputs" line, which is
+     commit_exact's 8.379 / 8.054 = 1.04.
 
-Neither correction changes a measurement: every callback figure below matches the run that
-produced the tables in docs/plans/milestone-b3-candidate-ordering.md exactly. What changed
-is what the harness retains and asserts, and the latency-spread line.
+No correction moves a measurement. Every callback figure below matches the run that produced
+the tables in docs/plans/milestone-b3-candidate-ordering.md exactly, and those figures are
+deterministic -- the repeatability control asserts them equal across two fresh copies rather
+than observing that they were.
 
-The latency spread is per-run. Three runs on this machine gave 1.06x (this file), 1.42x and
-1.05x; the plan cites 1.42x as the widest. Callback counts are deterministic and repeated
-exactly. Environment: CPython 3.13.15, SQLite 3.53.4 (.venv-sqlite).
+The latency spread is per-run, and it describes this instrument's noise rather than bounding
+anything. Four runs on this machine have given 1.06x, 1.42x, 1.05x and 1.04x (this file); the
+plan cites 1.42x as the widest. Only this run's inputs survive, so the other three stand as
+reported and cannot be rechecked. Environment: CPython 3.13.15, SQLite 3.53.4 (.venv-sqlite).
 
 ------------------------------------------------------------------------------------------
 
@@ -40,40 +51,47 @@ repeatability control (identical configuration, separate fresh copies):
   commit_exact       selection callbacks    261,161 vs    261,161  (1.000x)
   repository_bound   selection callbacks    527,284 vs    527,284  (1.000x)
   unfiltered         selection callbacks    780,222 vs    780,222  (1.000x)
-  latency spread across identical runs: 1.06x -- what this instrument returns when nothing changes. A description of its noise, not a threshold:
+  end-to-end best per shape (ms), the paired values the spread is taken over:
+  path_exact         e2e best     9.757 vs     9.831  (1.008x)
+  path_prefix        e2e best    10.399 vs    10.489  (1.009x)
+  commit_exact       e2e best     8.054 vs     8.379  (1.040x)
+  repository_bound   e2e best    15.626 vs    15.375  (1.016x)
+  unfiltered         e2e best    10.863 vs    11.019  (1.014x)
+  spread inputs (JSON, milliseconds, [run a, run b]): {"path_exact":[9.757,9.831],"path_prefix":[10.399,10.489],"commit_exact":[8.054,8.379],"repository_bound":[15.626,15.375],"unfiltered":[10.863,11.019]}
+  latency spread across identical runs: 1.04x -- what this instrument returns when nothing changes. A description of its noise, not a threshold:
   a latency ratio inside it establishes neither a difference nor an equivalence. The comparisons rest on the callback counts.
 
 --- current ---
 shape               sel (page 1)   sel (deep)  skipped  e2e (page 1)   sel ms  e2e best  sorted?
-path_exact               360,999      360,999        0       362,382   10.360    11.064      YES
-path_prefix              481,053      481,053        0       482,436   11.333    11.749      YES
-commit_exact             261,161      261,161        0       262,544    8.806     9.571      YES
-repository_bound         527,284      180,978    6,660       528,667   15.962    16.592      YES
-unfiltered               780,222      370,517   10,000       781,604   10.846    11.188      YES
+path_exact               360,999      360,999        0       362,382    9.220     9.800      YES
+path_prefix              481,053      481,053        0       482,436    9.653    10.402      YES
+commit_exact             261,161      261,161        0       262,544    7.686     8.304      YES
+repository_bound         527,284      180,978    6,660       528,667   15.048    15.786      YES
+unfiltered               780,222      370,517   10,000       781,604   10.480    11.208      YES
 
 --- statistics only ---
 shape               sel (page 1)   sel (deep)  skipped  e2e (page 1)   sel ms  e2e best  sorted?
-path_exact               361,181      361,181        0       362,633    9.593    10.631      YES
-path_prefix              481,301      481,301        0       482,753   10.233    11.332      YES
-commit_exact             261,364      261,364        0       262,816    8.543     9.415      YES
-repository_bound         527,461      180,972    6,660       528,913   16.788    17.197      YES
-unfiltered               500,561      370,602   10,000       502,012   10.557    11.419      YES
+path_exact               361,181      361,181        0       362,633    9.358    10.152      YES
+path_prefix              481,301      481,301        0       482,753   10.065    10.496      YES
+commit_exact             261,364      261,364        0       262,816    7.530     8.150      YES
+repository_bound         527,461      180,972    6,660       528,913   15.086    15.796      YES
+unfiltered               500,561      370,602   10,000       502,012   10.302    10.878      YES
 
 --- ordered ---
 shape               sel (page 1)   sel (deep)  skipped  e2e (page 1)   sel ms  e2e best  sorted?
-path_exact               360,698      360,698        0       362,081    9.468    10.284       no
-path_prefix              480,752      480,752        0       482,135   10.502    11.086       no
-commit_exact             260,860      260,860        0       262,243    8.202     8.667       no
-repository_bound           1,932          897    6,660         3,315    0.069     0.511       no
-unfiltered                   704          828   10,000         2,086    0.033     0.456       no
+path_exact               360,698      360,698        0       362,081    9.602    10.726       no
+path_prefix              480,752      480,752        0       482,135   10.297    11.135       no
+commit_exact             260,860      260,860        0       262,243    7.669     8.227       no
+repository_bound           1,932          897    6,660         3,315    0.071     0.502       no
+unfiltered                   704          828   10,000         2,086    0.034     0.452       no
 
 --- both ---
 shape               sel (page 1)   sel (deep)  skipped  e2e (page 1)   sel ms  e2e best  sorted?
-path_exact               360,880      360,880        0       362,332    9.469    10.402       no
-path_prefix              481,000      481,000        0       482,452   10.767    12.741       no
-commit_exact             261,063      261,063        0       262,515    8.589     9.593       no
-repository_bound           2,109        1,422    6,660         3,561    0.080     0.644       no
-unfiltered                   769        1,003   10,000         2,220    0.038     0.585       no
+path_exact               360,880      360,880        0       362,332    9.086    10.445       no
+path_prefix              481,000      481,000        0       482,452    9.944    10.603       no
+commit_exact             261,063      261,063        0       262,515    7.974     8.902       no
+repository_bound           2,109        1,422    6,660         3,561    0.077     0.655       no
+unfiltered                   769        1,003   10,000         2,220    0.038     0.607       no
 
 result identity (hits, order, evidence, pagination), vs 'current':
   current            identical

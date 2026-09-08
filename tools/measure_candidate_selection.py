@@ -40,7 +40,10 @@ Six controls run alongside:
    neither a difference nor an equivalence. It is the widest disagreement between the two
    runs in *either* direction -- each shape's pair is made symmetric before the maximum
    across shapes, not after it, or a shape that ran faster on the second copy is dropped
-   and the reported noise is narrower than the instrument's.
+   and the reported noise is narrower than the instrument's. **Its inputs are printed with
+   it**: the paired per-shape latencies, in a line of JSON, so a later reader can recompute
+   the ratio from the archived output. The first correction to this formula could not be
+   applied to the runs it invalidated, because those archives had kept the aggregate alone.
 3. **Discrimination.** The unfiltered arm must do visibly different work from the filtered
    ones, or the corpus is not exercising the predicates.
 4. **Non-vacuity.** Each shape must select a minority of the corpus, and each measured
@@ -70,6 +73,7 @@ Run: PYTHONPATH=src .venv-sqlite/bin/python tools/measure_candidate_selection.py
 from __future__ import annotations
 
 import dataclasses
+import json
 import sqlite3
 import sys
 from contextlib import nullcontext
@@ -378,10 +382,19 @@ def main() -> None:
         # first: pairs of 0.50 and 1.03 reported 1.03x, when the widest pair was 2x. The
         # spread is the widest disagreement between two identical runs in either direction,
         # so the reciprocal belongs inside the per-shape term.
-        spread = max(
-            max(second[name]["first"]["best"] / first[name]["first"]["best"],
-                first[name]["first"]["best"] / second[name]["first"]["best"])
-            for name in SHAPES)
+        pairs = {name: (first[name]["first"]["best"], second[name]["first"]["best"])
+                 for name in SHAPES}
+        spread = max(max(a / b, b / a) for a, b in pairs.values())
+        # The inputs, not just the aggregate. An archived spread that kept only its result
+        # cannot be rechecked when the formula that produced it turns out to be wrong -- which
+        # is exactly what happened to this line's first three runs, none of which can now be
+        # recomputed. Per shape for a reader, and once as JSON for a machine.
+        print("  end-to-end best per shape (ms), the paired values the spread is taken over:")
+        for name, (a, b) in pairs.items():
+            print(f"  {name:18s} e2e best {a:9.3f} vs {b:9.3f}  ({max(a / b, b / a):.3f}x)")
+        print("  spread inputs (JSON, milliseconds, [run a, run b]): "
+              + json.dumps({name: [round(a, 3), round(b, 3)] for name, (a, b) in pairs.items()},
+                           separators=(",", ":")))
         print(f"  latency spread across identical runs: {spread:.2f}x -- what this"
               " instrument returns when nothing changes. A description of its noise, not a"
               " threshold:\n  a latency ratio inside it establishes neither a difference nor an"
