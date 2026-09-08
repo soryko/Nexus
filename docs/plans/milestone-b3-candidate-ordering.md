@@ -139,6 +139,14 @@ cost, refresh cadence and staleness an automatic policy would have to carry. Wit
 decision for evidence loading, `ANALYZE` is now declined for both stages of a browse
 search, on measurements of both.
 
+**The decline is scoped to the strategy measured, not to the database.** Both stages were
+measured as production runs them today: five browse shapes carrying no text, against the
+correlated-`EXISTS` candidate statement. It says nothing about whether statistics are worth
+collecting for the lexical branch, which §7 records as unmeasured here. Nor does it settle
+the reference-driven shape of §6 — where the table shows the opposite sign, statistics
+taking the path-indexed probe from 161,374 callbacks to 1,614. If that shape is ever
+adopted, `ANALYZE` is an open question again and has to be measured against it.
+
 **Unchanged: migration `005` is still not written.** This slice adds no index and changes
 no schema; it changes the shape of one statement.
 
@@ -231,6 +239,14 @@ establishes.
 - **The callback count and the millisecond figure have different boundaries**: a stage's
   count is one whole call on a connection that has not seen the statement, and its replayed
   latency is a warm best-of-15. The two are not expected to agree to the digit.
+- **No claim that the cursor range makes work independent of depth inside a tie.**
+  `durable_seq <= ?` is a range constraint, so the seek skips the newer `durable_seq`
+  values ahead of the page; that is what the 70,821-against-828 figure measures, on a
+  corpus where `durable_seq` is effectively unique. The constraint admits an equal-sequence
+  group whole, and inside one the remaining `h.seq > ?` is not a range constraint. The tie
+  fixture ties eight rows across two values — enough to establish that pagination is
+  correct across a tie boundary, and far too small to measure what a large tie group costs.
+  The performance claim belongs to the measured fixtures; the tie tests are correctness.
 - **The §6 probe is not a result about a shipped path.** It has none of the controls the
   four arms have, and nothing in §§1–5 rests on it.
 - **One machine, one scope, one corpus shape.** The callback counts are deterministic; the
