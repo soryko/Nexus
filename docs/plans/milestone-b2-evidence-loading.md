@@ -184,6 +184,13 @@ worth optimising for. But it is not nothing, and it is not covered by the decisi
 The question is open and belongs to the candidate-selection slice, which is the next
 measured bottleneck; the statistics-only control is retained for it.
 
+> **Answered by [B3](milestone-b3-candidate-ordering.md), 2026-09-08.** Declined. That
+> 35.84% was statistics changing which table drove a join that still sorted the whole
+> scope; ordering the browse page on `head_index_recent` removes the sort and the gain with
+> it — 780,222 → 704 callbacks unfiltered — and statistics then *add* 65 to 248 callbacks
+> in every shape. `ANALYZE` is now declined for both stages of a browse search, on
+> measurements of both.
+
 **Unchanged: migration `005` is still not written.** Nothing here bears on it. This slice
 adds no index; it changes the shape of one statement.
 

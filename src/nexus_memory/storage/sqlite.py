@@ -4,6 +4,7 @@ import base64
 import binascii
 import hashlib
 import json
+import math
 import sqlite3
 import uuid
 from contextlib import closing, contextmanager
@@ -79,6 +80,15 @@ def _is_code_shaped(chunk: str) -> bool:
 def _prose_text(text: str) -> str:
     """The subset of a body that the ``split`` profile allows a stemmer to see."""
     return " ".join(chunk for chunk in text.split() if not _is_code_shaped(chunk))
+
+
+#: What ``sqlite3`` will bind as an integer: SQLite stores them as signed 64-bit, and a
+#: wider one raises ``OverflowError`` -- not a ``NexusError``, so not an answer any caller
+#: can act on. A cursor's ``seq`` binds as it arrives and carries the full range; its
+#: ``rank`` is bound negated on the browse page, so it is admitted only if ``-rank`` fits
+#: too, which is the symmetric bound ``_cursor_position`` applies.
+_SQLITE_INTEGER_MIN = -2 ** 63
+_SQLITE_INTEGER_MAX = 2 ** 63 - 1
 
 
 class SQLiteRepository:
@@ -851,6 +861,49 @@ class SQLiteRepository:
             raise CursorExpired("cursor is not valid for this search")
         return decoded
 
+    @staticmethod
+    def _cursor_position(payload: dict, message: str) -> tuple[float, int]:
+        """The ``(rank, seq)`` a cursor carries, established as numbers before anything uses them.
+
+        A cursor is caller-supplied text, so its decoded fields are untrusted JSON of any
+        type. They used to reach SQLite as bind parameters and nothing else, where a string
+        rank compared false and returned a wrong page quietly. B3 §1 orders the browse page
+        on ``h.durable_seq`` and so negates ``rank`` in Python to recover it -- and ``-"x"``
+        is a ``TypeError``, which is not a ``NexusError`` and not in ``search``'s except
+        clause, so a hand-edited rank left the storage layer as ``internal_error``. A
+        malformed cursor is a cursor-domain fault; it is answered here, in the same terms as
+        an expired one, before any arithmetic sees the value.
+
+        ``bool`` is excluded deliberately. It is a subclass of ``int``, so ``rank: true``
+        would otherwise negate to ``-1`` and silently page from the wrong position.
+
+        Being a number is necessary and not sufficient: the value has to be one SQLite can
+        bind and compare. JSON's integers are unbounded and ``json.loads`` accepts
+        ``Infinity`` and ``NaN``, so a decoded field can be numeric and still fail or
+        mislead downstream. ``10**100`` raises ``OverflowError`` at bind time -- the same
+        ``internal_error`` route the type check closed. A non-finite rank binds without
+        complaint and pages wrongly in silence: ``-Infinity`` negates to ``+Infinity``, which
+        no ``durable_seq`` exceeds, so the caller is handed page one again under a cursor
+        that promised the next page, while ``Infinity`` and ``NaN`` compare false against
+        every row and end the walk early. Both are answered here, in the cursor's domain.
+        """
+        try:
+            rank, seq = payload["rank"], payload["seq"]
+        except KeyError as error:
+            raise CursorExpired(message) from error
+        if isinstance(rank, bool) or not isinstance(rank, (int, float)):
+            raise CursorExpired(message)
+        if isinstance(seq, bool) or not isinstance(seq, int):
+            raise CursorExpired(message)
+        if isinstance(rank, float):
+            if not math.isfinite(rank):
+                raise CursorExpired(message)
+        elif not -_SQLITE_INTEGER_MAX <= rank <= _SQLITE_INTEGER_MAX:
+            raise CursorExpired(message)
+        if not _SQLITE_INTEGER_MIN <= seq <= _SQLITE_INTEGER_MAX:
+            raise CursorExpired(message)
+        return rank, seq
+
     # The correlation that ties an evidence row to the head revision already selected.
     # ``revision_id`` is part of it, not decoration: without it the predicate would match a
     # reference any revision of the memory ever carried, and B2b §4 is head revisions only.
@@ -1034,6 +1087,51 @@ class SQLiteRepository:
             or query.reference_commits
         )
 
+    def _browse_statement(self, inner: str, after: tuple[float, int] | None) -> tuple[str, list]:
+        """The recency page, ordered on the indexed column rather than on the negated alias.
+
+        ``head_index_recent`` is ``(namespace, actor, durable_seq DESC)``. The form this
+        replaced wrapped the select and ordered by ``rank``, which is ``-h.durable_seq``:
+        an expression the index cannot answer, so SQLite sorted every eligible row in the
+        scope to return one page of twenty. Ordering on ``h.durable_seq DESC`` directly
+        lets the walk stop at the limit. ``h.seq`` stays as the tiebreak and must stay
+        **ASC** — within one ``durable_seq`` the index carries rowid ascending, so ``DESC``
+        reintroduces the sort. Measured in B3 §1.
+
+        The cursor predicate is two halves doing different jobs. ``durable_seq <= ?`` is the
+        half the index can use: it becomes a range constraint and the seek starts at the
+        cursor rather than at the top of the scope. The disjunction resolves the tie that
+        bound admits, on rows already arrived at. Written as the disjunction alone — the
+        direct translation of the wrapper's predicate, and the obvious way to write it — it
+        is not a range constraint at all and every deep page pays for the whole prefix
+        ahead of it, which page two is too shallow to show. B3 §2.
+
+        ``tests/core/ordering_control.py`` retains the wrapper form and
+        ``test_candidate_ordering.py`` differentially tests this against it.
+        """
+        if after is None:
+            return inner + " ORDER BY h.durable_seq DESC, h.seq LIMIT ?", []
+        return (
+            inner + " AND h.durable_seq <= ? AND (h.durable_seq < ? OR h.seq > ?)"
+                    " ORDER BY h.durable_seq DESC, h.seq LIMIT ?",
+            [-after[0], -after[0], after[1]],
+        )
+
+    def _ranked_statement(self, inner: str, after: tuple[float, int] | None) -> tuple[str, list]:
+        """The lexical page, ordered by ``bm25`` through the wrapper.
+
+        ``rank`` here is a score computed per row, not a column any index carries, and the
+        multi-leg form is already a ``GROUP BY`` over a union — so the sort is not
+        avoidable by ordering differently, and B3 does not touch this path.
+        """
+        statement = f"SELECT * FROM ({inner})"
+        if after is None:
+            return statement + " ORDER BY rank, seq LIMIT ?", []
+        return (
+            statement + " WHERE (rank > ?) OR (rank = ? AND seq > ?) ORDER BY rank, seq LIMIT ?",
+            [after[0], after[0], after[1]],
+        )
+
     def search(self, scope: Scope, query: SearchQuery, repository_id: str | None = None) -> SearchPage:
         """``repository_id`` is the identity the *service* resolved for ``repository: "bound"``.
 
@@ -1049,11 +1147,12 @@ class SQLiteRepository:
                 generation = self._generation(db)
                 fingerprint = self._fingerprint(scope, query, repository_id)
                 after: tuple[float, int] | None = None
+                browse = False  # the recency branch orders on head_index_recent directly
                 if query.cursor is not None:
                     payload = self._decode_cursor(query.cursor)
                     if payload.get("fingerprint") != fingerprint or payload.get("generation") != generation:
                         raise CursorExpired("cursor is not valid for this search")
-                    after = (payload["rank"], payload["seq"])
+                    after = self._cursor_position(payload, "cursor is not valid for this search")
 
                 filters, filter_parameters = self._filters(query, repository_id)
                 # The authoritative join is mandatory: external content does not self-synchronise,
@@ -1091,6 +1190,7 @@ class SQLiteRepository:
                             "MIN(rank) AS rank,excerpt FROM (" + " UNION ALL ".join(leg_sql) + ") GROUP BY seq"
                         )
                 else:
+                    browse = True
                     inner = (
                         "SELECT h.seq AS seq,h.memory_id,h.revision_id,h.kind,h.tags_json,h.created_at,"
                         "h.has_parent,-h.durable_seq AS rank,"
@@ -1100,11 +1200,9 @@ class SQLiteRepository:
                     )
                     parameters = [scope.namespace, scope.actor, *filter_parameters]
 
-                statement = f"SELECT * FROM ({inner})"
-                if after is not None:
-                    statement += " WHERE (rank > ?) OR (rank = ? AND seq > ?)"
-                    parameters.extend([after[0], after[0], after[1]])
-                statement += " ORDER BY rank, seq LIMIT ?"
+                order = self._browse_statement if browse else self._ranked_statement
+                statement, cursor_parameters = order(inner, after)
+                parameters.extend(cursor_parameters)
                 parameters.append(query.limit + 1)
 
                 rows = db.execute(statement, parameters).fetchall()

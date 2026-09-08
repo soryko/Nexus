@@ -96,7 +96,11 @@ def plan_lines(db: Path, query: SearchQuery, repository_id: str | None) -> list[
         "EXPLAIN QUERY PLAN SELECT h.seq FROM head_index h"
         " JOIN memories m ON m.namespace=h.namespace AND m.actor=h.actor AND m.memory_id=h.memory_id"
         " WHERE h.namespace=? AND h.actor=? AND m.tombstoned=0 AND m.current_revision_id=h.revision_id "
-        + filters + " ORDER BY -h.durable_seq, h.seq LIMIT 21"
+        # The ordering production builds, not a paraphrase of it: B3 moved the browse
+        # page onto `h.durable_seq DESC` so the index answers it, and a reconstruction
+        # left on the negated expression would ask the planner a question about a
+        # statement that no longer runs.
+        + filters + " ORDER BY h.durable_seq DESC, h.seq LIMIT 21"
     )
     connection = sqlite3.connect(db)
     try:

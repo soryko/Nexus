@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 import os
 import subprocess
 import sys
@@ -307,5 +309,52 @@ def test_stdio_cursor_expires_when_the_index_generation_advances(tmp_path: Path)
             expired = await client.call_tool("search", {"query": "payments", "limit": 10, "cursor": cursor})
             assert expired.is_error
             assert any("cursor_expired:" in item.text for item in expired.content)
+
+    anyio.run(scenario)
+
+
+def test_stdio_reports_a_malformed_cursor_as_a_cursor_error(tmp_path: Path) -> None:
+    """A tampered ``rank`` is a cursor fault at the boundary a caller actually holds.
+
+    The browse page recovers ``durable_seq`` by negating the cursor's ``rank`` in Python,
+    so a non-numeric value raised ``TypeError`` inside storage -- not a ``NexusError``, not
+    caught, and rendered to the caller as ``internal_error: operation failed``. That is the
+    wrong contract twice over: it is the caller's cursor that is malformed, and
+    ``internal_error`` tells them nothing they can act on. Asserted end to end over stdio
+    rather than against the repository, because the code the caller reads is produced by
+    the transport.
+
+    A browse search (no query text) is used deliberately: the negation is on that branch.
+    """
+    async def scenario() -> None:
+        async with Client(_server(tmp_path / "state" / "memory.sqlite3")) as client:
+            for index in range(25):
+                await client.call_tool("record", {
+                    "content": f"ledger entry {index}", "idempotency_key": f"browse-{index}",
+                })
+            page = await client.call_tool("search", {"limit": 10})
+            cursor = page.structured_content["cursor"]
+            assert cursor is not None
+
+            # The untampered cursor pages, so the corpus and the fingerprint are sound and
+            # the assertions below cannot pass on an unrelated failure.
+            good = await client.call_tool("search", {"limit": 10, "cursor": cursor})
+            assert not good.is_error
+            assert good.structured_content["hits"]
+
+            payload = json.loads(base64.urlsafe_b64decode(cursor.encode()))
+            # The third is the numeric case: it decodes to an integer, passes a type check,
+            # and raises ``OverflowError`` when SQLite is asked to bind it -- reaching the
+            # caller by the same uncaught route, as the same ``internal_error``.
+            for label, value in (("text", "not-a-number"), ("null", None),
+                                 ("beyond sqlite's integer range", 10 ** 100)):
+                tampered = dict(payload, rank=value)
+                token = base64.urlsafe_b64encode(
+                    json.dumps(tampered, separators=(",", ":")).encode()).decode()
+                answer = await client.call_tool("search", {"limit": 10, "cursor": token})
+                assert answer.is_error, label
+                text = "".join(item.text for item in answer.content)
+                assert "cursor_expired:" in text, f"{label}: {text}"
+                assert "internal_error" not in text, f"{label}: {text}"
 
     anyio.run(scenario)
