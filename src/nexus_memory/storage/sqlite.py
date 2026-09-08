@@ -1034,6 +1034,51 @@ class SQLiteRepository:
             or query.reference_commits
         )
 
+    def _browse_statement(self, inner: str, after: tuple[float, int] | None) -> tuple[str, list]:
+        """The recency page, ordered on the indexed column rather than on the negated alias.
+
+        ``head_index_recent`` is ``(namespace, actor, durable_seq DESC)``. The form this
+        replaced wrapped the select and ordered by ``rank``, which is ``-h.durable_seq``:
+        an expression the index cannot answer, so SQLite sorted every eligible row in the
+        scope to return one page of twenty. Ordering on ``h.durable_seq DESC`` directly
+        lets the walk stop at the limit. ``h.seq`` stays as the tiebreak and must stay
+        **ASC** — within one ``durable_seq`` the index carries rowid ascending, so ``DESC``
+        reintroduces the sort. Measured in B3 §1.
+
+        The cursor predicate is two halves doing different jobs. ``durable_seq <= ?`` is the
+        half the index can use: it becomes a range constraint and the seek starts at the
+        cursor rather than at the top of the scope. The disjunction resolves the tie that
+        bound admits, on rows already arrived at. Written as the disjunction alone — the
+        direct translation of the wrapper's predicate, and the obvious way to write it — it
+        is not a range constraint at all and every deep page pays for the whole prefix
+        ahead of it, which page two is too shallow to show. B3 §2.
+
+        ``tests/core/ordering_control.py`` retains the wrapper form and
+        ``test_candidate_ordering.py`` differentially tests this against it.
+        """
+        if after is None:
+            return inner + " ORDER BY h.durable_seq DESC, h.seq LIMIT ?", []
+        return (
+            inner + " AND h.durable_seq <= ? AND (h.durable_seq < ? OR h.seq > ?)"
+                    " ORDER BY h.durable_seq DESC, h.seq LIMIT ?",
+            [-after[0], -after[0], after[1]],
+        )
+
+    def _ranked_statement(self, inner: str, after: tuple[float, int] | None) -> tuple[str, list]:
+        """The lexical page, ordered by ``bm25`` through the wrapper.
+
+        ``rank`` here is a score computed per row, not a column any index carries, and the
+        multi-leg form is already a ``GROUP BY`` over a union — so the sort is not
+        avoidable by ordering differently, and B3 does not touch this path.
+        """
+        statement = f"SELECT * FROM ({inner})"
+        if after is None:
+            return statement + " ORDER BY rank, seq LIMIT ?", []
+        return (
+            statement + " WHERE (rank > ?) OR (rank = ? AND seq > ?) ORDER BY rank, seq LIMIT ?",
+            [after[0], after[0], after[1]],
+        )
+
     def search(self, scope: Scope, query: SearchQuery, repository_id: str | None = None) -> SearchPage:
         """``repository_id`` is the identity the *service* resolved for ``repository: "bound"``.
 
@@ -1049,6 +1094,7 @@ class SQLiteRepository:
                 generation = self._generation(db)
                 fingerprint = self._fingerprint(scope, query, repository_id)
                 after: tuple[float, int] | None = None
+                browse = False  # the recency branch orders on head_index_recent directly
                 if query.cursor is not None:
                     payload = self._decode_cursor(query.cursor)
                     if payload.get("fingerprint") != fingerprint or payload.get("generation") != generation:
@@ -1091,6 +1137,7 @@ class SQLiteRepository:
                             "MIN(rank) AS rank,excerpt FROM (" + " UNION ALL ".join(leg_sql) + ") GROUP BY seq"
                         )
                 else:
+                    browse = True
                     inner = (
                         "SELECT h.seq AS seq,h.memory_id,h.revision_id,h.kind,h.tags_json,h.created_at,"
                         "h.has_parent,-h.durable_seq AS rank,"
@@ -1100,11 +1147,9 @@ class SQLiteRepository:
                     )
                     parameters = [scope.namespace, scope.actor, *filter_parameters]
 
-                statement = f"SELECT * FROM ({inner})"
-                if after is not None:
-                    statement += " WHERE (rank > ?) OR (rank = ? AND seq > ?)"
-                    parameters.extend([after[0], after[0], after[1]])
-                statement += " ORDER BY rank, seq LIMIT ?"
+                order = self._browse_statement if browse else self._ranked_statement
+                statement, cursor_parameters = order(inner, after)
+                parameters.extend(cursor_parameters)
                 parameters.append(query.limit + 1)
 
                 rows = db.execute(statement, parameters).fetchall()
