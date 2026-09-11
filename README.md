@@ -149,7 +149,7 @@ Literal mode makes two separate commitments, and they are worth stating apart be
 
 A `history` entry records **what** changed — revision IDs, parent links, timestamps. It never carries a rationale, because Nexus does not infer *why* a change was made from the difference between two revisions. If the reason matters, record it as a memory.
 
-`history` takes two optional arguments beside the required `memory_id`: `limit` (default 20, between 1 and 100) and `cursor`, which pages through a chain longer than one request returns. A history cursor is bound to the memory it was minted for: presented for another memory in the same scope it is `cursor_expired`, as it is when its fields have been edited. Unlike a search cursor it carries no index generation, so a concurrent write does not invalidate it.
+`history` takes two optional arguments beside the required `memory_id`: `limit` (default 20, between 1 and 100) and `cursor`, which pages through a chain longer than one request returns. A history cursor is bound to the memory it was minted for: presented for another memory in the same scope it is `cursor_expired`, as it is when one of its fields is malformed. It is **not** tamper-detecting — an edit substituting another well-formed value is accepted, and pages from the position that value names. Unlike a search cursor it carries no index generation, so a concurrent write does not invalidate it.
 
 ## Semantics worth knowing
 
