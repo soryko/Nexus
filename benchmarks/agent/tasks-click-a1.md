@@ -38,22 +38,38 @@ construction. Two candidates are merges and only the diff form handles them.
 Every row below was run. `pre-fix failures` is the measured count at the parent with the
 post-fix tests applied; a row could not be listed without it.
 
-| fix | pre-fix parent | subject | acceptance tests | src touched | pre-fix failures | post-fix passed | pytest |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `6de2121518` | `1339fd3323` | Treat `UNSET` in a `default_map` as absent | `test_defaults.py` | 1 file | **1** | 34 | 9.1.1 |
-| `1b0e19f505` | `499bbeea64` | Don't include envvar in error hint when envvar not configured | `test_options.py` | 1 file, 2 lines | **1** | 144 | 9.1.1 |
-| `8d7f03dac8` | `ef11be6e49` | Treat empty `auto_envvar` as `None` | `test_options.py` | 1 file, 5 lines | **1** | 110 | 9.1.1 |
-| `ebcd548d50` | `7f7bbe4569` | Options setting both `is_flag=False` and `flag_value` | `test_options.py` | 1 file, 6+/3- | **2** | 537 | 9.1.1 |
-| `762c97eef7` | `8929d39278` | Double-bracketing of choices in the synopsis | `test_basic.py` | 1 file | **2** | 90 | 8.4.2 |
-| `f58ca3e814` | `420c8fb44e` | `copy`, `deepcopy` and `pickle` of `Sentinel` members | `test_utils/test_sentinel.py` | 1 file | **3** | 10 | 9.1.1 |
-| `546f2851f4` | `ae46cfd6bc` | Callable `flag_value` instantiated when used as a default | `test_defaults.py`, `test_options.py` | 1 file | **7** | 584 | 9.1.1 |
-| `b67832c216` | `8c1a0a7abb` | Parsing when a parameter is named `help` | `test_basic.py`, `test_info_dict.py`, `test_options.py` | 1 file, 44+/2- | **10** | 776 | 9.1.1 |
-| `0f71fe771c` | `c943271a26` | Dual-option arbitration respecting explicit defaults | `test_options.py` | 1 file | **18** | 637 | 9.1.1 |
+| fix | pre-fix parent | subject | acceptance tests | failing instances | failing **functions** | src hunks | post-fix passed | pytest |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `1b0e19f505` | `499bbeea64` | Don't include envvar in error hint when envvar not configured | `test_options.py` | 1 | **1** | 1 | 144 | 9.1.1 |
+| `8d7f03dac8` | `ef11be6e49` | Treat empty `auto_envvar` as `None` | `test_options.py` | 1 | **1** | 1 | 110 | 9.1.1 |
+| `ebcd548d50` | `7f7bbe4569` | Options setting both `is_flag=False` and `flag_value` | `test_options.py` | 2 | **1** | 2 | 537 | 9.1.1 |
+| `6de2121518` | `1339fd3323` | Treat `UNSET` in a `default_map` as absent | `test_defaults.py` | 1 | **1** | **7** | 34 | 9.1.1 |
+| `762c97eef7` | `8929d39278` | Double-bracketing of choices in the synopsis | `test_basic.py` | 2 | **2** | 2 | 90 | 8.4.2 |
+| `f58ca3e814` | `420c8fb44e` | `copy`, `deepcopy` and `pickle` of `Sentinel` members | `test_utils/test_sentinel.py` | 3 | **2** | 1 | 10 | 9.1.1 |
+| `546f2851f4` | `ae46cfd6bc` | Callable `flag_value` instantiated when used as a default | `test_defaults.py`, `test_options.py` | 7 | **4** | 3 | 584 | 9.1.1 |
+| `b67832c216` | `8c1a0a7abb` | Parsing when a parameter is named `help` | `test_basic.py`, `test_info_dict.py`, `test_options.py` | 10 | **5** | 4 | 776 | 9.1.1 |
+| `0f71fe771c` | `c943271a26` | Dual-option arbitration respecting explicit defaults | `test_options.py` | 18 | **6** | 5 | 637 | 9.1.1 |
 
-Pre-fix failure count is the **boundedness measure**. The set is ordered by it deliberately:
-the rows above the middle are single-behaviour fixes, and the last two are broad enough that
-a partial patch could pass some checks and fail others. Whether a task is admitted at 18
-failures is a selection-rule decision (§5), not a fixture one — the fixture works either way.
+### Failure count alone is a weak complexity measure, and this table shows why
+
+The draft ordered the set by raw failure count and called it "the boundedness measure". That
+was wrong, and the correction is visible in the numbers above rather than argued from
+principle.
+
+**Parametrisation multiplies one defect into many failures.** Collapsing parametrised ids to
+their test function changes the picture at both ends: `ebcd548` falls from 2 failures to **1**
+function, `f58ca3e` from 3 to 2, and `0f71fe7` from 18 to **6** — a threefold inflation in the
+row the draft called the most complex.
+
+**And failure count can run opposite to the change's dispersion.** `6de2121` has the *smallest*
+failure count in the set, one function, yet the *largest* source change by hunk count — **7
+separate hunks**, more than the 5 of the 18-failure row. A task can be one observable symptom
+and a widely dispersed fix. Ordering by symptoms would have put it first and called it the
+simplest task in the set.
+
+No single column is the measure. The admission rule in §5 reads at least failing **functions**
+and source **hunks** together, and neither is a proxy for "how hard is this for an agent" —
+which is not established by any static property of a diff and is not claimed here.
 
 ## 3. Excluded, by class
 
@@ -96,7 +112,9 @@ is unmeasured outside the rows listed.
 
 ## 5. Still to be fixed by the selection rules
 
-- The boundedness admission bar (the `pre-fix failures` ceiling).
+- The boundedness admission bar. It reads failing **functions** and source **hunks**
+  together; raw failure count is not the measure, for the two reasons the table above
+  demonstrates.
 - The disjoint development / harness-validation / held-out split.
 - The **useful / useful-support / unnecessary / outdated** assignment. This is **not a
   property of a commit** and cannot be assigned in this table: it is a property of the
@@ -114,6 +132,12 @@ is unmeasured outside the rows listed.
    predate the model's training cutoff. Isolating the checkout prevents the agent from
    *retrieving* the fix; it does not establish that the model has not **memorised** it. This
    is a limitation of the whole source, not of any row, and it is recorded in every result
-   rather than mitigated — see `protocol-a1` §13. It bears on all arms roughly equally, which
-   is why it threatens the absolute numbers more than the between-arm comparison, but "roughly"
-   is an assumption and is labelled as one.
+   rather than mitigated — see `protocol-a1` §13.
+
+   **How it affects the arms is unknown, and the draft's "bears on all arms roughly equally"
+   is withdrawn.** Exposure may help every arm, or it may interact with an arm — a memory that
+   names the right subsystem could make recall of a memorised fix more likely in arm 2 than in
+   arm 1, which would show up as a Nexus benefit that is nothing of the kind. Equal effect is
+   not the conservative assumption; it is the convenient one. Nothing here measures which
+   holds, so no result may lean on either, and a between-arm difference on a memorised task
+   carries this caveat explicitly.

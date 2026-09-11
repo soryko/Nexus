@@ -302,11 +302,16 @@ or any comparison against another memory system, none of which is run here.
 
 **Nor can it establish that the agent had not already memorised the fix.** Source A is a
 public repository and its history predates the model's training cutoff. Runtime isolation
-(§11.4) stops the agent *retrieving* a fix; it does nothing about prior exposure. This
-inflates absolute correctness in **every** arm. It is assumed — not measured — to bear on the
-arms comparably, which is why the between-arm comparison is the figure this protocol trusts
-and the absolute rate is not; that assumption is labelled as an assumption wherever these
-figures appear.
+(§11.4) stops the agent *retrieving* a fix; it does nothing about prior exposure.
+
+**Its effect on the arms is unknown.** An earlier draft said exposure inflates every arm
+equally and therefore left the between-arm comparison safe. That is withdrawn: it is the
+convenient assumption, not the conservative one. Exposure could plausibly interact with an
+arm rather than shift all of them — a memory naming the right subsystem could make recall of
+a memorised fix more likely in arm 2 than in arm 1, and the result would look like a
+retrieval benefit while being an elicitation effect. Nothing in this protocol measures which
+happens. So: no figure, absolute or between-arm, may be defended by an equal-exposure
+argument, and every reported difference on a task whose fix is public carries this caveat.
 
 ## 14. Run record, written into the results artifact
 
