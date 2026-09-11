@@ -5,104 +5,209 @@
   "exposure": "Authored by an author who had read the fixes. Harness validation only; no benefit figure may be computed from it. See capture-policy-a1.md section 5.",
   "repository": "pallets/click",
   "development_tasks": [
-    {"task": "d1", "fix": "8d7f03dac8", "pre_fix": "ef11be6e49", "subject": "Treat empty auto_envvar as None"},
-    {"task": "d2", "fix": "1b0e19f505", "pre_fix": "499bbeea64", "subject": "Don't include envvar in error hint when envvar not configured"},
-    {"task": "d3", "fix": "6de2121518", "pre_fix": "1339fd3323", "subject": "Treat UNSET in a default_map as absent"}
+    {
+      "task": "d1",
+      "fix": "8d7f03dac8",
+      "pre_fix": "ef11be6e49",
+      "subject": "Treat empty auto_envvar as None"
+    },
+    {
+      "task": "d2",
+      "fix": "1b0e19f505",
+      "pre_fix": "499bbeea64",
+      "subject": "Don't include envvar in error hint when envvar not configured"
+    },
+    {
+      "task": "d3",
+      "fix": "6de2121518",
+      "pre_fix": "1339fd3323",
+      "subject": "Treat UNSET in a default_map as absent"
+    }
   ],
   "relevance_note": "Declared before any run, per capture-policy-a1.md section 6. 'necessary' means the task's rubric requires the fact; 'support' means relevant but not required; absence from a task's list means irrelevant to it.",
   "memories": [
     {
       "id": "c01",
       "kind": "constraint",
-      "tags": ["envvar", "resolution"],
+      "tags": [
+        "envvar",
+        "resolution"
+      ],
       "content": "Environment-variable resolution treats an empty string as absent, not as a value. Parameter.resolve_envvar_value returns a value only when it is truthy, so FOO= and an unset FOO are the same thing to a parameter.",
-      "relevance": {"d1": "necessary"}
+      "relevance": {
+        "d1": "necessary"
+      },
+      "discoverability": {
+        "d1": "discoverable"
+      }
     },
     {
       "id": "c02",
       "kind": "decision",
-      "tags": ["envvar", "resolution", "precedence"],
+      "tags": [
+        "envvar",
+        "resolution",
+        "precedence"
+      ],
       "content": "Value precedence is command line, then environment variable, then default. A parameter consults the environment only when the command line supplied nothing, which is why an envvar that resolves to a value suppresses the default rather than merging with it.",
-      "relevance": {"d1": "support", "d3": "support"}
+      "relevance": {
+        "d1": "support",
+        "d3": "support"
+      }
     },
     {
       "id": "c03",
       "kind": "observation",
-      "tags": ["envvar", "option", "core"],
+      "tags": [
+        "envvar",
+        "option",
+        "core"
+      ],
       "content": "Option overrides resolve_envvar_value to add the automatic-envvar path: when no explicit envvar is set and the context carries an auto_envvar_prefix, the name is derived as PREFIX_PARAMNAME. Explicit envvars are handled by the base implementation.",
-      "relevance": {"d1": "necessary"}
+      "relevance": {
+        "d1": "necessary"
+      },
+      "discoverability": {
+        "d1": "discoverable"
+      }
     },
     {
       "id": "c04",
       "kind": "constraint",
-      "tags": ["envvar", "help", "show_envvar"],
+      "tags": [
+        "envvar",
+        "help",
+        "show_envvar"
+      ],
       "content": "show_envvar is independent of whether envvar is set. An option can ask to show its environment variable while having none configured, in which case any name shown has to come from the context's auto_envvar_prefix.",
-      "relevance": {"d2": "necessary"}
+      "relevance": {
+        "d2": "necessary"
+      },
+      "discoverability": {
+        "d2": "discoverable"
+      }
     },
     {
       "id": "c05",
       "kind": "constraint",
-      "tags": ["sentinel", "defaults", "unset"],
+      "tags": [
+        "sentinel",
+        "defaults",
+        "unset"
+      ],
       "content": "UNSET is an internal sentinel that distinguishes 'no value was supplied' from 'the supplied value was None'. It is never a user-facing value: anything that reads a mapping of supplied values has to treat a stored UNSET as absence, not as data to hand back.",
-      "relevance": {"d3": "necessary"}
+      "relevance": {
+        "d3": "necessary"
+      },
+      "discoverability": {
+        "d3": "discoverable"
+      }
     },
     {
       "id": "c06",
       "kind": "decision",
-      "tags": ["defaults", "default_map", "callable"],
+      "tags": [
+        "defaults",
+        "default_map",
+        "callable"
+      ],
       "content": "A default_map entry may be a callable, and is invoked to produce the value when the lookup is asked to call it. Membership in the map is therefore decided before the value is inspected, because inspecting it can mean running it.",
-      "relevance": {"d3": "support"}
+      "relevance": {
+        "d3": "support"
+      }
     },
     {
       "id": "c07",
       "kind": "procedure",
-      "tags": ["testing", "pytest"],
+      "tags": [
+        "testing",
+        "pytest"
+      ],
       "content": "Run the suite from the checkout with PYTHONPATH=src and pass -p no:randomly. Click's own test group includes pytest-randomly, which reorders tests per run; leaving it on makes two runs of the same commit differ for reasons unrelated to the change.",
-      "relevance": {"d1": "support", "d2": "support", "d3": "support"}
+      "relevance": {
+        "d1": "support",
+        "d2": "support",
+        "d3": "support"
+      }
     },
     {
       "id": "c08",
       "kind": "failure",
-      "tags": ["testing", "pytest", "collection"],
+      "tags": [
+        "testing",
+        "pytest",
+        "collection"
+      ],
       "content": "Older test modules fail at collection, not at assertion, under pytest 9.x: 'PytestRemovedIn10Warning: Passing a non-Collection iterable to parametrize is deprecated' aborts the whole file. The cause is the pinned pytest, not the code under test. Pinning pytest below 9 collects and runs them.",
-      "relevance": {"d1": "support", "d2": "support", "d3": "support"}
+      "relevance": {
+        "d1": "support",
+        "d2": "support",
+        "d3": "support"
+      }
     },
     {
       "id": "c09",
       "kind": "constraint",
-      "tags": ["packaging", "dependencies"],
+      "tags": [
+        "packaging",
+        "dependencies"
+      ],
       "content": "Click has no runtime dependencies and targets the standard library only. A fix that would require a third-party package is out of bounds regardless of how well it reads.",
-      "relevance": {"d1": "support", "d2": "support", "d3": "support"}
+      "relevance": {
+        "d1": "support",
+        "d2": "support",
+        "d3": "support"
+      }
     },
     {
       "id": "c10",
       "kind": "procedure",
-      "tags": ["testing", "clirunner"],
+      "tags": [
+        "testing",
+        "clirunner"
+      ],
       "content": "CliRunner invokes a command in-process and returns a result carrying output, exit_code and exception. Assert on exit_code for failure paths rather than on the presence of a traceback, because a handled usage error exits non-zero without raising.",
-      "relevance": {"d2": "support"}
+      "relevance": {
+        "d2": "support"
+      }
     },
     {
       "id": "c11",
       "kind": "procedure",
-      "tags": ["release", "changelog"],
+      "tags": [
+        "release",
+        "changelog"
+      ],
       "content": "Every user-visible change gets a CHANGES entry naming the version it lands in. The entry is written with the change, not at release time.",
       "relevance": {}
     },
     {
       "id": "c12",
       "kind": "decision",
-      "tags": ["types", "annotations"],
+      "tags": [
+        "types",
+        "annotations"
+      ],
       "content": "Public API is fully annotated and the package ships a py.typed marker, so a change to a public signature is a typing change for downstream users even when runtime behaviour is unchanged.",
       "relevance": {}
     },
     {
       "id": "c13",
       "kind": "procedure",
-      "tags": ["testing", "pytest", "outdated"],
+      "tags": [
+        "testing",
+        "pytest",
+        "outdated"
+      ],
       "outdated": true,
       "outdated_note": "True when captured against the older checkout, superseded by the project's move to pyproject-based configuration. Present so protocol-a1 section 7's outdated category has an instance. An agent that follows it will look for a file that is not there.",
       "content": "Test configuration lives in setup.cfg; add pytest settings to its [tool:pytest] section.",
-      "relevance": {"d1": "outdated", "d2": "outdated", "d3": "outdated"}
+      "relevance": {
+        "d1": "outdated",
+        "d2": "outdated",
+        "d3": "outdated"
+      }
     }
-  ]
+  ],
+  "discoverability_note": "Per protocol-a1 section 7b, each necessary fact is labelled discoverable (obtainable by reading the fixture) or absent (not in the fixture at all). An advantage on a discoverable fact measures retrieval efficiency, not supplied knowledge. Labels below are for the development tasks only."
 }

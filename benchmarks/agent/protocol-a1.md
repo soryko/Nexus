@@ -67,11 +67,13 @@ protocol depends on these being properties of the pinned version, not of the doc
   auto-memory load into **every** arm, which means the "no persistent memory" baseline would
   silently contain a competing persistent-memory system. That is fatal to Q1 and to Q2, so
   `--bare` is mandatory, not a convenience.
-- **`--bare` has an auth prerequisite that is not satisfied by default.** Under it, Anthropic
-  auth is strictly `ANTHROPIC_API_KEY` or `apiKeyHelper` supplied via `--settings`; OAuth and
-  keychain are never read. Neither is configured on this host today. Provisioning one is a
-  precondition of the first scored run, and the choice is recorded in the run record because
-  it determines which account the usage bills to.
+- **`--bare` cannot authenticate on this host, and this is measured, not inferred.** Under
+  it, Anthropic auth is strictly `ANTHROPIC_API_KEY` or `apiKeyHelper` supplied via
+  `--settings`; OAuth and keychain are never read. Neither is configured here, and
+  `claude --bare -p … --output-format json` returns
+  `"result":"Not logged in · Please run /login"` with `"terminal_reason":"api_error"`.
+  Provisioning one is a **precondition of the first run of any arm**, and the choice is
+  recorded in the run record because it determines which account the usage bills to.
 - **Absence from `--help` means unadvertised, not unsupported, and the earlier draft got
   this wrong.** Tested against the parser — `claude <flag> mcp list`, a local subcommand
   that parses options without calling the API — with two controls: `--definitely-not-a-flag`
@@ -111,10 +113,31 @@ it is unadvertised and its behaviour is untested. Until a test shows it actually
 run at the stated turn count, the protocol claims no in-run cap, and a run that overruns its
 intended spend is detected afterwards and reported, not prevented.
 
-**Also unverified and pinned during harness validation (§5, repo C):** the field names in the
-`--output-format json` envelope. One real run is captured verbatim and its fields pinned in
-the run record before any scored run. No figure may be read from a field whose name was
-assumed.
+### The result envelope, captured verbatim
+
+Taken from the failed `--bare` run above — a real envelope, not a documented one. The fields
+the harness reads exist and are named:
+
+| Field | Use |
+| --- | --- |
+| `is_error` | **Authoritative** run outcome |
+| `terminal_reason` | Why it ended; `api_error` here |
+| `num_turns` | Turn accounting |
+| `duration_ms`, `duration_api_ms` | Latency, wall clock and API time separately |
+| `total_cost_usd` | Spend accounting |
+| `usage.{input_tokens,output_tokens,cache_creation_input_tokens,cache_read_input_tokens}` | Token accounting |
+| `permission_denials`, `session_id`, `result` | Trace and identification |
+
+**`subtype` is not the outcome field, and a harness that reads it will mis-score every failed
+run.** This envelope carries `"is_error":true` and `"subtype":"success"` *simultaneously*. A
+harness keyed on `subtype` would have recorded an authentication failure as a successful run
+with an empty patch — which §10 scores as `no_patch`, a **fail**, silently converting an
+`env_fail` into evidence against whichever arm happened to hit it. The harness reads
+`is_error`, and cross-checks `terminal_reason` to separate `env_fail` from a genuine failure.
+
+**Still unverified:** this is an *error* envelope. Which fields are populated on a successful
+run — `modelUsage` is empty here, and `usage` counts are all zero — is not established, and is
+pinned from a successful run during harness validation before any scored run.
 
 ## 5. Task sources
 
@@ -170,6 +193,31 @@ Selecting only memory-dependent tasks would overstate everyday benefit; the outd
 are the ones that can make a memory arm score *worse* than baseline, which is a real outcome
 this protocol must be able to report. Development tasks, harness-validation tasks and
 held-out tasks are disjoint sets, declared before execution and never rebalanced afterwards.
+
+## 7b. Every necessary fact is labelled discoverable or not
+
+Found during harness validation, and it changes what a benefit figure means.
+
+For task `d1` the fix *parametrises an existing test*. The pre-fix checkout therefore
+contains `test_empty_envvar` already asserting the convention for the explicit-envvar path —
+the very fact the corpus records as `necessary`. The hidden check is hidden; the convention
+it rests on is sitting in the agent's tree.
+
+This is not a fixture defect and cannot be engineered away: when a fix touches an existing
+test, the pre-fix version of that test is part of the repository the agent is given. What it
+does mean is that **"necessary" and "unavailable" are different properties**, and the draft
+used one word for both.
+
+Each necessary fact is therefore labelled, with the task:
+
+| Label | Meaning | What a memory arm's advantage measures |
+| --- | --- | --- |
+| **discoverable** | Obtainable from the fixture by reading it | Retrieval *efficiency* — the agent could have found it |
+| **absent** | Not present in the fixture at all | Retrieval *necessity* — the agent could not have |
+
+A benefit figure that mixes them overstates: an advantage on a discoverable fact says memory
+saved effort, not that it supplied knowledge. Both are reported, separately, and the held-out
+set must contain tasks of both kinds or it can only measure one of them.
 
 ## 8. Reported figures
 
