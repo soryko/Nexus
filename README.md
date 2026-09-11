@@ -5,12 +5,12 @@
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 [![SQLite](https://img.shields.io/badge/sqlite-3.51.3%2B-blue)](https://www.sqlite.org/)
 [![MCP](https://img.shields.io/badge/mcp-2.1.1-blue)](https://modelcontextprotocol.io/)
-[![Status](https://img.shields.io/badge/milestone-B2a%3A%20Git--verified%20references-orange)](docs/plans/milestone-b2a.md)
+[![Status](https://img.shields.io/badge/milestone-B3%3A%20browse%20candidate%20ordering-orange)](docs/plans/milestone-b3-candidate-ordering.md)
 
 An agent stores a fact once and reads it back in a later session, on a different process, with the same bytes it wrote. Everything runs locally against one SQLite file. No model call, network request or external service touches the write path.
 
 > [!IMPORTANT]
-> **Search covers current revisions only.** A term that appears solely in a superseded revision will not find that memory — use `history` to browse a memory's revisions and `get` to read an older one. Ranking is BM25 lexical ordering, not relevance: there is no semantic similarity, no embeddings and no learned ranking. Repository-verified references are implemented and closed, but nothing filters or ranks by them yet — search takes no repository, path or commit argument. Symbol indexing, automatic extraction and context-budget packing are later milestones. **No retrieval-quality advantage over any other tool has been measured or is claimed.** The v2 evaluation set *is* now judged and this build is measured against it ([results](benchmarks/eval/results-v2.md)) — but that is one 17-query set scoring this build alone, with labels that are AI-assessed, AI-audited twice and human-authorised, with no human audit at label level. No comparison against another system has been run.
+> **Search covers current revisions only.** A term that appears solely in a superseded revision will not find that memory — use `history` to browse a memory's revisions and `get` to read an older one. Ranking is BM25 lexical ordering, not relevance: there is no semantic similarity, no embeddings and no learned ranking. Repository-verified references are implemented and closed, and `search` filters on that recorded evidence by repository, path and commit. Nothing *ranks* by it: a reference filter narrows a result set and never reorders it, adds no evidence and never re-verifies on read. Symbol indexing, automatic extraction and context-budget packing are later milestones. **No retrieval-quality advantage over any other tool has been measured or is claimed.** The v2 evaluation set *is* now judged and this build is measured against it ([results](benchmarks/eval/results-v2.md)) — but that is one 17-query set scoring this build alone, with labels that are AI-assessed, AI-audited twice and human-authorised, with no human audit at label level. No comparison against another system has been run.
 
 ## What it gives you
 
@@ -99,7 +99,7 @@ On Windows the installed command is `.venv/Scripts/nexus-memory.exe`. Your clien
 | `get` | Read current content, or a specified revision | `memory_id` |
 | `revise` | Replace all revision fields, references included, if the head still matches | `memory_id`, `expected_revision_id`, `content`, `idempotency_key` |
 | `forget` | Tombstone a memory if the head still matches | `memory_id`, `expected_revision_id`, `idempotency_key` |
-| `search` | Find current memories by terms, tags and kinds | none |
+| `search` | Find current memories by terms, tags, kinds and recorded reference evidence | none |
 | `history` | List a memory's revision chain, newest first | `memory_id` |
 | `status` | Inspect scoped durability, index state, the bound repository and the verification mode | none |
 
@@ -134,6 +134,8 @@ get <memory_id> <revision> -> the superseded decision, in full
 
 Filters combine with AND. `query` is literal text unless `advanced` is true, which enables FTS5 syntax. `tags_all` and `tags_any` are deliberately separate. An empty request returns recent memories.
 
+Four further filters narrow on the reference evidence a write already recorded: `repository` (`"any"` or `"bound"`, naming no repository), `reference_paths`, `reference_path_prefix` and `reference_commits`. Paths and commits are matched byte-exactly against stored values — no wildcards, globs or revision specs — and the filters read only what verification already established. They never re-verify, never read a repository, and cannot widen what the scope can see.
+
 Literal mode makes two separate commitments, and they are worth stating apart because one does not imply the other:
 
 1. **FTS5 operators are inert.** `AND`, `OR`, `NEAR`, `*` and quotes in a literal query are matched as text, not obeyed as syntax.
@@ -146,6 +148,8 @@ Literal mode makes two separate commitments, and they are worth stating apart be
 > `lexical_rank` is a BM25 ordering value, **not** a confidence or relevance score, and it is only comparable within one result set. BM25 depends on corpus statistics, so a concurrent write can change the ranking of documents that did not themselves change. Cursors are therefore bound to an index generation: after any write, a stale cursor returns `cursor_expired` and the search must be restarted rather than silently returning inconsistent pages.
 
 A `history` entry records **what** changed — revision IDs, parent links, timestamps. It never carries a rationale, because Nexus does not infer *why* a change was made from the difference between two revisions. If the reason matters, record it as a memory.
+
+`history` takes two optional arguments beside the required `memory_id`: `limit` (default 20, between 1 and 100) and `cursor`, which pages through a chain longer than one request returns. A history cursor is bound to the memory it was minted for: presented for another memory in the same scope it is `cursor_expired`, as it is when its fields have been edited. Unlike a search cursor it carries no index generation, so a concurrent write does not invalidate it.
 
 ## Semantics worth knowing
 
@@ -223,3 +227,5 @@ Use SQLite's backup API, or shut every client down cleanly before copying. **Do 
 Retrieval work done since B1 is measured but **not shipped**: the [development charter](benchmarks/eval/v2-development-queries.md) records `stem` morphology qualified as the development baseline, a historical-discovery prototype built and rejected at ~2.70x storage against a 2x ceiling, and an evidence-selection rule rejected after it removed a directly relevant answer on v2. The shipped default remains `exact` current-head search, and abstention remains unsolved.
 
 **B2** adds repository context, in two slices. **B2a** — [contract](docs/plans/milestone-b2a.md) implemented and closed at `79e0a0d`, with its fifteen acceptance tests and eight mutation controls passing, under the documented limitation that repository verification is not atomic with the write — is a launch-bound repository identity that no tool call can override, and commit and path verification against committed Git objects, recording the resolved commit, repository-relative path, object ID and entry type. A verified reference establishes that the object existed at that path in that commit: not that the memory's prose is true, not that the working tree matches, not that the advice is current. **B2b** adds reference filters over that recorded evidence — filtering by repository, path and commit, adding no new evidence and never re-verifying on read. Its [contract](docs/plans/milestone-b2b.md) is reviewed and frozen; implemented and closed at `cdf51e7`. Symbol-aware retrieval comes after both. Cross-revision search — finding a term that only ever appeared in a superseded revision — is a separate follow-up with distinct current and history modes, so outdated instructions are never mixed into ordinary results. Embeddings come after a lexical baseline has been measured, not before.
+
+**B3** — [contract](docs/plans/milestone-b3-candidate-ordering.md), implemented 2026-09-08 and merged at `b92c718` — orders browse candidate selection on the index rather than sorting every eligible row. Its measurements cover the browse shapes it measured and establish nothing about lexical search or about sparse reference filters.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 import sqlite3
 from pathlib import Path
 
@@ -363,6 +365,109 @@ def test_history_reports_what_changed_not_why(tmp_path: Path) -> None:
     entry = service.history(memory_id).entries[0]
     for forbidden in ("reason", "rationale", "why", "explanation", "summary", "diff"):
         assert not hasattr(entry, forbidden)
+
+
+# --- history cursor fields --------------------------------------------------------------
+
+# A history cursor carries ``created_at`` and ``revision_id``, and both reach SQLite as bind
+# parameters against ``TEXT`` columns. Before the guard in ``_history_cursor_position`` they
+# were read straight out of the decoded payload, which is caller-supplied JSON of any type,
+# and each fault below left the cursor's own domain: an absent field raised ``KeyError``
+# (``internal_error``), a container or an unencodable string was caught as a storage fault
+# and reported as ``storage operation failed``, and a number simply compared false against
+# every row -- SQLite orders every number before every string -- handing back an empty page
+# under a cursor that promised the next one. B3 §5 recorded the defect and deferred it here.
+
+#: Sentinel for "delete this key", distinct from a JSON ``null``, which is its own case.
+_ABSENT = object()
+
+
+def _retamper(token: str, changes: dict) -> str:
+    """Decode a *minted* cursor, apply ``changes``, and re-encode it.
+
+    Built from a real cursor rather than from a hand-written payload so the fingerprint still
+    matches: the tampered field is then the only reason the call can fail, and the test
+    cannot pass on an expiry it did not intend to provoke.
+    """
+    payload = json.loads(base64.urlsafe_b64decode(token.encode()))
+    for key, value in changes.items():
+        if value is _ABSENT:
+            payload.pop(key, None)
+        else:
+            payload[key] = value
+    return base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode()
+
+
+@pytest.fixture
+def paginated_history(tmp_path: Path) -> tuple[MemoryService, str, str]:
+    """Twelve revisions of one memory, and a genuine cursor onto the second page of five."""
+    service = _service(tmp_path / "memory.sqlite3")
+    memory_id, revision_id = _store(service, "v0", "k0")
+    for i in range(1, 12):
+        revision_id = service.revise(memory_id, revision_id, MemoryInput(f"v{i}"), f"k{i}").revision_id
+    cursor = service.history(memory_id, limit=5).cursor
+    assert cursor is not None, "the fixture minted no cursor and would assert nothing"
+    return service, memory_id, cursor
+
+
+#: Every fault is applied to each field separately, because each field is read separately
+#: and a guard covering only the first would pass a shared parametrisation.
+MALFORMED_HISTORY_CURSOR_FIELDS = {
+    "absent": _ABSENT,
+    "null": None,
+    "integer": 0,  # the quiet one: orders before every TEXT value, so the page comes back empty
+    "float": 0.0,
+    "true": True,  # subclasses int, and would bind as 1 rather than be refused
+    "list": ["2026-01-01T00:00:00+00:00"],
+    "dict": {"value": "2026-01-01T00:00:00+00:00"},
+    "unencodable_string": "\udcff",  # a lone surrogate survives json.loads and cannot be bound
+}
+
+
+@pytest.mark.parametrize("name", ["created_at", "revision_id"])
+@pytest.mark.parametrize("fault", MALFORMED_HISTORY_CURSOR_FIELDS.values(),
+                         ids=list(MALFORMED_HISTORY_CURSOR_FIELDS))
+def test_a_malformed_history_cursor_field_is_a_cursor_error(
+        paginated_history: tuple[MemoryService, str, str], name: str, fault: object) -> None:
+    """Each malformed field is answered in the cursor's own domain, for both fields.
+
+    Asserted as ``CursorExpired`` and not merely as "some ``NexusError``": the transport
+    renders the code, and which code a caller is handed is the whole finding.
+    """
+    service, memory_id, cursor = paginated_history
+    tampered = _retamper(cursor, {name: fault})
+    with pytest.raises(CursorExpired):
+        service.history(memory_id, limit=5, cursor=tampered)
+
+
+def test_a_well_formed_history_cursor_past_every_row_is_a_page_not_an_error(
+        paginated_history: tuple[MemoryService, str, str]) -> None:
+    """The guard refuses what SQLite cannot carry and not one value more.
+
+    A timestamp before every revision is a perfectly bindable ``TEXT`` value that happens to
+    select nothing. It must come back as an empty page -- the honest answer to a position
+    past every row -- rather than as an error, which is what keeps the type check from being
+    a blanket rejection of values it merely did not mint.
+    """
+    service, memory_id, cursor = paginated_history
+    tampered = _retamper(cursor, {"created_at": "0001-01-01T00:00:00+00:00"})
+    assert service.history(memory_id, limit=5, cursor=tampered).entries == ()
+
+
+def test_a_valid_history_cursor_still_pages_after_the_field_check(
+        paginated_history: tuple[MemoryService, str, str]) -> None:
+    """The negative control: the guard must reject malformed fields and nothing else.
+
+    Re-encoding an untampered payload exercises the same path the tampered cases take, so a
+    guard that rejected every re-encoded cursor -- or every cursor -- would fail here rather
+    than pass the parametrisation above vacuously.
+    """
+    service, memory_id, cursor = paginated_history
+    expected = service.history(memory_id, limit=5, cursor=cursor)
+    reencoded = service.history(memory_id, limit=5, cursor=_retamper(cursor, {}))
+    assert [entry.revision_id for entry in reencoded.entries] == \
+        [entry.revision_id for entry in expected.entries]
+    assert expected.entries, "the control page is empty and asserts nothing"
 
 
 # --- negative controls -----------------------------------------------------------------
