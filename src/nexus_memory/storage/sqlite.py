@@ -904,6 +904,45 @@ class SQLiteRepository:
             raise CursorExpired(message)
         return rank, seq
 
+    @staticmethod
+    def _history_cursor_position(payload: dict, message: str) -> tuple[str, str]:
+        """The ``(created_at, revision_id)`` a history cursor carries, established as text first.
+
+        B3 §5 recorded this path as a separate defect and left it. ``history`` read both
+        fields straight out of the decoded payload, and a cursor is caller-supplied text
+        whose fields are untrusted JSON of any type. Three faults followed, none of them the
+        cursor-domain error the contract documents. An absent field raised ``KeyError``,
+        which is not a ``NexusError`` and is not in ``history``'s except clause, so it left
+        storage as ``internal_error``. A container raised ``sqlite3.ProgrammingError``, and a
+        string SQLite cannot encode -- a lone surrogate survives ``json.loads`` -- raised
+        ``UnicodeEncodeError``; both *are* in that clause and were reported as ``storage
+        operation failed``, blaming storage for a caller's cursor.
+
+        The third is the quiet one, and the reason a type check is not cosmetic here. Both
+        columns are ``TEXT``, and SQLite orders every number before every string, so
+        ``created_at: 0`` compares false against every row: the caller is handed an empty
+        page under a cursor that promised the next one, with no error raised anywhere.
+        Requiring ``str`` closes it, and excludes ``bool`` and the numeric types by the same
+        check rather than by a separate one.
+
+        Unlike ``_cursor_position`` this needs no range bound. Nothing here reaches
+        arithmetic -- both fields are bind parameters and nothing else -- and the transport
+        caps a cursor at 4096 characters, so the only value a correctly typed field can hold
+        that SQLite cannot carry is one it cannot encode.
+        """
+        try:
+            created_at, revision_id = payload["created_at"], payload["revision_id"]
+        except KeyError as error:
+            raise CursorExpired(message) from error
+        for value in (created_at, revision_id):
+            if not isinstance(value, str):
+                raise CursorExpired(message)
+            try:
+                value.encode()
+            except UnicodeEncodeError as error:
+                raise CursorExpired(message) from error
+        return created_at, revision_id
+
     # The correlation that ties an evidence row to the head revision already selected.
     # ``revision_id`` is part of it, not decoration: without it the predicate would match a
     # reference any revision of the memory ever carried, and B2b §4 is head revisions only.
@@ -1299,7 +1338,7 @@ class SQLiteRepository:
                     payload = self._decode_cursor(cursor)
                     if payload.get("fingerprint") != fingerprint:
                         raise CursorExpired("cursor is not valid for this history")
-                    after = (payload["created_at"], payload["revision_id"])
+                    after = self._history_cursor_position(payload, "cursor is not valid for this history")
 
                 statement = (
                     "SELECT revision_id,parent_revision_id,kind,created_at FROM revisions"

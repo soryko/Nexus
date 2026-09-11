@@ -16,6 +16,9 @@ from nexus_memory.transport.mcp_server import _default_db, _prepare_new_storage,
 
 PROJECT_ROOT = Path(__file__).parents[2]
 
+#: Sentinel for "delete this key", distinct from a JSON ``null``, which is its own case.
+_ABSENT = object()
+
 
 def _server(db: Path) -> StdioServerParameters:
     env = os.environ.copy()
@@ -356,5 +359,66 @@ def test_stdio_reports_a_malformed_cursor_as_a_cursor_error(tmp_path: Path) -> N
                 text = "".join(item.text for item in answer.content)
                 assert "cursor_expired:" in text, f"{label}: {text}"
                 assert "internal_error" not in text, f"{label}: {text}"
+
+    anyio.run(scenario)
+
+
+def test_stdio_reports_a_malformed_history_cursor_as_a_cursor_error(tmp_path: Path) -> None:
+    """The same contract for ``history``, whose cursor carries text rather than numbers.
+
+    B3 §5 fixed ``search`` and recorded this path as a separate defect. ``history`` read
+    ``created_at`` and ``revision_id`` straight out of the decoded payload, and each of the
+    three faults below left the cursor's domain by a different route: an absent field raised
+    ``KeyError`` and reached the caller as ``internal_error``, a container was caught as a
+    storage fault and reported as ``storage operation failed``, and an integer raised nothing
+    at all -- both columns are ``TEXT`` and SQLite orders every number before every string,
+    so the call returned an empty page under a cursor that promised the next one.
+
+    Asserted end to end because the transport is where the code a caller reads is produced,
+    and per field because each is read separately.
+    """
+    async def scenario() -> None:
+        async with Client(_server(tmp_path / "state" / "memory.sqlite3")) as client:
+            first = await client.call_tool("record", {
+                "content": "revision 0", "idempotency_key": "history-0",
+            })
+            memory_id = first.structured_content["memory_id"]
+            revision_id = first.structured_content["revision_id"]
+            for index in range(1, 12):
+                receipt = await client.call_tool("revise", {
+                    "memory_id": memory_id, "expected_revision_id": revision_id,
+                    "content": f"revision {index}", "idempotency_key": f"history-{index}",
+                })
+                revision_id = receipt.structured_content["revision_id"]
+
+            page = await client.call_tool("history", {"memory_id": memory_id, "limit": 5})
+            cursor = page.structured_content["cursor"]
+            assert cursor is not None
+
+            # The untampered cursor pages, so the corpus and the fingerprint are sound and
+            # the assertions below cannot pass on an unrelated failure.
+            good = await client.call_tool("history", {
+                "memory_id": memory_id, "limit": 5, "cursor": cursor})
+            assert not good.is_error
+            assert good.structured_content["entries"]
+
+            payload = json.loads(base64.urlsafe_b64decode(cursor.encode()))
+            for field in ("created_at", "revision_id"):
+                for label, value in (("absent", _ABSENT), ("integer", 0), ("container", ["x"])):
+                    tampered = dict(payload)
+                    if value is _ABSENT:
+                        tampered.pop(field)
+                    else:
+                        tampered[field] = value
+                    token = base64.urlsafe_b64encode(
+                        json.dumps(tampered, separators=(",", ":")).encode()).decode()
+                    answer = await client.call_tool("history", {
+                        "memory_id": memory_id, "limit": 5, "cursor": token})
+                    case = f"{field}/{label}"
+                    assert answer.is_error, f"{case}: answered with a page, not an error"
+                    text = "".join(item.text for item in answer.content)
+                    assert "cursor_expired:" in text, f"{case}: {text}"
+                    assert "internal_error" not in text, f"{case}: {text}"
+                    assert "storage operation failed" not in text, f"{case}: {text}"
 
     anyio.run(scenario)
