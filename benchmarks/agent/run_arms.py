@@ -1,7 +1,23 @@
-"""A1 development run, task d1, three arms, one attempt each.
+"""SUPERSEDED. The development-only runner, kept because it produced the saved dev runs.
 
-Harness validation only (capture-policy-a1 section 5): no benefit figure may be computed
-from this corpus. What this run is for is showing the plumbing works and that the arms
+Superseded by `run_arms_isolated.py`, and not in three small ways:
+
+  one store        every arm and every attempt shared `RUN/nexus-dev.db`. Arm 2 can write it,
+                   so a write was visible to the notes arm and to the next attempt.
+  no attempt       `RUN/arms/<arm>/` carries no attempt component, so a second attempt
+                   overwrites the first and one record survives three.
+  redrawn order    the arm order was built inside the run with `random.Random(SEED)`, a fresh
+                   generator from one constant, which recorded a seed and produced a single
+                   order everywhere.
+  no boundary      no sandbox profile, no egress control, no reachability gate.
+
+None of that fails loudly. A held-out task run here yields a complete, plausible `records.json`
+whose comparison is void, and nothing in the artifact says so -- which is why the refusal below
+is a guard in the code and not a warning in a document. It runs `development` tasks and refuses
+everything else.
+
+Harness validation only (capture-policy-a1 section 5): no benefit figure may be computed from
+the development corpus. What such a run is for is showing the plumbing works and that the arms
 differ in the intended way.
 """
 from __future__ import annotations
@@ -17,6 +33,12 @@ BENCH = REPO / "benchmarks" / "agent"
 PYTEST_PY = "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/bin/python"
 sys.path.insert(0, str(BENCH))
 from build_fixture import score  # the same scorer the controls used
+import task_set
+
+# Before anything else: before the stale interpreter path above is used, before a fixture is
+# copied, and above all before a token is spent.
+_REG = task_set.registration(BENCH / "prompts-a1.json")
+task_set.require(_REG, TASK, ("development",), "run_arms.py")
 
 SEED = 20260911
 MAX_TURNS = 30

@@ -20,8 +20,19 @@ reported success without having tested anything:
                     and on which `~/.claude/projects` depends.
   forwarder accept  a legitimate request driven over HTTP to the stub, so a forwarder that
                     had come to refuse everything can no longer pass.
+  canonical paths   every allow and deny path compared against its own `realpath`, per arm.
+                    `write_profile` resolves denies and emits allows as given, so on a
+                    symlinked scratch root the two lists spell one file two ways. A diverging
+                    allow is over-restriction -- the positive controls below fail loudly -- but
+                    which paths diverge is a property of the EXECUTION LAYOUT, so it is
+                    reported for the layout a run will actually use rather than assumed.
 
-Usage:  python3 validate_boundary.py <scratch-dir> <base-run-dir> <task> <python>
+The boundary paths are no longer mirrored here. `paths_for` used to reproduce
+`run_arms_isolated.boundary_paths` by hand and had drifted out of step with it -- still naming
+one store shared by three arms after the runner had moved to a private copy per arm-run. This
+imports the runner and calls its own function, so what is validated is what will run.
+
+Usage:  python3 validate_boundary.py <scratch-dir> <base-run-dir> <task> <python> [config]
 """
 from __future__ import annotations
 
@@ -46,52 +57,108 @@ import isolation
 from model_forwarder import inspect_body
 
 SCRATCH, BASE_RUN, TASK, PY = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], sys.argv[4]
-VENV_PY = REPO / ".venv-sqlite" / "bin" / "python"      # the interpreter Nexus itself runs on
+CONFIG = sys.argv[5] if len(sys.argv) > 5 else None
+
+import a1_config                                                        # noqa: E402
+
+CFG = a1_config.load(CONFIG).require()
+VENV_PY = Path(CFG.venv_python)                 # the interpreter Nexus itself runs on
 ARMS = ("baseline", "nexus", "notes")
-FWD_PORT = 8899
+FWD_PORT = CFG.forwarder_port
 DECOY_PORT = 8901
 STUB_PORT = 8902
-CORPUS_SIZE = 13
-MEMORY_PROBE_QUERY = "click option parameter"
-SOURCE_CLONE = "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/click"
+CORPUS_SIZE = CFG.corpus_size
+MEMORY_PROBE_QUERY = CFG.memory_probe_query
+SOURCE_CLONE = CFG.source_clone
+
+# The store this validation builds, and the runner instance whose OWN `boundary_paths` is
+# exercised. `paths_for` used to be a hand-written mirror of that function, described in its
+# docstring as mirroring it -- and it had drifted: it still named `run/nexus-dev.db`, one
+# store shared by three arms, after the runner had moved to a private copy per arm-run. A
+# validator that mirrors the thing it validates stops validating it the first time either
+# side moves, and nothing says when that happened.
+MASTER = SCRATCH / "boundary-validation" / "master" / "corpus.db"
+
+#: Set in `main`, once the master store exists -- the runner's own preflight refuses a
+#: `store_master` that is not there yet, which is the point of that preflight.
+RUNNER = None
+
+
+def store_for(arm: str) -> Path:
+    return RUNNER.arm_store(arm)
+
+
+def _runner():
+    """Import `run_arms_isolated` bound to this validation's scratch, task and store.
+
+    Configuration is written out rather than mutated in place, so the module under test loads
+    it exactly as a real run would.
+    """
+    import importlib
+    saved_argv, saved_env = sys.argv[:], os.environ.get("A1_CONFIG")
+    cfg = json.loads(Path(CONFIG or a1_config.DEFAULT_PATH).read_text())
+    cfg = {k: v for k, v in cfg.items() if not k.startswith("_")}
+    cfg["store_master"] = str(MASTER)
+    cfg["corpus_digest"] = ""                   # the gate is exercised by the runner, not here
+    path = SCRATCH / "boundary-validation" / "config.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(cfg))
+    sys.argv = ["run_arms_isolated.py", str(SCRATCH), TASK, "1"]
+    os.environ["A1_CONFIG"] = str(path)
+    try:
+        sys.modules.pop("run_arms_isolated", None)
+        return importlib.import_module("run_arms_isolated")
+    finally:
+        sys.argv = saved_argv
+        if saved_env is None:
+            os.environ.pop("A1_CONFIG", None)
+        else:
+            os.environ["A1_CONFIG"] = saved_env
 
 
 def layout(run: Path) -> None:
-    """The directory shape `run_arms_isolated.prepare` produces, without running an arm.
+    """Seed the master store the arms will be given private copies of.
 
-    Including the store: the memory control needs a real one, and it is built here from the
-    corpus by `seed_store.py` rather than copied from a hand-made file, so the validation
-    runs against a store the repository can reproduce.
+    Built from the corpus by `seed_store.py` rather than copied from a hand-made file, so the
+    validation runs against a store the repository can reproduce.
+
+    The arm checkouts are NOT laid out here any more. They are laid out by the runner's own
+    `prepare`, into the runner's own `OUT/arms/<arm>/repo`, because `boundary_paths` allows
+    that path and no other. Laying them out somewhere else and then asking the runner for its
+    paths produced a profile that denied the very directory the probe ran from -- which read,
+    in the artifact, as the nexus arm being unable to reach the corpus.
     """
-    for arm in ARMS:
-        dst = run / "arms" / arm / "repo"
-        if dst.exists():
-            shutil.rmtree(dst)
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(BASE_RUN / "base" / TASK, dst, symlinks=True)
-        (run / "arms" / arm / "mcp.json").write_text("{}")
     # seeded through the project venv, not this interpreter: the store is Nexus's, and the
     # SQLite it must be built against is the one `.venv-sqlite` links, not whichever libsqlite
     # the python running this validator happens to have.
+    MASTER.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run([str(VENV_PY), str(BENCH / "seed_store.py"),
-                    str(run / "nexus-dev.db"), "a1-dev", "agent",
+                    str(MASTER), CFG.namespace, CFG.actor,
                     "--map", str(run / "store-map.json")], check=True,
                    capture_output=True, text=True)
 
 
-def paths_for(arm: str, run: Path, cwd: Path):
-    """Mirrors `run_arms_isolated.boundary_paths`, including its arm condition: the store is
-    allowed to the nexus arm and denied by name to the other two."""
-    store = isolation.sqlite_read_paths(run / "nexus-dev.db")
-    allow = isolation.default_allow_paths(cwd, PY) + [
-        run / "arms" / arm,
-        REPO / ".venv-sqlite", REPO / "src", REPO / "pyproject.toml"]
-    deny = [BASE_RUN / "base" / "checks",
-            *[(run / "arms" / a) for a in ARMS if a != arm],
-            run / "scoring", Path(SOURCE_CLONE), BENCH]
-    allow += store if arm == "nexus" else []
-    deny += [] if arm == "nexus" else store
-    return allow, deny
+def canonical_path_divergence(allow: list, deny: list) -> dict:
+    """Paths whose spelling differs from their canonical form, per list.
+
+    `write_profile` resolves the deny list with `os.path.realpath` and emits the allow list as
+    given. On a scratch root that is itself a symlink -- `/var/folders/...` for `/private/var/
+    folders/...`, which is what `tempfile` hands out on macOS -- the two lists then spell the
+    same file differently. The kernel matches the canonical form, so a diverging ALLOW simply
+    fails to match: over-restriction, and the positive controls below catch it loudly rather
+    than a boundary silently opening. It is reported per arm so the execution layout can be
+    checked before a run rather than discovered during one.
+    """
+    def diverging(paths):
+        spellings = {str(p) for p in paths}
+        # `/etc` resolves to `/private/etc` and SYSTEM_READ_ROOTS deliberately carries both,
+        # so a path whose canonical form is already in the same list is covered either way.
+        return sorted({str(p): os.path.realpath(p) for p in paths
+                       if str(p) != os.path.realpath(p)
+                       and os.path.realpath(p) not in spellings}.items())
+    return {"allow_paths_not_canonical": diverging(allow),
+            "deny_paths_not_canonical": diverging(deny),
+            "all_canonical": not diverging(allow) and not diverging(deny)}
 
 
 # --------------------------------------------------------------------------- forwarder --
@@ -248,7 +315,7 @@ def loopback_scope(profile: Path, cwd: Path) -> dict:
         srv.wait(timeout=10)
 
 
-def memory_reachable(profile: Path, cwd: Path, arm: str, run: Path) -> dict:
+def memory_reachable(profile: Path, cwd: Path, arm: str, run: Path, db: Path) -> dict:
     """Retrieval over MCP, from inside the boundary, with the WAL sidecars live.
 
     This replaces `nexus-memory --help`. `--help` returns 0 before `main()` ever constructs
@@ -267,8 +334,7 @@ def memory_reachable(profile: Path, cwd: Path, arm: str, run: Path) -> dict:
     has to fail, and `paired` is not needed because the positive half is the nexus arm
     running the identical probe against the identical store.
     """
-    exe = REPO / ".venv-sqlite" / "bin" / "nexus-memory"
-    db = run / "nexus-dev.db"
+    exe = Path(CFG.nexus_server)
     if not exe.exists() or not db.exists():
         return {"applicable": False, "reason": f"{exe if not exe.exists() else db} not present"}
     probe_py = run / "arms" / arm / "mcp_probe.py"       # BENCH is denied; the arm dir is not
@@ -278,8 +344,8 @@ def memory_reachable(profile: Path, cwd: Path, arm: str, run: Path) -> dict:
     try:
         sidecars = sorted(p.name for s in ("-wal", "-shm")
                           if (p := Path(f"{db}{s}")).exists())
-        r = isolation.probe(profile, [str(REPO / ".venv-sqlite/bin/python"), str(probe_py),
-                                      str(exe), str(db), "a1-dev", "agent",
+        r = isolation.probe(profile, [str(VENV_PY), str(probe_py),
+                                      str(exe), str(db), CFG.namespace, CFG.actor,
                                       MEMORY_PROBE_QUERY, str(CORPUS_SIZE)], cwd, timeout=120)
     finally:
         holder.close()
@@ -353,7 +419,7 @@ def prior_store_allow_blocked(run: Path, cwd: Path) -> dict:
     and something else changed.
     """
     cwd_nexus = run / "arms" / "nexus" / "repo"
-    db = run / "nexus-dev.db"
+    db = store_for("nexus")
     exe = REPO / ".venv-sqlite" / "bin" / "nexus-memory"
     probe_py = run / "arms" / "nexus" / "mcp_probe.py"
     shutil.copy2(BENCH / "mcp_probe.py", probe_py)
@@ -412,23 +478,45 @@ def prior_profile_leaked(run: Path, cwd: Path) -> dict:
 
 
 def main() -> int:
-    run = SCRATCH / "boundary-validation"
-    if run.exists():
-        shutil.rmtree(run)
-    run.mkdir(parents=True)
-    layout(run)
+    staging = SCRATCH / "boundary-validation"
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.mkdir(parents=True)
+    layout(staging)                 # seeds MASTER, which the runner's preflight requires
+    global RUNNER
+    RUNNER = _runner()
+    # Everything below runs in the layout a real arm-run uses: the runner's attempt directory,
+    # its checkouts, its per-arm stores.
+    run = RUNNER.OUT
+    for arm in ARMS:
+        RUNNER.prepare(arm)
+    # One private copy of the master per arm, exactly as an arm-run is given one. The stores
+    # must be distinct: three arms sharing one was the defect this layout replaced.
+    for arm in ARMS:
+        RUNNER.provision_store(arm)
+    distinct = {arm: str(RUNNER.arm_store(arm)) for arm in ARMS}
+    if len(set(distinct.values())) != len(ARMS):
+        print(f"ABORT: arms do not have distinct stores: {distinct}")
+        return 1
 
-    record: dict = {"task": TASK, "python": PY, "forwarder_port": FWD_PORT, "arms": {}}
+    record: dict = {"task": TASK, "python": PY, "forwarder_port": FWD_PORT,
+                    "config": CFG.as_recorded(), "master_store": str(MASTER), "arms": {}}
     ok = True
+    stores = {}
     for arm in ARMS:
         cwd = run / "arms" / arm / "repo"
-        allow, deny = paths_for(arm, run, cwd)
+        # The runner's own function, given the runner's own cwd, so what is validated is what
+        # will run. `boundary_paths` reads the arm's store path from the same module.
+        allow, deny = RUNNER.boundary_paths(arm, cwd)
+        stores[arm] = RUNNER.arm_store(arm)
         profile = isolation.write_profile(run / "arms" / arm / "sandbox.sb", cwd, deny, allow,
                                           FWD_PORT)
-        bound = isolation.check_boundary(profile, cwd, BASE_RUN / "base" / "checks" / TASK,
+        bound = isolation.check_boundary(profile, cwd,
+                                         Path(RUNNER.FIXTURE_BASE) / "checks" / TASK,
                                          PY, deny, BENCH)
+        bound["canonical_paths"] = canonical_path_divergence(allow, deny)
         bound["loopback_limited_to_forwarder_port"] = loopback_scope(profile, cwd)
-        bound["memory_reachable"] = memory_reachable(profile, cwd, arm, run)
+        bound["memory_reachable"] = memory_reachable(profile, cwd, arm, run, store_for(arm))
         bound["scratch_root_entry_only"] = scratch_root_entry_only(profile, run, cwd)
         record["arms"][arm] = bound
         mem = bound["memory_reachable"]
@@ -437,6 +525,11 @@ def main() -> int:
                 and bound["scratch_root_entry_only"]["entry_only"]
                 and (not mem.get("applicable") or mem["as_intended"]))
         ok &= held
+        cp = bound["canonical_paths"]
+        print(f"[{arm}] configured paths are canonical: {cp['all_canonical']}"
+              + ("" if cp["all_canonical"] else
+                 f"  allow={len(cp['allow_paths_not_canonical'])} "
+                 f"deny={len(cp['deny_paths_not_canonical'])} diverge"))
         print(f"[{arm}] negative {bound['negative_controls']}")
         print(f"[{arm}] positive {bound['positive_controls']} "
               f"runner={bound.get('runner_version')}")

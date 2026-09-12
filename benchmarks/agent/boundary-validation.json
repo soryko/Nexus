@@ -1,7 +1,28 @@
 {
- "task": "d1",
- "python": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/bin/python",
+ "task": "h1",
+ "python": "/Users/soko/Cerebros/nexus-a1-fixtures/.venv-click/bin/python",
  "forwarder_port": 8899,
+ "config": {
+  "source_clone": "/Users/soko/Cerebros/nexus-a1-fixtures/click",
+  "pytest_python": "/Users/soko/Cerebros/nexus-a1-fixtures/.venv-click/bin/python",
+  "venv_python": "/Users/soko/Cerebros/nexus-memory/.venv-sqlite/bin/python",
+  "nexus_server": "/Users/soko/Cerebros/nexus-memory/.venv-sqlite/bin/nexus-memory",
+  "forwarder_port": 8899,
+  "corpus_size": 13,
+  "max_turns": 30,
+  "wall_clock_s": 600,
+  "memory_probe_query": "click option parameter",
+  "repo": "/Users/soko/Cerebros/nexus-memory",
+  "bench": "/Users/soko/Cerebros/nexus-memory/benchmarks/agent",
+  "store_master": "",
+  "corpus_digest": "",
+  "namespace": "a1-dev",
+  "actor": "agent",
+  "notes_file": "notes-dev-a1.md",
+  "prompts": "prompts-a1.json",
+  "config_source": "/Users/soko/Cerebros/nexus-memory/benchmarks/agent/a1-config.json"
+ },
+ "master_store": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/exec-layout/boundary-validation/master/corpus.db",
  "arms": {
   "baseline": {
    "network_egress_blocked": true,
@@ -17,10 +38,10 @@
     "works_outside": true,
     "demonstrates_boundary": true,
     "inside_tail": [
-     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/smoke/base/checks/d1/tests/test_options.py: Operation not permitted"
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/exec-layout/run-h1/base/checks/h1/tests/test_options.py: Operation not permitted"
     ],
     "outside_tail": [
-     "    assert option.is_bool_flag is expected"
+     "    assert result.output == expect_output"
     ]
    },
    "held_checks_unreadable": true,
@@ -32,7 +53,7 @@
      "cat: /Users/soko/Cerebros/nexus-memory/benchmarks/agent/MANIFEST.md: Operation not permitted"
     ],
     "outside_tail": [
-     "pytest suite, and that it needs an interpreter with a working `pyexpat`."
+     "the same order; that is the defect, not a finding."
     ]
    },
    "bench_dir_unreadable": true,
@@ -41,13 +62,13 @@
     "works_outside": true,
     "demonstrates_boundary": true,
     "inside_tail": [
-     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring/boundary-probe-answers.txt: Operation not permitted"
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/exec-layout/run-h1/attempt1/scoring/boundary-probe-answers.txt: Operation not permitted"
     ],
     "outside_tail": [
      "held-out answer material would live here"
     ],
     "applicable": true,
-    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring"
+    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/exec-layout/run-h1/attempt1/scoring"
    },
    "future_path_denied": true,
    "own_checkout_readable": true,
@@ -61,7 +82,7 @@
    ],
    "runner_tail": [],
    "runner_scratch_usable": true,
-   "runner_scratch_dir": "/private/tmp/claude-501/-private-tmp-claude-501--Users-soko-Cerebros-nexus-memory-2875a44a-2ea4-4a24-8ab3-dcad1b9ab047-scratchpad-boundary-validation-arms-baseline-repo",
+   "runner_scratch_dir": "/private/tmp/claude-501/-private-tmp-claude-501--Users-soko-Cerebros-nexus-memory-59108fe1-1dd8-4a3d-96ad-a17a7d6747af-scratchpad-exec-layout-run-h1-attempt1-arms-baseline-repo",
    "runner_scratch_tail": [],
    "negative_controls": {
     "network_egress_blocked": true,
@@ -78,6 +99,11 @@
     "runner_scratch_usable": true
    },
    "all_hold": true,
+   "canonical_paths": {
+    "allow_paths_not_canonical": [],
+    "deny_paths_not_canonical": [],
+    "all_canonical": true
+   },
    "loopback_limited_to_forwarder_port": {
     "blocked_inside": true,
     "works_outside": true,
@@ -88,29 +114,8 @@
     "outside_tail": []
    },
    "memory_reachable": {
-    "applicable": true,
-    "arm_should_reach": false,
-    "reached": false,
-    "as_intended": true,
-    "wal_sidecars_live_during_probe": [
-     "nexus-dev.db-shm",
-     "nexus-dev.db-wal"
-    ],
-    "active_memories": null,
-    "hits": null,
-    "detail": {
-     "db": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/nexus-dev.db",
-     "namespace": "a1-dev",
-     "actor": "agent",
-     "query": "click option parameter",
-     "sidecars_present": [
-      "nexus-dev.db-shm",
-      "nexus-dev.db-wal"
-     ],
-     "reachable": false,
-     "retrieved": false,
-     "error": "ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)"
-    }
+    "applicable": false,
+    "reason": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/exec-layout/run-h1/attempt1/stores/baseline/nexus.db not present"
    },
    "scratch_root_entry_only": {
     "root": "/private/tmp/claude-501",
@@ -135,10 +140,10 @@
     "works_outside": true,
     "demonstrates_boundary": true,
     "inside_tail": [
-     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/smoke/base/checks/d1/tests/test_options.py: Operation not permitted"
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/exec-layout/run-h1/base/checks/h1/tests/test_options.py: Operation not permitted"
     ],
     "outside_tail": [
-     "    assert option.is_bool_flag is expected"
+     "    assert result.output == expect_output"
     ]
    },
    "held_checks_unreadable": true,
@@ -150,7 +155,7 @@
      "cat: /Users/soko/Cerebros/nexus-memory/benchmarks/agent/MANIFEST.md: Operation not permitted"
     ],
     "outside_tail": [
-     "pytest suite, and that it needs an interpreter with a working `pyexpat`."
+     "the same order; that is the defect, not a finding."
     ]
    },
    "bench_dir_unreadable": true,
@@ -159,13 +164,13 @@
     "works_outside": true,
     "demonstrates_boundary": true,
     "inside_tail": [
-     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring/boundary-probe-answers.txt: Operation not permitted"
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/exec-layout/run-h1/attempt1/scoring/boundary-probe-answers.txt: Operation not permitted"
     ],
     "outside_tail": [
      "held-out answer material would live here"
     ],
     "applicable": true,
-    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring"
+    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/exec-layout/run-h1/attempt1/scoring"
    },
    "future_path_denied": true,
    "own_checkout_readable": true,
@@ -179,7 +184,7 @@
    ],
    "runner_tail": [],
    "runner_scratch_usable": true,
-   "runner_scratch_dir": "/private/tmp/claude-501/-private-tmp-claude-501--Users-soko-Cerebros-nexus-memory-2875a44a-2ea4-4a24-8ab3-dcad1b9ab047-scratchpad-boundary-validation-arms-nexus-repo",
+   "runner_scratch_dir": "/private/tmp/claude-501/-private-tmp-claude-501--Users-soko-Cerebros-nexus-memory-59108fe1-1dd8-4a3d-96ad-a17a7d6747af-scratchpad-exec-layout-run-h1-attempt1-arms-nexus-repo",
    "runner_scratch_tail": [],
    "negative_controls": {
     "network_egress_blocked": true,
@@ -196,6 +201,11 @@
     "runner_scratch_usable": true
    },
    "all_hold": true,
+   "canonical_paths": {
+    "allow_paths_not_canonical": [],
+    "deny_paths_not_canonical": [],
+    "all_canonical": true
+   },
    "loopback_limited_to_forwarder_port": {
     "blocked_inside": true,
     "works_outside": true,
@@ -211,19 +221,19 @@
     "reached": true,
     "as_intended": true,
     "wal_sidecars_live_during_probe": [
-     "nexus-dev.db-shm",
-     "nexus-dev.db-wal"
+     "nexus.db-shm",
+     "nexus.db-wal"
     ],
     "active_memories": 13,
     "hits": 6,
     "detail": {
-     "db": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/nexus-dev.db",
+     "db": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/exec-layout/run-h1/attempt1/stores/nexus/nexus.db",
      "namespace": "a1-dev",
      "actor": "agent",
      "query": "click option parameter",
      "sidecars_present": [
-      "nexus-dev.db-shm",
-      "nexus-dev.db-wal"
+      "nexus.db-shm",
+      "nexus.db-wal"
      ],
      "reachable": true,
      "active_memories": 13,
@@ -231,7 +241,7 @@
      "active_as_expected": true,
      "hits": 6,
      "retrieved": true,
-     "first_hit": "3a2ba70a-5513-41b7-9d42-6286635e6b59",
+     "first_hit": "99167abf-6af6-4887-a067-8c87e08f42ff",
      "sqlite_version": "3.53.4"
     }
    },
@@ -258,10 +268,10 @@
     "works_outside": true,
     "demonstrates_boundary": true,
     "inside_tail": [
-     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/smoke/base/checks/d1/tests/test_options.py: Operation not permitted"
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/exec-layout/run-h1/base/checks/h1/tests/test_options.py: Operation not permitted"
     ],
     "outside_tail": [
-     "    assert option.is_bool_flag is expected"
+     "    assert result.output == expect_output"
     ]
    },
    "held_checks_unreadable": true,
@@ -273,7 +283,7 @@
      "cat: /Users/soko/Cerebros/nexus-memory/benchmarks/agent/MANIFEST.md: Operation not permitted"
     ],
     "outside_tail": [
-     "pytest suite, and that it needs an interpreter with a working `pyexpat`."
+     "the same order; that is the defect, not a finding."
     ]
    },
    "bench_dir_unreadable": true,
@@ -282,13 +292,13 @@
     "works_outside": true,
     "demonstrates_boundary": true,
     "inside_tail": [
-     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring/boundary-probe-answers.txt: Operation not permitted"
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/exec-layout/run-h1/attempt1/scoring/boundary-probe-answers.txt: Operation not permitted"
     ],
     "outside_tail": [
      "held-out answer material would live here"
     ],
     "applicable": true,
-    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring"
+    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/exec-layout/run-h1/attempt1/scoring"
    },
    "future_path_denied": true,
    "own_checkout_readable": true,
@@ -302,7 +312,7 @@
    ],
    "runner_tail": [],
    "runner_scratch_usable": true,
-   "runner_scratch_dir": "/private/tmp/claude-501/-private-tmp-claude-501--Users-soko-Cerebros-nexus-memory-2875a44a-2ea4-4a24-8ab3-dcad1b9ab047-scratchpad-boundary-validation-arms-notes-repo",
+   "runner_scratch_dir": "/private/tmp/claude-501/-private-tmp-claude-501--Users-soko-Cerebros-nexus-memory-59108fe1-1dd8-4a3d-96ad-a17a7d6747af-scratchpad-exec-layout-run-h1-attempt1-arms-notes-repo",
    "runner_scratch_tail": [],
    "negative_controls": {
     "network_egress_blocked": true,
@@ -319,6 +329,11 @@
     "runner_scratch_usable": true
    },
    "all_hold": true,
+   "canonical_paths": {
+    "allow_paths_not_canonical": [],
+    "deny_paths_not_canonical": [],
+    "all_canonical": true
+   },
    "loopback_limited_to_forwarder_port": {
     "blocked_inside": true,
     "works_outside": true,
@@ -329,29 +344,8 @@
     "outside_tail": []
    },
    "memory_reachable": {
-    "applicable": true,
-    "arm_should_reach": false,
-    "reached": false,
-    "as_intended": true,
-    "wal_sidecars_live_during_probe": [
-     "nexus-dev.db-shm",
-     "nexus-dev.db-wal"
-    ],
-    "active_memories": null,
-    "hits": null,
-    "detail": {
-     "db": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/nexus-dev.db",
-     "namespace": "a1-dev",
-     "actor": "agent",
-     "query": "click option parameter",
-     "sidecars_present": [
-      "nexus-dev.db-shm",
-      "nexus-dev.db-wal"
-     ],
-     "reachable": false,
-     "retrieved": false,
-     "error": "ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)"
-    }
+    "applicable": false,
+    "reason": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/exec-layout/run-h1/attempt1/stores/notes/nexus.db not present"
    },
    "scratch_root_entry_only": {
     "root": "/private/tmp/claude-501",
@@ -371,19 +365,19 @@
  },
  "prior_store_allow": {
   "sidecars_live": [
-   "nexus-dev.db-shm",
-   "nexus-dev.db-wal"
+   "nexus.db-shm",
+   "nexus.db-wal"
   ],
   "prior_allow_db_only": {
    "reached": false,
    "tail": [
-    "{\"db\": \"/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/nexus-dev.db\", \"namespace\": \"a1-dev\", \"actor\": \"agent\", \"query\": \"click option parameter\", \"sidecars_present\": [\"nexus-dev.db-shm\", \"nexus-dev.db-wal\"], \"reachable\": false, \"retrieved\": false, \"error\": \"ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)\"}"
+    "{\"db\": \"/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/exec-layout/run-h1/attempt1/stores/nexus/nexus.db\", \"namespace\": \"a1-dev\", \"actor\": \"agent\", \"query\": \"click option parameter\", \"sidecars_present\": [\"nexus.db-shm\", \"nexus.db-wal\"], \"reachable\": false, \"retrieved\": false, \"error\": \"ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)\"}"
    ]
   },
   "repaired_allow_db_and_sidecars": {
    "reached": true,
    "tail": [
-    "{\"db\": \"/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/nexus-dev.db\", \"namespace\": \"a1-dev\", \"actor\": \"agent\", \"query\": \"click option parameter\", \"sidecars_present\": [\"nexus-dev.db-shm\", \"nexus-dev.db-wal\"], \"reachable\": true, \"active_memories\": 13, \"expected_active\": 13, \"active_as_expected\": true, \"hits\": 6, \"retrieved\": true, \"first_hit\": \"3a2ba70a-5513-41b7-9d42-6286635e6b59\", \"sqlite_version\": \"3.53.4\"}"
+    "{\"db\": \"/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/exec-layout/run-h1/attempt1/stores/nexus/nexus.db\", \"namespace\": \"a1-dev\", \"actor\": \"agent\", \"query\": \"click option parameter\", \"sidecars_present\": [\"nexus.db-shm\", \"nexus.db-wal\"], \"reachable\": true, \"active_memories\": 13, \"expected_active\": 13, \"active_as_expected\": true, \"hits\": 6, \"retrieved\": true, \"first_hit\": \"99167abf-6af6-4887-a067-8c87e08f42ff\", \"sqlite_version\": \"3.53.4\"}"
    ]
   },
   "repair_is_the_difference": true,
@@ -395,7 +389,7 @@
    "works_outside": true,
    "demonstrates_boundary": true,
    "inside_tail": [
-    "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/ordering-probe/outer/inner/withheld.txt: Operation not permitted"
+    "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/exec-layout/run-h1/attempt1/ordering-probe/outer/inner/withheld.txt: Operation not permitted"
    ],
    "outside_tail": [
     "withheld: inside the same subtree, denied"

@@ -31,6 +31,7 @@ from trace_parse import parse as parse_trace
 from terminal_status import classify
 import isolation
 import schedule as sched
+import task_set
 
 # Every path and ceiling comes from the configuration file now, validated before anything
 # runs. Two of these used to be constants naming one session's scratchpad by its UUID, so the
@@ -45,7 +46,15 @@ MEMORY_PROBE_QUERY = CFG.memory_probe_query
 SOURCE_CLONE = CFG.source_clone
 MAX_TURNS = CFG.max_turns
 WALL_CLOCK_S = CFG.wall_clock_s
-FIXTURE_BASE = ""  # set in main()
+
+# The fixtures, and beside them the hidden acceptance checks. This was `""` until `main()`
+# assigned it, which made `boundary_paths` depend on an assignment in another function: called
+# before it, the deny that withholds the checks came out as the RELATIVE path `checks`, which
+# `write_profile` then resolved against whatever the process's working directory happened to
+# be. A deny naming the wrong path is indistinguishable, in the profile and in the artifact,
+# from a deny that works -- the failure mode this harness has already been bitten by twice. It
+# was never anything but `RUN/base`, so it is that, once, here.
+FIXTURE_BASE = str(RUN / "base")
 
 # The task prompt. Byte-for-byte identical in every arm. Every prompt states the observable
 # symptom and the expected outcome; none names the function, the file or the mechanism.
@@ -56,18 +65,8 @@ FIXTURE_BASE = ""  # set in main()
 # the development runs stay comparable. It also keeps the held-out prompts authorable as data
 # by someone who need not open the runner at all.
 PROMPT_REGISTRATION = CFG.bench_path("prompts")
-_reg = json.loads(PROMPT_REGISTRATION.read_text())
-if TASK not in _reg["tasks"]:
-    raise SystemExit(f"{PROMPT_REGISTRATION.name} registers no task {TASK!r}; "
-                     f"it has {', '.join(sorted(_reg['tasks']))}")
-_spec = _reg["tasks"][TASK]
-if _spec.get("role") != "evaluation":
-    # A capture task run as an arm would score a task whose memories were captured FROM it,
-    # and an evaluation task run as a capture would put a held-out task in front of the
-    # session that writes the corpus. The registration says which each task is; this refuses
-    # rather than trusting the operator's argv.
-    raise SystemExit(f"{TASK} is registered as {_spec.get('role')!r}, not an evaluation task; "
-                     f"capture tasks are run by run_capture.py")
+_reg = task_set.registration(PROMPT_REGISTRATION)
+_spec = task_set.require(_reg, TASK, ("development", "heldout"), "run_arms_isolated.py")
 PROMPT = _spec["body"] + _reg["tails"][_spec["tail"]] + _reg["consult"]
 
 # What an arm's environment is, and is not: `a1_config.ENV_ALLOWLIST` plus the two names the
@@ -100,7 +99,16 @@ STORE_MASTER = Path(CFG.store_master) if CFG.store_master else RUN / "nexus-dev.
 
 
 def arm_store(arm: str) -> Path:
-    return OUT / "arms" / arm / "store" / "nexus.db"
+    """Deliberately NOT under `OUT/arms/<arm>/`, which the arm is allowed as a whole subtree.
+
+    Put there, the store was readable by containment, and `sqlite_read_paths` -- the three-file
+    allow that exists because a WAL store is `.db`, `-wal` and `-shm` -- stopped carrying any
+    weight for the arm that needs it. The control that compares the one-file spelling against
+    the three-file one is what noticed: both reached, where only the three-file one should.
+    Kept outside, the store is allowed BY NAME and by nothing else, which is what the profile
+    has always claimed.
+    """
+    return OUT / "stores" / arm / "nexus.db"
 
 
 def mcp_config(arm: str) -> dict:
@@ -173,7 +181,7 @@ def boundary_paths(arm: str, cwd: Path) -> tuple[list[Path], list[Path]]:
     a copy: the master is denied to every arm, and whatever this one writes dies with it.
     """
     allow = isolation.default_allow_paths(cwd, PYTEST_PY) + [
-        OUT / "arms" / arm,                 # mcp.json, sandbox.sb, mcp_probe.py, its own store
+        OUT / "arms" / arm,                 # mcp.json, sandbox.sb, mcp_probe.py
         REPO / ".venv-sqlite", REPO / "src", REPO / "pyproject.toml",
     ]
     if ARMS[arm]["memory"]:
@@ -184,13 +192,17 @@ def boundary_paths(arm: str, cwd: Path) -> tuple[list[Path], list[Path]]:
             STORE_MASTER.parent if CFG.store_master else STORE_MASTER,
             Path(SOURCE_CLONE),
             BENCH]                          # saved patches, reports, corpus, task sheet
+    if ARMS[arm]["memory"]:
+        # every other arm-run's store, named as a tree. Its own three files are allowed above
+        # and denies are emitted after allows, so this must not cover them.
+        deny += [OUT / "stores" / a for a in ARMS if a != arm]
     if not ARMS[arm]["memory"]:
         # named explicitly rather than left to the default, so the artifact records that the
         # store was withheld from this arm rather than merely unmentioned. For these two arms
         # `isolation` emits a write deny beside the read deny; for the nexus arm it cannot,
         # because the server it runs opens the store read-write and migrates it. That arm's
         # isolation is the private copy above, not a permission.
-        deny += isolation.sqlite_read_paths(arm_store(arm))
+        deny += [OUT / "stores", *isolation.sqlite_read_paths(arm_store(arm))]
     return allow, deny
 
 
@@ -328,8 +340,6 @@ def store_digest(db: Path) -> str:
 def main() -> int:
     allfx = json.loads((RUN / "base" / "fixtures.json").read_text())
     fixtures = next(f for f in allfx if f["task"] == TASK)
-    global FIXTURE_BASE
-    FIXTURE_BASE = str(RUN / "base")
     checks, held = fixtures["checks"], Path(fixtures["held_checks"])
 
     # The order is READ from the frozen schedule, never re-derived. The old code built it

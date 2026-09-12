@@ -7,7 +7,8 @@
   "Every prompt states the observable symptom and the expected outcome. None names the",
   "function, the file or the mechanism. d1-d4 are reproduced byte-for-byte from the",
   "constants they replace, so the development runs remain comparable.",
-  "c1 and c2 are CAPTURE tasks. They take the capture instruction instead of `consult`, because a capture session has no prior memory to consult and is the thing that writes it."
+  "c1 and c2 are CAPTURE tasks. They take the capture instruction instead of `consult`, because a capture session has no prior memory to consult and is the thing that writes it.",
+  "Every task declares its `set`: development | capture | heldout, the same three disjoint sets freeze-heldout-a1.md section 1 names. Each harness refuses the sets it must not run, reading the declaration rather than trusting argv."
  ],
  "consult": "\n\nBefore your first source edit, consult any available prior-work memory: Nexus memory tools or `NOTES-FROM-EARLIER-WORK.md`. If neither is available, proceed using the repository. Treat prior notes as potentially outdated and verify relevant claims against current code.",
  "tails": {
@@ -16,52 +17,52 @@
  },
  "tasks": {
   "d1": {
-   "body": "In this Click checkout there is a bug in how an option resolves its value from the environment through the context's automatic environment-variable prefix.\n\nReproduction: a command with an option declared `@click.option(\"--mypath\", type=click.Path(exists=True), envvar=\"MYPATH\")`, invoked with `auto_envvar_prefix=\"AUTO\"` and with `AUTO_MYPATH` set to the empty string in the environment, raises instead of completing with `mypath` left as `None`.",
+   "set": "development",
    "tail": "default",
-   "role": "evaluation"
+   "body": "In this Click checkout there is a bug in how an option resolves its value from the environment through the context's automatic environment-variable prefix.\n\nReproduction: a command with an option declared `@click.option(\"--mypath\", type=click.Path(exists=True), envvar=\"MYPATH\")`, invoked with `auto_envvar_prefix=\"AUTO\"` and with `AUTO_MYPATH` set to the empty string in the environment, raises instead of completing with `mypath` left as `None`."
   },
   "d2": {
-   "body": "In this Click checkout, an option that asks to show its environment variable but has none configured produces a misleading error message.\n\nReproduction: `click.Command(\"cli\", params=[click.Option([\"--foo\"], show_envvar=True, required=True)])`, invoked with no arguments, exits 2 with a message that appends an environment-variable clause even though no environment variable is configured for that option. It should read `Error: Missing option '--foo'.`",
+   "set": "development",
    "tail": "default",
-   "role": "evaluation"
+   "body": "In this Click checkout, an option that asks to show its environment variable but has none configured produces a misleading error message.\n\nReproduction: `click.Command(\"cli\", params=[click.Option([\"--foo\"], show_envvar=True, required=True)])`, invoked with no arguments, exits 2 with a message that appends an environment-variable clause even though no environment variable is configured for that option. It should read `Error: Missing option '--foo'.`"
   },
   "d3": {
-   "body": "In this Click checkout, an `UNSET` entry in a context's `default_map` is not handled correctly.\n\nReproduction: a command declared with `context_settings={\"default_map\": {\"port\": UNSET}}` -- where `UNSET` is imported from `click._utils` -- and an option `@click.option(\"--port\", default=8000)`, invoked with no arguments, prints `port=None`. It should print `port=8000`.",
+   "set": "development",
    "tail": "default",
-   "role": "evaluation"
+   "body": "In this Click checkout, an `UNSET` entry in a context's `default_map` is not handled correctly.\n\nReproduction: a command declared with `context_settings={\"default_map\": {\"port\": UNSET}}` -- where `UNSET` is imported from `click._utils` -- and an option `@click.option(\"--port\", default=8000)`, invoked with no arguments, prints `port=None`. It should print `port=8000`."
   },
   "d4": {
-   "body": "This checkout's test suite is configured to turn warnings into errors, so a test that uses an unregistered pytest marker fails at collection rather than merely warning.\n\nReproduction: a test decorated `@pytest.mark.integration` errors during collection with `PytestUnknownMarkWarning: Unknown pytest.mark.integration`, because that marker is not registered in this project's pytest configuration.\n\nRegister the `integration` marker in this project's pytest configuration so such a test collects and runs cleanly, and add one test under `tests/` that uses it.",
+   "set": "development",
    "tail": "d4",
-   "role": "evaluation"
+   "body": "This checkout's test suite is configured to turn warnings into errors, so a test that uses an unregistered pytest marker fails at collection rather than merely warning.\n\nReproduction: a test decorated `@pytest.mark.integration` errors during collection with `PytestUnknownMarkWarning: Unknown pytest.mark.integration`, because that marker is not registered in this project's pytest configuration.\n\nRegister the `integration` marker in this project's pytest configuration so such a test collects and runs cleanly, and add one test under `tests/` that uses it."
   },
   "c1": {
-   "role": "capture",
+   "set": "capture",
    "tail": "default",
    "body": "In this Click checkout, an option that declares a flag value while still taking a value cannot be passed on its own.\n\nReproduction: a command with an option declared `@click.option(\"--theflag\", type=str, is_flag=False, flag_value=\"FlagValue\", default=\"Default\")`, invoked with `--theflag` and nothing after it, exits 2 with `Error: Option '--theflag' requires an argument.` It should complete and print `FlagValue`. Invoked with no arguments it prints `Default`, and invoked as `--theflag value` it prints `value`; both of those are already correct and must stay so."
   },
   "c2": {
-   "role": "capture",
+   "set": "capture",
    "tail": "default",
    "body": "In this Click checkout, a callable used as an option's flag value is called when it supplies that option's default.\n\nReproduction: a command with an option declared `@click.option(\"--opt\", \"value\", flag_value=Marker, type=UNPROCESSED, default=True)` -- where `Marker` is a plain class -- invoked with no arguments prints an instance of `Marker`. Invoked as `--opt` it prints the class itself, which is what both cases should print. An entry for that option in a context's `default_map` must still take precedence over the flag value, and a callable sitting in a `default_map` must still be called."
   },
   "h1": {
-   "role": "evaluation",
+   "set": "heldout",
    "tail": "default",
    "body": "In this Click checkout, two flags that share a destination arbitrate incorrectly against an explicit default.\n\nReproduction: a command declaring `@click.option(\"--without-xyz\", \"xyz\", flag_value=False)` and `@click.option(\"--with-xyz\", \"xyz\", flag_value=True, default=True)`, invoked with no arguments, prints `False`. It should print `True`. Invoked as `--with-xyz` it prints `True` and as `--without-xyz` it prints `False`, and both are already correct. When both flags are given the last one on the command line should win, and none of this should depend on which of the two decorators is applied first."
   },
   "h2": {
-   "role": "evaluation",
+   "set": "heldout",
    "tail": "default",
    "body": "In this Click checkout, the usage line brackets an optional argument's choices twice.\n\nReproduction: a command with `@click.argument(\"method\", type=click.Choice([\"foo\", \"bar\", \"baz\"]), nargs=-1)` renders `Usage: cli-variadic [OPTIONS] [[foo|bar|baz]]...`, and the same argument declared `required=False` renders `Usage: cli-optional [OPTIONS] [[foo|bar|baz]]`. Each should carry a single pair of brackets: `[foo|bar|baz]...` and `[foo|bar|baz]`. Any other type that renders its own metavar, such as a date format, should behave the same way."
   },
   "h3": {
-   "role": "evaluation",
+   "set": "heldout",
    "tail": "default",
    "body": "In this Click checkout, a parameter named `help` collides with the automatic help option.\n\nReproduction: `click.Command(\"cli\", params=[click.Argument([\"help\"])], callback=...)`, invoked with `value`, exits 2 with `Error: Invalid value for '--help': 'value' is not a valid boolean.` It should run the callback and pass it `value`. The same happens for an option whose destination is `help`. The automatic `--help` must keep working and must still show `Show this message and exit.`, including when a command sets its own help option names."
   },
   "h4": {
-   "role": "evaluation",
+   "set": "heldout",
    "tail": "default",
    "body": "In this Click checkout, a sentinel value does not survive pickling.\n\nReproduction: `pickle.loads(pickle.dumps(UNSET))` -- with `UNSET` imported from `click._utils` -- raises `ValueError: <object object at 0x...> is not a valid Sentinel`. It should return the same member, so that the round-tripped value is identical to the original. `copy.copy` and `copy.deepcopy` of the same value already return the member and must continue to. Every member of that sentinel type is affected, not only `UNSET`."
   }

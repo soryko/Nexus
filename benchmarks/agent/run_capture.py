@@ -44,6 +44,7 @@ sys.path.insert(0, str(BENCH))
 import a1_config                                                        # noqa: E402
 import build_fixture                                                    # noqa: E402
 import isolation                                                        # noqa: E402
+import task_set                                                         # noqa: E402
 from terminal_status import classify                                    # noqa: E402
 from trace_parse import parse as parse_trace                            # noqa: E402
 
@@ -63,13 +64,8 @@ CAPTURE_TOOLS = ("Read,Edit,Write,Bash,Glob,Grep,"
 
 
 def prompt_for(task: str) -> str:
-    reg = json.loads(CFG.bench_path("prompts").read_text())
-    spec = reg["tasks"].get(task)
-    if spec is None:
-        raise SystemExit(f"no prompt registered for {task}")
-    if spec.get("role") != "capture":
-        raise SystemExit(f"{task} is registered as {spec.get('role')!r}, not a capture task; "
-                         f"this harness runs capture tasks only")
+    reg = task_set.registration(CFG.bench_path("prompts"))
+    spec = task_set.require(reg, task, ("capture",), "run_capture.py")
     return spec["body"] + reg["tails"][spec["tail"]] + reg["capture_instruction"]
 
 
