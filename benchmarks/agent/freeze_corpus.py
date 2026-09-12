@@ -300,8 +300,10 @@ def main(argv: list[str]) -> int:
         "mix_declaration_sha256": sha256_file(mix_path) if mix_path else None,
         "mix": verdict,
         "frozen_utc": corpus["frozen_utc"],
-        "next": ["set store_master and corpus_digest in a1-config.json to the two values "
-                 "above", "only then reveal the held-out tasks and run the arms"],
+        "config_to_set": {"store_master": str(master), "corpus_digest": master_digest,
+                          "corpus_size": len(memories), "notes_file": notes_path.name},
+        "next": ["set the four configuration values above in a1-config.json",
+                 "only then reveal the held-out tasks and run the arms"],
     }
     freeze_path = out_dir / f"freeze-record-{CORPUS_VERSION}.json"
     freeze_path.write_text(json.dumps(record, indent=1) + "\n")
@@ -314,6 +316,12 @@ def main(argv: list[str]) -> int:
     print(f"\nSet in a1-config.json before any arm runs:")
     print(f'  "store_master": "{master}",')
     print(f'  "corpus_digest": "{master_digest}",')
+    # corpus_size is the reachability gate's expected count: the runner aborts an arm whose
+    # own probe sees a different number. It was pinned at the development corpus's 13, which
+    # would have failed every held-out nexus arm before a token was spent -- loudly, but 36
+    # runs into a frozen schedule.
+    print(f'  "corpus_size": {len(memories)},')
+    print(f'  "notes_file": "{notes_path.name}",')
     if verdict["unmet"]:
         print("\nThe corpus is frozen and the mix requirement is UNMET, above. That is a "
               "reported result, not a thing to fix by capturing again.")

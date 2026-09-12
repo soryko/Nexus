@@ -8,6 +8,13 @@ executable here, before any arm runs and without an API key:
   that passes is vacuous and is removed from the set.
 * **§11.4 oracle-reachability** -- assert the fix is unreachable from the checkout: no ref
   or unreferenced object carries it, and no remote is configured to fetch it from.
+* **fix-oracle** -- run the hidden checks against the tree at the FIX commit. They must
+  PASS. This is the control the other two do not cover, and its absence hid a real defect:
+  `h2`'s check file cannot be COLLECTED under the pinned pytest at all, because an unrelated
+  `parametrize` call in it trips a deprecation this project's own configuration turns into an
+  error. The no-model control was satisfied -- the checks did not pass on an unpatched tree --
+  for the wrong reason, since they could not pass on any tree. A task whose checks can never
+  pass scores every arm zero and reads, in every figure, as a task nobody solved.
 
 Neither establishes benefit, and §11.4 establishes *retrieval* isolation only -- it says
 nothing about whether the model memorised a public fix (§13).
@@ -39,6 +46,28 @@ def test_paths(clone: Path, pre_fix: str, fix: str) -> list[str]:
     """
     out = git(clone, "diff", "--name-only", pre_fix, fix)
     return [p for p in out.splitlines() if p.startswith("tests/") and p.endswith(".py")]
+
+
+def fix_oracle(clone: Path, task: dict, checks: list[str], python: str, workdir: Path) -> dict:
+    """Run the hidden checks against the tree at the fix commit. They must pass.
+
+    The no-model control asks whether the checks fail WITHOUT the fix; this asks whether they
+    can succeed WITH it. Only the pair distinguishes a task the agent has to solve from a task
+    that cannot be solved, and the second is indistinguishable from the first in every figure
+    the run reports.
+    """
+    if workdir.exists():
+        shutil.rmtree(workdir)
+    workdir.mkdir(parents=True)
+    exported = subprocess.run(["git", "-C", str(clone), "archive", task["fix"]],
+                              capture_output=True, check=True)
+    subprocess.run(["tar", "-x", "-C", str(workdir)], input=exported.stdout, check=True)
+    done = subprocess.run([python, "-m", "pytest", *checks, "-q", "-p", "no:randomly"],
+                          cwd=workdir, capture_output=True, text=True,
+                          env={"PYTHONPATH": "src", "PATH": "/usr/bin:/bin"})
+    tail = done.stdout.strip().splitlines()[-1] if done.stdout.strip() else ""
+    return {"exit": done.returncode, "summary": tail, "passed": done.returncode == 0,
+            "detail": done.stdout.strip()[-1500:] if done.returncode else ""}
 
 
 def build(clone: Path, task: dict, out: Path) -> dict:
@@ -140,16 +169,29 @@ def main(argv: list[str]) -> int:
             (out / task["task"] / c).exists() and
             (out / task["task"] / c).read_bytes() == (Path(built["held_checks"]) / c).read_bytes()
             for c in built["checks"])
+        built["fix_oracle"] = fix_oracle(
+            clone, task, built["checks"], task.get("python", python),
+            out / "fix-oracle" / task["task"]) if task["fix"] else {
+                "passed": None, "summary": "authored task: no upstream fix to check against"}
         report.append(built)
         ok = (built["oracle"]["isolated"] and not built["no_model"]["passed"]
-              and built["checks_absent_from_fixture"])
+              and built["checks_absent_from_fixture"]
+              and built["fix_oracle"]["passed"] is not False)
         print(f"[{'OK ' if ok else 'BAD'}] {task['task']} {task['fix'][:7]}  "
               f"isolated={built['oracle']['isolated']}  "
               f"checks_hidden={built['checks_absent_from_fixture']}  "
-              f"no-model: {built['no_model']['summary']}")
+              f"no-model: {built['no_model']['summary']}  |  "
+              f"fix-oracle: {built['fix_oracle']['summary']}")
+        if built["fix_oracle"]["passed"] is False:
+            print("       ^ THE CHECKS CANNOT PASS EVEN WITH THE FIX APPLIED. This task is "
+                  "not scoreable as registered: every arm scores zero on it, and the result "
+                  "reads as a task nobody solved.")
+            for line in built["fix_oracle"]["detail"].splitlines()[-4:]:
+                print(f"         {line}")
     Path(out / "fixtures.json").write_text(json.dumps(report, indent=1))
     return 0 if all(r["oracle"]["isolated"] and not r["no_model"]["passed"]
-                    and r["checks_absent_from_fixture"] for r in report) else 1
+                    and r["checks_absent_from_fixture"]
+                    and r["fix_oracle"]["passed"] is not False for r in report) else 1
 
 
 if __name__ == "__main__":
