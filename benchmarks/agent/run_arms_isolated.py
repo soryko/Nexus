@@ -460,6 +460,8 @@ def main() -> int:
          "schedule": str(SCHEDULE), "schedule_digest": plan.schedule_digest,
          "config": CFG.as_recorded(), "scorer_version": __import__(
              "score_compliance").SCORER_VERSION,
+         "functional_scorer_version": __import__(
+             "build_fixture").FUNCTIONAL_SCORER_VERSION,
          "max_turns": MAX_TURNS,
          "wall_clock_s": WALL_CLOCK_S, "prompt": PROMPT,
          "deny_ordering": ordering,

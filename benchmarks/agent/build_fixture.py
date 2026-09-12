@@ -31,6 +31,34 @@ import sys
 from pathlib import Path
 
 
+#: Version of the FUNCTIONAL check runner -- `score` below -- recorded in every artifact it
+#: produces. `score_compliance.SCORER_VERSION` versions the other scorer, the one that reads
+#: task-requirement compliance off a trace; these are different instruments and a run needs
+#: both numbers to be readable later.
+#:
+#: `a1-functional-1` ran pytest with no `-W`. `a1-functional-2` adds `PYTEST_IGNORE`, below.
+FUNCTIONAL_SCORER_VERSION = "a1-functional-2"
+
+#: One warning class, demoted from error to ignored, for every task equally.
+#:
+#: Click's own configuration turns warnings into errors. Under the pinned pytest 9.1.1 an
+#: unrelated `parametrize` call in `tests/test_basic.py` raises `PytestRemovedIn10Warning`
+#: during COLLECTION, which made h2's acceptance checks impossible to pass on any tree --
+#: including the tree at its own fix commit. Without this the task scores every arm zero and
+#: reads as a task nobody solved.
+#:
+#: Registered rather than reached for. It was measured on all ten tasks before being adopted
+#: and before any held-out result existed: identical counts on d1, d2, d3, h1, h3, h4, c1 and
+#: c2; h2's fix-oracle goes from `1 error` to 90 passed and its no-model control to 2 failed /
+#: 88 passed, so the task remains non-vacuous. It does not suppress the
+#: `PytestUnknownMarkWarning` that d4 is built on, which was checked directly rather than
+#: inferred from the class names.
+#:
+#: It is applied to every task, not to h2. A flag applied where it is needed is an instrument
+#: that varies with the task it measures.
+PYTEST_IGNORE = ("-W", "ignore::pytest.PytestRemovedIn10Warning")
+
+
 def git(repo: Path, *args: str, check: bool = True) -> str:
     done = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
     if check and done.returncode:
@@ -62,11 +90,13 @@ def fix_oracle(clone: Path, task: dict, checks: list[str], python: str, workdir:
     exported = subprocess.run(["git", "-C", str(clone), "archive", task["fix"]],
                               capture_output=True, check=True)
     subprocess.run(["tar", "-x", "-C", str(workdir)], input=exported.stdout, check=True)
-    done = subprocess.run([python, "-m", "pytest", *checks, "-q", "-p", "no:randomly"],
+    done = subprocess.run([python, "-m", "pytest", *checks, "-q", "-p", "no:randomly",
+                           *PYTEST_IGNORE],
                           cwd=workdir, capture_output=True, text=True,
                           env={"PYTHONPATH": "src", "PATH": "/usr/bin:/bin"})
     tail = done.stdout.strip().splitlines()[-1] if done.stdout.strip() else ""
     return {"exit": done.returncode, "summary": tail, "passed": done.returncode == 0,
+            "scorer_version": FUNCTIONAL_SCORER_VERSION,
             "detail": done.stdout.strip()[-1500:] if done.returncode else ""}
 
 
@@ -142,7 +172,8 @@ def score(tree: Path, held: Path, checks: list[str], python: str, workdir: Path)
         target = workdir / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(held / relative, target)
-    done = subprocess.run([python, "-m", "pytest", *checks, "-q", "-p", "no:randomly"],
+    done = subprocess.run([python, "-m", "pytest", *checks, "-q", "-p", "no:randomly",
+                           *PYTEST_IGNORE],
                           cwd=workdir, capture_output=True, text=True,
                           env={"PYTHONPATH": "src", "PATH": "/usr/bin:/bin"})
     tail = done.stdout.strip().splitlines()[-1] if done.stdout.strip() else ""
@@ -152,6 +183,7 @@ def score(tree: Path, held: Path, checks: list[str], python: str, workdir: Path)
     # works. The field says what happened and the caller names it.
     return {"exit": done.returncode, "summary": tail, "failing_instances": len(failed),
             "failing_functions": len({l.split("[")[0] for l in failed}),
+            "scorer_version": FUNCTIONAL_SCORER_VERSION,
             "passed": done.returncode == 0}
 
 

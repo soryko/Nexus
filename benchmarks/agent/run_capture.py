@@ -316,6 +316,7 @@ def main() -> int:
          "store": str(STORE), "store_final": final,
          "tasks": [t["task"] for t in tasks],
          "capture_tools": CAPTURE_TOOLS,
+         "functional_scorer_version": build_fixture.FUNCTIONAL_SCORER_VERSION,
          "config": CFG.as_recorded(),
          "deny_ordering": ordering,
          "fixtures": report,
