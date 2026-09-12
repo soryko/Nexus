@@ -30,13 +30,23 @@ BENCH = Path(__file__).parent
 NOTES_NAME = "NOTES-FROM-EARLIER-WORK"
 
 
-def load_corpus():
-    c = json.loads((BENCH / "corpus-dev-a1.json").read_text())
-    return c, {m["id"]: m for m in c["memories"]}
+def load_corpus(corpus: Path | None = None, mix: Path | None = None):
+    """The corpus, its index, and the relevance source.
+
+    The development corpus carries `relevance` inside each memory, because its author
+    declared it there. The held-out corpus cannot: its mix is declared separately, after the
+    memories exist and before any arm runs (mix-declaration-a1.md), and the corpus file is
+    what the arms' store was built from. So relevance comes from the mix declaration when one
+    is supplied, and from the memory itself when one is not.
+    """
+    c = json.loads(Path(corpus or BENCH / "corpus-dev-a1.json").read_text())
+    declaration = json.loads(Path(mix).read_text()) if mix else None
+    return c, {m["id"]: m for m in c["memories"]}, declaration
 
 
-def bucket(mem, task):
-    rel = mem.get("relevance", {}).get(task)
+def bucket(mem, task, mix=None):
+    rel = (mix["tasks"].get(task, {}).get("relevance", {}).get(mem["id"]) if mix
+           else mem.get("relevance", {}).get(task))
     return {"necessary": "necessary", "support": "useful support",
             "outdated": "outdated"}.get(rel, "irrelevant")
 
@@ -94,11 +104,17 @@ def measure(run_dir: Path, task: str, arm: str, smap: dict, byid: dict) -> dict:
             "orphans": t["orphans"], "unresolved": t["unresolved"]}
 
 
-def report(run_dir: Path, task: str) -> None:
-    corpus, byid = load_corpus()
-    smap = {r["memory_id"]: r["corpus_id"]
-            for r in json.loads((run_dir / "store-map.json").read_text())}
-    need = {c for c, m in byid.items() if m.get("relevance", {}).get(task) == "necessary"}
+def report(run_dir: Path, task: str, corpus_path: Path | None = None,
+           mix_path: Path | None = None, store_map: Path | None = None) -> None:
+    corpus, byid, mix = load_corpus(corpus_path, mix_path)
+    smap_file = store_map or (run_dir / "store-map.json")
+    if smap_file.exists():
+        smap = {r["memory_id"]: r["corpus_id"]
+                for r in json.loads(smap_file.read_text())}
+    else:
+        # the held-out corpus carries each memory's store id, so no side file is needed
+        smap = {m["memory_id"]: m["id"] for m in corpus["memories"] if m.get("memory_id")}
+    need = {c for c, m in byid.items() if bucket(m, task, mix) == "necessary"}
     print(f"### {task}  ({run_dir.name})")
     for arm in ("baseline", "nexus", "notes"):
         if not (run_dir / "arms" / arm).exists():
@@ -106,13 +122,14 @@ def report(run_dir: Path, task: str) -> None:
         m = measure(run_dir, task, arm, smap, byid)
         allids = m["full_ids"] | m["excerpt_only"]
         print(f"--- {arm} ---")
-        print(f"    delivered any : {len(allids)}/13     repeat deliveries: {len(m['deliveries'])}")
+        print(f"    delivered any : {len(allids)}/{len(byid)}     "
+              f"repeat deliveries: {len(m['deliveries'])}")
         print(f"    full bodies   : {len(m['full_ids'])}  ({m['bytes_full']} bytes)")
         print(f"    excerpt only  : {len(m['excerpt_only'])}  ({m['bytes_excerpt']} bytes"
               f" across all excerpts)")
         for b in ("necessary", "useful support", "outdated", "irrelevant"):
-            f = sorted(c for c in m["full_ids"] if bucket(byid[c], task) == b)
-            e = sorted(c for c in m["excerpt_only"] if bucket(byid[c], task) == b)
+            f = sorted(c for c in m["full_ids"] if bucket(byid[c], task, mix) == b)
+            e = sorted(c for c in m["excerpt_only"] if bucket(byid[c], task, mix) == b)
             print(f"    {b:16} full={f} excerpt_only={e}")
         if not need:
             cov = "N/A (no necessary MEMORY declared; see the report on repository evidence)"
@@ -125,4 +142,8 @@ def report(run_dir: Path, task: str) -> None:
 
 
 if __name__ == "__main__":
-    report(Path(sys.argv[1]), sys.argv[2])
+    a = sys.argv
+    report(Path(a[1]), a[2],
+           Path(a[a.index("--corpus") + 1]) if "--corpus" in a else None,
+           Path(a[a.index("--mix") + 1]) if "--mix" in a else None,
+           Path(a[a.index("--store-map") + 1]) if "--store-map" in a else None)
