@@ -1,4 +1,14 @@
 {
+ "_comment": [
+  "Copy to a1-config.json and edit. That file is per-host and is not committed.",
+  "Point source_clone and pytest_python at a DURABLE location, not a session scratchpad:",
+  "a frozen schedule is 38 model runs long, and a clone that moves turns the deny",
+  "withholding it into a deny that names nothing -- indistinguishable, in the artifact,",
+  "from a deny that works.",
+  "store_master is the frozen corpus, copied per arm-run and never opened by an arm.",
+  "corpus_digest is the row digest that corpus was registered with; when it is set the",
+  "runner refuses to start against any other store, and when it is empty the run says so."
+ ],
  "source_clone": "/path/to/a/pallets-click/clone",
  "pytest_python": "/path/to/.venv-click/bin/python",
  "venv_python": "/path/to/nexus-memory/.venv-sqlite/bin/python",
@@ -7,5 +17,11 @@
  "corpus_size": 13,
  "max_turns": 30,
  "wall_clock_s": 600,
- "memory_probe_query": "click option parameter"
+ "memory_probe_query": "click option parameter",
+ "store_master": "",
+ "corpus_digest": "",
+ "namespace": "a1-dev",
+ "actor": "agent",
+ "notes_file": "notes-dev-a1.md",
+ "prompts": "prompts-a1.json"
 }

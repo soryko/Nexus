@@ -150,6 +150,9 @@ def load(path: Path | str | None = None) -> Config:
     if not p.exists():
         raise SystemExit(f"no configuration at {p}; copy a1-config.example.json and edit it")
     data = json.loads(p.read_text())
+    # Keys beginning with "_" are comments -- the example template carries one, and a
+    # configuration a reader cannot annotate is a configuration a reader gets wrong.
+    data = {k: v for k, v in data.items() if not k.startswith("_")}
     known = {f for f in Config.__dataclass_fields__ if not f.startswith("_")}
     if unknown := sorted(set(data) - known):
         raise SystemExit(f"{p}: unknown configuration field(s): {', '.join(unknown)}")
