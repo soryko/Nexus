@@ -27,7 +27,7 @@ is reported as answering 1 and not 2 — it is not evidence for the tool, only f
 
 | # | Arm | Composition | Role |
 | --- | --- | --- | --- |
-| 1 | **Baseline** | Claude + ordinary repository tools, no persistent memory of any kind | Primary control for Q1 |
+| 1 | **Baseline** | The pinned model + ordinary repository tools, no persistent memory of any kind | Primary control for Q1 |
 | 2 | **Nexus** | Identical, plus the Nexus MCP server holding the frozen captured memories | Treatment |
 | 3 | **Plain notes** | Identical, plus the same captured information as one readable file in the checkout | Primary control for Q2 |
 | 4 | **No-op MCP** | Identical, plus a stub MCP server exposing Nexus's tool schemas and returning valid empty results | Diagnostic only |
@@ -43,14 +43,27 @@ made. Arm 4 is optional per run; arms 1–3 are not.
 Anything on this list that varies between arms voids the comparison for that task.
 
 - Exact model identifier (the full name, never an alias — an alias moves), Claude Code
-  version, `--effort` level, and any `--fallback-model` policy. A run in which the fallback
-  fired is recorded as such and excluded from the scored set, not silently kept.
+  version, `--effort` level, reasoning settings, and any `--fallback-model` policy. A run in
+  which the fallback fired is recorded as such and excluded from the scored set, not silently
+  kept.
+  **The runner as chosen cannot satisfy this rule, and the gap is registered rather than
+  papered over.** The model is `deepseek-flash` served by DeepSeek's Anthropic-compatible
+  endpoint, and that endpoint returns the alias verbatim rather than resolving it to a
+  versioned identifier — measured in [`runner-a1.md`](runner-a1.md) §2. A model move during
+  the run window would therefore be silent. **This is settled, not open.** The run record
+  carries the alias, the endpoint and the **UTC run window**, and records the underlying
+  revision as unknown. A fingerprint probe is a diagnostic that may detect a change; it is
+  not a form of pinning and is not registered as one.
 - Task prompt, byte for byte. Ordinary tool allowlist, permission mode, working directory,
   environment variables, and network reachability.
 - Resource ceilings, wall-clock timeout, and retry policy.
 - A fresh session and an isolated checkout per attempt. No `--continue`, no `--resume`, no
   shared transcript, no automatic memory, no carried scratch directory.
 - Arm order randomised per task, and the randomisation seed recorded.
+- **The model is chosen before the run and is never re-chosen after it.** Selecting a model
+  on which the memory arms happen to gain most would make the headline figure a maximum over
+  models, reported as a single measurement. If a second model is ever run, it is an
+  additional arm-set reported beside the first, never a replacement for it.
 
 **The same model does not make runs deterministic.** Every task is run in `n` independent
 trials per arm (`n` fixed in §15), attempts collapse to a per-task summary before any
@@ -106,12 +119,25 @@ control.
 | --- | --- | --- |
 | Wall-clock timeout, enforced by the harness | A real hard stop | Available; registered as the ceiling |
 | Post-run usage accounting from the result envelope | A record, read after the fact | Registered as accounting, never as a cap |
-| An in-run spend or turn cap | A hard cap | **Not established.** Requires a verified runtime mechanism |
+| An in-run turn cap: `--max-turns` | A hard cap | **Established.** Verified to terminate a run, not merely to parse — [`runner-a1.md`](runner-a1.md) §6 |
+| An in-run *spend* cap | A hard cap | **Not established.** No verified mechanism |
 
-`--max-turns` is parser-accepted (above) and is the obvious candidate for the third row, but
-it is unadvertised and its behaviour is untested. Until a test shows it actually terminates a
-run at the stated turn count, the protocol claims no in-run cap, and a run that overruns its
-intended spend is detected afterwards and reported, not prevented.
+`--max-turns` was parser-accepted but behaviourally untested when this was drafted. **It has
+now been tested and it terminates the run**: a task needing nine sequential writes, capped at
+2, stopped after two with `"subtype":"error_max_turns"` and `"terminal_reason":"max_turns"`.
+The turn ceiling is registered as a real control. Two details bind the harness: `num_turns`
+is *not* the cap — a cap of 2 reported `num_turns: 3`, so the ceiling is recorded as the flag
+value — and a capped run leaves a **partial** patch, which §10 scores.
+
+No in-run *spend* cap exists. A run that overruns its intended cost is still detected
+afterwards and reported, not prevented.
+
+**`total_cost_usd` is not a spend measurement on this endpoint.** The envelope reports
+`"costBasis":"unknown"` and its dollar figure is reproduced exactly, across four runs, by a
+fixed $5.00/M-input, $25.00/M-output, $0.50/M-cache-read table applied to a model the CLI does
+not recognise. The token counts come from the provider and remain valid accounting; the dollar
+figure has no established provenance and **is not quoted at all**. See
+[`runner-a1.md`](runner-a1.md) §3.
 
 ### The result envelope, captured verbatim
 
@@ -135,9 +161,13 @@ with an empty patch — which §10 scores as `no_patch`, a **fail**, silently co
 `env_fail` into evidence against whichever arm happened to hit it. The harness reads
 `is_error`, and cross-checks `terminal_reason` to separate `env_fail` from a genuine failure.
 
-**Still unverified:** this is an *error* envelope. Which fields are populated on a successful
-run — `modelUsage` is empty here, and `usage` counts are all zero — is not established, and is
-pinned from a successful run during harness validation before any scored run.
+**A successful envelope is now pinned too**, from the runner verification of 2026-09-11:
+`modelUsage` is populated (keyed by the requested model name), `usage` counts are non-zero,
+`terminal_reason` reads `completed`, and `is_error` is `false` while `subtype` is `success` —
+the one case where the two agree. Two of its fields are **unreliable for this provider** and
+are not read: `modelUsage[…].provider` reports `firstParty` for a third-party endpoint, and
+`usage.output_tokens_details.thinking_tokens` reports `0` on runs whose stream demonstrably
+carries thinking blocks. See [`runner-a1.md`](runner-a1.md) §2 and §5.
 
 ## 5. Task sources
 
@@ -237,8 +267,18 @@ Per arm, per task, and never collapsed into one score:
 
    Only the third is reported as irrelevant context. A figure that merges the second into
    the third is not reported at all.
-4. **Latency** — wall clock, and the turn count from the result envelope.
-5. **Total storage** — bytes the memory arm's store occupies, reported beside any benefit.
+4. **Task-requirement compliance** — of the deliverables the *prompt* asks for, how many
+   the patch and transcript actually provide. This is **not** required-evidence completeness:
+   that counts facts, this counts deliverables. "Extend the existing test suite" is a
+   deliverable. The distinction is not academic — `d3`'s Nexus arm passed every hidden check
+   while writing no test at all, which correctness scoring structurally cannot see. Scored by
+   [`score_compliance.py`](score_compliance.py) over saved patches and traces, with no model
+   invoked, and reported as `met/applicable` with the failed requirements named.
+5. **Latency** — wall clock, and the **tool-call count derived from the trace**, reported
+   under that name. It is not a turn count: one model response may request several tools. The
+   envelope's `num_turns` is not reported at all (§10). The configured `--max-turns` value and
+   the observed termination reason are recorded instead.
+6. **Total storage** — bytes the memory arm's store occupies, reported beside any benefit.
 
 ## 9. Denominators that must not be merged
 
@@ -260,10 +300,48 @@ direction is derived from the scoring rule rather than from the verdict's name:
 | Verdict | Cause | Scored as | Bias if mishandled |
 | --- | --- | --- | --- |
 | `timeout` | wall-clock ceiling hit | **fail**, and counted | Excluding it favours whichever arm is slower — usually the memory arms |
+| `max_turns` | `--max-turns` ceiling hit | **not an outcome** — see below | — |
 | `env_fail` | harness, network or auth fault | **excluded**, and reported | Scoring it as fail penalises an arm for the harness |
 | `fallback_fired` | `--fallback-model` served the run | **excluded**, and reported | A different model in one arm voids that task's comparison |
 | `no_patch` | agent produced no diff | **fail** | Treating it as N/A hides a real failure mode |
 | `refused` | agent declined the task | **fail**, recorded verbatim | — |
+
+**An outcome is three figures, never one.** The amendment below changes what "success"
+means, so the change is made explicitly rather than absorbed. Every arm-run reports:
+
+| Dimension | Instrument |
+| --- | --- |
+| **Functional correctness** of the patch at termination | hidden acceptance checks |
+| **Task-requirement compliance** | §8.4, over the saved patch and trace |
+| **Termination reason** | `completed`, `max_turns`, `timeout` |
+
+Passing the checks and terminating normally are different outcomes and are never collapsed.
+**Both scoring rules are reported.** The original rule — a truncated run is a fail — is
+preserved and printed alongside, and any figure computed the new way is labelled *recomputed
+under the amended rule*. A reader must be able to see which rule produced which number.
+
+The same distinction applies to the **wall-clock** ceiling: where a timed-out run leaves a
+patch that can be safely scored, it is scored, and the timeout is reported as its termination
+reason rather than as its outcome.
+
+**`max_turns` is a truncation fact, not a verdict, and the first version of this row was
+wrong.** It scored a capped run as a fail on the premise that the cap leaves a partial patch.
+Four runs contradict that premise: `d1`'s capped baseline and **all three** `d3` arms hit the
+ceiling and produced complete patches that passed every hidden check. Scoring the premise
+would have failed a whole task's arms for finishing inside 31 turns.
+
+So truncation and correctness are recorded separately. A capped run is **scored on the patch
+it produced**, exactly like any other, and its truncation is reported beside it as a per-arm
+**truncation rate**. Nothing is excluded for hitting the cap. The bias that motivated the
+original row is real but belongs in the truncation rate, not in the correctness denominator:
+if one arm is capped more often than another, that is a finding about the arms, and it is
+visible only if it is reported rather than folded into a pass/fail.
+
+**`num_turns` may not be used for any of this.** It is not the flag's unit and its divergence
+is not constant: a cap of 2 reported 3; `d1`'s baseline capped at 31 while sibling arms
+*completed* at 33 and 34 under a ceiling of 30; and `d2`'s Nexus arm reported
+**`num_turns: 1` for a run with 41 tool calls and a 1,134-byte passing patch**. Turn-related
+figures come from the trace's tool-call count, and the ceiling is recorded as the flag value.
 
 A run whose excluded count is not reported alongside its scored count is not a valid run.
 
@@ -299,10 +377,62 @@ fresh fixture; chaining them lets one control make the next pass for the wrong r
    repository, issue trackers, package indexes, search) is blocked. The two are separated by
    an explicit allowlist, and the allowlist is recorded in the run record.
 
+   **A host allowlist does not cover provider-side search, and this was measured, not
+   supposed.** The chosen endpoint executes web search *on the provider's servers*: offered
+   an Anthropic-style server tool it returned a real `server_tool_use`/`web_search_tool_result`
+   pair ([`runner-a1.md`](runner-a1.md) §7). No rule about the runner's own network reaches
+   that traffic. Claude Code was measured **not** to offer the tool by default, but A1 does
+   not rest on a default: every arm sets `--disallowedTools WebSearch,WebFetch`, and every
+   scored run asserts `usage.server_tool_use.web_search_requests == 0`. A run where it is
+   non-zero is an `env_fail`, excluded and reported.
+
+   **The control as first written did not cover the network, and a run proved it.** In the
+   development run of 2026-09-11 the plain-notes arm ran `pip download click` and read the
+   fixed `resolve_envvar_value` out of an upstream wheel **before** editing the source, then
+   downloaded the 8.1.0 sdist and copied its changelog entry verbatim. Every part of §11.4 as
+   drafted passed: no ref, no remote, no unreachable object carried the fix. The object
+   database was isolated and the *host* was not. Isolation is therefore asserted over three
+   surfaces, not one:
+
+   | Surface | Assertion | How it is established |
+   | --- | --- | --- |
+   | Git object database | fix unreachable by ref, remote or dangling object | `build_fixture.py`, per fixture |
+   | Network egress | package indexes, upstream repository, issue trackers unreachable; model API reachable | proxy allowlist, with a **negative control** (a package download must fail) and a **positive control** (the model API must answer), both run per arm and recorded |
+   | Host filesystem | no extracted upstream copy outside the checkout | contaminating paths removed before the run; the trace is read for reads outside the fixture |
+
+   A run whose egress controls are not recorded is not a valid run. The negative control
+   runs in the arm's own environment, not the harness's.
+
    **This control establishes retrieval isolation and nothing more.** It cannot establish
    that the model has never seen the fix: source A is a public repository whose history
    predates the model's training data. Memorisation is a limitation of the source, recorded
    in §13 and in every result, not something a fixture can remove.
+
+5. **Exposure audit** (not a clearance, and never reported as one). Prior exposure cannot be
+   screened out, only looked for. Before a task enters a held-out set, and again on any
+   result that looks like recall:
+
+   - **Predeclare the checks**: solution-text leakage, and distinctive upstream-string
+     matches such as issue numbers, changelog wording and identifiers the fixture does not
+     contain.
+   - **Audit the complete agent-visible input** before attributing anything to the model —
+     every tool response, the notes file, the prompt, filenames and metadata. The
+     2026-09-11 run is the case in point: a changelog entry reproduced word for word,
+     including its issue number, was initially attributed to memorisation and was in fact
+     **downloaded**, which the trace showed plainly once it was read.
+   - **Report suspected exposure separately** from correctness. It is never folded into a
+     pass rate.
+   - **A negative screen proves nothing about what the model has seen.** No wording of the
+     form "cleared of memorisation" may appear in a result.
+   - **A task is not removed because baseline succeeded.** Removing those selects for the
+     chosen model's failures and biases every comparison built on the remaining set.
+   - **Screening by running the model is itself model contact and is disclosed.** A task
+     screened that way is no longer untouched with respect to model behaviour, and the
+     selection procedure is recorded with the task.
+
+   For memory-specific tasks, project decisions authored *before* the later task — and not
+   reverse-engineered from its answer — reduce dependence on public-fix recall. That is a
+   mitigation of the source's weakness, not a clearance either.
 
 Controls 1 and 4 are the two with guaranteed outcomes: they detect a task set that cannot
 fail and one that cannot honestly succeed. Neither demonstrates benefit. Experiments 2 and 3
@@ -349,8 +479,11 @@ survive a capture policy the agent applied on its own rather than one written in
 or any comparison against another memory system, none of which is run here.
 
 **Nor can it establish that the agent had not already memorised the fix.** Source A is a
-public repository and its history predates the model's training cutoff. Runtime isolation
-(§11.4) stops the agent *retrieving* a fix; it does nothing about prior exposure.
+public, widely-mirrored repository, which makes prior exposure **possible**. That its history
+predates the model's training cutoff is *not* established — no training window is published
+for the model in use, and an earlier draft asserted a chronology it could not support. The
+weaker point is the one that matters and it survives: runtime isolation (§11.4) stops the
+agent *retrieving* a fix and does nothing about prior exposure, whose extent is unknown.
 
 **Its effect on the arms is unknown.** An earlier draft said exposure inflates every arm
 equally and therefore left the between-arm comparison safe. That is withdrawn: it is the
@@ -384,10 +517,17 @@ document is not registered.
    sets, each with its pinned pre-fix commit, rubric, necessary-fact list, and hidden checks.
 3. **The memory provenance**: the capture policy text, and the frozen corpus it produced.
 4. **The arms as executed**: whether arm 4 runs, `n`, the ceilings, and the auth mechanism
-   `--bare` will use.
+   `--bare` will use. **Partly filled**, by [`runner-a1.md`](runner-a1.md): the model is
+   `deepseek-flash` for **all three arms**, served by DeepSeek's Anthropic-compatible endpoint,
+   authenticated by `ANTHROPIC_API_KEY` under `--bare`; ordinary tool calls, Nexus MCP calls
+   and `--max-turns` are all verified through it; reasoning is default-on and held fixed by
+   holding the request shape fixed. **Still open:** whether arm 4 runs, `n`, the wall-clock
+   ceiling, the turn ceiling's value, and the §3 amendment the alias problem forces.
 5. **The analysis, fixed before any scored run** (§12): the rule collapsing `n` attempts to a
    per-task summary, the paired comparison over tasks, and the interval method with its
    contributing task count.
 6. **The budget mechanism** (§4): the wall-clock ceiling, the accounting fields, and whether
-   an in-run cap exists at all — which requires testing whether `--max-turns` behaves, not
-   merely that it parses.
+   an in-run cap exists at all. **The last of these is answered:** `--max-turns` was tested,
+   it terminates the run, and it is registered as the in-run turn ceiling. **Still open:** the
+   wall-clock ceiling and the turn ceiling's *values*, and the accounting fields now that
+   `total_cost_usd` is disqualified as spend and `thinking_tokens` as a reasoning measure.

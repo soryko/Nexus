@@ -1,0 +1,33 @@
+seed=20260911  realised arm order: baseline -> nexus -> notes
+
+frozen store digest before any arm: cc41ba082b6fb0be
+
+[baseline] egress control: pip download blocked = True
+[baseline] running ...
+  -> {'is_error': False, 'subtype': 'success', 'terminal_reason': 'completed', 'num_turns': 32}  patch=1079B  checks: 144 passed in 0.11s  wall=179.3s
+[nexus] egress control: pip download blocked = True
+[nexus] memory visibility control: scope=(a1-dev,agent) visible=13
+[nexus] running ...
+  -> {'is_error': False, 'subtype': 'success', 'terminal_reason': 'completed', 'num_turns': 1}  patch=1134B  checks: 144 passed in 0.10s  wall=190.2s
+[notes] egress control: pip download blocked = True
+[notes] running ...
+  -> {'is_error': False, 'subtype': 'success', 'terminal_reason': 'completed', 'num_turns': 37}  patch=1538B  checks: 144 passed in 0.09s  wall=307.0s
+
+frozen store digest after all arms: cc41ba082b6fb0be  unchanged=True
+########## d2 DONE ##########
+seed=20260911  realised arm order: baseline -> nexus -> notes
+
+frozen store digest before any arm: ef30b6bff79964a5
+
+[baseline] egress control: pip download blocked = True
+[baseline] running ...
+  -> {'is_error': True, 'subtype': 'error_max_turns', 'terminal_reason': 'max_turns', 'num_turns': 31}  patch=4663B  checks: 34 passed in 0.03s  wall=81.7s
+[nexus] egress control: pip download blocked = True
+[nexus] memory visibility control: scope=(a1-dev,agent) visible=13
+[nexus] running ...
+  -> {'is_error': True, 'subtype': 'error_max_turns', 'terminal_reason': 'max_turns', 'num_turns': 31}  patch=2804B  checks: 34 passed in 0.06s  wall=225.5s
+[notes] egress control: pip download blocked = True
+[notes] running ...
+  -> {'is_error': True, 'subtype': 'error_max_turns', 'terminal_reason': 'max_turns', 'num_turns': 31}  patch=4686B  checks: 34 passed in 0.11s  wall=92.4s
+
+frozen store digest after all arms: ef30b6bff79964a5  unchanged=True

@@ -1,0 +1,21 @@
+--- baseline (none available) ---
+    memories delivered: 0/13   bytes: 0
+    necessary       : 0  []
+    useful support  : 0  []
+    outdated        : 0  []
+    irrelevant      : 0  []
+    necessary-fact coverage: 0/1
+--- nexus (per retrieval) ---
+    memories delivered: 6/13   bytes: 1342
+    necessary       : 1  ['c04']
+    useful support  : 2  ['c09', 'c10']
+    outdated        : 0  []
+    irrelevant      : 3  ['c01', 'c02', 'c03']
+    necessary-fact coverage: 1/1
+--- notes (whole file, on first read) ---
+    memories delivered: 13/13   bytes: 2776
+    necessary       : 1  ['c04']
+    useful support  : 4  ['c07', 'c08', 'c09', 'c10']
+    outdated        : 1  ['c13']
+    irrelevant      : 7  ['c01', 'c02', 'c03', 'c05', 'c06', 'c11', 'c12']
+    necessary-fact coverage: 1/1

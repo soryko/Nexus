@@ -128,9 +128,11 @@ is unmeasured outside the rows listed.
    task above has a memory pairing. `protocol-a1` §6 steps 1 and 2 are unexecuted.
 2. **Budget enforcement.** See `protocol-a1` §4. Wall-clock enforcement is available to the
    harness; a hard in-run spend cap is not yet established.
-3. **Public-history exposure.** Click is a widely-mirrored public repository and these fixes
-   predate the model's training cutoff. Isolating the checkout prevents the agent from
-   *retrieving* the fix; it does not establish that the model has not **memorised** it. This
+3. **Public-history exposure.** Click is a widely-mirrored public repository, so prior
+   exposure is **possible**. That these fixes predate the model's training cutoff is *not*
+   established — no training window is published for the model in use — and that claim is
+   withdrawn. Isolating the checkout prevents the agent from *retrieving* the fix; it does
+   not establish that the model has not **memorised** it. This
    is a limitation of the whole source, not of any row, and it is recorded in every result
    rather than mitigated — see `protocol-a1` §13.
 
