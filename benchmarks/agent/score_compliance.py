@@ -1,137 +1,152 @@
-"""Task-requirement compliance, scored separately from functional correctness.
+"""Task-requirement compliance: structural checks, plus one discriminating test.
 
-`protocol-a1` section 8 counts *evidence* facts. This counts *deliverables*: things the
-prompt asked the agent to produce. "Add a regression test" is a requirement, not a fact, and
-a patch can pass every hidden check while ignoring it -- d3's Nexus arm did exactly that.
+A prior version scored deliverables with heuristics that a review broke in four ways at
+once -- an arbitrary source edit, `assert True`, a `status`-only memory call and the reply
+"NOT DONE" together scored 5/5. Each heuristic confused a *proxy* with the thing:
 
-Three dimensions, never merged:
+  file location        is not relevance
+  a new assertion      is not regression coverage
+  a `status` call      is not prior-work evidence
+  `"DONE" in text`     matches "NOT DONE"
 
-    functional correctness   hidden acceptance checks pass or fail
-    requirement compliance   this file
-    termination reason       completed / max_turns / timeout
-
-Runs over saved patches and traces. No model is invoked.
+What is structural stays, and now says so in its name. The one requirement that can be
+settled by execution is settled by execution: a regression test must FAIL on the pre-fix
+tree. Everything left over is flagged for a fixed review rubric rather than guessed at.
 """
 from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
-# The deliverables every A1 task prompt states, in the prompt's own words.
-REQUIREMENTS = {
-    "R1_fix_in_src": "Fix the behaviour in `src/`",
-    "R2_extend_tests": "extend the existing test suite to cover it",
-    "R3_no_unrelated": "Do not change behaviour unrelated to this bug",
-    "R4_reply_done": "When you are done, reply DONE",
-    "R5_consult_first": "Before your first source edit, consult any available prior-work memory",
-}
-# What "nothing unrelated" permits depends on what the task asked for. d4 is a
-# configuration task, so pyproject.toml is the deliverable, not collateral damage; the first
-# version of this list marked all three d4 arms non-compliant for doing the task correctly.
-ALLOWED_PATHS = {
-    "default": ("src/click/", "tests/", "CHANGES.rst"),
-    "d4": ("pyproject.toml", "tests/", "CHANGES.rst"),
-}
-MEMORY_TOOLS = {"mcp__nexus__search", "mcp__nexus__get", "mcp__nexus__history",
-                "mcp__nexus__status"}
+from trace_parse import parse
+
+BENCH = Path(__file__).parent
+ALLOWED = {"default": ("src/click/", "tests/", "CHANGES.rst"),
+           "d4": ("pyproject.toml", "tests/", "CHANGES.rst")}
+CONTENT_TOOLS = {"mcp__nexus__get", "mcp__nexus__search"}
+NOTES_NAME = "NOTES-FROM-EARLIER-WORK"
 
 
 def changed_files(patch: str) -> list[str]:
     return re.findall(r"^\+\+\+ b/(.+)$", patch, re.M)
 
 
-def compliance(arm: str, patch: str, calls: list[dict], result: str | None,
-               memory_available: bool, task: str = "") -> dict:
+def test_hunks_only(patch: str) -> str:
+    """The patch restricted to test files, so it can be applied without the fix."""
+    out, keep = [], False
+    for line in patch.splitlines(keepends=True):
+        if line.startswith("diff --git "):
+            keep = "/tests/" in line or line.rstrip().endswith(".py") and " b/tests/" in line
+        if keep:
+            out.append(line)
+    return "".join(out)
+
+
+def regression_discriminates(patch: str, pristine: Path, python: str) -> dict:
+    """THE discriminating test: do the arm's own tests fail on the unfixed tree?
+
+    A test that passes before the fix does not cover the regression, whatever it asserts.
+    Returns applicable=False when the arm added no test at all -- that is R2 failing for a
+    different and simpler reason.
+    """
+    hunks = test_hunks_only(patch)
+    if not hunks.strip():
+        return {"applicable": False, "reason": "no test-file changes in the patch"}
+    with tempfile.TemporaryDirectory() as td:
+        work = Path(td) / "tree"
+        shutil.copytree(pristine, work, symlinks=True)
+        # NOT --3way: the fixture is a fresh repository whose object database never held
+        # the pre-image blobs the patch names, so a 3-way merge fails with "does not match
+        # index" on every arm. Context application is what is wanted here anyway.
+        p = subprocess.run(["git", "apply", "--recount", "-"], cwd=work, input=hunks,
+                           text=True, capture_output=True)
+        if p.returncode:
+            p = subprocess.run(["patch", "-p1", "--forward", "--batch"], cwd=work,
+                               input=hunks, text=True, capture_output=True)
+        if p.returncode:
+            return {"applicable": False,
+                    "reason": f"test hunks did not apply: {(p.stderr or p.stdout).strip()[:120]}"}
+        files = [f for f in changed_files(hunks)]
+        run = subprocess.run([python, "-m", "pytest", *files, "-q", "-p", "no:randomly"],
+                             cwd=work, capture_output=True, text=True,
+                             env={"PYTHONPATH": "src", "PATH": "/usr/bin:/bin"})
+        return {"applicable": True, "fails_prefix": run.returncode != 0,
+                "summary": (run.stdout.strip().splitlines() or [""])[-1]}
+
+
+def final_text(env: dict | None) -> str:
+    return ((env or {}).get("result") or "").strip()
+
+
+def score(run_dir: Path, task: str, arm: str, pristine: Path, python: str) -> dict:
+    patch = (run_dir / "arms" / arm / "patch.diff").read_text()
+    t = parse(run_dir / "arms" / arm / "trace.jsonl")
     files = changed_files(patch)
-    added_tests = re.findall(r"^\+\s*def (test_\w+)", patch, re.M)
-    # A new test function is not the only way to extend coverage, and requiring one marked
-    # every d2 arm non-compliant for doing exactly what the upstream fix did: appending
-    # assertions to an existing test. New assertions inside a tests/ file, and a new
-    # parametrise decorator over an existing test, both count.
-    added_params = bool(re.search(r"^\+\s*@pytest\.mark\.parametrize", patch, re.M))
-    in_tests = False
-    added_asserts = 0
-    for line in patch.splitlines():
-        if line.startswith("+++ b/"):
-            in_tests = line[6:].startswith("tests/")
-        elif in_tests and re.match(r"^\+\s*assert\b", line):
-            added_asserts += 1
 
-    def first_index(pred):
-        for i, c in enumerate(calls):
-            if pred(c):
-                return i
-        return None
-
-    i_mem = first_index(lambda c: c.get("name") in MEMORY_TOOLS
-                        or "NOTES-FROM-EARLIER-WORK" in json.dumps(c.get("input", {})))
-    i_edit = first_index(lambda c: "src/click/" in json.dumps(c.get("input", {}))
-                         and c.get("name") in ("Edit", "Write"))
-
-    # d4 is a configuration task: its prompt asks for a registered marker and a test, not a
-    # src/ change. Requiring a src/ edit there would fail a correct patch.
-    out = {
-        "R1_fix_in_src": (None if task == "d4"
-                          else any(f.startswith("src/click/") for f in files)),
-        "R2_extend_tests": bool(added_tests) or added_params or added_asserts > 0,
-        "R3_no_unrelated": all(f.startswith(ALLOWED_PATHS.get(task, ALLOWED_PATHS["default"]))
-                              for f in files) and bool(files),
-        "R4_reply_done": bool(result) and "DONE" in result.upper(),
-        # R5 is only applicable where there was something to consult. Where nothing was
-        # available the prompt says "proceed using the repository", so it cannot be failed.
-        "R5_consult_first": (None if not memory_available
-                             else (i_mem is not None and (i_edit is None or i_mem < i_edit))),
+    # --- structural: cheap, honest about what they are ---
+    structural = {
+        "S1_touched_src": (None if task == "d4"
+                           else any(f.startswith("src/click/") for f in files)),
+        "S2_paths_within_scope": bool(files) and all(
+            f.startswith(ALLOWED.get(task, ALLOWED["default"])) for f in files),
+        "S3_added_test_file_change": any(f.startswith("tests/") for f in files),
     }
-    if task == "d4":
-        out["R6_marker_registered_where_read"] = (
-            "pyproject.toml" in " ".join(files) and "integration" in patch)
-        out["R7_no_setup_cfg"] = not any(f.endswith("setup.cfg") for f in files)
-    applicable = [v for v in out.values() if v is not None]
-    out["_met"] = sum(1 for v in applicable if v)
-    out["_applicable"] = len(applicable)
-    out["_files"] = files
-    out["_added_tests"] = added_tests
-    out["_added_asserts"] = added_asserts
-    return out
 
+    # --- executed: the only requirement a machine can settle here ---
+    reg = regression_discriminates(patch, pristine, python)
+    executed = {"E1_regression_fails_prefix": reg.get("fails_prefix") if reg["applicable"] else False}
 
-def main(argv: list[str]) -> int:
-    rows = []
-    for run_dir in argv[1:]:
-        run = Path(run_dir)
-        data = json.loads((run / "records.json").read_text())
-        task = data["task"]
-        for rec in data["records"]:
-            arm = rec["arm"]
-            patch = (run / "arms" / arm / "patch.diff").read_text()
-            res = rec.get("result") or {}
-            available = arm == "nexus" and (
-                (rec.get("memory_visibility") or {}).get("visible", 0) > 0)
-            if arm == "notes":
-                available = True
-            c = compliance(arm, patch, rec["tool_calls"], res.get("result"), available, task)
-            term = rec["terminal"]["terminal_reason"]
-            rows.append({
-                "run": run.name, "task": task, "arm": arm,
-                # dimension 1 -- unchanged instrument
-                "functional_correctness": rec["scored"]["passed"],
-                # dimension 2 -- this file
-                "requirement_compliance": f"{c['_met']}/{c['_applicable']}",
-                "failed_requirements": [k for k, v in c.items()
-                                        if not k.startswith("_") and v is False],
-                # dimension 3
-                "termination_reason": term,
-                # the two scoring rules, both reported, neither silently replacing the other
-                "outcome_original_rule": ("fail (truncated)" if term in ("max_turns", "timeout")
-                                          else ("pass" if rec["scored"]["passed"] else "fail")),
-                "outcome_amended_rule": "pass" if rec["scored"]["passed"] else "fail",
-                "tool_calls": len(rec["tool_calls"]),
-            })
-    print(json.dumps(rows, indent=1))
-    return 0
+    # --- exact, not substring ---
+    txt = final_text(t["result"])
+    # "reply DONE" is satisfied by a reply that OPENS with DONE, punctuation allowed, and
+    # by nothing else. Exact equality rejects "DONE. Summary: ..." which plainly complies;
+    # a substring test accepts "NOT DONE" and any prose containing the word. The rule is the
+    # first word of the reply.
+    first_word = re.match(r"\s*([A-Za-z]+)", txt)
+    protocol = {"P1_final_reply_opens_done":
+                bool(first_word) and first_word.group(1).upper() == "DONE"}
 
+    # --- consultation must have DELIVERED something, not merely been called ---
+    first_content = first_edit = None
+    for c in t["calls"]:
+        got = c.get("result") or ""
+        content_bearing = False
+        if c["name"] == "mcp__nexus__get" and '"content"' in got:
+            content_bearing = True
+        elif c["name"] == "mcp__nexus__search":
+            try:
+                content_bearing = bool((json.loads(got) or {}).get("hits"))
+            except Exception:
+                content_bearing = False
+        elif NOTES_NAME in json.dumps(c.get("input") or {}) and len(got) > 200:
+            content_bearing = True
+        if content_bearing and first_content is None:
+            first_content = c["index"]
+        if (c["name"] in ("Edit", "Write")
+                and "src/click/" in json.dumps(c.get("input") or {}) and first_edit is None):
+            first_edit = c["index"]
+    memory_offered = arm in ("nexus", "notes")
+    protocol["P2_consulted_content_before_edit"] = (
+        None if not memory_offered
+        else (first_content is not None and (first_edit is None or first_content < first_edit)))
 
-if __name__ == "__main__":
-    raise SystemExit(main(sys.argv))
+    checks = {**structural, **executed, **protocol}
+    applicable = [v for v in checks.values() if v is not None]
+    return {
+        "task": task, "arm": arm,
+        "checks": checks,
+        "compliance": f"{sum(1 for v in applicable if v)}/{len(applicable)}",
+        "failed": [k for k, v in checks.items() if v is False],
+        "regression_probe": reg,
+        "final_reply": txt[:60],
+        "unsettled_by_machine": [
+            "relevance of the source change to the reported defect",
+            "whether the added test covers the defect rather than merely failing",
+        ],
+        "trace_health": {"orphan_results": t["orphans"], "unresolved_calls": t["unresolved"]},
+    }

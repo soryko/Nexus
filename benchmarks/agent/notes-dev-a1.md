@@ -28,7 +28,7 @@ Rendered from `dev-a1` by `render_notes.py`. Same content as the memory store, g
 
 - Every user-visible change gets a CHANGES entry naming the version it lands in. The entry is written with the change, not at release time. _(tags: release, changelog)_
 
-- Test configuration lives in setup.cfg; add pytest settings to its [tool:pytest] section. _(tags: testing, pytest, outdated)_
+- Test configuration lives in setup.cfg; add pytest settings to its [tool:pytest] section. _(tags: testing, pytest)_
 
 ## Observed failures
 

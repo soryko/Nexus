@@ -1,5 +1,9 @@
 # A1 development run — `d4`, the outdated-memory task
 
+> **Figures here are superseded where they concern delivered context, task-requirement compliance, or termination.** Six instrument defects were found in review of `cbdf1f3`; the repairs and the recomputed figures are in [`results-recomputed.md`](results-recomputed.md). This document is kept as the record of what was reported at the time.
+
+> **Superseded in one respect beyond the recomputation:** `c13` carried the tag `outdated`, which is delivered metadata, so this run tested arms declining advice *explicitly labelled* stale. The unlabelled condition is [`results-recomputed.md`](results-recomputed.md) §8.
+
 **Harness validation only.** `d4` closes the gap [`results-dev-d2-d3.md`](results-dev-d2-d3.md)
 §3 identified: the corpus carried an outdated memory, but no task gave it an opportunity to
 mislead. Artifacts: [`run-dev-d4/`](run-dev-d4/).
@@ -62,9 +66,24 @@ nothing in the task made it relevant. The exposure condition holds.
 All three registered `integration` in `pyproject.toml`. **None created a `setup.cfg`.** Both
 memory arms were handed the stale advice and neither followed it.
 
-`d4` declares no necessary memory — the repository's own `pyproject.toml` carries the
-evidence — so its required-evidence denominator is genuinely zero and reports **N/A**, per
-`protocol-a1` §9, never `0.0`. This is the first task to exercise that rule.
+**`d4` declares no necessary *memory*. It does not have zero required evidence, and the two
+must not be conflated.** The correct action rests on a fact the agent must obtain — that this
+project's pytest configuration lives in `pyproject.toml`'s `[tool.pytest.ini_options]` — and
+that fact is necessary evidence. What is zero is the count of *memories* declared necessary,
+because the repository supplies the evidence instead of the store.
+
+So two figures, kept apart:
+
+| Figure | `d4` |
+| --- | --- |
+| **Necessary-memory coverage** (how much of what the store had to supply arrived) | **N/A** — the store was required to supply nothing |
+| **Required-evidence completeness** (whether the agent obtained the facts the task needs) | **not N/A** — one necessary fact, repository-discoverable |
+
+`protocol-a1` §9's N/A rule applies to the first and not the second, and §7's warning that
+"memory-unnecessary" is a statement about the *store* and never about the task's evidence
+demands is exactly this case. The second figure is **not yet implemented** — §8's
+required-evidence instrument does not exist — so `d4` reports memory coverage as N/A and
+leaves evidence completeness unmeasured rather than implying it is zero or satisfied.
 
 Two extra deliverables are scored here, `R6` (marker registered where pytest actually reads
 config) and `R7` (no `setup.cfg` created). Both are met by all three arms.

@@ -205,8 +205,7 @@
    "kind": "procedure",
    "tags": [
     "testing",
-    "pytest",
-    "outdated"
+    "pytest"
    ],
    "outdated": true,
    "outdated_note": "True when captured against the older checkout, superseded by the project's move to pyproject-based configuration. Present so protocol-a1 section 7's outdated category has an instance. An agent that follows it will look for a file that is not there.",
@@ -216,9 +215,13 @@
     "d2": "outdated",
     "d3": "outdated",
     "d4": "outdated"
-   }
+   },
+   "evaluator_only_tags_removed": [
+    "outdated"
+   ]
   }
  ],
  "discoverability_note": "Per protocol-a1 section 7b, each necessary fact is labelled discoverable (obtainable by reading the fixture) or absent (not in the fixture at all). An advantage on a discoverable fact measures retrieval efficiency, not supplied knowledge. Labels below are for the development tasks only.",
- "d4_note": "d4 is authored, not an upstream fix commit, and is the only task in the set where an outdated memory can mislead. It declares no necessary memory: the correct action is supported by the checkout's own pyproject.toml. Relevance declared before the run."
+ "d4_note": "d4 is authored, not an upstream fix commit, and is the only task in the set where an outdated memory can mislead. It declares no necessary memory: the correct action is supported by the checkout's own pyproject.toml. Relevance declared before the run.",
+ "delivered_metadata_note": "Tags are DELIVERED: they appear in search hits, in get responses and in the rendered notes file. Evaluator vocabulary must therefore never sit in them. c13 carried the tag 'outdated', so d4's first run tested behaviour against advice the model was told was stale -- not detection of unsuspected staleness. The label lives only in `relevance`, which is evaluator metadata and is never delivered."
 }

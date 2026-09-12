@@ -1,0 +1,132 @@
+[
+ {
+  "arm": "baseline",
+  "terminal": "completed",
+  "functional": true,
+  "compliance": "4/4",
+  "failed": [],
+  "regression_probe": {
+   "applicable": true,
+   "fails_prefix": true,
+   "summary": "1 error in 0.05s"
+  },
+  "boundary": {
+   "network_egress_blocked": true,
+   "network_probe_tail": [
+    "ERROR: No matching distribution found for click"
+   ],
+   "dns_and_https_blocked": true,
+   "dns_probe_tail": [
+    "curl: (6) Could not resolve host: pypi.org"
+   ],
+   "held_checks_unreadable": true,
+   "fs_probe_tail": [
+    "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4iso/base/checks/d4/tests/*.py: No such file or directory"
+   ],
+   "held_checks_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4iso/base/checks/d4/tests/test_marker_registration.py: Operation not permitted"
+    ],
+    "outside_tail": [
+     "    assert True"
+    ]
+   },
+   "all_hold": true
+  },
+  "trace_health": {
+   "orphan_results": 0,
+   "unresolved_calls": 0
+  }
+ },
+ {
+  "arm": "nexus",
+  "terminal": "completed",
+  "functional": true,
+  "compliance": "4/5",
+  "failed": [
+   "P1_final_reply_opens_done"
+  ],
+  "regression_probe": {
+   "applicable": true,
+   "fails_prefix": true,
+   "summary": "1 error in 0.05s"
+  },
+  "boundary": {
+   "network_egress_blocked": true,
+   "network_probe_tail": [
+    "ERROR: No matching distribution found for click"
+   ],
+   "dns_and_https_blocked": true,
+   "dns_probe_tail": [
+    "curl: (6) Could not resolve host: pypi.org"
+   ],
+   "held_checks_unreadable": true,
+   "fs_probe_tail": [
+    "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4iso/base/checks/d4/tests/*.py: No such file or directory"
+   ],
+   "held_checks_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4iso/base/checks/d4/tests/test_marker_registration.py: Operation not permitted"
+    ],
+    "outside_tail": [
+     "    assert True"
+    ]
+   },
+   "all_hold": true
+  },
+  "trace_health": {
+   "orphan_results": 0,
+   "unresolved_calls": 0
+  }
+ },
+ {
+  "arm": "notes",
+  "terminal": "completed",
+  "functional": true,
+  "compliance": "4/5",
+  "failed": [
+   "P1_final_reply_opens_done"
+  ],
+  "regression_probe": {
+   "applicable": true,
+   "fails_prefix": true,
+   "summary": "1 error in 0.05s"
+  },
+  "boundary": {
+   "network_egress_blocked": true,
+   "network_probe_tail": [
+    "ERROR: No matching distribution found for click"
+   ],
+   "dns_and_https_blocked": true,
+   "dns_probe_tail": [
+    "curl: (6) Could not resolve host: pypi.org"
+   ],
+   "held_checks_unreadable": true,
+   "fs_probe_tail": [
+    "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4iso/base/checks/d4/tests/*.py: No such file or directory"
+   ],
+   "held_checks_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4iso/base/checks/d4/tests/test_marker_registration.py: Operation not permitted"
+    ],
+    "outside_tail": [
+     "    assert True"
+    ]
+   },
+   "all_hold": true
+  },
+  "trace_health": {
+   "orphan_results": 0,
+   "unresolved_calls": 0
+  }
+ }
+]

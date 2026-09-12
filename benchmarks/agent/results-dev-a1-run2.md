@@ -1,5 +1,7 @@
 # A1 development run 2 — `d1`, three arms, explicit consultation policy
 
+> **Figures here are superseded where they concern delivered context, task-requirement compliance, or termination.** Six instrument defects were found in review of `cbdf1f3`; the repairs and the recomputed figures are in [`results-recomputed.md`](results-recomputed.md). This document is kept as the record of what was reported at the time.
+
 **Harness validation only.** The corpus and the task prompt were both authored by someone who
 had read the fix ([`capture-policy-a1.md`](capture-policy-a1.md) §5). No benefit figure is
 computed here and none may be. What this run had to establish is that **memory delivery

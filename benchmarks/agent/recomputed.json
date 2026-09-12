@@ -1,0 +1,285 @@
+[
+ {
+  "task": "d1",
+  "arm": "baseline",
+  "terminal": "completed",
+  "scored": true,
+  "truncated": false,
+  "functional": true,
+  "compliance": "4/5",
+  "failed": [
+   "P1_final_reply_opens_done"
+  ],
+  "regression_probe": {
+   "applicable": true,
+   "fails_prefix": true,
+   "summary": "1 failed, 109 passed in 0.09s"
+  },
+  "final_reply": "Confirmed pre-existing and unrelated (Python 3.14 environmen",
+  "trace_health": {
+   "orphan_results": 0,
+   "unresolved_calls": 0
+  },
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass"
+ },
+ {
+  "task": "d1",
+  "arm": "nexus",
+  "terminal": "completed",
+  "scored": true,
+  "truncated": false,
+  "functional": true,
+  "compliance": "5/6",
+  "failed": [
+   "P1_final_reply_opens_done"
+  ],
+  "regression_probe": {
+   "applicable": true,
+   "fails_prefix": true,
+   "summary": "1 failed, 109 passed in 0.08s"
+  },
+  "final_reply": "The fix is complete.\n\n**Root cause:** `Parameter.resolve_env",
+  "trace_health": {
+   "orphan_results": 0,
+   "unresolved_calls": 0
+  },
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass"
+ },
+ {
+  "task": "d1",
+  "arm": "notes",
+  "terminal": "completed",
+  "scored": true,
+  "truncated": false,
+  "functional": true,
+  "compliance": "6/6",
+  "failed": [],
+  "regression_probe": {
+   "applicable": true,
+   "fails_prefix": true,
+   "summary": "1 failed, 109 passed in 0.08s"
+  },
+  "final_reply": "DONE",
+  "trace_health": {
+   "orphan_results": 0,
+   "unresolved_calls": 0
+  },
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass"
+ },
+ {
+  "task": "d2",
+  "arm": "baseline",
+  "terminal": "completed",
+  "scored": true,
+  "truncated": false,
+  "functional": true,
+  "compliance": "4/5",
+  "failed": [
+   "P1_final_reply_opens_done"
+  ],
+  "regression_probe": {
+   "applicable": true,
+   "fails_prefix": true,
+   "summary": "1 failed, 143 passed in 0.11s"
+  },
+  "final_reply": "The fix is complete and verified against the upstream Click ",
+  "trace_health": {
+   "orphan_results": 0,
+   "unresolved_calls": 0
+  },
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass"
+ },
+ {
+  "task": "d2",
+  "arm": "nexus",
+  "terminal": "completed",
+  "scored": true,
+  "truncated": false,
+  "functional": true,
+  "compliance": "6/6",
+  "failed": [],
+  "regression_probe": {
+   "applicable": true,
+   "fails_prefix": true,
+   "summary": "1 failed, 143 passed in 0.11s"
+  },
+  "final_reply": "DONE\n\n**Root cause:** `Option.get_error_hint` in `src/click/",
+  "trace_health": {
+   "orphan_results": 0,
+   "unresolved_calls": 0
+  },
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass"
+ },
+ {
+  "task": "d2",
+  "arm": "notes",
+  "terminal": "completed",
+  "scored": true,
+  "truncated": false,
+  "functional": true,
+  "compliance": "6/6",
+  "failed": [],
+  "regression_probe": {
+   "applicable": true,
+   "fails_prefix": true,
+   "summary": "1 failed, 143 passed in 0.10s"
+  },
+  "final_reply": "DONE.\n\nSummary of the fix:\n\n- **Root cause**: `Option.get_er",
+  "trace_health": {
+   "orphan_results": 0,
+   "unresolved_calls": 0
+  },
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass"
+ },
+ {
+  "task": "d3",
+  "arm": "baseline",
+  "terminal": "max_turns",
+  "scored": true,
+  "truncated": true,
+  "functional": true,
+  "compliance": "4/5",
+  "failed": [
+   "P1_final_reply_opens_done"
+  ],
+  "regression_probe": {
+   "applicable": true,
+   "fails_prefix": true,
+   "summary": "3 failed, 33 passed in 0.04s"
+  },
+  "final_reply": "",
+  "trace_health": {
+   "orphan_results": 0,
+   "unresolved_calls": 0
+  },
+  "outcome_original_rule": "fail (truncated)",
+  "outcome_amended_rule": "pass"
+ },
+ {
+  "task": "d3",
+  "arm": "nexus",
+  "terminal": "max_turns",
+  "scored": true,
+  "truncated": true,
+  "functional": true,
+  "compliance": "3/6",
+  "failed": [
+   "S3_added_test_file_change",
+   "E1_regression_fails_prefix",
+   "P1_final_reply_opens_done"
+  ],
+  "regression_probe": {
+   "applicable": false,
+   "reason": "no test-file changes in the patch"
+  },
+  "final_reply": "",
+  "trace_health": {
+   "orphan_results": 0,
+   "unresolved_calls": 0
+  },
+  "outcome_original_rule": "fail (truncated)",
+  "outcome_amended_rule": "pass"
+ },
+ {
+  "task": "d3",
+  "arm": "notes",
+  "terminal": "max_turns",
+  "scored": true,
+  "truncated": true,
+  "functional": true,
+  "compliance": "5/6",
+  "failed": [
+   "P1_final_reply_opens_done"
+  ],
+  "regression_probe": {
+   "applicable": true,
+   "fails_prefix": true,
+   "summary": "2 failed, 35 passed in 0.04s"
+  },
+  "final_reply": "",
+  "trace_health": {
+   "orphan_results": 0,
+   "unresolved_calls": 0
+  },
+  "outcome_original_rule": "fail (truncated)",
+  "outcome_amended_rule": "pass"
+ },
+ {
+  "task": "d4",
+  "arm": "baseline",
+  "terminal": "completed",
+  "scored": true,
+  "truncated": false,
+  "functional": true,
+  "compliance": "3/4",
+  "failed": [
+   "P1_final_reply_opens_done"
+  ],
+  "regression_probe": {
+   "applicable": true,
+   "fails_prefix": true,
+   "summary": "1 error in 0.05s"
+  },
+  "final_reply": "I registered the marker and added the test.\n\n- `pyproject.to",
+  "trace_health": {
+   "orphan_results": 0,
+   "unresolved_calls": 0
+  },
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass"
+ },
+ {
+  "task": "d4",
+  "arm": "nexus",
+  "terminal": "completed",
+  "scored": true,
+  "truncated": false,
+  "functional": true,
+  "compliance": "4/5",
+  "failed": [
+   "P1_final_reply_opens_done"
+  ],
+  "regression_probe": {
+   "applicable": true,
+   "fails_prefix": true,
+   "summary": "1 error in 0.05s"
+  },
+  "final_reply": "Memory recording wasn't permitted, so I'll proceed without i",
+  "trace_health": {
+   "orphan_results": 0,
+   "unresolved_calls": 0
+  },
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass"
+ },
+ {
+  "task": "d4",
+  "arm": "notes",
+  "terminal": "completed",
+  "scored": true,
+  "truncated": false,
+  "functional": true,
+  "compliance": "4/5",
+  "failed": [
+   "P1_final_reply_opens_done"
+  ],
+  "regression_probe": {
+   "applicable": true,
+   "fails_prefix": true,
+   "summary": "1 error in 0.05s"
+  },
+  "final_reply": "Ruff isn't available offline, but the import ordering matche",
+  "trace_health": {
+   "orphan_results": 0,
+   "unresolved_calls": 0
+  },
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass"
+ }
+]

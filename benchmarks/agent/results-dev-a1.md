@@ -1,5 +1,7 @@
 # A1 development run — task `d1`, three arms, one attempt each
 
+> **Figures here are superseded where they concern delivered context, task-requirement compliance, or termination.** Six instrument defects were found in review of `cbdf1f3`; the repairs and the recomputed figures are in [`results-recomputed.md`](results-recomputed.md). This document is kept as the record of what was reported at the time.
+
 **Harness validation only. No benefit figure is computed from this run and none may be.**
 The corpus was authored by someone who had read the fixes
 ([`capture-policy-a1.md`](capture-policy-a1.md) §5), and so was the task prompt. What a
