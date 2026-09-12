@@ -7,7 +7,8 @@
   "from a deny that works.",
   "store_master is the frozen corpus, copied per arm-run and never opened by an arm.",
   "corpus_digest is the row digest that corpus was registered with; when it is set the",
-  "runner refuses to start against any other store, and when it is empty the run says so."
+  "runner refuses to start against any other store, and when it is empty the run says so.",
+  "capture_max_turns / capture_wall_clock_s are CAPTURE's ceilings and not the arms'. The arms' 30 turns and 600 s are registered in freeze-heldout-a1.md section 3 and must not be changed; capture does strictly more work under a longer prompt, and attempt 1 hit 30 turns on both tasks."
  ],
  "source_clone": "/path/to/a/pallets-click/clone",
  "pytest_python": "/path/to/.venv-click/bin/python",
@@ -23,5 +24,7 @@
  "namespace": "a1-dev",
  "actor": "agent",
  "notes_file": "notes-dev-a1.md",
- "prompts": "prompts-a1.json"
+ "prompts": "prompts-a1.json",
+ "capture_max_turns": 60,
+ "capture_wall_clock_s": 1200
 }

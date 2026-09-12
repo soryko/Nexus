@@ -158,9 +158,18 @@ def create_store() -> None:
 
 def invoke(task: str, cwd: Path, prompt: str) -> dict:
     cfg = task_dir(task) / "mcp.json"
+    # `--repo` binds the arm's own checkout, which is what makes a reference recordable.
+    # Without it the server has no binding and no verifier, and `record` with a reference is
+    # refused outright: `verification_unavailable: reference verification is unavailable in
+    # this mode` (memory/service.py). The first capture run hit exactly that -- the session
+    # cited src/click/core.py and CHANGES.rst for a convention it had just read, the call was
+    # refused, and it re-recorded the same fact with the citation stripped. The policy asks
+    # whether a fact is "stated or evident in the code"; a harness that refuses to store
+    # where answers that question with a shrug.
     cfg.write_text(json.dumps({"mcpServers": {"nexus": {
         "command": CFG.nexus_server,
-        "args": ["--db", str(STORE), "--namespace", CFG.namespace, "--actor", CFG.actor]}}}))
+        "args": ["--db", str(STORE), "--namespace", CFG.namespace, "--actor", CFG.actor,
+                 "--repo", str(cwd)]}}}))
     allow, deny = boundary_paths(task, cwd)
     profile = isolation.write_profile(task_dir(task) / "sandbox.sb", cwd, deny, allow,
                                       CFG.forwarder_port)
@@ -171,7 +180,7 @@ def invoke(task: str, cwd: Path, prompt: str) -> dict:
            "--disallowedTools", "WebSearch,WebFetch",
            "--permission-mode", "acceptEdits",
            "--disable-slash-commands",
-           "--max-turns", str(CFG.max_turns),
+           "--max-turns", str(CFG.capture_max_turns),
            "--output-format", "stream-json", "--verbose"]
     env = a1_config.child_env(f"http://127.0.0.1:{CFG.forwarder_port}/anthropic",
                               os.environ["DEEPSEEK_API_KEY"])
@@ -180,7 +189,7 @@ def invoke(task: str, cwd: Path, prompt: str) -> dict:
     verdict = None
     try:
         done = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True,
-                              timeout=CFG.wall_clock_s)
+                              timeout=CFG.capture_wall_clock_s)
         out, err = done.stdout, done.stderr
     except subprocess.TimeoutExpired as exc:
         out = (exc.stdout or b"").decode() if isinstance(exc.stdout, bytes) else (exc.stdout or "")
@@ -312,6 +321,9 @@ def main() -> int:
          "store": str(STORE), "store_final": final,
          "tasks": [t["task"] for t in tasks],
          "capture_tools": CAPTURE_TOOLS,
+         "ceilings": {"max_turns": CFG.capture_max_turns,
+                      "wall_clock_s": CFG.capture_wall_clock_s,
+                      "note": "capture's own ceilings, not the arms'. See capture-attempt-1.md"},
          "functional_scorer_version": build_fixture.FUNCTIONAL_SCORER_VERSION,
          "config": CFG.as_recorded(),
          "deny_ordering": ordering,

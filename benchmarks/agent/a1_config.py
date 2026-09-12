@@ -65,6 +65,14 @@ class Config:
     corpus_size: int = 13
     max_turns: int = 30
     wall_clock_s: int = 600
+    # Capture's own ceilings, and deliberately not the arms'. freeze-heldout-a1 section 3
+    # registers `--max-turns 30` and 600 s under "arms, trials and ceilings", calibrated on
+    # runs that only had to fix a bug. A capture run does that AND records as it goes, under a
+    # prompt about three times as long, and attempt 1 hit the turn ceiling on both tasks with
+    # one memory to show for it. Raising these leaves the evaluation instrument untouched: no
+    # arm reads them.
+    capture_max_turns: int = 60
+    capture_wall_clock_s: int = 1200
     memory_probe_query: str = "click option parameter"
     repo: str = str(REPO)
     bench: str = str(BENCH)
@@ -104,7 +112,8 @@ class Config:
                 bad.append(f"{name}: {p} is not executable")
         if not 1 <= self.forwarder_port <= 65535:
             bad.append(f"forwarder_port: {self.forwarder_port} is not a port number")
-        for name in ("corpus_size", "max_turns", "wall_clock_s"):
+        for name in ("corpus_size", "max_turns", "wall_clock_s", "capture_max_turns",
+                     "capture_wall_clock_s"):
             if getattr(self, name) <= 0:
                 bad.append(f"{name}: {getattr(self, name)} must be positive")
         for name, kind in self._OPTIONAL_PATHS:
