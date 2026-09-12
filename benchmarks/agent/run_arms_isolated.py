@@ -5,33 +5,38 @@ from this corpus. What this run is for is showing the plumbing works and that th
 differ in the intended way.
 """
 from __future__ import annotations
-import json, os, random, shutil, subprocess, sys, time
+import json, os, shutil, subprocess, sys, time
 from datetime import datetime, timezone
 from pathlib import Path
 
 SP = Path(sys.argv[1])
 TASK = sys.argv[2]
+ATTEMPT = int(sys.argv[3]) if len(sys.argv) > 3 else 1
+SCHEDULE = Path(sys.argv[4]) if len(sys.argv) > 4 else None
 RUN = SP / f"run-{TASK}"
-REPO = Path("/Users/soko/Cerebros/nexus-memory")
-BENCH = REPO / "benchmarks" / "agent"
-PYTEST_PY = "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/bin/python"
+BENCH = Path(__file__).parent
 sys.path.insert(0, str(BENCH))
+import a1_config
 from build_fixture import score  # the same scorer the controls used
 from trace_parse import parse as parse_trace
 from terminal_status import classify
 import isolation
+import schedule as sched
 
-SEED = 20260911
-FORWARDER_PORT = 8899
-CORPUS_SIZE = 13
-# A query the pre-run gate can pose without holding the answer key: it names the corpus's
-# own subject matter, not any task's fix. A gate that returned nothing for every query would
-# be a broken index, which is exactly what it is here to catch.
-MEMORY_PROBE_QUERY = "click option parameter"
-SOURCE_CLONE = "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/click"
+# Every path and ceiling comes from the configuration file now, validated before anything
+# runs. Two of these used to be constants naming one session's scratchpad by its UUID, so the
+# harness worked on exactly one host on exactly one day -- and a deny for a path that has
+# moved looks, in the artifact, exactly like a deny that works.
+CFG = a1_config.load().require()
+REPO = Path(CFG.repo)
+PYTEST_PY = CFG.pytest_python
+FORWARDER_PORT = CFG.forwarder_port
+CORPUS_SIZE = CFG.corpus_size
+MEMORY_PROBE_QUERY = CFG.memory_probe_query
+SOURCE_CLONE = CFG.source_clone
+MAX_TURNS = CFG.max_turns
+WALL_CLOCK_S = CFG.wall_clock_s
 FIXTURE_BASE = ""  # set in main()
-MAX_TURNS = 30
-WALL_CLOCK_S = 600
 
 # The task prompt. Byte-for-byte identical in every arm. It states the observable symptom
 # and the expected outcome; it does not name the function, the file or the mechanism.
@@ -93,18 +98,11 @@ PROMPTS = {
 D4_TAIL = (" Do not change behaviour unrelated to this. When you are done, reply DONE.")
 PROMPT = PROMPTS[TASK] + (D4_TAIL if TASK == "d4" else TAIL) + CONSULT
 
-# Superseded by isolation.py. These variables were the old "allowlist": they asked pip and
-# curl to route through a dead proxy, which Claude Code ignored entirely and which any client
-# could ignore too. They are kept only so the arm environment is identical in the respects
-# that are not the boundary; the boundary itself is now the sandbox profile.
-NET = {
-    "HTTP_PROXY": "http://127.0.0.1:1", "HTTPS_PROXY": "http://127.0.0.1:1",
-    "http_proxy": "http://127.0.0.1:1", "https_proxy": "http://127.0.0.1:1",
-    "ALL_PROXY": "socks5://127.0.0.1:1", "all_proxy": "socks5://127.0.0.1:1",
-    "NO_PROXY": "api.deepseek.com", "no_proxy": "api.deepseek.com",
-    "PIP_NO_INDEX": "1", "PIP_INDEX_URL": "http://127.0.0.1:1/simple",
-    "PIP_RETRIES": "0", "PIP_TIMEOUT": "2", "UV_OFFLINE": "1", "UV_NO_INDEX": "1",
-}
+# What an arm's environment is, and is not: `a1_config.ENV_ALLOWLIST` plus the two names the
+# harness sets itself. It used to be `dict(os.environ)` -- the operator's whole shell, none of
+# it held fixed across arms. The superseded proxy variables that used to sit here are gone
+# rather than kept as decoration: they were never merged into the child environment, so the
+# comment claiming they kept the arms identical described nothing the code did.
 
 BASE_TOOLS = "Read,Edit,Write,Bash,Glob,Grep"
 NEXUS_TOOLS = "mcp__nexus__search,mcp__nexus__get,mcp__nexus__history,mcp__nexus__status"
@@ -188,10 +186,9 @@ def invoke(arm: str, cwd: Path) -> dict:
            "--disable-slash-commands",
            "--max-turns", str(MAX_TURNS),
            "--output-format", "stream-json", "--verbose"]
-    env = dict(os.environ)
     # the sandbox denies every host but localhost; the forwarder is the only egress
-    env["ANTHROPIC_BASE_URL"] = f"http://127.0.0.1:{FORWARDER_PORT}/anthropic"
-    env["ANTHROPIC_API_KEY"] = os.environ["DEEPSEEK_API_KEY"]
+    env = a1_config.child_env(f"http://127.0.0.1:{FORWARDER_PORT}/anthropic",
+                              os.environ["DEEPSEEK_API_KEY"])
     started = datetime.now(timezone.utc)
     t0 = time.monotonic()
     verdict = None
@@ -207,7 +204,7 @@ def invoke(arm: str, cwd: Path) -> dict:
     (RUN / "arms" / arm / "trace.jsonl").write_text(out)
     (RUN / "arms" / arm / "stderr.txt").write_text(err)
     return {"arm": arm, "started_utc": started.isoformat(), "wall_clock_s": round(wall, 1),
-            "forced_verdict": verdict}
+            "forced_verdict": verdict, "child_env": a1_config.env_record(env)}
 
 
 def read_trace(arm: str) -> dict:
@@ -308,9 +305,18 @@ def main() -> int:
     FIXTURE_BASE = str(RUN / "base")
     checks, held = fixtures["checks"], Path(fixtures["held_checks"])
 
-    order = list(ARMS)
-    random.Random(SEED).shuffle(order)
-    print(f"seed={SEED}  realised arm order: {' -> '.join(order)}\n")
+    # The order is READ from the frozen schedule, never re-derived. The old code built it
+    # with `random.Random(SEED).shuffle(...)` inside each run -- a fresh generator from the
+    # same constant every time, which recorded a seed and produced one order everywhere:
+    # all eight saved development runs say `baseline -> nexus -> notes`.
+    if SCHEDULE is None:
+        print("no schedule given; a scored run requires one frozen before execution\n"
+              "usage: run_arms_isolated.py <scratch> <task> <attempt> <schedule.json>")
+        return 2
+    plan = sched.load(SCHEDULE)
+    order = plan.order_for(TASK, ATTEMPT)
+    print(f"schedule {SCHEDULE.name} digest={plan.schedule_digest[:16]} seed={plan.seed}\n"
+          f"{TASK} attempt {ATTEMPT}: realised arm order {' -> '.join(order)}\n")
 
     # the deny-ordering control: once per run, not per arm -- it is a property of the
     # profile generator, not of any one arm's profile
@@ -387,7 +393,11 @@ def main() -> int:
     after = store_digest()
     print(f"\nfrozen store digest after all arms: {after}  unchanged={before == after}")
     (RUN / "records.json").write_text(json.dumps(
-        {"task": TASK, "seed": SEED, "order": order, "max_turns": MAX_TURNS,
+        {"task": TASK, "attempt": ATTEMPT, "seed": plan.seed, "order": order,
+         "schedule": str(SCHEDULE), "schedule_digest": plan.schedule_digest,
+         "config": CFG.as_recorded(), "scorer_version": __import__(
+             "score_compliance").SCORER_VERSION,
+         "max_turns": MAX_TURNS,
          "wall_clock_s": WALL_CLOCK_S, "prompt": PROMPT,
          "deny_ordering": ordering,
          "store_digest_before": before, "store_digest_after": after,

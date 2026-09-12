@@ -38,8 +38,8 @@ from __future__ import annotations
 import json, sys, tempfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
-from score_compliance import (UNKNOWN, bash_mutates, first_delivery_event, first_edit_event,
-                              notes_lines, score)
+from score_compliance import (FAIL, NA, PASS, UNKNOWN, bash_mutates, first_delivery_event,
+                              first_edit_event, notes_lines, score)
 
 NOTES_LINES = notes_lines()
 
@@ -200,8 +200,17 @@ def run_score(patch, tr, task, arm, pristine):
         return score(run, task, arm, pristine, PY_CLICK)
 
 
+def v(record, name):
+    """A check's verdict string."""
+    return record["checks"][name]["verdict"]
+
+
+def why(record, name):
+    return record["checks"][name]["reason"]
+
+
 def check(label, got, want):
-    ok = got is want
+    ok = got == want
     print(f"  [{'PASS' if ok else 'FAIL'}] {label}: {got!r} (want {want!r})")
     return ok
 
@@ -211,10 +220,10 @@ def main() -> int:
     print("round one -- the original four counterexamples")
     r = run_score(BAD_PATCH, TRACE_ROUND_ONE, "d1", "nexus", PRISTINE)
     print(f"  compliance: {r['compliance']}   failed: {r['failed']}")
-    ok &= check("E1 rejects `assert True`", r["checks"]["E1_regression_discriminates"], False)
-    ok &= check('P1 rejects "NOT DONE"', r["checks"]["P1_final_reply_opens_done"], False)
+    ok &= check("E1 rejects `assert True`", v(r, "E1_regression_discriminates"), FAIL)
+    ok &= check('P1 rejects "NOT DONE"', v(r, "P1_final_reply_opens_done"), FAIL)
     ok &= check("P2 rejects a status-only call",
-                r["checks"]["P2_content_delivered_before_edit"], False)
+                v(r, "P2_content_delivered_before_edit"), FAIL)
 
     print("\nround two -- a nonzero pytest exit from a syntax error")
     r = run_score(SYNTAX_ERROR_PATCH, TRACE_ROUND_ONE, "d1", "nexus", PRISTINE)
@@ -227,7 +236,7 @@ def main() -> int:
           f"fails_prefix={probe.get('fails_prefix')} "
           f"passes_candidate={probe.get('passes_candidate')}")
     ok &= check("E1 rejects a test file that does not parse",
-                r["checks"]["E1_regression_discriminates"], False)
+                v(r, "E1_regression_discriminates"), FAIL)
 
     print("\nround two -- delivery order vs issue order")
     r = run_score(BAD_PATCH, TRACE_LATE_DELIVERY, "d1", "nexus", PRISTINE)
@@ -235,20 +244,20 @@ def main() -> int:
     print(f"  first delivery at event {c['first_delivery']['at']}, "
           f"first edit at event {c['first_edit']['at']}")
     ok &= check("P2 rejects hits that arrive after the edit",
-                r["checks"]["P2_content_delivered_before_edit"], False)
+                v(r, "P2_content_delivered_before_edit"), FAIL)
     r = run_score(BAD_PATCH, TRACE_TIMELY_DELIVERY, "d1", "nexus", PRISTINE)
     ok &= check("P2 still accepts hits that arrive before the edit",
-                r["checks"]["P2_content_delivered_before_edit"], True)
+                v(r, "P2_content_delivered_before_edit"), PASS)
 
     print("\nround two -- edits the old check could not see")
     r = run_score(BAD_PATCH, TRACE_BASH_EDIT, "d1", "nexus", PRISTINE)
     print(f"  first edit: {r['consultation']['first_edit']}")
     ok &= check("P2 counts a Bash heredoc as an edit",
-                r["checks"]["P2_content_delivered_before_edit"], False)
+                v(r, "P2_content_delivered_before_edit"), FAIL)
     r = run_score(BAD_PATCH, TRACE_D4_LATE, "d4", "nexus", PRISTINE_D4)
     print(f"  first edit: {r['consultation']['first_edit']}")
     ok &= check("P2 counts a d4 pyproject.toml edit",
-                r["checks"]["P2_content_delivered_before_edit"], False)
+                v(r, "P2_content_delivered_before_edit"), FAIL)
 
     print("\nround two -- the Bash write matcher, in isolation")
     SRC = ("src/click",)
@@ -270,24 +279,25 @@ def main() -> int:
     r = run_score(BAD_PATCH, TRACE_NOTES_NAMED_NOT_READ, "d1", "nexus", PRISTINE)
     print(f"  first delivery: {r['consultation']['first_delivery']}")
     ok &= check("P2 rejects a listing from a command that merely names the notes file",
-                r["checks"]["P2_content_delivered_before_edit"], False)
+                v(r, "P2_content_delivered_before_edit"), FAIL)
     r = run_score(BAD_PATCH, TRACE_NOTES_ACTUALLY_READ, "d1", "notes", PRISTINE)
     print(f"  first delivery: {r['consultation']['first_delivery']}")
     ok &= check("P2 still accepts the notes' own text",
-                r["checks"]["P2_content_delivered_before_edit"], True)
+                v(r, "P2_content_delivered_before_edit"), PASS)
 
     print("\nround three -- an edit the matcher cannot locate is UNKNOWN, not a pass")
     r = run_score(BAD_PATCH, TRACE_EDIT_NOT_LOCATED, "d1", "nexus", PRISTINE)
     print(f"  first edit: {r['consultation']['first_edit']}   "
-          f"compliance: {r['compliance']}   unsettled: {r['unsettled']}")
+          f"compliance: {r['compliance']}   unknown: {r['unknown']}   "
+          f"n/a: {r['not_applicable']}")
     ok &= check("P2 is unknown when no edit is located",
-                r["checks"]["P2_content_delivered_before_edit"], UNKNOWN)
+                v(r, "P2_content_delivered_before_edit"), UNKNOWN)
     ok &= check("an unknown check is counted in neither half of the ratio",
                 r["compliance"].endswith("/5"), True)      # six checks, five settled
     ok &= check("an unknown check is not reported as a failure",
                 "P2_content_delivered_before_edit" in r["failed"], False)
     ok &= check("an unknown check is listed for review",
-                "P2_content_delivered_before_edit" in r["unsettled"], True)
+                "P2_content_delivered_before_edit" in r["unknown"], True)
 
     print("\n  unsettled by machine:")
     for u in r["unsettled_by_machine"]:

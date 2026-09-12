@@ -32,7 +32,7 @@
      "cat: /Users/soko/Cerebros/nexus-memory/benchmarks/agent/MANIFEST.md: Operation not permitted"
     ],
     "outside_tail": [
-     "    attempt restarted from a fresh fixture. Recorded so the spend is visible."
+     "pytest suite, and that it needs an interpreter with a working `pyexpat`."
     ]
    },
    "bench_dir_unreadable": true,
@@ -150,7 +150,7 @@
      "cat: /Users/soko/Cerebros/nexus-memory/benchmarks/agent/MANIFEST.md: Operation not permitted"
     ],
     "outside_tail": [
-     "    attempt restarted from a fresh fixture. Recorded so the spend is visible."
+     "pytest suite, and that it needs an interpreter with a working `pyexpat`."
     ]
    },
    "bench_dir_unreadable": true,
@@ -231,7 +231,7 @@
      "active_as_expected": true,
      "hits": 6,
      "retrieved": true,
-     "first_hit": "6d464b86-ec01-42b4-b067-3b517f0bd6e6",
+     "first_hit": "3a2ba70a-5513-41b7-9d42-6286635e6b59",
      "sqlite_version": "3.53.4"
     }
    },
@@ -273,7 +273,7 @@
      "cat: /Users/soko/Cerebros/nexus-memory/benchmarks/agent/MANIFEST.md: Operation not permitted"
     ],
     "outside_tail": [
-     "    attempt restarted from a fresh fixture. Recorded so the spend is visible."
+     "pytest suite, and that it needs an interpreter with a working `pyexpat`."
     ]
    },
    "bench_dir_unreadable": true,
@@ -383,7 +383,7 @@
   "repaired_allow_db_and_sidecars": {
    "reached": true,
    "tail": [
-    "{\"db\": \"/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/nexus-dev.db\", \"namespace\": \"a1-dev\", \"actor\": \"agent\", \"query\": \"click option parameter\", \"sidecars_present\": [\"nexus-dev.db-shm\", \"nexus-dev.db-wal\"], \"reachable\": true, \"active_memories\": 13, \"expected_active\": 13, \"active_as_expected\": true, \"hits\": 6, \"retrieved\": true, \"first_hit\": \"6d464b86-ec01-42b4-b067-3b517f0bd6e6\", \"sqlite_version\": \"3.53.4\"}"
+    "{\"db\": \"/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/nexus-dev.db\", \"namespace\": \"a1-dev\", \"actor\": \"agent\", \"query\": \"click option parameter\", \"sidecars_present\": [\"nexus-dev.db-shm\", \"nexus-dev.db-wal\"], \"reachable\": true, \"active_memories\": 13, \"expected_active\": 13, \"active_as_expected\": true, \"hits\": 6, \"retrieved\": true, \"first_hit\": \"3a2ba70a-5513-41b7-9d42-6286635e6b59\", \"sqlite_version\": \"3.53.4\"}"
    ]
   },
   "repair_is_the_difference": true,

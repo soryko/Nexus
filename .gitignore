@@ -22,3 +22,6 @@ BUILD.json
 
 # failure diagnoses written outside pytest's tmp rotation
 artifacts/
+
+# per-host harness configuration; a1-config.example.json is the committed template
+benchmarks/agent/a1-config.json

@@ -1,0 +1,11 @@
+{
+ "source_clone": "/path/to/a/pallets-click/clone",
+ "pytest_python": "/path/to/.venv-click/bin/python",
+ "venv_python": "/path/to/nexus-memory/.venv-sqlite/bin/python",
+ "nexus_server": "/path/to/nexus-memory/.venv-sqlite/bin/nexus-memory",
+ "forwarder_port": 8899,
+ "corpus_size": 13,
+ "max_turns": 30,
+ "wall_clock_s": 600,
+ "memory_probe_query": "click option parameter"
+}

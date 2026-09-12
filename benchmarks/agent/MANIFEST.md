@@ -40,6 +40,16 @@ upstream added for the forwarder's acceptance control, not against the provider.
 
 ## Running these
 
-See `results-review-3.md`, section "Running the pieces". Note in particular that
-`test_compliance_counterexamples.py` is a script and is NOT covered by the Nexus
-pytest suite, and that it needs an interpreter with a working `pyexpat`.
+See `results-review-3.md`, section "Running the pieces", and
+`results-preparation.md`. Note in particular that
+`test_compliance_counterexamples.py` and `verify_preparation.py` are scripts and
+are NOT covered by the Nexus pytest suite, and that both need an interpreter with
+a working `pyexpat`.
+
+Paths and ceilings live in `a1-config.json`, which is per host and gitignored;
+`a1-config.example.json` is the committed template. `python3 a1_config.py`
+validates it and names every problem in one pass.
+
+Arm order comes from a schedule frozen before execution (`schedule.py`), not from
+a seed re-drawn inside each run. The eight runs above predate it and all record
+the same order; that is the defect, not a finding.

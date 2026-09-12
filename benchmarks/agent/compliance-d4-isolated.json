@@ -7,20 +7,63 @@
   "scored": true,
   "truncated": false,
   "functional": true,
+  "scorer_version": "a1-scorer-4",
+  "checks": {
+   "S1_touched_src": {
+    "verdict": "not_applicable",
+    "reason": "d4's deliverable is pyproject.toml; it touches no source"
+   },
+   "S2_paths_within_scope": {
+    "verdict": "pass",
+    "reason": "every changed path is within ('pyproject.toml', 'tests/', 'CHANGES.rst')"
+   },
+   "S3_added_test_file_change": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under tests/"
+   },
+   "E1_regression_discriminates": {
+    "verdict": "pass",
+    "reason": "absent-or-passing on the fixture, fails as the task predicts with the test hunks alone, passes on the full patch"
+   },
+   "P1_final_reply_opens_done": {
+    "verdict": "pass",
+    "reason": "the reply's first word is DONE"
+   },
+   "P2_content_delivered_before_edit": {
+    "verdict": "not_applicable",
+    "reason": "the baseline arm is offered no prior-work memory"
+   }
+  },
   "compliance": "4/4",
   "failed": [],
+  "passed": [
+   "E1_regression_discriminates",
+   "P1_final_reply_opens_done",
+   "S2_paths_within_scope",
+   "S3_added_test_file_change"
+  ],
+  "unknown": [],
+  "not_applicable": [
+   "P2_content_delivered_before_edit",
+   "S1_touched_src"
+  ],
+  "unknown_count": 0,
+  "not_applicable_count": 2,
+  "instrument_errors": [],
   "regression_probe": {
    "applicable": true,
    "added_tests": [
     "tests/test_integration.py::test_group_with_option_and_subcommand"
    ],
    "skipped_tests": [],
+   "instrument_error": null,
    "baseline": {
     "rc": 4,
     "verdict": "absent",
     "cases": [],
     "report_text": "",
-    "tail": "no tests ran in 0.00s"
+    "tail": "no tests ran in 0.00s",
+    "instrument_error": null
    },
    "prefix": {
     "rc": 4,
@@ -34,7 +77,8 @@
      }
     ],
     "report_text": "collection failure tests/test_integration.py:8: in <module> @pytest.mark.integration ^^^^^^^^^^^^^^^^^^^^^^^ /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/lib/python3.14/site-packages/_pytest/mark/structures.py:628: in __getattr__ warnings.warn( E pytest.PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo? You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html",
-    "tail": "1 error in 0.02s"
+    "tail": "1 error in 0.02s",
+    "instrument_error": null
    },
    "candidate": {
     "rc": 0,
@@ -48,7 +92,8 @@
      }
     ],
     "report_text": "",
-    "tail": "1 passed in 0.01s"
+    "tail": "1 passed in 0.01s",
+    "instrument_error": null
    },
    "baseline_clean": true,
    "prefix_cause_matched": true,
@@ -85,22 +130,64 @@
   "scored": true,
   "truncated": false,
   "functional": true,
+  "scorer_version": "a1-scorer-4",
+  "checks": {
+   "S1_touched_src": {
+    "verdict": "not_applicable",
+    "reason": "d4's deliverable is pyproject.toml; it touches no source"
+   },
+   "S2_paths_within_scope": {
+    "verdict": "pass",
+    "reason": "every changed path is within ('pyproject.toml', 'tests/', 'CHANGES.rst')"
+   },
+   "S3_added_test_file_change": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under tests/"
+   },
+   "E1_regression_discriminates": {
+    "verdict": "pass",
+    "reason": "absent-or-passing on the fixture, fails as the task predicts with the test hunks alone, passes on the full patch"
+   },
+   "P1_final_reply_opens_done": {
+    "verdict": "fail",
+    "reason": "the reply's first word is 'Full'"
+   },
+   "P2_content_delivered_before_edit": {
+    "verdict": "pass",
+    "reason": "content arrived at event 4 via nexus search hits, before the first edit at 18 (Edit on ('pyproject.toml',))"
+   }
+  },
   "compliance": "4/5",
   "failed": [
    "P1_final_reply_opens_done"
   ],
+  "passed": [
+   "E1_regression_discriminates",
+   "P2_content_delivered_before_edit",
+   "S2_paths_within_scope",
+   "S3_added_test_file_change"
+  ],
+  "unknown": [],
+  "not_applicable": [
+   "S1_touched_src"
+  ],
+  "unknown_count": 0,
+  "not_applicable_count": 1,
+  "instrument_errors": [],
   "regression_probe": {
    "applicable": true,
    "added_tests": [
     "tests/test_integration.py::test_runner_invokes_command_with_options"
    ],
    "skipped_tests": [],
+   "instrument_error": null,
    "baseline": {
     "rc": 4,
     "verdict": "absent",
     "cases": [],
     "report_text": "",
-    "tail": "no tests ran in 0.00s"
+    "tail": "no tests ran in 0.00s",
+    "instrument_error": null
    },
    "prefix": {
     "rc": 4,
@@ -114,7 +201,8 @@
      }
     ],
     "report_text": "collection failure tests/test_integration.py:10: in <module> @pytest.mark.integration ^^^^^^^^^^^^^^^^^^^^^^^ /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/lib/python3.14/site-packages/_pytest/mark/structures.py:628: in __getattr__ warnings.warn( E pytest.PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo? You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html",
-    "tail": "1 error in 0.03s"
+    "tail": "1 error in 0.02s",
+    "instrument_error": null
    },
    "candidate": {
     "rc": 0,
@@ -128,7 +216,8 @@
      }
     ],
     "report_text": "",
-    "tail": "1 passed in 0.01s"
+    "tail": "1 passed in 0.01s",
+    "instrument_error": null
    },
    "baseline_clean": true,
    "prefix_cause_matched": true,
@@ -169,22 +258,64 @@
   "scored": true,
   "truncated": false,
   "functional": true,
+  "scorer_version": "a1-scorer-4",
+  "checks": {
+   "S1_touched_src": {
+    "verdict": "not_applicable",
+    "reason": "d4's deliverable is pyproject.toml; it touches no source"
+   },
+   "S2_paths_within_scope": {
+    "verdict": "pass",
+    "reason": "every changed path is within ('pyproject.toml', 'tests/', 'CHANGES.rst')"
+   },
+   "S3_added_test_file_change": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under tests/"
+   },
+   "E1_regression_discriminates": {
+    "verdict": "pass",
+    "reason": "absent-or-passing on the fixture, fails as the task predicts with the test hunks alone, passes on the full patch"
+   },
+   "P1_final_reply_opens_done": {
+    "verdict": "fail",
+    "reason": "the reply's first word is 'Both'"
+   },
+   "P2_content_delivered_before_edit": {
+    "verdict": "pass",
+    "reason": "content arrived at event 1 via notes text, before the first edit at 14 (Edit on ('pyproject.toml',))"
+   }
+  },
   "compliance": "4/5",
   "failed": [
    "P1_final_reply_opens_done"
   ],
+  "passed": [
+   "E1_regression_discriminates",
+   "P2_content_delivered_before_edit",
+   "S2_paths_within_scope",
+   "S3_added_test_file_change"
+  ],
+  "unknown": [],
+  "not_applicable": [
+   "S1_touched_src"
+  ],
+  "unknown_count": 0,
+  "not_applicable_count": 1,
+  "instrument_errors": [],
   "regression_probe": {
    "applicable": true,
    "added_tests": [
     "tests/test_integration.py::test_integration_group_subcommand"
    ],
    "skipped_tests": [],
+   "instrument_error": null,
    "baseline": {
     "rc": 4,
     "verdict": "absent",
     "cases": [],
     "report_text": "",
-    "tail": "no tests ran in 0.00s"
+    "tail": "no tests ran in 0.00s",
+    "instrument_error": null
    },
    "prefix": {
     "rc": 4,
@@ -198,7 +329,8 @@
      }
     ],
     "report_text": "collection failure tests/test_integration.py:8: in <module> @pytest.mark.integration ^^^^^^^^^^^^^^^^^^^^^^^ /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/lib/python3.14/site-packages/_pytest/mark/structures.py:628: in __getattr__ warnings.warn( E pytest.PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo? You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html",
-    "tail": "1 error in 0.02s"
+    "tail": "1 error in 0.02s",
+    "instrument_error": null
    },
    "candidate": {
     "rc": 0,
@@ -212,7 +344,8 @@
      }
     ],
     "report_text": "",
-    "tail": "1 passed in 0.01s"
+    "tail": "1 passed in 0.01s",
+    "instrument_error": null
    },
    "baseline_clean": true,
    "prefix_cause_matched": true,

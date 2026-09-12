@@ -189,6 +189,10 @@ own `.venv-sqlite` python that import fails with `No module named expat`, aborti
 
 ## Still open before held-out registration
 
+**All four are now closed — see [`results-preparation.md`](results-preparation.md).** They
+are left stated here as they were registered, so the record shows what was open at the time
+this document was written rather than being rewritten to look complete.
+
 Four items, none of them repaired here, all of them required before the held-out corpus is
 frozen:
 

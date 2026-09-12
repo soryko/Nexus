@@ -42,6 +42,14 @@ the absence of evidence as evidence:
   itself as missing -- a Bash write after a `cd` into the deliverable directory -- was also
   the case that scored. It is UNKNOWN now: outside the ratio, and listed for review.
 
+A fourth pass changed the shape of a result rather than any check's meaning. A check used to
+be `True`, `False` or `None`, which cannot express the two things this scorer keeps
+discovering it needs to say: *why*, and *the instrument broke*. Both were being flattened
+into `False`, which is a statement about the ARM. Every check now carries `verdict` --
+`pass`, `fail`, `unknown` or `not_applicable` -- with the reason it reached it, and the
+record carries the scorer version that produced it. An instrument failure leaves its own
+check `unknown`, keeps its diagnostics, and leaves every other check reportable.
+
 What is structural stays, and says so in its name. Everything left over is flagged for a
 fixed review rubric rather than guessed at.
 """
@@ -75,7 +83,53 @@ EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit", "Update", "str_repla
 # A check that a machine cannot settle. It is neither a pass nor a fail: it is counted in
 # neither half of the compliance ratio and is listed for review, because silently resolving
 # it either way states something the trace does not support.
-UNKNOWN = "unknown"
+PASS, FAIL, UNKNOWN, NA = "pass", "fail", "unknown", "not_applicable"
+
+# Bumped whenever a check's meaning changes, so a saved record says which scorer produced it.
+# A ratio is not comparable across versions and the version is stored beside every one.
+SCORER_VERSION = "a1-scorer-4"
+SCORER_CHANGELOG = {
+    "a1-scorer-2": "heuristics replaced; regression probe runs three trees",
+    "a1-scorer-3": "delivery recognised by notes text; undetected edit is UNKNOWN",
+    "a1-scorer-4": "every verdict carries a reason; instrument failures are separated from "
+                   "arm outcomes and leave their check UNKNOWN",
+}
+
+
+def verdict(state: str, reason: str, instrument_error: dict | None = None) -> dict:
+    """One check's result: what it is, why, and -- if the instrument broke -- what broke.
+
+    Every check states its own reason. A bare `False` in a saved record tells a later reader
+    that something failed and nothing about what, which is how `E1 = False` came to mean both
+    "the arm wrote no regression test" and "the scorer could not parse its own report".
+    """
+    assert state in (PASS, FAIL, UNKNOWN, NA), state
+    return {"verdict": state, "reason": reason,
+            **({"instrument_error": instrument_error} if instrument_error else {})}
+
+
+def boolean(ok: bool, yes: str, no: str) -> dict:
+    return verdict(PASS if ok else FAIL, yes if ok else no)
+
+
+def tally(checks: dict) -> dict:
+    """Compliance over the SETTLED checks, with the other three states beside it.
+
+    The ratio alone hides its own denominator: 4/5 with one unknown and 4/5 with one
+    not-applicable are different measurements, and neither is 4/6.
+    """
+    states = {k: v["verdict"] for k, v in checks.items()}
+    settled = [k for k, s in states.items() if s in (PASS, FAIL)]
+    return {
+        "compliance": f"{sum(1 for k in settled if states[k] == PASS)}/{len(settled)}",
+        "passed": sorted(k for k in settled if states[k] == PASS),
+        "failed": sorted(k for k in settled if states[k] == FAIL),
+        "unknown": sorted(k for k, s in states.items() if s == UNKNOWN),
+        "not_applicable": sorted(k for k, s in states.items() if s == NA),
+        "unknown_count": sum(1 for s in states.values() if s == UNKNOWN),
+        "not_applicable_count": sum(1 for s in states.values() if s == NA),
+        "instrument_errors": sorted(k for k, v in checks.items() if v.get("instrument_error")),
+    }
 
 
 def notes_lines() -> list[str]:
@@ -259,14 +313,40 @@ def _apply(hunks: str, work: Path) -> subprocess.CompletedProcess:
     return p
 
 
+def _instrument_error(stage: str, detail: str, **extra) -> dict:
+    """A failure OF THE MEASUREMENT, kept apart from anything the arm did.
+
+    The distinction was missing and it biases in the worse direction. `_pytest` caught only
+    `ET.ParseError`, so a broken `pyexpat` -- which this host has, in its own `.venv-sqlite`
+    -- raised `ImportError` out of the scorer and aborted the whole record; and had the
+    `except` been widened instead, the same fault would have produced zero test cases, a
+    verdict of `absent`, and `E1 = False`. An instrument that could not run would have been
+    reported as an arm that failed to write a regression test.
+
+    So it is neither. The verdict goes to UNKNOWN, the diagnostics are kept, and every other
+    check in the record still reports.
+    """
+    return {"stage": stage, "detail": detail[:600], **extra}
+
+
 def _pytest(python: str, work: Path, targets: list[str]) -> dict:
     """Run pytest and read its JUnit report, so failure/error/skip are distinguished by
-    pytest itself rather than inferred from an exit code."""
+    pytest itself rather than inferred from an exit code.
+
+    Returns `instrument_error` instead of a verdict when the measurement itself did not
+    happen: the interpreter could not be launched, pytest reported an internal or usage
+    error, or the report could not be read.
+    """
     xml = work.parent / f"{work.name}-junit.xml"
-    run = subprocess.run([python, "-m", "pytest", *targets, "-q", "-p", "no:randomly",
-                          f"--junit-xml={xml}"],
-                         cwd=work, capture_output=True, text=True,
-                         env={"PYTHONPATH": "src", "PATH": "/usr/bin:/bin"})
+    try:
+        run = subprocess.run([python, "-m", "pytest", *targets, "-q", "-p", "no:randomly",
+                              f"--junit-xml={xml}"],
+                             cwd=work, capture_output=True, text=True,
+                             env={"PYTHONPATH": "src", "PATH": "/usr/bin:/bin"})
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"rc": None, "verdict": None, "cases": [], "report_text": "", "tail": "",
+                "instrument_error": _instrument_error(
+                    "pytest_invoke", f"{type(exc).__name__}: {exc}", python=python)}
     cases: list[dict] = []
     full: list[str] = []
     if xml.exists():
@@ -282,17 +362,31 @@ def _pytest(python: str, work: Path, targets: list[str]) -> dict:
                 full.append(flat)
                 cases.append({"name": tc.get("name", ""), "classname": tc.get("classname", ""),
                               "kind": kind, "message": flat[:300]})
-        except ET.ParseError:
-            pass
+        except Exception as exc:          # ParseError, ImportError from a broken pyexpat, ...
+            xml.unlink(missing_ok=True)
+            return {"rc": run.returncode, "verdict": None, "cases": [], "report_text": "",
+                    "tail": "", "instrument_error": _instrument_error(
+                        "junit_read", f"{type(exc).__name__}: {exc}", report=str(xml))}
         xml.unlink(missing_ok=True)
     text = f"{run.stdout}\n{run.stderr}"
+    # pytest says "file or directory not found" for a missing file and "ERROR: not found:
+    # <file>::<name>" for a missing test id. Both mean the same thing here: the arm's test
+    # does not exist on this tree yet, which is the expected baseline for a newly added test
+    # and must not be read as a failure.
+    absent = ("file or directory not found" in text
+              or re.search(r"^ERROR: not found:", text, re.M) is not None)
+    # 3 is pytest's internal error, 4 its usage error -- and rc 4 is ALSO how pytest reports
+    # the absent case above, which is a legitimate baseline verdict. Only the residue is an
+    # instrument failure. Getting this wrong turned every absent-baseline tree into an
+    # instrument error on the first run of this code.
+    if not cases and (run.returncode == 3 or (run.returncode == 4 and not absent)):
+        return {"rc": run.returncode, "verdict": None, "cases": [], "report_text": "",
+                "tail": (text.strip().splitlines() or [""])[-1],
+                "instrument_error": _instrument_error(
+                    "pytest_exit", f"pytest exited {run.returncode} "
+                    f"({'internal error' if run.returncode == 3 else 'usage error'}): "
+                    f"{text.strip()[-300:]}")}
     if not cases:
-        # pytest says "file or directory not found" for a missing file and "ERROR: not
-        # found: <file>::<name>" for a missing test id. Both mean the same thing here: the
-        # arm's test does not exist on this tree yet, which is the expected baseline for a
-        # newly added test and must not be read as a failure.
-        absent = ("file or directory not found" in text
-                  or re.search(r"^ERROR: not found:", text, re.M) is not None)
         verdict = ("absent" if absent
                    else "not_collected" if run.returncode == 5
                    else f"no_report(rc={run.returncode})")
@@ -309,7 +403,8 @@ def _pytest(python: str, work: Path, targets: list[str]) -> dict:
     # `PytestUnknownMarkWarning` -- sits well past 300 characters into the traceback.
     return {"rc": run.returncode, "verdict": verdict, "cases": cases,
             "report_text": " ".join(" ".join(full).split())[:2000],
-            "tail": (run.stdout.strip().splitlines() or [""])[-1]}
+            "tail": (run.stdout.strip().splitlines() or [""])[-1],
+            "instrument_error": None}
 
 
 # What a genuine regression test looks like on the UNFIXED tree, per task. `d4` registers a
@@ -344,7 +439,8 @@ def regression_discriminates(patch: str, pristine: Path, python: str, task: str)
                 "reason": "no module-level test function added by the patch"}
 
     exp = PREFIX_EXPECTATION.get(task, PREFIX_EXPECTATION["default"])
-    out: dict = {"applicable": True, "added_tests": ids, "skipped_tests": skipped}
+    out: dict = {"applicable": True, "added_tests": ids, "skipped_tests": skipped,
+                 "instrument_error": None}
     with tempfile.TemporaryDirectory() as td:
         base = Path(td) / "baseline"
         shutil.copytree(pristine, base, symlinks=True)
@@ -361,9 +457,17 @@ def regression_discriminates(patch: str, pristine: Path, python: str, task: str)
         cand = Path(td) / "candidate"
         shutil.copytree(pristine, cand, symlinks=True)
         ac = _apply(patch, cand)
-        out["candidate"] = ({"verdict": "patch_did_not_apply",
+        out["candidate"] = ({"verdict": "patch_did_not_apply", "instrument_error": None,
                              "tail": (ac.stderr or ac.stdout).strip()[:120]}
                             if ac.returncode else _pytest(python, cand, ids))
+
+    # One tree that could not be measured makes the whole transition unmeasured. It is NOT
+    # read as a missing transition, which is what "discriminates = False" would say.
+    for tree in ("baseline", "prefix", "candidate"):
+        if (err := out[tree].get("instrument_error")):
+            out["instrument_error"] = {**err, "tree": tree}
+            out["discriminates"] = None
+            return out
 
     # baseline: the test must not already have been failing on the fixture
     out["baseline_clean"] = out["baseline"]["verdict"] in ("absent", "not_collected", "passed")
@@ -391,20 +495,49 @@ def score(run_dir: Path, task: str, arm: str, pristine: Path, python: str) -> di
     patch = (run_dir / "arms" / arm / "patch.diff").read_text()
     t = parse(run_dir / "arms" / arm / "trace.jsonl")
     files = changed_files(patch)
+    scope = ALLOWED.get(task, ALLOWED["default"])
 
     # --- structural: cheap, honest about what they are ---
-    structural = {
-        "S1_touched_src": (None if task == "d4"
-                           else any(f.startswith("src/click/") for f in files)),
-        "S2_paths_within_scope": bool(files) and all(
-            f.startswith(ALLOWED.get(task, ALLOWED["default"])) for f in files),
-        "S3_added_test_file_change": any(f.startswith("tests/") for f in files),
+    checks = {
+        "S1_touched_src": (
+            verdict(NA, "d4's deliverable is pyproject.toml; it touches no source")
+            if task == "d4" else
+            boolean(any(f.startswith("src/click/") for f in files),
+                    "the patch changes a file under src/click/",
+                    f"no file under src/click/ in {files or 'an empty patch'}")),
+        "S2_paths_within_scope": boolean(
+            bool(files) and all(f.startswith(scope) for f in files),
+            f"every changed path is within {scope}",
+            f"outside {scope}: {[f for f in files if not f.startswith(scope)] or 'empty patch'}"),
+        "S3_added_test_file_change": boolean(
+            any(f.startswith("tests/") for f in files),
+            "the patch changes a file under tests/",
+            "no file under tests/ in the patch"),
     }
 
-    # --- executed: the only requirement a machine can settle here ---
-    reg = regression_discriminates(patch, pristine, python, task)
-    executed = {"E1_regression_discriminates": (reg.get("discriminates")
-                                                if reg["applicable"] else False)}
+    # --- executed: the only requirement a machine can settle here. An instrument failure
+    # --- here must not take the other five checks down with it, so it is caught.
+    try:
+        reg = regression_discriminates(patch, pristine, python, task)
+    except Exception as exc:                       # the scorer, not the arm
+        reg = {"applicable": True, "discriminates": None,
+               "instrument_error": _instrument_error(
+                   "regression_probe", f"{type(exc).__name__}: {exc}")}
+    if reg.get("instrument_error"):
+        checks["E1_regression_discriminates"] = verdict(
+            UNKNOWN, "the regression probe did not run; the arm's test is unmeasured",
+            instrument_error=reg["instrument_error"])
+    elif not reg["applicable"]:
+        checks["E1_regression_discriminates"] = verdict(
+            FAIL, f"no addressable regression test: {reg.get('reason', 'none given')}")
+    else:
+        checks["E1_regression_discriminates"] = boolean(
+            bool(reg.get("discriminates")),
+            "absent-or-passing on the fixture, fails as the task predicts with the test "
+            "hunks alone, passes on the full patch",
+            f"baseline_clean={reg.get('baseline_clean')} "
+            f"fails_prefix={reg.get('fails_prefix')} "
+            f"passes_candidate={reg.get('passes_candidate')}")
 
     # --- exact, not substring ---
     txt = final_text(t["result"])
@@ -413,39 +546,42 @@ def score(run_dir: Path, task: str, arm: str, pristine: Path, python: str) -> di
     # a substring test accepts "NOT DONE" and any prose containing the word. The rule is the
     # first word of the reply.
     first_word = re.match(r"\s*([A-Za-z]+)", txt)
-    protocol = {"P1_final_reply_opens_done":
-                bool(first_word) and first_word.group(1).upper() == "DONE"}
+    opens_done = bool(first_word) and first_word.group(1).upper() == "DONE"
+    checks["P1_final_reply_opens_done"] = boolean(
+        opens_done, "the reply's first word is DONE",
+        f"the reply's first word is {first_word.group(1) if first_word else '(nothing)'!r}")
 
     # --- consultation must have DELIVERED content before the first edit, not merely been
     # --- issued before it
     delivery = first_delivery_event(t["calls"])
     edit = first_edit_event(t["calls"], task)
-    memory_offered = arm in ("nexus", "notes")
     # An edit the matcher could not locate leaves the ORDER unknown, not satisfied. The
     # previous rule read `not edit["found"]` as "nothing to be late for" and passed the
-    # check -- so the one shape the matcher admits it can miss, a Bash write after a `cd`
-    # into the deliverable directory, was also the shape that scored best. Non-detection now
-    # costs the check its place in the ratio and sends it to review. (The patch is the
-    # evidence a reviewer settles it with: an arm with a non-empty diff edited something.)
-    if not memory_offered:
-        p2 = None
+    # check -- so the one shape the matcher admits it can miss, a write that reaches the
+    # deliverable without spelling its path, was also the shape that scored best.
+    if arm not in ("nexus", "notes"):
+        p2 = verdict(NA, f"the {arm} arm is offered no prior-work memory")
     elif not delivery["found"]:
-        p2 = False                      # nothing was delivered at all; order does not arise
+        p2 = verdict(FAIL, "no prior-work content was delivered at any point")
     elif not edit["found"]:
-        p2 = UNKNOWN
+        p2 = verdict(UNKNOWN,
+                     f"content arrived at event {delivery['at']} via {delivery['via']}, but "
+                     f"no edit was located on {EDIT_SCOPE.get(task, EDIT_SCOPE['default'])} "
+                     f"-- the order cannot be settled from the trace; read the patch")
     else:
-        p2 = delivery["at"] < edit["at"]
-    protocol["P2_content_delivered_before_edit"] = p2
+        p2 = boolean(delivery["at"] < edit["at"],
+                     f"content arrived at event {delivery['at']} via {delivery['via']}, "
+                     f"before the first edit at {edit['at']} ({edit['why']})",
+                     f"content arrived at event {delivery['at']} via {delivery['via']}, "
+                     f"after the first edit at {edit['at']} ({edit['why']})")
+    checks["P2_content_delivered_before_edit"] = p2
 
-    checks = {**structural, **executed, **protocol}
-    settled = [v for v in checks.values() if v is True or v is False]
-    unsettled = [k for k, v in checks.items() if v == UNKNOWN]
+    counts = tally(checks)
     return {
         "task": task, "arm": arm,
+        "scorer_version": SCORER_VERSION,
         "checks": checks,
-        "compliance": f"{sum(1 for v in settled if v)}/{len(settled)}",
-        "unsettled": unsettled,
-        "failed": [k for k, v in checks.items() if v is False],
+        **counts,
         "regression_probe": reg,
         "consultation": {"first_delivery": delivery, "first_edit": edit},
         "final_reply": txt[:60],
@@ -453,8 +589,7 @@ def score(run_dir: Path, task: str, arm: str, pristine: Path, python: str) -> di
             "relevance of the source change to the reported defect",
             "whether the added test covers the defect rather than merely failing in the "
             "predicted way",
-            *(["P2: no edit was located on the deliverable surface, so consultation ORDER "
-               "is unknown -- read the patch and the trace by hand"] if unsettled else []),
+            *(f"{k}: {checks[k]['reason']}" for k in counts["unknown"]),
         ],
         "trace_health": {"orphan_results": t["orphans"], "unresolved_calls": t["unresolved"]},
     }
