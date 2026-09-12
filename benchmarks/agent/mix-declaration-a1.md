@@ -63,6 +63,35 @@ None of the three prevents a determined author from re-capturing and re-declarin
 scratch. They establish that *this* corpus and *this* declaration are the ones the results
 were produced under, which is the claim the evaluation actually needs.
 
+## What the declaration must record — settled 2026-09-12
+
+The registered rule stands: **the existing author may declare the mix.** Independence between
+the person who authored the prompts and harness and the person who declares the mix would
+strengthen a later evaluation, and it is deliberately *not* made an A1 requirement — adding one
+here would be a new prerequisite invented after the harness was built.
+
+What makes that admissible is disclosure rather than independence, so four things are recorded
+before any held-out arm runs, and `freeze_corpus.py` refuses a declaration missing any of them:
+
+1. **The frozen corpus digest** — `declared_against_corpus_digest`, which must equal the row
+   digest the freeze computes. A mismatch means a memory changed between freezing and
+   declaring, which is the one thing this document says declaring may never do.
+2. **Each task's category and its supporting memory references** — `memory` (useful /
+   unnecessary / outdated) and `relevance` (corpus id → necessary / support / outdated), with
+   `discoverability` on every necessary fact.
+3. **The declarer's prior exposure** — name, and whether they read the held-out prompts,
+   authored them, authored the harness, and read the freeze registration. Stated, not avoided.
+4. **Any missing category, as an unmet requirement** — printed `UNMET`, written into the
+   freeze record, and left there.
+
+The declaration must leave the corpus and the task selection unchanged, and both halves are
+checked rather than promised: the digest binds the corpus, and the declared task keys must be
+exactly the registered held-out set — a declaration that adds or drops a task is refused.
+
+That second half was, for a while, a check that could not fail. The expected task list was
+read from the declaration's own keys, so "no mix category declared for h3" passed
+unconditionally. It reads the registration now.
+
 ## A missing category is a result
 
 `freeze-heldout-a1` §2 already says it and it is repeated here because it is the rule most

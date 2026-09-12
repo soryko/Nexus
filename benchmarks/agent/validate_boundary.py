@@ -499,8 +499,26 @@ def main() -> int:
         print(f"ABORT: arms do not have distinct stores: {distinct}")
         return 1
 
-    record: dict = {"task": TASK, "python": PY, "forwarder_port": FWD_PORT,
-                    "config": CFG.as_recorded(), "master_store": str(MASTER), "arms": {}}
+    record: dict = {
+        "task": TASK, "python": PY, "forwarder_port": FWD_PORT,
+        "config": CFG.as_recorded(), "master_store": str(MASTER),
+        # What the memory control does and does not establish. It is run against the
+        # DEVELOPMENT corpus, seeded here from corpus-dev-a1.json, because that is the corpus
+        # that exists before capture. `active_memories` and `hits` below therefore demonstrate
+        # that the boundary and the retrieval path work -- an arm reaching a real store over
+        # MCP from inside the sandbox. They say nothing about the held-out corpus's size or
+        # contents, which do not exist until run_capture.py and freeze_corpus.py produce them.
+        # The held-out run checks against ITS OWN frozen values: `corpus_digest` gates the
+        # master before any arm starts, and `corpus_size` is what the reachability gate
+        # compares each arm's own probe against. Both are set from the freeze record.
+        "corpus_under_validation": {
+            "which": "development",
+            "source": "corpus-dev-a1.json, seeded by seed_store.py",
+            "expected_active_memories": CORPUS_SIZE,
+            "establishes": "the boundary and the MCP retrieval path, with a real store",
+            "does_not_establish": "the held-out corpus's size or contents",
+        },
+        "arms": {}}
     ok = True
     stores = {}
     for arm in ARMS:

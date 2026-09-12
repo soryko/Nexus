@@ -54,6 +54,22 @@ CORPUS_VERSION = "heldout-a1"
 MIX_CATEGORIES = ("useful", "unnecessary", "outdated")
 #: The two labels §7b requires every necessary fact to carry.
 DISCOVERABILITY = ("discoverable", "absent")
+#: Exposure the declarer must state. The registered rule lets the existing author declare the
+#: mix, so what makes that admissible is the exposure being on the record rather than absent.
+EXPOSURE_FIELDS = ("read_heldout_prompts", "authored_heldout_prompts", "authored_harness",
+                   "read_freeze_registration")
+
+
+def registered_heldout_tasks() -> list[str]:
+    """The held-out set, read from its registration.
+
+    NOT from the declaration's own keys, which is where this came from first: with the
+    expected set derived from the thing being checked, "no mix category declared for h3"
+    could never fire, and the check that exists to catch a task nobody classified passed
+    unconditionally.
+    """
+    return [t["task"] for t in
+            json.loads((BENCH / "tasks-heldout-a1.json").read_text())["tasks"]]
 
 
 def rows(db: Path, namespace: str, actor: str) -> list[dict]:
@@ -114,7 +130,8 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def validate_mix(mix: dict | None, corpus: list[dict], tasks: list[str]) -> dict:
+def validate_mix(mix: dict | None, corpus: list[dict], tasks: list[str],
+                 corpus_digest: str | None = None) -> dict:
     """Check the declaration against `protocol-a1` §7 and §7b. Reports; never repairs.
 
     Three findings are possible and all three are results rather than errors: a category with
@@ -130,6 +147,34 @@ def validate_mix(mix: dict | None, corpus: list[dict], tasks: list[str]) -> dict
     known = {m["id"] for m in corpus}
     per_task = mix.get("tasks", {})
     unmet, notes = [], []
+
+    # The declaration must be bound to the corpus it was written against. A digest that does
+    # not match the frozen one means a memory changed between freezing and declaring, which is
+    # the one thing mix-declaration-a1.md says declaring may never do.
+    claimed = mix.get("declared_against_corpus_digest")
+    if corpus_digest is not None:
+        if not claimed:
+            unmet.append("declaration does not state declared_against_corpus_digest; it must "
+                         "name the corpus it was written against")
+        elif claimed != corpus_digest:
+            unmet.append(f"declaration was written against corpus {claimed}, but the frozen "
+                         f"corpus is {corpus_digest}: the corpus changed, which a declaration "
+                         f"may not do")
+
+    # The declarer's exposure, on the record. The registered rule permits the existing author
+    # to declare, so the safeguard is not independence but disclosure.
+    declarer = mix.get("declarer") or {}
+    missing_exposure = [f for f in EXPOSURE_FIELDS if f not in declarer]
+    if missing_exposure:
+        unmet.append(f"declarer exposure not stated: {', '.join(missing_exposure)}")
+    elif not declarer.get("name"):
+        unmet.append("declarer.name is not stated")
+
+    # Task selection unchanged: exactly the registered held-out set, no more and no fewer.
+    extra = sorted(set(per_task) - set(tasks))
+    if extra:
+        unmet.append(f"declaration classifies tasks that are not in the registered held-out "
+                     f"set: {', '.join(extra)}. A declaration may not change task selection.")
 
     unknown = sorted({mid for task in per_task.values()
                       for mid in task.get("relevance", {}) if mid not in known})
@@ -205,10 +250,9 @@ def main(argv: list[str]) -> int:
 
     tasks = [t["task"] for t in
              json.loads((BENCH / "tasks-capture-a1.json").read_text())["tasks"]]
-    heldout_tasks = sorted((json.loads(mix_path.read_text()).get("tasks", {}) if mix_path
-                            else {}).keys())
+    heldout_tasks = registered_heldout_tasks()
     mix = json.loads(mix_path.read_text()) if mix_path else None
-    verdict = validate_mix(mix, memories, heldout_tasks or [])
+    verdict = validate_mix(mix, memories, heldout_tasks, digest)
 
     corpus = {
         "corpus_version": CORPUS_VERSION,
@@ -299,6 +343,9 @@ def main(argv: list[str]) -> int:
         "mix_declaration": str(mix_path) if mix_path else None,
         "mix_declaration_sha256": sha256_file(mix_path) if mix_path else None,
         "mix": verdict,
+        "declarer": (mix or {}).get("declarer"),
+        "registered_heldout_tasks": heldout_tasks,
+        "task_selection_unchanged": sorted((mix or {}).get("tasks", {})) == sorted(heldout_tasks),
         "frozen_utc": corpus["frozen_utc"],
         "config_to_set": {"store_master": str(master), "corpus_digest": master_digest,
                           "corpus_size": len(memories), "notes_file": notes_path.name},
