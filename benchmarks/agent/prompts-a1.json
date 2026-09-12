@@ -44,6 +44,26 @@
    "role": "capture",
    "tail": "default",
    "body": "In this Click checkout, a callable used as an option's flag value is called when it supplies that option's default.\n\nReproduction: a command with an option declared `@click.option(\"--opt\", \"value\", flag_value=Marker, type=UNPROCESSED, default=True)` -- where `Marker` is a plain class -- invoked with no arguments prints an instance of `Marker`. Invoked as `--opt` it prints the class itself, which is what both cases should print. An entry for that option in a context's `default_map` must still take precedence over the flag value, and a callable sitting in a `default_map` must still be called."
+  },
+  "h1": {
+   "role": "evaluation",
+   "tail": "default",
+   "body": "In this Click checkout, two flags that share a destination arbitrate incorrectly against an explicit default.\n\nReproduction: a command declaring `@click.option(\"--without-xyz\", \"xyz\", flag_value=False)` and `@click.option(\"--with-xyz\", \"xyz\", flag_value=True, default=True)`, invoked with no arguments, prints `False`. It should print `True`. Invoked as `--with-xyz` it prints `True` and as `--without-xyz` it prints `False`, and both are already correct. When both flags are given the last one on the command line should win, and none of this should depend on which of the two decorators is applied first."
+  },
+  "h2": {
+   "role": "evaluation",
+   "tail": "default",
+   "body": "In this Click checkout, the usage line brackets an optional argument's choices twice.\n\nReproduction: a command with `@click.argument(\"method\", type=click.Choice([\"foo\", \"bar\", \"baz\"]), nargs=-1)` renders `Usage: cli-variadic [OPTIONS] [[foo|bar|baz]]...`, and the same argument declared `required=False` renders `Usage: cli-optional [OPTIONS] [[foo|bar|baz]]`. Each should carry a single pair of brackets: `[foo|bar|baz]...` and `[foo|bar|baz]`. Any other type that renders its own metavar, such as a date format, should behave the same way."
+  },
+  "h3": {
+   "role": "evaluation",
+   "tail": "default",
+   "body": "In this Click checkout, a parameter named `help` collides with the automatic help option.\n\nReproduction: `click.Command(\"cli\", params=[click.Argument([\"help\"])], callback=...)`, invoked with `value`, exits 2 with `Error: Invalid value for '--help': 'value' is not a valid boolean.` It should run the callback and pass it `value`. The same happens for an option whose destination is `help`. The automatic `--help` must keep working and must still show `Show this message and exit.`, including when a command sets its own help option names."
+  },
+  "h4": {
+   "role": "evaluation",
+   "tail": "default",
+   "body": "In this Click checkout, a sentinel value does not survive pickling.\n\nReproduction: `pickle.loads(pickle.dumps(UNSET))` -- with `UNSET` imported from `click._utils` -- raises `ValueError: <object object at 0x...> is not a valid Sentinel`. It should return the same member, so that the round-tripped value is identical to the original. `copy.copy` and `copy.deepcopy` of the same value already return the member and must continue to. Every member of that sentinel type is affected, not only `UNSET`."
   }
  },
  "capture_instruction": "\n\nYou are the first session to work in this repository, and a later session will work in it after you. As you go, record what that later session would want to know, using the memory tools you have (`record`, and `revise` to correct something you already recorded). Record as you work rather than all at the end, and record what you would have wanted to know when you started.\n\nRecord four kinds of thing, and apply the test beside each one before recording it:\n- `decision` — a choice already made in this codebase, and its reason. Could a reader reach this by reading the code as it stands?\n- `constraint` — an invariant or convention the code holds to. Is it stated or evident in the code, the docs or the tests as they stand?\n- `procedure` — how something is done in this repository. Did you actually do it this way?\n- `failure` — something that went wrong and what it turned out to be. Did you observe it, rather than anticipate it?\nUse `observation` only for something that fits none of those four.\n\nDo not record:\n1. Anything you can state only because you did this task — the change you made, where you made it, or a description of the defect specific enough to substitute for finding it.\n2. Anything about the tests that judge this work: no test name, no assertion, no expected output.\n3. Anything that is true only after your change. A convention your own fix introduces is not prior knowledge, however true it is once you are done.\n4. The task statement, or anything that reads as an instruction for a later task.\n\nThe test that separates a recordable constraint from a leak is whether it names the convention or the violation. \"Values of this kind are normalised before they are compared\" is a convention, discoverable in the code as it stands, and is recordable. \"This particular path forgets to normalise them\" is the defect you were asked to find, and is not."
