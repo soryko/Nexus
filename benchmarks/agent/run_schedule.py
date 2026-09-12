@@ -99,7 +99,7 @@ def main(argv: list[str]) -> int:
         if record.exists():
             data = json.loads(record.read_text())
             entry["arms"] = {r["arm"]: {
-                "terminal": (r.get("terminal") or {}).get("verdict"),
+                "terminal": (r.get("terminal") or {}).get("terminal"),
                 "checks": (r.get("scored") or {}).get("summary"),
                 "store_unchanged": (r.get("store") or {}).get("unchanged")}
                 for r in data["records"]}

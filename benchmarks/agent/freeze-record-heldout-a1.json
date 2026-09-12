@@ -1,0 +1,60 @@
+{
+ "corpus": "/Users/soko/Cerebros/nexus-memory/benchmarks/agent/corpus-heldout-a1.json",
+ "corpus_sha256": "91156294039b6f37228dd28731b4c566ad5cbafa496142499da8298afaf805e7",
+ "notes": "/Users/soko/Cerebros/nexus-memory/benchmarks/agent/notes-heldout-a1.md",
+ "notes_sha256": "3e26bc4ce08f6f71377de69f9ac73ebf1c1ab2ba6f86badac591bccad4dc01e9",
+ "notes_withheld_fields": [
+  "memory_id"
+ ],
+ "master_store": "/Users/soko/Cerebros/nexus-a1-fixtures/heldout-corpus/nexus-heldout.db",
+ "master_digest": "9ae2a9f268dd894d",
+ "capture_store_digest": "9ae2a9f268dd894d",
+ "master_matches_capture": true,
+ "memories": 13,
+ "memories_with_history": [],
+ "mix_declaration": "benchmarks/agent/mix-heldout-a1.json",
+ "mix_declaration_sha256": "21a44b688ed3f65fb5b6ed1bc6760ee285c885e8290292c0134e4f74be51ad71",
+ "mix": {
+  "declared": true,
+  "categories": {
+   "h1": "outdated",
+   "h2": "unnecessary",
+   "h3": "unnecessary",
+   "h4": "useful"
+  },
+  "unmet": [],
+  "notes": [
+   "useful: h4",
+   "unnecessary: h2, h3",
+   "outdated: h1",
+   "no memory is declared NECESSARY for any task. Section 7b's two labels therefore have nothing to apply to, and this corpus can measure neither retrieval efficiency nor retrieval necessity on a required fact. Reported, not corrected."
+  ],
+  "necessary_facts": 0
+ },
+ "declarer": {
+  "name": "Claude Opus 5, the session that built the harness and authored the prompts",
+  "read_heldout_prompts": true,
+  "authored_heldout_prompts": true,
+  "authored_harness": true,
+  "read_freeze_registration": true,
+  "note": "Permitted by freeze-heldout-a1.md section 2 as read in mix-declaration-a1.md: declaring is not selecting, provided the corpus is invariant across the declaration. The declarer did not author, edit or select any memory -- all thirteen were written by the capture sessions of attempt 3, whose traces are preserved at nexus-a1-fixtures/capture-attempt-3/. Independence between the prompt author and the mix declarer would strengthen a later evaluation and is not an A1 requirement."
+ },
+ "registered_heldout_tasks": [
+  "h1",
+  "h2",
+  "h3",
+  "h4"
+ ],
+ "task_selection_unchanged": true,
+ "frozen_utc": "2026-09-12T13:02:33.012664+00:00",
+ "config_to_set": {
+  "store_master": "/Users/soko/Cerebros/nexus-a1-fixtures/heldout-corpus/nexus-heldout.db",
+  "corpus_digest": "9ae2a9f268dd894d",
+  "corpus_size": 13,
+  "notes_file": "notes-heldout-a1.md"
+ },
+ "next": [
+  "set the four configuration values above in a1-config.json",
+  "only then reveal the held-out tasks and run the arms"
+ ]
+}

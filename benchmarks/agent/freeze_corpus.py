@@ -206,6 +206,14 @@ def validate_mix(mix: dict | None, corpus: list[dict], tasks: list[str],
             label = spec.get("discoverability", {}).get(mid)
             (labelled if label in DISCOVERABILITY else unlabelled).append((task, mid, label))
     seen = {label for _, _, label in labelled}
+    if not labelled and not unlabelled:
+        # Not an unmet requirement -- section 7b labels necessary facts, it does not require
+        # any to exist -- but a set with none measures neither retrieval efficiency nor
+        # retrieval necessity, and a reader must not have to infer that from an empty map.
+        notes.append("no memory is declared NECESSARY for any task. Section 7b's two labels "
+                     "therefore have nothing to apply to, and this corpus can measure neither "
+                     "retrieval efficiency nor retrieval necessity on a required fact. "
+                     "Reported, not corrected.")
     if unlabelled:
         unmet.append(f"necessary facts with no discoverability label (section 7b): "
                      f"{[(t, m) for t, m, _ in unlabelled]}")
@@ -297,7 +305,7 @@ def main(argv: list[str]) -> int:
     print(f"  memories      {len(memories)} live, {len(revised)} with superseded revisions")
     print(f"  row digest    {digest}")
     print(f"  capture runs  " + ", ".join(
-        f"{r['task']}={r.get('terminal', {}).get('verdict', '?')}"
+        f"{r['task']}={(r.get('terminal') or {}).get('terminal', '?')}"
         for r in captured.get("records", [])))
     print(f"\nmix declaration: {'none supplied' if mix is None else mix_path}")
     for line in verdict.get("notes", []):
