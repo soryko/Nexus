@@ -18,3 +18,28 @@ Executed but NOT counted above, because they produced no records file:
     (tokens spent) and then died on a dangling variable left by an edit to the
     runner -- `blocked`, then `vis`. Partial output was discarded and the
     attempt restarted from a fresh fixture. Recorded so the spend is visible.
+
+## Not an arm-run
+
+`smoke-a1/` holds one integrated smoke test of the boundary repaired after the
+review of 2a966c1: a model response, a repository read, an edit and a Nexus
+retrieval, on a d1 fixture with no task in the prompt. It produces no compliance
+figure, no functional verdict and no row in the table above, and its record says
+so in its first field. It exists because `claude --version` and
+`nexus-memory --help` cannot establish that the request/tool loop survives the
+restrictions -- and on its first two executions it found two boundary defects
+that every model-free control had passed. See `results-review-3.md`.
+
+Two earlier executions of it were discarded and are not preserved. The first
+died at 0.4 s on `EPERM ... open '/tmp/claude-501'` before any token was spent.
+The second completed (6 127 in / 1 726 out) with every Bash call refused, which
+is how the second defect was found. Both are reported in
+`results-review-3.md §7`; the run kept here is the third, after both repairs.
+The diagnosis between them cost nothing: it ran against the loopback stub
+upstream added for the forwarder's acceptance control, not against the provider.
+
+## Running these
+
+See `results-review-3.md`, section "Running the pieces". Note in particular that
+`test_compliance_counterexamples.py` is a script and is NOT covered by the Nexus
+pytest suite, and that it needs an interpreter with a working `pyexpat`.

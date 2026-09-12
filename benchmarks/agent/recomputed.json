@@ -32,10 +32,10 @@
       "name": "test_empty_envvar_auto_prefix",
       "classname": "tests.test_options",
       "kind": "failure",
-      "message": "assert 2 == 0 + where 2 = <Result SystemExit(2)>.exit_code runner = <click.testing.CliRunner object at 0x10700aba0> def test_empty_envvar_auto_prefix(runner): @click.command() @click.option(\"--mypath\", type=click.Path(exists=True), envvar=\"MYPATH\") def cli(mypath): click.echo(f\"mypath: {mypath}\") re"
+      "message": "assert 2 == 0 + where 2 = <Result SystemExit(2)>.exit_code runner = <click.testing.CliRunner object at 0x1066baba0> def test_empty_envvar_auto_prefix(runner): @click.command() @click.option(\"--mypath\", type=click.Path(exists=True), envvar=\"MYPATH\") def cli(mypath): click.echo(f\"mypath: {mypath}\") re"
      }
     ],
-    "report_text": "assert 2 == 0 + where 2 = <Result SystemExit(2)>.exit_code runner = <click.testing.CliRunner object at 0x10700aba0> def test_empty_envvar_auto_prefix(runner): @click.command() @click.option(\"--mypath\", type=click.Path(exists=True), envvar=\"MYPATH\") def cli(mypath): click.echo(f\"mypath: {mypath}\") result = runner.invoke( cli, [], auto_envvar_prefix=\"AUTO\", env={\"AUTO_MYPATH\": \"\"} ) > assert result.exit_code == 0 E assert 2 == 0 E + where 2 = <Result SystemExit(2)>.exit_code tests/test_options.py:176: AssertionError",
+    "report_text": "assert 2 == 0 + where 2 = <Result SystemExit(2)>.exit_code runner = <click.testing.CliRunner object at 0x1066baba0> def test_empty_envvar_auto_prefix(runner): @click.command() @click.option(\"--mypath\", type=click.Path(exists=True), envvar=\"MYPATH\") def cli(mypath): click.echo(f\"mypath: {mypath}\") result = runner.invoke( cli, [], auto_envvar_prefix=\"AUTO\", env={\"AUTO_MYPATH\": \"\"} ) > assert result.exit_code == 0 E assert 2 == 0 E + where 2 = <Result SystemExit(2)>.exit_code tests/test_options.py:176: AssertionError",
     "tail": "1 failed in 0.05s"
    },
    "candidate": {
@@ -59,11 +59,8 @@
   },
   "consultation": {
    "first_delivery": {
-    "found": true,
-    "at": 2,
-    "issued_at": 0,
-    "index": 0,
-    "tool": "Bash"
+    "found": false,
+    "at": null
    },
    "first_edit": {
     "found": true,
@@ -114,10 +111,10 @@
       "name": "test_empty_envvar_auto_prefix",
       "classname": "tests.test_options",
       "kind": "failure",
-      "message": "assert 2 == 0 + where 2 = <Result SystemExit(2)>.exit_code runner = <click.testing.CliRunner object at 0x109362ba0> def test_empty_envvar_auto_prefix(runner): @click.command() @click.option(\"--mypath\", type=click.Path(exists=True), envvar=\"MYPATH\") def cli(mypath): click.echo(f\"mypath: {mypath}\") re"
+      "message": "assert 2 == 0 + where 2 = <Result SystemExit(2)>.exit_code runner = <click.testing.CliRunner object at 0x10aa26ba0> def test_empty_envvar_auto_prefix(runner): @click.command() @click.option(\"--mypath\", type=click.Path(exists=True), envvar=\"MYPATH\") def cli(mypath): click.echo(f\"mypath: {mypath}\") re"
      }
     ],
-    "report_text": "assert 2 == 0 + where 2 = <Result SystemExit(2)>.exit_code runner = <click.testing.CliRunner object at 0x109362ba0> def test_empty_envvar_auto_prefix(runner): @click.command() @click.option(\"--mypath\", type=click.Path(exists=True), envvar=\"MYPATH\") def cli(mypath): click.echo(f\"mypath: {mypath}\") result = runner.invoke(cli, [], auto_envvar_prefix=\"AUTO\", env={\"AUTO_MYPATH\": \"\"}) > assert result.exit_code == 0 E assert 2 == 0 E + where 2 = <Result SystemExit(2)>.exit_code tests/test_options.py:174: AssertionError",
+    "report_text": "assert 2 == 0 + where 2 = <Result SystemExit(2)>.exit_code runner = <click.testing.CliRunner object at 0x10aa26ba0> def test_empty_envvar_auto_prefix(runner): @click.command() @click.option(\"--mypath\", type=click.Path(exists=True), envvar=\"MYPATH\") def cli(mypath): click.echo(f\"mypath: {mypath}\") result = runner.invoke(cli, [], auto_envvar_prefix=\"AUTO\", env={\"AUTO_MYPATH\": \"\"}) > assert result.exit_code == 0 E assert 2 == 0 E + where 2 = <Result SystemExit(2)>.exit_code tests/test_options.py:174: AssertionError",
     "tail": "1 failed in 0.05s"
    },
    "candidate": {
@@ -142,10 +139,11 @@
   "consultation": {
    "first_delivery": {
     "found": true,
-    "at": 3,
-    "issued_at": 0,
-    "index": 0,
-    "tool": "Bash"
+    "at": 5,
+    "issued_at": 4,
+    "index": 2,
+    "tool": "mcp__nexus__search",
+    "via": "nexus search hits"
    },
    "first_edit": {
     "found": true,
@@ -191,7 +189,7 @@
      }
     ],
     "report_text": "",
-    "tail": "1 passed in 0.04s"
+    "tail": "1 passed in 0.03s"
    },
    "prefix": {
     "rc": 1,
@@ -207,10 +205,10 @@
       "name": "test_empty_envvar[AUTO_MYPATH]",
       "classname": "tests.test_options",
       "kind": "failure",
-      "message": "assert 2 == 0 + where 2 = <Result SystemExit(2)>.exit_code runner = <click.testing.CliRunner object at 0x1070525d0>, envvar = 'AUTO_MYPATH' @pytest.mark.parametrize(\"envvar\", [\"MYPATH\", \"AUTO_MYPATH\"]) def test_empty_envvar(runner, envvar): @click.command() @click.option(\"--mypath\", type=click.Path("
+      "message": "assert 2 == 0 + where 2 = <Result SystemExit(2)>.exit_code runner = <click.testing.CliRunner object at 0x10ab0a5d0>, envvar = 'AUTO_MYPATH' @pytest.mark.parametrize(\"envvar\", [\"MYPATH\", \"AUTO_MYPATH\"]) def test_empty_envvar(runner, envvar): @click.command() @click.option(\"--mypath\", type=click.Path("
      }
     ],
-    "report_text": "assert 2 == 0 + where 2 = <Result SystemExit(2)>.exit_code runner = <click.testing.CliRunner object at 0x1070525d0>, envvar = 'AUTO_MYPATH' @pytest.mark.parametrize(\"envvar\", [\"MYPATH\", \"AUTO_MYPATH\"]) def test_empty_envvar(runner, envvar): @click.command() @click.option(\"--mypath\", type=click.Path(exists=True), envvar=\"MYPATH\") def cli(mypath): click.echo(f\"mypath: {mypath}\") result = runner.invoke(cli, [], auto_envvar_prefix=\"AUTO\", env={envvar: \"\"}) > assert result.exit_code == 0 E assert 2 == 0 E + where 2 = <Result SystemExit(2)>.exit_code tests/test_options.py:164: AssertionError",
+    "report_text": "assert 2 == 0 + where 2 = <Result SystemExit(2)>.exit_code runner = <click.testing.CliRunner object at 0x10ab0a5d0>, envvar = 'AUTO_MYPATH' @pytest.mark.parametrize(\"envvar\", [\"MYPATH\", \"AUTO_MYPATH\"]) def test_empty_envvar(runner, envvar): @click.command() @click.option(\"--mypath\", type=click.Path(exists=True), envvar=\"MYPATH\") def cli(mypath): click.echo(f\"mypath: {mypath}\") result = runner.invoke(cli, [], auto_envvar_prefix=\"AUTO\", env={envvar: \"\"}) > assert result.exit_code == 0 E assert 2 == 0 E + where 2 = <Result SystemExit(2)>.exit_code tests/test_options.py:164: AssertionError",
     "tail": "1 failed, 1 passed in 0.05s"
    },
    "candidate": {
@@ -244,7 +242,8 @@
     "at": 2,
     "issued_at": 0,
     "index": 0,
-    "tool": "Bash"
+    "tool": "Bash",
+    "via": "notes text"
    },
    "first_edit": {
     "found": true,
@@ -305,8 +304,8 @@
       "message": "assert \"Error: Missing option '--foo'.\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" + where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" = <Result SystemExit(2)>.output runner "
      }
     ],
-    "report_text": "assert \"Error: Missing option '--foo'.\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" + where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" = <Result SystemExit(2)>.output runner = <click.testing.CliRunner object at 0x10a9b0ec0> def test_missing_envvar(runner): cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], envvar=\"bar\", required=True)] ) result = runner.invoke(cli) assert result.exit_code == 2 assert \"Error: Missing option '--foo'.\" in result.output cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], envvar=\"bar\", show_envvar=True, required=True)], ) result = runner.invoke(cli) assert result.exit_code == 2 assert \"Error: Missing option '--foo' (env var: 'bar').\" in result.output cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], show_envvar=True, required=True)] ) result = runner.invoke(cli) assert result.exit_code == 2 > assert \"Error: Missing option '--foo'.\" in result.output E assert \"Error: Missing option '--foo'.\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" E + where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" = <Result SystemExit(2)>.output tests/test_options.py:599: AssertionError",
-    "tail": "1 failed in 0.06s"
+    "report_text": "assert \"Error: Missing option '--foo'.\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" + where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" = <Result SystemExit(2)>.output runner = <click.testing.CliRunner object at 0x10a918ec0> def test_missing_envvar(runner): cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], envvar=\"bar\", required=True)] ) result = runner.invoke(cli) assert result.exit_code == 2 assert \"Error: Missing option '--foo'.\" in result.output cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], envvar=\"bar\", show_envvar=True, required=True)], ) result = runner.invoke(cli) assert result.exit_code == 2 assert \"Error: Missing option '--foo' (env var: 'bar').\" in result.output cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], show_envvar=True, required=True)] ) result = runner.invoke(cli) assert result.exit_code == 2 > assert \"Error: Missing option '--foo'.\" in result.output E assert \"Error: Missing option '--foo'.\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" E + where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" = <Result SystemExit(2)>.output tests/test_options.py:599: AssertionError",
+    "tail": "1 failed in 0.10s"
    },
    "candidate": {
     "rc": 0,
@@ -320,7 +319,7 @@
      }
     ],
     "report_text": "",
-    "tail": "1 passed in 0.05s"
+    "tail": "1 passed in 0.06s"
    },
    "baseline_clean": true,
    "fails_prefix": true,
@@ -329,11 +328,8 @@
   },
   "consultation": {
    "first_delivery": {
-    "found": true,
-    "at": 2,
-    "issued_at": 0,
-    "index": 0,
-    "tool": "Bash"
+    "found": false,
+    "at": null
    },
    "first_edit": {
     "found": true,
@@ -379,7 +375,7 @@
      }
     ],
     "report_text": "",
-    "tail": "1 passed in 0.04s"
+    "tail": "1 passed in 0.06s"
    },
    "prefix": {
     "rc": 1,
@@ -392,7 +388,7 @@
       "message": "assert \"Error: Missing option '--foo'.\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" + where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" = <Result SystemExit(2)>.output runner "
      }
     ],
-    "report_text": "assert \"Error: Missing option '--foo'.\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" + where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" = <Result SystemExit(2)>.output runner = <click.testing.CliRunner object at 0x108be8ec0> def test_missing_envvar(runner): cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], envvar=\"bar\", required=True)] ) result = runner.invoke(cli) assert result.exit_code == 2 assert \"Error: Missing option '--foo'.\" in result.output cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], envvar=\"bar\", show_envvar=True, required=True)], ) result = runner.invoke(cli) assert result.exit_code == 2 assert \"Error: Missing option '--foo' (env var: 'bar').\" in result.output cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], show_envvar=True, required=True)], ) result = runner.invoke(cli) assert result.exit_code == 2 > assert \"Error: Missing option '--foo'.\" in result.output E assert \"Error: Missing option '--foo'.\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" E + where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" = <Result SystemExit(2)>.output tests/test_options.py:600: AssertionError",
+    "report_text": "assert \"Error: Missing option '--foo'.\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" + where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" = <Result SystemExit(2)>.output runner = <click.testing.CliRunner object at 0x107190ec0> def test_missing_envvar(runner): cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], envvar=\"bar\", required=True)] ) result = runner.invoke(cli) assert result.exit_code == 2 assert \"Error: Missing option '--foo'.\" in result.output cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], envvar=\"bar\", show_envvar=True, required=True)], ) result = runner.invoke(cli) assert result.exit_code == 2 assert \"Error: Missing option '--foo' (env var: 'bar').\" in result.output cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], show_envvar=True, required=True)], ) result = runner.invoke(cli) assert result.exit_code == 2 > assert \"Error: Missing option '--foo'.\" in result.output E assert \"Error: Missing option '--foo'.\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" E + where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" = <Result SystemExit(2)>.output tests/test_options.py:600: AssertionError",
     "tail": "1 failed in 0.06s"
    },
    "candidate": {
@@ -407,7 +403,7 @@
      }
     ],
     "report_text": "",
-    "tail": "1 passed in 0.04s"
+    "tail": "1 passed in 0.05s"
    },
    "baseline_clean": true,
    "fails_prefix": true,
@@ -417,10 +413,11 @@
   "consultation": {
    "first_delivery": {
     "found": true,
-    "at": 3,
-    "issued_at": 2,
-    "index": 1,
-    "tool": "Bash"
+    "at": 5,
+    "issued_at": 4,
+    "index": 2,
+    "tool": "mcp__nexus__search",
+    "via": "nexus search hits"
    },
    "first_edit": {
     "found": true,
@@ -466,7 +463,7 @@
      }
     ],
     "report_text": "",
-    "tail": "1 passed in 0.04s"
+    "tail": "1 passed in 0.05s"
    },
    "prefix": {
     "rc": 1,
@@ -479,8 +476,8 @@
       "message": "assert \"Error: Missing option '--foo'.\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" + where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" = <Result SystemExit(2)>.output runner "
      }
     ],
-    "report_text": "assert \"Error: Missing option '--foo'.\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" + where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" = <Result SystemExit(2)>.output runner = <click.testing.CliRunner object at 0x108704ec0> def test_missing_envvar(runner): cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], envvar=\"bar\", required=True)] ) result = runner.invoke(cli) assert result.exit_code == 2 assert \"Error: Missing option '--foo'.\" in result.output cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], envvar=\"bar\", show_envvar=True, required=True)], ) result = runner.invoke(cli) assert result.exit_code == 2 assert \"Error: Missing option '--foo' (env var: 'bar').\" in result.output cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], show_envvar=True, required=True)] ) result = runner.invoke(cli) assert result.exit_code == 2 > assert \"Error: Missing option '--foo'.\" in result.output E assert \"Error: Missing option '--foo'.\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" E + where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" = <Result SystemExit(2)>.output tests/test_options.py:599: AssertionError",
-    "tail": "1 failed in 0.06s"
+    "report_text": "assert \"Error: Missing option '--foo'.\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" + where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" = <Result SystemExit(2)>.output runner = <click.testing.CliRunner object at 0x109458ec0> def test_missing_envvar(runner): cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], envvar=\"bar\", required=True)] ) result = runner.invoke(cli) assert result.exit_code == 2 assert \"Error: Missing option '--foo'.\" in result.output cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], envvar=\"bar\", show_envvar=True, required=True)], ) result = runner.invoke(cli) assert result.exit_code == 2 assert \"Error: Missing option '--foo' (env var: 'bar').\" in result.output cli = click.Command( \"cli\", params=[click.Option([\"--foo\"], show_envvar=True, required=True)] ) result = runner.invoke(cli) assert result.exit_code == 2 > assert \"Error: Missing option '--foo'.\" in result.output E assert \"Error: Missing option '--foo'.\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" E + where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" = <Result SystemExit(2)>.output tests/test_options.py:599: AssertionError",
+    "tail": "1 failed in 0.07s"
    },
    "candidate": {
     "rc": 0,
@@ -494,7 +491,7 @@
      }
     ],
     "report_text": "",
-    "tail": "1 passed in 0.04s"
+    "tail": "1 passed in 0.06s"
    },
    "baseline_clean": true,
    "fails_prefix": true,
@@ -507,7 +504,8 @@
     "at": 2,
     "issued_at": 0,
     "index": 0,
-    "tool": "Bash"
+    "tool": "Bash",
+    "via": "notes text"
    },
    "first_edit": {
     "found": true,
@@ -550,7 +548,7 @@
     "verdict": "absent",
     "cases": [],
     "report_text": "",
-    "tail": "no tests ran in 0.01s"
+    "tail": "no tests ran in 0.02s"
    },
    "prefix": {
     "rc": 1,
@@ -566,16 +564,16 @@
       "name": "test_default_map_unset_falls_back_to_parameter_default",
       "classname": "tests.test_defaults",
       "kind": "failure",
-      "message": "AssertionError: assert 'port=None\\n' == 'port=8000\\n' - port=8000 + port=None runner = <click.testing.CliRunner object at 0x10961ce10> def test_default_map_unset_falls_back_to_parameter_default(runner): \"\"\"An ``UNSET`` entry in ``default_map`` is treated as if the key were absent. Regression test: a"
+      "message": "AssertionError: assert 'port=None\\n' == 'port=8000\\n' - port=8000 + port=None runner = <click.testing.CliRunner object at 0x10a740e10> def test_default_map_unset_falls_back_to_parameter_default(runner): \"\"\"An ``UNSET`` entry in ``default_map`` is treated as if the key were absent. Regression test: a"
      },
      {
       "name": "test_default_map_unset_argument_falls_back",
       "classname": "tests.test_defaults",
       "kind": "failure",
-      "message": "AssertionError: assert 'name=None\\n' == 'name=world\\n' - name=world + name=None runner = <click.testing.CliRunner object at 0x1094bae90> def test_default_map_unset_argument_falls_back(runner): \"\"\"``UNSET`` in ``default_map`` also falls back for arguments.\"\"\" @click.command(context_settings={\"default"
+      "message": "AssertionError: assert 'name=None\\n' == 'name=world\\n' - name=world + name=None runner = <click.testing.CliRunner object at 0x10a652e90> def test_default_map_unset_argument_falls_back(runner): \"\"\"``UNSET`` in ``default_map`` also falls back for arguments.\"\"\" @click.command(context_settings={\"default"
      }
     ],
-    "report_text": "AssertionError: assert 'port=None\\n' == 'port=8000\\n' - port=8000 + port=None runner = <click.testing.CliRunner object at 0x10961ce10> def test_default_map_unset_falls_back_to_parameter_default(runner): \"\"\"An ``UNSET`` entry in ``default_map`` is treated as if the key were absent. Regression test: a command declaring ``context_settings={\"default_map\": {\"port\": UNSET}}`` with an option ``@click.option(\"--port\", default=8000)`` invoked without arguments must report ``8000``, not ``None``. \"\"\" @click.command(context_settings={\"default_map\": {\"port\": UNSET}}) @click.option(\"--port\", default=8000, show_default=True) def cli(port): click.echo(f\"port={port}\") result = runner.invoke(cli, []) assert not result.exception > assert result.output == \"port=8000\\n\" E AssertionError: assert 'port=None\\n' == 'port=8000\\n' E E - port=8000 E + port=None tests/test_defaults.py:286: AssertionError AssertionError: assert 'name=None\\n' == 'name=world\\n' - name=world + name=None runner = <click.testing.CliRunner object at 0x1094bae90> def test_default_map_unset_argument_falls_back(runner): \"\"\"``UNSET`` in ``default_map`` also falls back for arguments.\"\"\" @click.command(context_settings={\"default_map\": {\"name\": UNSET}}) @click.argument(\"name\", default=\"world\") def cli(name): click.echo(f\"name={name}\") result = runner.invoke(cli, []) assert not result.exception > assert result.output == \"name=world\\n\" E AssertionError: assert 'name=None\\n' == 'name=world\\n' E E - name=world E + name=None tests/test_defaults.py:320: AssertionError",
+    "report_text": "AssertionError: assert 'port=None\\n' == 'port=8000\\n' - port=8000 + port=None runner = <click.testing.CliRunner object at 0x10a740e10> def test_default_map_unset_falls_back_to_parameter_default(runner): \"\"\"An ``UNSET`` entry in ``default_map`` is treated as if the key were absent. Regression test: a command declaring ``context_settings={\"default_map\": {\"port\": UNSET}}`` with an option ``@click.option(\"--port\", default=8000)`` invoked without arguments must report ``8000``, not ``None``. \"\"\" @click.command(context_settings={\"default_map\": {\"port\": UNSET}}) @click.option(\"--port\", default=8000, show_default=True) def cli(port): click.echo(f\"port={port}\") result = runner.invoke(cli, []) assert not result.exception > assert result.output == \"port=8000\\n\" E AssertionError: assert 'port=None\\n' == 'port=8000\\n' E E - port=8000 E + port=None tests/test_defaults.py:286: AssertionError AssertionError: assert 'name=None\\n' == 'name=world\\n' - name=world + name=None runner = <click.testing.CliRunner object at 0x10a652e90> def test_default_map_unset_argument_falls_back(runner): \"\"\"``UNSET`` in ``default_map`` also falls back for arguments.\"\"\" @click.command(context_settings={\"default_map\": {\"name\": UNSET}}) @click.argument(\"name\", default=\"world\") def cli(name): click.echo(f\"name={name}\") result = runner.invoke(cli, []) assert not result.exception > assert result.output == \"name=world\\n\" E AssertionError: assert 'name=None\\n' == 'name=world\\n' E E - name=world E + name=None tests/test_defaults.py:320: AssertionError",
     "tail": "2 failed, 1 passed in 0.03s"
    },
    "candidate": {
@@ -611,11 +609,8 @@
   },
   "consultation": {
    "first_delivery": {
-    "found": true,
-    "at": 3,
-    "issued_at": 0,
-    "index": 0,
-    "tool": "Bash"
+    "found": false,
+    "at": null
    },
    "first_edit": {
     "found": true,
@@ -657,7 +652,8 @@
     "at": 5,
     "issued_at": 4,
     "index": 2,
-    "tool": "mcp__nexus__search"
+    "tool": "mcp__nexus__search",
+    "via": "nexus search hits"
    },
    "first_edit": {
     "found": true,
@@ -716,7 +712,7 @@
       "name": "test_default_map_unset_falls_back_to_default",
       "classname": "tests.test_defaults",
       "kind": "failure",
-      "message": "AssertionError: assert 'port=None\\n' == 'port=8000\\n' - port=8000 + port=None runner = <click.testing.CliRunner object at 0x10733ce10> def test_default_map_unset_falls_back_to_default(runner): \"\"\"A literal :attr:`UNSET` stored in ``default_map`` means the map did not supply a value, so the parameter"
+      "message": "AssertionError: assert 'port=None\\n' == 'port=8000\\n' - port=8000 + port=None runner = <click.testing.CliRunner object at 0x106a00e10> def test_default_map_unset_falls_back_to_default(runner): \"\"\"A literal :attr:`UNSET` stored in ``default_map`` means the map did not supply a value, so the parameter"
      },
      {
       "name": "test_default_map_unset_without_parameter_default",
@@ -725,8 +721,8 @@
       "message": ""
      }
     ],
-    "report_text": "AssertionError: assert 'port=None\\n' == 'port=8000\\n' - port=8000 + port=None runner = <click.testing.CliRunner object at 0x10733ce10> def test_default_map_unset_falls_back_to_default(runner): \"\"\"A literal :attr:`UNSET` stored in ``default_map`` means the map did not supply a value, so the parameter's own default is used instead of ``None``. The sentinel is internal: reading it back out of a mapping must be treated as absence, not as data to hand to the callback. \"\"\" @click.command(context_settings={\"default_map\": {\"port\": UNSET}}) @click.option(\"--port\", default=8000) def cli(port): click.echo(f\"port={port}\") result = runner.invoke(cli, []) assert not result.exception > assert result.output == \"port=8000\\n\" E AssertionError: assert 'port=None\\n' == 'port=8000\\n' E E - port=8000 E + port=None tests/test_defaults.py:288: AssertionError",
-    "tail": "1 failed, 2 passed in 0.02s"
+    "report_text": "AssertionError: assert 'port=None\\n' == 'port=8000\\n' - port=8000 + port=None runner = <click.testing.CliRunner object at 0x106a00e10> def test_default_map_unset_falls_back_to_default(runner): \"\"\"A literal :attr:`UNSET` stored in ``default_map`` means the map did not supply a value, so the parameter's own default is used instead of ``None``. The sentinel is internal: reading it back out of a mapping must be treated as absence, not as data to hand to the callback. \"\"\" @click.command(context_settings={\"default_map\": {\"port\": UNSET}}) @click.option(\"--port\", default=8000) def cli(port): click.echo(f\"port={port}\") result = runner.invoke(cli, []) assert not result.exception > assert result.output == \"port=8000\\n\" E AssertionError: assert 'port=None\\n' == 'port=8000\\n' E E - port=8000 E + port=None tests/test_defaults.py:288: AssertionError",
+    "tail": "1 failed, 2 passed in 0.03s"
    },
    "candidate": {
     "rc": 0,
@@ -765,7 +761,8 @@
     "at": 2,
     "issued_at": 0,
     "index": 0,
-    "tool": "Bash"
+    "tool": "Bash",
+    "via": "notes text"
    },
    "first_edit": {
     "found": true,
@@ -820,7 +817,7 @@
      }
     ],
     "report_text": "collection failure tests/test_integration.py:8: in <module> @pytest.mark.integration ^^^^^^^^^^^^^^^^^^^^^^^ /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/lib/python3.14/site-packages/_pytest/mark/structures.py:628: in __getattr__ warnings.warn( E pytest.PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo? You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html",
-    "tail": "1 error in 0.01s"
+    "tail": "1 error in 0.02s"
    },
    "candidate": {
     "rc": 0,
@@ -900,7 +897,7 @@
      }
     ],
     "report_text": "collection failure tests/test_integration_marker.py:8: in <module> @pytest.mark.integration ^^^^^^^^^^^^^^^^^^^^^^^ /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/lib/python3.14/site-packages/_pytest/mark/structures.py:628: in __getattr__ warnings.warn( E pytest.PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo? You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html",
-    "tail": "1 error in 0.01s"
+    "tail": "1 error in 0.02s"
    },
    "candidate": {
     "rc": 0,
@@ -925,10 +922,11 @@
   "consultation": {
    "first_delivery": {
     "found": true,
-    "at": 3,
-    "issued_at": 2,
-    "index": 1,
-    "tool": "Bash"
+    "at": 5,
+    "issued_at": 4,
+    "index": 2,
+    "tool": "mcp__nexus__search",
+    "via": "nexus search hits"
    },
    "first_edit": {
     "found": true,
@@ -983,7 +981,7 @@
      }
     ],
     "report_text": "collection failure tests/test_integration.py:8: in <module> @pytest.mark.integration ^^^^^^^^^^^^^^^^^^^^^^^ /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/lib/python3.14/site-packages/_pytest/mark/structures.py:628: in __getattr__ warnings.warn( E pytest.PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo? You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html",
-    "tail": "1 error in 0.01s"
+    "tail": "1 error in 0.02s"
    },
    "candidate": {
     "rc": 0,
@@ -1011,7 +1009,8 @@
     "at": 2,
     "issued_at": 0,
     "index": 0,
-    "tool": "Bash"
+    "tool": "Bash",
+    "via": "notes text"
    },
    "first_edit": {
     "found": true,
@@ -1064,7 +1063,7 @@
      }
     ],
     "report_text": "collection failure tests/test_integration.py:8: in <module> @pytest.mark.integration ^^^^^^^^^^^^^^^^^^^^^^^ /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/lib/python3.14/site-packages/_pytest/mark/structures.py:628: in __getattr__ warnings.warn( E pytest.PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo? You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html",
-    "tail": "1 error in 0.01s"
+    "tail": "1 error in 0.02s"
    },
    "candidate": {
     "rc": 0,
@@ -1088,11 +1087,8 @@
   },
   "consultation": {
    "first_delivery": {
-    "found": true,
-    "at": 3,
-    "issued_at": 0,
-    "index": 0,
-    "tool": "Bash"
+    "found": false,
+    "at": null
    },
    "first_edit": {
     "found": true,
@@ -1147,7 +1143,7 @@
      }
     ],
     "report_text": "collection failure tests/test_integration.py:10: in <module> @pytest.mark.integration ^^^^^^^^^^^^^^^^^^^^^^^ /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/lib/python3.14/site-packages/_pytest/mark/structures.py:628: in __getattr__ warnings.warn( E pytest.PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo? You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html",
-    "tail": "1 error in 0.01s"
+    "tail": "1 error in 0.03s"
    },
    "candidate": {
     "rc": 0,
@@ -1175,7 +1171,8 @@
     "at": 4,
     "issued_at": 2,
     "index": 2,
-    "tool": "mcp__nexus__search"
+    "tool": "mcp__nexus__search",
+    "via": "nexus search hits"
    },
    "first_edit": {
     "found": true,
@@ -1230,7 +1227,7 @@
      }
     ],
     "report_text": "collection failure tests/test_integration.py:8: in <module> @pytest.mark.integration ^^^^^^^^^^^^^^^^^^^^^^^ /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/lib/python3.14/site-packages/_pytest/mark/structures.py:628: in __getattr__ warnings.warn( E pytest.PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo? You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html",
-    "tail": "1 error in 0.01s"
+    "tail": "1 error in 0.02s"
    },
    "candidate": {
     "rc": 0,
@@ -1258,7 +1255,8 @@
     "at": 1,
     "issued_at": 0,
     "index": 0,
-    "tool": "Bash"
+    "tool": "Bash",
+    "via": "notes text"
    },
    "first_edit": {
     "found": true,

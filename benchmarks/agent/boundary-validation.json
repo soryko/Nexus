@@ -1,5 +1,5 @@
 {
- "task": "d4",
+ "task": "d1",
  "python": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/bin/python",
  "forwarder_port": 8899,
  "arms": {
@@ -17,10 +17,10 @@
     "works_outside": true,
     "demonstrates_boundary": true,
     "inside_tail": [
-     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4/base/checks/d4/tests/test_marker_registration.py: Operation not permitted"
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/smoke/base/checks/d1/tests/test_options.py: Operation not permitted"
     ],
     "outside_tail": [
-     "    assert True"
+     "    assert option.is_bool_flag is expected"
     ]
    },
    "held_checks_unreadable": true,
@@ -41,13 +41,13 @@
     "works_outside": true,
     "demonstrates_boundary": true,
     "inside_tail": [
-     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/cb243e2f-e074-4714-8410-582784b6dbff/scratchpad/boundary-validation/scoring/boundary-probe-answers.txt: Operation not permitted"
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring/boundary-probe-answers.txt: Operation not permitted"
     ],
     "outside_tail": [
      "held-out answer material would live here"
     ],
     "applicable": true,
-    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/cb243e2f-e074-4714-8410-582784b6dbff/scratchpad/boundary-validation/scoring"
+    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring"
    },
    "future_path_denied": true,
    "own_checkout_readable": true,
@@ -60,6 +60,9 @@
     "2.1.258 (Claude Code)"
    ],
    "runner_tail": [],
+   "runner_scratch_usable": true,
+   "runner_scratch_dir": "/private/tmp/claude-501/-private-tmp-claude-501--Users-soko-Cerebros-nexus-memory-2875a44a-2ea4-4a24-8ab3-dcad1b9ab047-scratchpad-boundary-validation-arms-baseline-repo",
+   "runner_scratch_tail": [],
    "negative_controls": {
     "network_egress_blocked": true,
     "dns_and_https_blocked": true,
@@ -71,7 +74,8 @@
     "own_checkout_readable": true,
     "interpreter_runs": true,
     "git_runs": true,
-    "runner_starts": true
+    "runner_starts": true,
+    "runner_scratch_usable": true
    },
    "all_hold": true,
    "loopback_limited_to_forwarder_port": {
@@ -83,12 +87,38 @@
     ],
     "outside_tail": []
    },
-   "nexus_server_starts": {
+   "memory_reachable": {
     "applicable": true,
-    "starts": true,
-    "tail": [
-     "                        identity (requires --repo)"
-    ]
+    "arm_should_reach": false,
+    "reached": false,
+    "as_intended": true,
+    "wal_sidecars_live_during_probe": [
+     "nexus-dev.db-shm",
+     "nexus-dev.db-wal"
+    ],
+    "active_memories": null,
+    "hits": null,
+    "detail": {
+     "db": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/nexus-dev.db",
+     "namespace": "a1-dev",
+     "actor": "agent",
+     "query": "click option parameter",
+     "sidecars_present": [
+      "nexus-dev.db-shm",
+      "nexus-dev.db-wal"
+     ],
+     "reachable": false,
+     "retrieved": false,
+     "error": "ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)"
+    }
+   },
+   "scratch_root_entry_only": {
+    "root": "/private/tmp/claude-501",
+    "entry_openable": true,
+    "held_checks_under_it_denied": true,
+    "runner_starts": true,
+    "subpath_spelling_would_expose_held_checks": true,
+    "entry_only": true
    }
   },
   "nexus": {
@@ -105,10 +135,10 @@
     "works_outside": true,
     "demonstrates_boundary": true,
     "inside_tail": [
-     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4/base/checks/d4/tests/test_marker_registration.py: Operation not permitted"
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/smoke/base/checks/d1/tests/test_options.py: Operation not permitted"
     ],
     "outside_tail": [
-     "    assert True"
+     "    assert option.is_bool_flag is expected"
     ]
    },
    "held_checks_unreadable": true,
@@ -129,13 +159,13 @@
     "works_outside": true,
     "demonstrates_boundary": true,
     "inside_tail": [
-     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/cb243e2f-e074-4714-8410-582784b6dbff/scratchpad/boundary-validation/scoring/boundary-probe-answers.txt: Operation not permitted"
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring/boundary-probe-answers.txt: Operation not permitted"
     ],
     "outside_tail": [
      "held-out answer material would live here"
     ],
     "applicable": true,
-    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/cb243e2f-e074-4714-8410-582784b6dbff/scratchpad/boundary-validation/scoring"
+    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring"
    },
    "future_path_denied": true,
    "own_checkout_readable": true,
@@ -148,6 +178,9 @@
     "2.1.258 (Claude Code)"
    ],
    "runner_tail": [],
+   "runner_scratch_usable": true,
+   "runner_scratch_dir": "/private/tmp/claude-501/-private-tmp-claude-501--Users-soko-Cerebros-nexus-memory-2875a44a-2ea4-4a24-8ab3-dcad1b9ab047-scratchpad-boundary-validation-arms-nexus-repo",
+   "runner_scratch_tail": [],
    "negative_controls": {
     "network_egress_blocked": true,
     "dns_and_https_blocked": true,
@@ -159,7 +192,8 @@
     "own_checkout_readable": true,
     "interpreter_runs": true,
     "git_runs": true,
-    "runner_starts": true
+    "runner_starts": true,
+    "runner_scratch_usable": true
    },
    "all_hold": true,
    "loopback_limited_to_forwarder_port": {
@@ -171,12 +205,43 @@
     ],
     "outside_tail": []
    },
-   "nexus_server_starts": {
+   "memory_reachable": {
     "applicable": true,
-    "starts": true,
-    "tail": [
-     "                        identity (requires --repo)"
-    ]
+    "arm_should_reach": true,
+    "reached": true,
+    "as_intended": true,
+    "wal_sidecars_live_during_probe": [
+     "nexus-dev.db-shm",
+     "nexus-dev.db-wal"
+    ],
+    "active_memories": 13,
+    "hits": 6,
+    "detail": {
+     "db": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/nexus-dev.db",
+     "namespace": "a1-dev",
+     "actor": "agent",
+     "query": "click option parameter",
+     "sidecars_present": [
+      "nexus-dev.db-shm",
+      "nexus-dev.db-wal"
+     ],
+     "reachable": true,
+     "active_memories": 13,
+     "expected_active": 13,
+     "active_as_expected": true,
+     "hits": 6,
+     "retrieved": true,
+     "first_hit": "6d464b86-ec01-42b4-b067-3b517f0bd6e6",
+     "sqlite_version": "3.53.4"
+    }
+   },
+   "scratch_root_entry_only": {
+    "root": "/private/tmp/claude-501",
+    "entry_openable": true,
+    "held_checks_under_it_denied": true,
+    "runner_starts": true,
+    "subpath_spelling_would_expose_held_checks": true,
+    "entry_only": true
    }
   },
   "notes": {
@@ -193,10 +258,10 @@
     "works_outside": true,
     "demonstrates_boundary": true,
     "inside_tail": [
-     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4/base/checks/d4/tests/test_marker_registration.py: Operation not permitted"
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/smoke/base/checks/d1/tests/test_options.py: Operation not permitted"
     ],
     "outside_tail": [
-     "    assert True"
+     "    assert option.is_bool_flag is expected"
     ]
    },
    "held_checks_unreadable": true,
@@ -217,13 +282,13 @@
     "works_outside": true,
     "demonstrates_boundary": true,
     "inside_tail": [
-     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/cb243e2f-e074-4714-8410-582784b6dbff/scratchpad/boundary-validation/scoring/boundary-probe-answers.txt: Operation not permitted"
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring/boundary-probe-answers.txt: Operation not permitted"
     ],
     "outside_tail": [
      "held-out answer material would live here"
     ],
     "applicable": true,
-    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/cb243e2f-e074-4714-8410-582784b6dbff/scratchpad/boundary-validation/scoring"
+    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring"
    },
    "future_path_denied": true,
    "own_checkout_readable": true,
@@ -236,6 +301,9 @@
     "2.1.258 (Claude Code)"
    ],
    "runner_tail": [],
+   "runner_scratch_usable": true,
+   "runner_scratch_dir": "/private/tmp/claude-501/-private-tmp-claude-501--Users-soko-Cerebros-nexus-memory-2875a44a-2ea4-4a24-8ab3-dcad1b9ab047-scratchpad-boundary-validation-arms-notes-repo",
+   "runner_scratch_tail": [],
    "negative_controls": {
     "network_egress_blocked": true,
     "dns_and_https_blocked": true,
@@ -247,7 +315,8 @@
     "own_checkout_readable": true,
     "interpreter_runs": true,
     "git_runs": true,
-    "runner_starts": true
+    "runner_starts": true,
+    "runner_scratch_usable": true
    },
    "all_hold": true,
    "loopback_limited_to_forwarder_port": {
@@ -259,12 +328,38 @@
     ],
     "outside_tail": []
    },
-   "nexus_server_starts": {
+   "memory_reachable": {
     "applicable": true,
-    "starts": true,
-    "tail": [
-     "                        identity (requires --repo)"
-    ]
+    "arm_should_reach": false,
+    "reached": false,
+    "as_intended": true,
+    "wal_sidecars_live_during_probe": [
+     "nexus-dev.db-shm",
+     "nexus-dev.db-wal"
+    ],
+    "active_memories": null,
+    "hits": null,
+    "detail": {
+     "db": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/nexus-dev.db",
+     "namespace": "a1-dev",
+     "actor": "agent",
+     "query": "click option parameter",
+     "sidecars_present": [
+      "nexus-dev.db-shm",
+      "nexus-dev.db-wal"
+     ],
+     "reachable": false,
+     "retrieved": false,
+     "error": "ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)"
+    }
+   },
+   "scratch_root_entry_only": {
+    "root": "/private/tmp/claude-501",
+    "entry_openable": true,
+    "held_checks_under_it_denied": true,
+    "runner_starts": true,
+    "subpath_spelling_would_expose_held_checks": true,
+    "entry_only": true
    }
   }
  },
@@ -273,6 +368,62 @@
   "bench_file": "MANIFEST.md",
   "future_deny_path_readable_under_prior_profile": true,
   "note": "both True is the defect; the repaired profile denies both"
+ },
+ "prior_store_allow": {
+  "sidecars_live": [
+   "nexus-dev.db-shm",
+   "nexus-dev.db-wal"
+  ],
+  "prior_allow_db_only": {
+   "reached": false,
+   "tail": [
+    "{\"db\": \"/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/nexus-dev.db\", \"namespace\": \"a1-dev\", \"actor\": \"agent\", \"query\": \"click option parameter\", \"sidecars_present\": [\"nexus-dev.db-shm\", \"nexus-dev.db-wal\"], \"reachable\": false, \"retrieved\": false, \"error\": \"ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)\"}"
+   ]
+  },
+  "repaired_allow_db_and_sidecars": {
+   "reached": true,
+   "tail": [
+    "{\"db\": \"/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/nexus-dev.db\", \"namespace\": \"a1-dev\", \"actor\": \"agent\", \"query\": \"click option parameter\", \"sidecars_present\": [\"nexus-dev.db-shm\", \"nexus-dev.db-wal\"], \"reachable\": true, \"active_memories\": 13, \"expected_active\": 13, \"active_as_expected\": true, \"hits\": 6, \"retrieved\": true, \"first_hit\": \"6d464b86-ec01-42b4-b067-3b517f0bd6e6\", \"sqlite_version\": \"3.53.4\"}"
+   ]
+  },
+  "repair_is_the_difference": true,
+  "note": "with the sidecars on disk the one-file allow cannot open the store; with them checkpointed away it can, which is why no gate saw this"
+ },
+ "deny_ordering": {
+  "synthetic_denied_child": {
+   "blocked_inside": true,
+   "works_outside": true,
+   "demonstrates_boundary": true,
+   "inside_tail": [
+    "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/ordering-probe/outer/inner/withheld.txt: Operation not permitted"
+   ],
+   "outside_tail": [
+    "withheld: inside the same subtree, denied"
+   ]
+  },
+  "synthetic_allowed_sibling": {
+   "blocked_inside": false,
+   "works_outside": true,
+   "demonstrates_boundary": false,
+   "inside_tail": [
+    "readable: inside an allowed subtree, not denied"
+   ],
+   "outside_tail": [
+    "readable: inside an allowed subtree, not denied"
+   ]
+  },
+  "home_claude_projects": {
+   "blocked_inside": true,
+   "works_outside": true,
+   "demonstrates_boundary": true,
+   "inside_tail": [
+    "ls: /Users/soko/.claude/projects: Operation not permitted"
+   ],
+   "outside_tail": [
+    "-private-tmp-claude-501--Users-soko-Cerebros-nexus-memory-3a1f29bd-bbe5-4757-8711-792724cbc000-scratchpad-turns"
+   ]
+  },
+  "ordering_holds": true
  },
  "forwarder": {
   "provider-side search tool": {
@@ -301,9 +452,18 @@
    "message": "method GET is not forwarded"
   },
   "ordinary client-tool request accepted": {
+   "status": 200,
    "refused": false,
-   "expected_refused": false
+   "expected_refused": false,
+   "reached_upstream": true,
+   "upstream_path": "/anthropic/v1/messages",
+   "tools_forwarded_intact": true,
+   "body_echoed": true,
+   "inspect_body_verdict": null
   },
+  "stub_upstream": "127.0.0.1:8902",
+  "refusals_held": true,
+  "acceptance_held": true,
   "all_refusals_held": true
  },
  "all_hold": true

@@ -25,6 +25,13 @@ A deny-by-default boundary can fail in the opposite direction: a profile that bl
 runtime blocks the negative controls too, and reads as maximally secure while making the
 arm impossible to run. `check_boundary` therefore carries positive controls -- the checkout
 is readable, the interpreter runs, `git` runs -- and `all_hold` requires those as well.
+
+Two things the second review found missing, both here now. `sqlite_read_paths` exists
+because a WAL-mode store is three files and the profile allowed one of them.
+`deny_ordering_probe` exists because every negative control tested a path outside all of
+the allows, so none of them would have noticed a profile that ignored denies -- and the
+deny that withholds `~/.claude/projects` from inside an allowed `~/.claude` is the one
+protecting earlier sessions' transcripts.
 """
 from __future__ import annotations
 
@@ -64,6 +71,18 @@ HOME_DENIES = (
     ".claude/todos", ".claude/telemetry",
 )
 
+# Claude Code opens its own scratch root at startup and fails with
+#   EPERM: operation not permitted, open '/tmp/claude-<uid>'
+# before it emits anything. `claude --version` does not touch it, so the positive control
+# passed on a profile no run could survive -- which is what the integrated smoke test was
+# for, and what it found on its first execution.
+#
+# It is an ENTRY, never a subpath. The scratchpad tree underneath holds this run's fixtures,
+# the held-out checks, the source clone and every other session's working directory, so
+# `(subpath ...)` here would re-open everything the profile exists to close. Verified in both
+# directions by `scratch_root_entry_only` in validate_boundary.py.
+RUNNER_SCRATCH_ENTRIES = (Path(f"/private/tmp/claude-{os.getuid()}"),)
+
 HEADER = """(version 1)
 (allow default)
 
@@ -82,11 +101,43 @@ def _q(p) -> str:
     return str(p).replace('\\', '\\\\').replace('"', '\\"')
 
 
+def sqlite_read_paths(db) -> list[Path]:
+    """A WAL-mode SQLite store is three files, and allowing one of them allows none of it.
+
+    The repaired profile allowed `nexus-dev.db` alone. A file is emitted as a `literal`, so
+    `nexus-dev.db-wal` and `nexus-dev.db-shm` fell to the default deny and the server got
+    `unable to open database file` -- but only while a sidecar existed, which is to say only
+    while something held the store open. With the sidecars checkpointed away the same
+    profile reads it fine, so the failure is intermittent by construction and no probe that
+    opens the store from outside the sandbox can see it.
+
+    The sidecars do not exist when the profile is written; `profile_for` emits an absent
+    path as a `subpath`, which matches it once it appears.
+    """
+    return [Path(db), Path(f"{db}-wal"), Path(f"{db}-shm")]
+
+
+def runner_scratch_for(arm_repo: Path) -> Path:
+    """Claude Code's per-checkout scratch directory, which its Bash tool opens.
+
+    The smoke test found this one too, and only the smoke test could: with the scratch ROOT
+    allowed as an entry the run completes, the model answers, Read and Edit work -- and every
+    Bash call fails with `EPERM ... open '/private/tmp/claude-<uid>/<slug>'`, which is one
+    directory further down. An arm would simply have looked like an arm that did not use
+    Bash, and four of the saved development runs open with a Bash call.
+
+    The slug is the absolute checkout path with `/` replaced by `-`, so this names ONE
+    directory belonging to ONE arm rather than widening the root.
+    """
+    return RUNNER_SCRATCH_ENTRIES[0] / str(Path(arm_repo).resolve()).replace("/", "-")
+
+
 def default_allow_paths(arm_repo: Path, python: str | None = None) -> list[Path]:
     """Runtime the arm needs, plus its own checkout. Nothing from the benchmark tree."""
     allows = [Path(r) for r in SYSTEM_READ_ROOTS]
     allows += [HOME / r for r in HOME_READ_ROOTS]
     allows.append(Path(arm_repo))
+    allows.append(runner_scratch_for(arm_repo))
     if python:
         # Both spellings of the interpreter: a venv's `bin/python` is a symlink to the base
         # interpreter, so `resolve()` alone points outside the venv and leaves `pyvenv.cfg`
@@ -97,17 +148,30 @@ def default_allow_paths(arm_repo: Path, python: str | None = None) -> list[Path]
 
 
 def profile_for(arm_repo: Path, deny_paths: list[Path], allow_paths: list[Path] | None = None,
-                forwarder_port: int | None = None) -> str:
-    """Deny-by-default reads. `deny_paths` are applied last and are NOT existence-filtered."""
+                forwarder_port: int | None = None,
+                allow_entries: list[Path] | None = None) -> str:
+    """Deny-by-default reads. `deny_paths` are applied last and are NOT existence-filtered.
+
+    `allow_paths` grants a whole subtree when the path is a directory, which is the right
+    shape for a runtime root and the wrong shape for a directory that merely has to be
+    OPENABLE. `allow_entries` is that second case: a `literal`, matching the directory entry
+    and nothing beneath it.
+    """
     net = (f'(allow network-outbound (remote ip "localhost:{forwarder_port}"))'
            if forwarder_port else '(allow network-outbound (remote ip "localhost:*"))')
     allows = list(allow_paths if allow_paths is not None else default_allow_paths(arm_repo))
+    entries = list(RUNNER_SCRATCH_ENTRIES if allow_entries is None else allow_entries)
     denies = [*(HOME / d for d in HOME_DENIES), *deny_paths]
     lines = [HEADER.format(net=net)]
     for p in allows:
         lines.append(f'(allow file-read* (subpath "{_q(p)}"))'
                      if Path(p).is_dir() or not Path(p).exists()
                      else f'(allow file-read* (literal "{_q(p)}"))')
+    if entries:
+        lines.append("\n; ---- directory ENTRIES, not subtrees: openable, contents still "
+                     "denied ----")
+    for p in entries:
+        lines.append(f'(allow file-read* (literal "{_q(p)}"))')
     lines.append("\n; ---- denied unconditionally: applied after the allows, and never "
                  "skipped for\n;      a path that does not exist yet ----")
     for p in denies:
@@ -118,14 +182,15 @@ def profile_for(arm_repo: Path, deny_paths: list[Path], allow_paths: list[Path] 
 
 def write_profile(path: Path, arm_repo: Path, deny_paths: list[Path],
                   allow_paths: list[Path] | None = None,
-                  forwarder_port: int | None = None) -> Path:
+                  forwarder_port: int | None = None,
+                  allow_entries: list[Path] | None = None) -> Path:
     """Note what is NOT here: the `if p.exists()` filter the previous version applied to
     `deny_paths`. A path that does not exist yet is exactly the case that needs denying --
     the scoring directory is created part-way through the run."""
     path.parent.mkdir(parents=True, exist_ok=True)
     resolved_denies = [Path(os.path.realpath(p)) for p in deny_paths]
     path.write_text(profile_for(Path(arm_repo).resolve(), resolved_denies,
-                                allow_paths, forwarder_port))
+                                allow_paths, forwarder_port, allow_entries))
     return path
 
 
@@ -184,6 +249,50 @@ def future_path_probe(profile: Path, deny_paths: list[Path], cwd: Path) -> dict:
         return out
     finally:
         shutil.rmtree(created_root, ignore_errors=True)
+
+
+def deny_ordering_probe(tmp: Path, cwd: Path) -> dict:
+    """Demonstrate that a deny INSIDE an allowed subtree wins.
+
+    The whole profile rests on this. `HOME_READ_ROOTS` admits `~/.claude` because the runner
+    needs it, and `HOME_DENIES` then withholds `~/.claude/projects`, which holds the
+    transcripts of earlier work on this repository and its auto-memory. If the emission
+    order were wrong, or if SBPL took first-match rather than last-match, that deny would do
+    nothing and the arm could read the answers out of a previous session.
+
+    No existing control tested it: `held_checks`, the benchmark directory and the future
+    path all sit outside every allow, so the default deny would have caught them however the
+    ordering came out. Each would have passed against a profile that ignores denies entirely.
+
+    Two cases are recorded. A synthetic subtree isolates the ordering rule itself -- an
+    allowed directory with a denied child, and a sibling file that must stay readable, so a
+    profile that simply denies everything cannot pass. The second names the real pair, and
+    lists the directory rather than reading a file from it: the question is whether the deny
+    binds, and a listing answers that without copying a transcript anywhere.
+    """
+    outer, inner = tmp / "outer", tmp / "outer" / "inner"
+    inner.mkdir(parents=True, exist_ok=True)
+    (outer / "sibling.txt").write_text("readable: inside an allowed subtree, not denied\n")
+    (inner / "withheld.txt").write_text("withheld: inside the same subtree, denied\n")
+    prof = write_profile(tmp / "ordering.sb", outer, [inner],
+                         default_allow_paths(outer, None) + [outer])
+    out = {
+        "synthetic_denied_child": paired(prof, ["/bin/cat", str(inner / "withheld.txt")], cwd),
+        "synthetic_allowed_sibling": paired(prof, ["/bin/cat", str(outer / "sibling.txt")], cwd),
+    }
+    real = HOME / ".claude" / "projects"
+    out["home_claude_projects"] = (
+        paired(prof, ["/bin/ls", str(real)], cwd) if real.is_dir()
+        else {"demonstrates_boundary": None, "reason": f"{real} is not present on this host"})
+    shutil.rmtree(outer, ignore_errors=True)
+    # the denied child must be blocked, the allowed sibling must NOT be, and the real pair
+    # must behave like the synthetic one wherever it exists
+    out["ordering_holds"] = bool(
+        out["synthetic_denied_child"]["demonstrates_boundary"]
+        and not out["synthetic_allowed_sibling"]["blocked_inside"]
+        and out["synthetic_allowed_sibling"]["works_outside"]
+        and out["home_claude_projects"].get("demonstrates_boundary") is not False)
+    return out
 
 
 def check_boundary(profile: Path, cwd: Path, held_checks: Path, python: str,
@@ -250,13 +359,24 @@ def check_boundary(profile: Path, cwd: Path, held_checks: Path, python: str,
     out["runner_starts"] = rv.returncode == 0
     out["runner_version"] = (rv.stdout or "").strip().splitlines()[-1:]
     out["runner_tail"] = (rv.stderr or "").strip().splitlines()[-1:]
+    # ...and its per-checkout scratch directory must be writable AND readable, because the
+    # Bash tool opens it. `--version` does not, so the smoke test caught a profile under
+    # which the model answered, Read and Edit worked, and every Bash call returned EPERM.
+    scratch = runner_scratch_for(cwd)
+    sp = probe(profile, ["/bin/sh", "-c",
+                         f'mkdir -p "{scratch}" && : > "{scratch}/.probe" '
+                         f'&& cat "{scratch}/.probe" && ls "{scratch}" >/dev/null'], cwd)
+    out["runner_scratch_usable"] = sp.returncode == 0
+    out["runner_scratch_dir"] = str(scratch)
+    out["runner_scratch_tail"] = (sp.stderr or "").strip().splitlines()[-1:]
 
     negative = ["network_egress_blocked", "dns_and_https_blocked", "held_checks_unreadable"]
     if out["bench_dir_unreadable"] is not None:
         negative.append("bench_dir_unreadable")
     if out["future_path_denied"] is not None:
         negative.append("future_path_denied")
-    positive = ["own_checkout_readable", "interpreter_runs", "git_runs", "runner_starts"]
+    positive = ["own_checkout_readable", "interpreter_runs", "git_runs", "runner_starts",
+                "runner_scratch_usable"]
     out["negative_controls"] = {k: out[k] for k in negative}
     out["positive_controls"] = {k: out[k] for k in positive}
     out["all_hold"] = all(out[k] for k in (*negative, *positive))

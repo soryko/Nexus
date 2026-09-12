@@ -28,6 +28,20 @@ A second review broke two of the replacements:
   `pyproject.toml`, and which a `Bash` heredoc or `sed -i` sidesteps on any task. Both are
   counted.
 
+A third review broke the two replacements in turn, both in the same direction -- treating
+the absence of evidence as evidence:
+
+  naming the notes file is not reading it. `ls -la && cat NOTES-FROM-EARLIER-WORK.md
+  2>/dev/null || echo "NO NOTES FILE"` matched on its INPUT and returned a directory
+  listing longer than the length threshold, so it scored as prior-work content delivered --
+  in the nexus arm, which has no notes file, and with a zero exit the `is_error` guard
+  cannot see. Delivery is recognised by the notes' own text now, in the result.
+
+  an edit the matcher cannot find does not make the order compliant. The rule read "no edit
+  detected" as "the delivery cannot have been late", so the one case the matcher documents
+  itself as missing -- a Bash write after a `cd` into the deliverable directory -- was also
+  the case that scored. It is UNKNOWN now: outside the ratio, and listed for review.
+
 What is structural stays, and says so in its name. Everything left over is flagged for a
 fixed review rubric rather than guessed at.
 """
@@ -55,7 +69,41 @@ EDIT_SCOPE = {"default": ("src/click",), "d4": ("pyproject.toml",)}
 
 CONTENT_TOOLS = {"mcp__nexus__get", "mcp__nexus__search"}
 NOTES_NAME = "NOTES-FROM-EARLIER-WORK"
+NOTES_FILE = BENCH / "notes-dev-a1.md"
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit", "Update", "str_replace_editor"}
+
+# A check that a machine cannot settle. It is neither a pass nor a fail: it is counted in
+# neither half of the compliance ratio and is listed for review, because silently resolving
+# it either way states something the trace does not support.
+UNKNOWN = "unknown"
+
+
+def notes_lines() -> list[str]:
+    """Substantial lines of the rendered notes, used to recognise the notes' actual text.
+
+    Matching on the FILENAME was the defect. The old rule accepted any call whose input
+    mentioned `NOTES-FROM-EARLIER-WORK` and whose result ran past 200 characters, so
+
+        ls -la && cat NOTES-FROM-EARLIER-WORK.md 2>/dev/null || echo "NO NOTES FILE"
+
+    scored as prior-work content delivered -- in the NEXUS arm, which has no notes file, on
+    the strength of a directory listing. The `|| echo` even guarantees a zero exit, so the
+    `is_error` guard does not catch it. Three saved nexus runs were credited this way.
+
+    Recognising the text itself cannot be satisfied by a command that merely names the file.
+    """
+    return [ln.strip() for ln in NOTES_FILE.read_text().splitlines()
+            if len(ln.strip()) >= 80]
+
+
+def notes_content_delivered(text: str, lines: list[str], need: int = 2) -> bool:
+    """The result carries the notes' own prose, not a reference to it.
+
+    Two lines rather than one: a single line can reach a trace through the task prompt or
+    through a grep for a phrase, and one match would make the check a search for whether the
+    agent already knew what to look for.
+    """
+    return sum(1 for ln in lines if ln in text) >= need
 
 # A Bash command that writes. Redirection into /dev/null and `2>&1` are excluded; so is a
 # bare `>` that is part of `->` or `-->`, which appear constantly in prose arguments.
@@ -99,31 +147,36 @@ def first_edit_event(calls: list[dict], task: str) -> dict:
     return {"found": False, "at": None}
 
 
-def first_delivery_event(calls: list[dict]) -> dict:
+def first_delivery_event(calls: list[dict], lines: list[str] | None = None) -> dict:
     """The first event at which prior-work CONTENT actually arrived.
 
     Keyed on `resolved_at`, not `issued_at`: a `search` requested before the edit whose hits
     come back after it delivered nothing the edit could have used. Errored results never
     count, whatever they were asked for.
+
+    Three ways content can arrive, and each is recognised by what CAME BACK rather than by
+    what was asked for: a `get` carrying a body, a `search` carrying hits, or a result
+    carrying the notes' own text. Naming the notes file is not reading it.
     """
+    lines = notes_lines() if lines is None else lines
     best = None
     for c in calls:
         if c.get("is_error") or c.get("resolved_at") is None:
             continue
         got = c.get("result") or ""
-        content_bearing = False
+        via = None
         if c["name"] == "mcp__nexus__get" and '"content"' in got:
-            content_bearing = True
+            via = "nexus get body"
         elif c["name"] == "mcp__nexus__search":
             try:
-                content_bearing = bool((json.loads(got) or {}).get("hits"))
+                via = "nexus search hits" if (json.loads(got) or {}).get("hits") else None
             except Exception:
-                content_bearing = False
-        elif NOTES_NAME in json.dumps(c.get("input") or {}) and len(got) > 200:
-            content_bearing = True
-        if content_bearing and (best is None or c["resolved_at"] < best["at"]):
+                via = None
+        elif notes_content_delivered(got, lines):
+            via = "notes text"
+        if via and (best is None or c["resolved_at"] < best["at"]):
             best = {"found": True, "at": c["resolved_at"], "issued_at": c["issued_at"],
-                    "index": c["index"], "tool": c["name"]}
+                    "index": c["index"], "tool": c["name"], "via": via}
     return best or {"found": False, "at": None}
 
 
@@ -368,16 +421,30 @@ def score(run_dir: Path, task: str, arm: str, pristine: Path, python: str) -> di
     delivery = first_delivery_event(t["calls"])
     edit = first_edit_event(t["calls"], task)
     memory_offered = arm in ("nexus", "notes")
-    protocol["P2_content_delivered_before_edit"] = (
-        None if not memory_offered
-        else bool(delivery["found"] and (not edit["found"] or delivery["at"] < edit["at"])))
+    # An edit the matcher could not locate leaves the ORDER unknown, not satisfied. The
+    # previous rule read `not edit["found"]` as "nothing to be late for" and passed the
+    # check -- so the one shape the matcher admits it can miss, a Bash write after a `cd`
+    # into the deliverable directory, was also the shape that scored best. Non-detection now
+    # costs the check its place in the ratio and sends it to review. (The patch is the
+    # evidence a reviewer settles it with: an arm with a non-empty diff edited something.)
+    if not memory_offered:
+        p2 = None
+    elif not delivery["found"]:
+        p2 = False                      # nothing was delivered at all; order does not arise
+    elif not edit["found"]:
+        p2 = UNKNOWN
+    else:
+        p2 = delivery["at"] < edit["at"]
+    protocol["P2_content_delivered_before_edit"] = p2
 
     checks = {**structural, **executed, **protocol}
-    applicable = [v for v in checks.values() if v is not None]
+    settled = [v for v in checks.values() if v is True or v is False]
+    unsettled = [k for k, v in checks.items() if v == UNKNOWN]
     return {
         "task": task, "arm": arm,
         "checks": checks,
-        "compliance": f"{sum(1 for v in applicable if v)}/{len(applicable)}",
+        "compliance": f"{sum(1 for v in settled if v)}/{len(settled)}",
+        "unsettled": unsettled,
         "failed": [k for k, v in checks.items() if v is False],
         "regression_probe": reg,
         "consultation": {"first_delivery": delivery, "first_edit": edit},
@@ -386,8 +453,8 @@ def score(run_dir: Path, task: str, arm: str, pristine: Path, python: str) -> di
             "relevance of the source change to the reported defect",
             "whether the added test covers the defect rather than merely failing in the "
             "predicted way",
-            "a Bash write performed after `cd` into the deliverable directory, which "
-            "first_edit_event matches on the path and would miss",
+            *(["P2: no edit was located on the deliverable surface, so consultation ORDER "
+               "is unknown -- read the patch and the trace by hand"] if unsettled else []),
         ],
         "trace_health": {"orphan_results": t["orphans"], "unresolved_calls": t["unresolved"]},
     }

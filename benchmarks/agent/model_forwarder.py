@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import http.server
 import json
+import os
 import re
 import socketserver
 import ssl
@@ -40,6 +41,30 @@ from collections import Counter
 UPSTREAM_HOST = "api.deepseek.com"
 UPSTREAM_BASE = "/anthropic"
 DEFAULT_PORT = 8899
+
+
+def _stub_upstream() -> tuple[str, int] | None:
+    """A loopback stand-in for the provider, for the ACCEPTANCE control only.
+
+    The validator could previously exercise refusals only, because sending a legitimate
+    request meant paying for one. So it checked the accepted shape by calling `inspect_body`
+    directly and never drove `_route` or `_forward` at all -- which left the allowlist with
+    no positive control, the same gap `check_boundary` grew positive controls to close. A
+    forwarder that had come to refuse everything would have recorded `all_refusals_held:
+    True` and looked perfect.
+
+    Read from the environment, and only ever set by `validate_boundary.py`: the arms run
+    under `sandbox-exec` and cannot set a variable in this process, which starts before them
+    and outside the sandbox. Only loopback is accepted, so this cannot redirect traffic off
+    the host, and the address in use is printed at startup and recorded in the artifact.
+    """
+    raw = os.environ.get("A1_FORWARDER_STUB_UPSTREAM")
+    if not raw:
+        return None
+    host, _, port = raw.partition(":")
+    if host not in ("127.0.0.1", "localhost") or not port.isdigit():
+        raise SystemExit(f"stub upstream must be loopback host:port, got {raw!r}")
+    return host, int(port)
 HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
        "te", "trailers", "transfer-encoding", "upgrade", "host", "content-length"}
 
@@ -119,10 +144,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if refusal:
             return self._refuse(403, refusal)
 
-        conn = http.client.HTTPSConnection(UPSTREAM_HOST, 443,
-                                           context=ssl.create_default_context(), timeout=600)
+        stub = _stub_upstream()
+        if stub:
+            conn = http.client.HTTPConnection(stub[0], stub[1], timeout=30)
+            host = f"{stub[0]}:{stub[1]}"
+        else:
+            conn = http.client.HTTPSConnection(UPSTREAM_HOST, 443,
+                                               context=ssl.create_default_context(),
+                                               timeout=600)
+            host = UPSTREAM_HOST
         headers = {k: v for k, v in self.headers.items() if k.lower() not in HOP}
-        headers["Host"] = UPSTREAM_HOST
+        headers["Host"] = host
         try:
             conn.request(method, UPSTREAM_BASE + route, body=body, headers=headers)
             up = conn.getresponse()
@@ -172,8 +204,11 @@ if __name__ == "__main__":
     # parsed here, not at import: `inspect_body` is imported by the boundary validator,
     # which has its own argv
     PORT = int(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_PORT
+    stub = _stub_upstream()
+    target = (f"http://{stub[0]}:{stub[1]}{UPSTREAM_BASE}  [STUB UPSTREAM -- control only]"
+              if stub else f"https://{UPSTREAM_HOST}{UPSTREAM_BASE}")
     with Server(("127.0.0.1", PORT), Handler) as srv:
-        print(f"forwarder on 127.0.0.1:{PORT} -> https://{UPSTREAM_HOST}{UPSTREAM_BASE} "
+        print(f"forwarder on 127.0.0.1:{PORT} -> {target} "
               f"(POST {', '.join(r.pattern for r in ALLOWED_ROUTES)}; "
               f"client-side tool definitions only)", flush=True)
         srv.serve_forever()

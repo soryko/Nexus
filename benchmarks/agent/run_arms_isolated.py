@@ -23,6 +23,11 @@ import isolation
 
 SEED = 20260911
 FORWARDER_PORT = 8899
+CORPUS_SIZE = 13
+# A query the pre-run gate can pose without holding the answer key: it names the corpus's
+# own subject matter, not any task's fix. A gate that returned nothing for every query would
+# be a broken index, which is exactly what it is here to catch.
+MEMORY_PROBE_QUERY = "click option parameter"
 SOURCE_CLONE = "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/click"
 FIXTURE_BASE = ""  # set in main()
 MAX_TURNS = 30
@@ -142,17 +147,29 @@ def boundary_paths(arm: str, cwd: Path) -> tuple[list[Path], list[Path]]:
     editable install the memory server runs from. BENCH is on the deny list and sits inside
     the repository the nexus server imports from, which is why denies are emitted after
     allows: `src/` is readable, `benchmarks/agent/` is not.
+
+    The store is allowed to the NEXUS ARM ONLY. It was previously allowed to all three, which
+    handed the baseline and notes arms file-read on the corpus they are defined by not
+    having. Neither has the MCP tool, and `RUN` itself is unreadable so the filename has to
+    be guessed -- but an arm holding Bash and `/usr/bin/sqlite3` needed only the guess, and
+    nothing about the design required the allow. The run directory is still not allowed as a
+    whole; the three store files are named, and no more.
     """
     allow = isolation.default_allow_paths(cwd, PYTEST_PY) + [
-        RUN / "arms" / arm,                 # mcp.json, sandbox.sb
-        RUN / "nexus-dev.db",               # the frozen corpus, for the nexus arm
+        RUN / "arms" / arm,                 # mcp.json, sandbox.sb, mcp_probe.py
         REPO / ".venv-sqlite", REPO / "src", REPO / "pyproject.toml",
     ]
+    if arm == "nexus":
+        allow += isolation.sqlite_read_paths(RUN / "nexus-dev.db")   # .db, -wal, -shm
     deny = [Path(FIXTURE_BASE) / "checks",
             *[(RUN / "arms" / a) for a in ARMS if a != arm],
             RUN / "scoring",                # created part-way through the run; denied anyway
             Path(SOURCE_CLONE),
             BENCH]                          # saved patches, reports, corpus, task sheet
+    if arm != "nexus":
+        # named explicitly rather than left to the default, so the artifact records that the
+        # store was withheld from this arm rather than merely unmentioned
+        deny += isolation.sqlite_read_paths(RUN / "nexus-dev.db")
     return allow, deny
 
 
@@ -210,14 +227,25 @@ def patch_of(cwd: Path) -> str:
                           capture_output=True, text=True, check=True).stdout
 
 
-def memory_visibility(arm: str) -> dict:
-    """Assert the agent will actually SEE the corpus, reading the config the run will use.
+def memory_visibility(arm: str, profile: Path, cwd: Path) -> dict:
+    """Assert the agent will actually REACH the corpus -- over MCP, from inside the boundary.
 
     Three runs were lost to one defect and two bad controls. Nexus scope is (namespace,
     actor) and it isolates: a store seeded as one actor reports active_memories=0 to a server
     launched as another. A hand-edited mcp.json did not help, because invoke() rewrites that
     file from ARMS at launch -- so the pre-run check validated an artifact the run replaced.
     This reads the config as written by the harness itself, immediately before the arm runs.
+
+    The previous version then answered the question in the wrong process. It opened the
+    database with `sqlite3.connect` from the HARNESS, outside the sandbox, where every path
+    is readable -- so it reported `visible=13` for a store the arm could not open at all.
+    Paired with `nexus-memory --help`, which returns 0 without constructing a repository, the
+    two gates between the corpus and the run could both pass while the arm's own first
+    `search` failed.
+
+    So the gate is the arm's own path now: `sandbox-exec` -> the server -> `status` AND a
+    `search` that returns hits, with a live WAL held open across the probe so the sidecar
+    case is the one being tested rather than the checkpointed one that happens to work.
     """
     import sqlite3
     cfg = json.loads((RUN / "arms" / arm / "mcp.json").read_text())
@@ -228,11 +256,30 @@ def memory_visibility(arm: str) -> dict:
     db = args[args.index("--db") + 1]
     ns = args[args.index("--namespace") + 1]
     actor = args[args.index("--actor") + 1]
-    con = sqlite3.connect(db)
-    n = con.execute("select count(*) from memories where namespace=? and actor=? and tombstoned=0",
-                    (ns, actor)).fetchone()[0]
-    con.close()
-    return {"applicable": True, "db": db, "namespace": ns, "actor": actor, "visible": n}
+
+    probe = RUN / "arms" / arm / "mcp_probe.py"      # BENCH is denied; the arm dir is not
+    shutil.copy2(BENCH / "mcp_probe.py", probe)
+    # Hold the store open so `-wal` and `-shm` exist while the probe runs. A read-only
+    # connection is enough to materialise them and cannot touch the frozen corpus.
+    holder = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    holder.execute("select 1").fetchone()
+    try:
+        sidecars = sorted(Path(db + s).name for s in ("-wal", "-shm") if Path(db + s).exists())
+        r = isolation.probe(profile, [str(REPO / ".venv-sqlite/bin/python"), str(probe),
+                                      str(REPO / ".venv-sqlite/bin/nexus-memory"), db, ns,
+                                      actor, MEMORY_PROBE_QUERY, str(CORPUS_SIZE)],
+                            cwd, timeout=120)
+    finally:
+        holder.close()
+    try:
+        detail = json.loads((r.stdout or "").strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        detail = {"error": (r.stderr or r.stdout).strip()[-400:]}
+    return {"applicable": True, "db": db, "namespace": ns, "actor": actor,
+            "wal_sidecars_live_during_probe": sidecars,
+            "inside_sandbox": True, "exit": r.returncode,
+            "reached": r.returncode == 0, "detail": detail,
+            "visible": detail.get("active_memories")}
 
 
 def store_digest() -> str:
@@ -265,6 +312,19 @@ def main() -> int:
     random.Random(SEED).shuffle(order)
     print(f"seed={SEED}  realised arm order: {' -> '.join(order)}\n")
 
+    # the deny-ordering control: once per run, not per arm -- it is a property of the
+    # profile generator, not of any one arm's profile
+    ordering = isolation.deny_ordering_probe(RUN / "ordering-probe", RUN)
+    print(f"deny-after-allow ordering holds: {ordering['ordering_holds']}  "
+          f"(denied child blocked={ordering['synthetic_denied_child']['demonstrates_boundary']}, "
+          f"allowed sibling readable="
+          f"{not ordering['synthetic_allowed_sibling']['blocked_inside']}, "
+          f"~/.claude/projects blocked="
+          f"{ordering['home_claude_projects'].get('demonstrates_boundary')})\n", flush=True)
+    if not ordering["ordering_holds"]:
+        print("ABORT: denies do not win inside an allowed subtree", flush=True)
+        return 1
+
     before = store_digest()
     print(f"frozen store digest before any arm: {before}\n")
     records = []
@@ -281,15 +341,18 @@ def main() -> int:
         if not bound["all_hold"]:
             print(f"[{arm}] ABORT: boundary not demonstrated -> {bound}", flush=True)
             return 1
-        # the memory-visibility gate: read back the config the run will actually parse
+        # the memory-reachability gate: the arm's own path to the store, inside the boundary
         cfg_path = RUN / "arms" / arm / "mcp.json"
         cfg_path.write_text(json.dumps(ARMS[arm]["mcp"]))
-        vis = memory_visibility(arm)
+        vis = memory_visibility(arm, profile, cwd)
         if vis["applicable"]:
-            print(f"[{arm}] memory visibility: scope=({vis['namespace']},{vis['actor']}) "
-                  f"visible={vis['visible']}", flush=True)
-            if vis["visible"] != 13:
-                print(f"[{arm}] ABORT: corpus not visible to the configured scope", flush=True)
+            print(f"[{arm}] memory reachable inside the sandbox: scope=("
+                  f"{vis['namespace']},{vis['actor']}) active={vis['visible']} "
+                  f"hits={vis['detail'].get('hits')} "
+                  f"wal={vis['wal_sidecars_live_during_probe']}", flush=True)
+            if not vis["reached"] or vis["visible"] != CORPUS_SIZE:
+                print(f"[{arm}] ABORT: corpus not reachable from inside the boundary "
+                      f"-> {vis['detail']}", flush=True)
                 return 1
         print(f"[{arm}] running ...", flush=True)
         rec = invoke(arm, cwd)
@@ -326,6 +389,7 @@ def main() -> int:
     (RUN / "records.json").write_text(json.dumps(
         {"task": TASK, "seed": SEED, "order": order, "max_turns": MAX_TURNS,
          "wall_clock_s": WALL_CLOCK_S, "prompt": PROMPT,
+         "deny_ordering": ordering,
          "store_digest_before": before, "store_digest_after": after,
          "store_unchanged": before == after, "records": records}, indent=1))
     return 0

@@ -10,14 +10,38 @@ Round two: three more ways to pass without complying --
   * an added test whose nonzero pytest exit comes from a syntax error rather than from the
     defect.
 
+Round three, from the review of 2a966c1, is two more ways to pass without complying --
+  * a Bash command that NAMES the notes file, returns a directory listing and exits zero,
+    which the old length-and-filename rule credited as prior-work content in an arm that
+    has no notes file, and
+  * an edit the matcher cannot locate, which the old rule read as "nothing to be late for".
+
 Each must now be rejected, and the compliant shapes must still be accepted -- a check that
 rejects everything is not a check.
+
+RUNNING IT. This is a script, not a pytest module, despite the filename:
+
+    <click-venv>/bin/python test_compliance_counterexamples.py <click-venv>/bin/python
+
+It is NOT part of the main suite and is not covered by it. `pyproject.toml` sets
+`testpaths = ["tests"]`, so pytest never reaches this directory, and pointing pytest at this
+file collects zero tests and reports "no tests ran" -- the checks live in `main()`, and the
+interpreter to score against arrives as `sys.argv[1]`.
+
+The interpreter matters and is not free choice. Scoring parses pytest's JUnit report through
+`xml.etree`, so it needs a working `pyexpat`: under this repository's own `.venv-sqlite`
+python the import fails (`No module named expat`) and the run aborts inside
+`score_compliance._pytest` rather than reporting a scorer defect. The click venv's python
+3.14 is the interpreter these cases have been run against.
 """
 from __future__ import annotations
 import json, sys, tempfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
-from score_compliance import score, bash_mutates, first_edit_event, first_delivery_event
+from score_compliance import (UNKNOWN, bash_mutates, first_delivery_event, first_edit_event,
+                              notes_lines, score)
+
+NOTES_LINES = notes_lines()
 
 PY_CLICK = sys.argv[1] if len(sys.argv) > 1 else "python3"
 BENCH = Path(__file__).parent
@@ -131,6 +155,41 @@ TRACE_D4_LATE = trace(
     call("t2", "mcp__nexus__search", {"query": "marker"}), result("t2", HITS),
     envelope("DONE"))
 
+# round three: the exact command three saved nexus runs were credited for. It names the
+# notes file, it returns far more than the old 200-character threshold, and because of the
+# `|| echo` it returns zero -- so `is_error` never fires. What comes back is a directory
+# listing, in an arm that has no notes file.
+LISTING = ("total 192\ndrwxr-xr-x@ 23 soko wheel 736 Sep 11 17:55 .\n"
+           + "".join(f"-rw-r--r--@ 1 soko wheel {100+i} Mar 28 2022 file{i}.py\n"
+                     for i in range(40))
+           + "NO NOTES FILE\n")
+TRACE_NOTES_NAMED_NOT_READ = trace(
+    call("t1", "Bash", {"command": "ls -la && cat NOTES-FROM-EARLIER-WORK.md 2>/dev/null "
+                        "|| echo \"NO NOTES FILE\""}),
+    result("t1", LISTING),
+    call("t2", "Edit", {"file_path": "/x/src/click/core.py"}), result("t2", "ok"),
+    envelope("DONE"))
+
+# ...and the same shape where the file IS there and its text comes back
+NOTES_TEXT = "\n".join(["# Notes from earlier work on this repository", *NOTES_LINES[:3]])
+TRACE_NOTES_ACTUALLY_READ = trace(
+    call("t1", "Bash", {"command": "cat NOTES-FROM-EARLIER-WORK.md"}),
+    result("t1", NOTES_TEXT),
+    call("t2", "Edit", {"file_path": "/x/src/click/core.py"}), result("t2", "ok"),
+    envelope("DONE"))
+
+# round three: memory delivered, and an edit the matcher cannot see. `bash_mutates` requires
+# the deliverable path as a literal substring, so a write that reaches the same file without
+# spelling `src/click` -- here by letting `find` locate it -- is a write the matcher misses.
+# It is the same class as the `cd`-then-write case the matcher documents about itself. The
+# order is genuinely unknown, and must not be scored as compliance.
+TRACE_EDIT_NOT_LOCATED = trace(
+    call("t1", "mcp__nexus__search", {"query": "envvar"}), result("t1", HITS),
+    call("t2", "Bash", {"command": "find . -name core.py -path '*click*' "
+                        "-exec sed -i '' 's/a/b/' {} +"}),
+    result("t2", "ok"),
+    envelope("DONE"))
+
 
 def run_score(patch, tr, task, arm, pristine):
     with tempfile.TemporaryDirectory() as td:
@@ -206,6 +265,29 @@ def main() -> int:
         ("echo 'a -> b' # src/click", False),
     ]:
         ok &= check(f"bash_mutates({cmd!r})", bash_mutates(cmd, SRC), want)
+
+    print("\nround three -- naming the notes file is not reading it")
+    r = run_score(BAD_PATCH, TRACE_NOTES_NAMED_NOT_READ, "d1", "nexus", PRISTINE)
+    print(f"  first delivery: {r['consultation']['first_delivery']}")
+    ok &= check("P2 rejects a listing from a command that merely names the notes file",
+                r["checks"]["P2_content_delivered_before_edit"], False)
+    r = run_score(BAD_PATCH, TRACE_NOTES_ACTUALLY_READ, "d1", "notes", PRISTINE)
+    print(f"  first delivery: {r['consultation']['first_delivery']}")
+    ok &= check("P2 still accepts the notes' own text",
+                r["checks"]["P2_content_delivered_before_edit"], True)
+
+    print("\nround three -- an edit the matcher cannot locate is UNKNOWN, not a pass")
+    r = run_score(BAD_PATCH, TRACE_EDIT_NOT_LOCATED, "d1", "nexus", PRISTINE)
+    print(f"  first edit: {r['consultation']['first_edit']}   "
+          f"compliance: {r['compliance']}   unsettled: {r['unsettled']}")
+    ok &= check("P2 is unknown when no edit is located",
+                r["checks"]["P2_content_delivered_before_edit"], UNKNOWN)
+    ok &= check("an unknown check is counted in neither half of the ratio",
+                r["compliance"].endswith("/5"), True)      # six checks, five settled
+    ok &= check("an unknown check is not reported as a failure",
+                "P2_content_delivered_before_edit" in r["failed"], False)
+    ok &= check("an unknown check is listed for review",
+                "P2_content_delivered_before_edit" in r["unsettled"], True)
 
     print("\n  unsettled by machine:")
     for u in r["unsettled_by_machine"]:

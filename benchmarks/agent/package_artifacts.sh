@@ -12,6 +12,6 @@ for f in run-dev-*/arms/*/trace.jsonl; do
 done
 
 # Checksums over every artifact, compressed or not, so a later reader can prove nothing moved.
-find run-dev-* *.json *.md *.py *.sh -type f 2>/dev/null \
+find run-dev-* smoke-a1 *.json *.md *.py *.sh -type f 2>/dev/null \
   | grep -v __pycache__ | sort | xargs shasum -a 256 > SHA256SUMS
 echo "  checksums: $(wc -l < SHA256SUMS | tr -d ' ') files -> SHA256SUMS"
