@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import sqlite3
+import time
 import uuid
 from contextlib import closing, contextmanager
 from datetime import UTC, datetime
@@ -396,14 +397,58 @@ class SQLiteRepository:
             db.execute("INSERT INTO revision_fts(revision_fts,rowid,body) VALUES('delete',?,?)", (seq, body))
             db.execute("DELETE FROM revision_index WHERE seq=?", (seq,))
 
+    # The journal-mode switch is the one statement in initialization that a busy handler
+    # does not protect, so its budget is spelled out here rather than left to ``timeout``.
+    WAL_SWITCH_BUDGET_SECONDS = 5.0
+    WAL_SWITCH_RETRY_SECONDS = 0.05
+
+    @classmethod
+    def _establish_wal(cls, connection: sqlite3.Connection) -> None:
+        """Put the database in WAL, tolerating a concurrent opener doing the same.
+
+        Eight processes opening one fresh store at once raced: seven switched the journal
+        and the eighth got ``SQLITE_BUSY``, about one run in fifteen. (Observed in
+        ``artifacts/diagnostics/initialization-20260912T104251Z-3648-c88c59d0.json``.)
+
+        The busy handler is not the blanket protection it looks like here. Measured against
+        a rollback-mode database, a rival holding EXCLUSIVE or SHARED *is* waited out --
+        ``PRAGMA busy_timeout`` covers those, and the switch only fails if the rival
+        outlasts the whole budget. A rival holding RESERVED is different: SQLite returns
+        ``SQLITE_BUSY`` immediately, without consulting the busy handler at all, because
+        waiting for a write transaction to finish while it may be waiting on us is the
+        deadlock it refuses to enter. That is the case that fired -- the first opener takes
+        RESERVED for its own migrations the moment it finishes converting, and an opener
+        that read the old journal mode just before then walks straight into it.
+
+        So the budget here is ours, not SQLite's: retry the switch, re-reading the mode
+        each time, until either it takes or the budget runs out. Reading first is also what
+        makes the common case free -- a store that is already WAL is left alone. (That read
+        is an optimisation only; setting WAL on a WAL database is already a no-op that
+        takes no lock.)
+        """
+        deadline = time.monotonic() + cls.WAL_SWITCH_BUDGET_SECONDS
+        while True:
+            if connection.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal":
+                return
+            try:
+                journal_mode = connection.execute("PRAGMA journal_mode = WAL").fetchone()[0]
+            except sqlite3.OperationalError:
+                # Someone else holds the database. Fall through to the budget check: either
+                # they finish the switch and the next read sees WAL, or we run out of time
+                # and the caller reports a failed initialization as before.
+                journal_mode = ""
+            if journal_mode.lower() == "wal":
+                return
+            if time.monotonic() >= deadline:
+                raise StorageIntegrityError("storage initialization failed")
+            time.sleep(cls.WAL_SWITCH_RETRY_SECONDS)
+
     def _migrate(self) -> None:
         connection = None
         try:
             self._probe_fts5()
             connection = self._connect()
-            journal_mode = connection.execute("PRAGMA journal_mode = WAL").fetchone()[0]
-            if journal_mode.lower() != "wal":
-                raise StorageIntegrityError("storage initialization failed")
+            self._establish_wal(connection)
             connection.execute("BEGIN IMMEDIATE")
             version = connection.execute("PRAGMA user_version").fetchone()[0]
             if version > self.SCHEMA_VERSION:
