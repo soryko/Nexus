@@ -110,7 +110,20 @@ Interpreter for every run above: **CPython 3.14.7**. Commits older than the curr
 may need an interpreter contemporary with them; that is a per-task fixture property too, and
 is unmeasured outside the rows listed.
 
-## 5. Still to be fixed by the selection rules
+## 5. Fixed by the selection rules — see `freeze-heldout-a1.md` §1
+
+The first two are **now fixed**; the third still cannot be fixed here, for the reason it
+always gave.
+
+- ~~The boundedness admission bar.~~ Registered: at most 6 failing functions and at most 7
+  source hunks, calibrated against `d3` — 1 function across 7 hunks — which all three arms
+  completed. It excludes none of the six remaining candidates, which is the residue of the
+  class exclusions in §3 rather than a slack bar.
+- ~~The disjoint split.~~ Registered: development `d1`–`d4`, capture `c1`–`c2`, held-out
+  `h1`–`h4`, chronologically ordered so every capture fix is an ancestor of every held-out
+  pre-fix commit (verified, 8 of 8).
+
+The original wording, for the record:
 
 - The boundedness admission bar. It reads failing **functions** and source **hunks**
   together; raw failure count is not the measure, for the two reasons the table above
@@ -124,10 +137,16 @@ is unmeasured outside the rows listed.
 
 ## 6. Unverified — blocking registration
 
-1. **Capture provenance.** No capture policy exists yet, so no memory corpus exists, so no
-   task above has a memory pairing. `protocol-a1` §6 steps 1 and 2 are unexecuted.
-2. **Budget enforcement.** See `protocol-a1` §4. Wall-clock enforcement is available to the
-   harness; a hard in-run spend cap is not yet established.
+1. **Capture provenance.** The policy now exists (`capture-policy-a1.md`) and the held-out
+   capture procedure is registered (`freeze-heldout-a1.md` §2), but **no held-out memory
+   corpus exists yet and none may**: it is produced by a prior-session run on `c1`/`c2` that
+   never sees `h1`–`h4`. `protocol-a1` §6 steps 1 and 2 remain unexecuted for the held-out
+   set, and the task-to-memory pairing — useful / support / unnecessary / outdated — is
+   assigned when that corpus is frozen, never here.
+2. **Budget enforcement.** See `protocol-a1` §4 and `freeze-heldout-a1.md` §3. Wall-clock
+   enforcement (600 s) and an in-run turn ceiling (30) are registered and verified. A hard
+   in-run *spend* cap is still not established, and none is claimed: spend is reported after
+   the fact, in tokens.
 3. **Public-history exposure.** Click is a widely-mirrored public repository, so prior
    exposure is **possible**. That these fixes predate the model's training cutoff is *not*
    established — no training window is published for the model in use — and that claim is

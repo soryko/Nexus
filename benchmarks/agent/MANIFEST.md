@@ -38,6 +38,19 @@ is how the second defect was found. Both are reported in
 The diagnosis between them cost nothing: it ran against the loopback stub
 upstream added for the forwarder's acceptance control, not against the provider.
 
+## Held-out registration
+
+`freeze-heldout-a1.md`, frozen 2026-09-12 before any held-out task ran, fills
+four of `protocol-a1` §15's six open slots: the selection rule and the three
+disjoint task sets (development `d1`-`d4`, capture `c1`-`c2`, held-out
+`h1`-`h4`), the arms as executed, the analysis, and the budget. The execution
+schedule is `schedule-heldout-a1.json`, digest `1a960a7465fa36a0`.
+
+Slot 3, the held-out memory corpus, stays open on purpose: it is produced by a
+prior-session run on `c1`/`c2` that never sees `h1`-`h4`, so it cannot exist
+before the tasks are frozen. Required-evidence completeness is deferred from A1
+and will not be reported.
+
 ## Running these
 
 See `results-review-3.md`, section "Running the pieces", and

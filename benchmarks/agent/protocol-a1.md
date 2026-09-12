@@ -1,12 +1,20 @@
 # A1 — agent task baseline (protocol **draft**, not yet registered)
 
-**Status: draft. No scored run may be executed against this document as it stands.**
+**Status: draft — one slot short. No scored run may be executed against this document as it
+stands.**
+
+Five of §15's six slots are filled, four of them by
+[`freeze-heldout-a1.md`](freeze-heldout-a1.md) on 2026-09-12: the repository, the task
+selection rules and the disjoint sets, the arms as executed, the analysis, and the budget.
+**Slot 3 — the held-out memory corpus — is open, and cannot be closed early.** It is produced
+by a prior-session run on the capture tasks that never sees the held-out ones, so it can only
+exist *after* the tasks were frozen. Closing it by authoring memories now would be the exact
+contamination the ordering exists to prevent.
 
 This registers the *rules* of the measurement — arms, provenance, scoring, controls, and
-what each figure may be read to mean. Source A is now `pallets/click`, and its candidate
-tasks are surveyed in [`tasks-click-a1.md`](tasks-click-a1.md), itself a draft. The capture
-policy, the memory corpus and the analysis are still unfilled: they are the slots in §15, and
-this document becomes *registered* only when all of them are filled and frozen. Deviating after seeing results invalidates the run; the
+what each figure may be read to mean. Source A is `pallets/click`, and its candidate
+tasks are surveyed in [`tasks-click-a1.md`](tasks-click-a1.md). This document becomes
+*registered* only when every slot is filled and frozen. Deviating after seeing results invalidates the run; the
 correct response to a surprising number is a new run under an amended protocol, recorded as
 an amendment below the line, exactly as [`protocol-v2.md`](../eval/protocol-v2.md) does.
 
@@ -513,21 +521,36 @@ document is not registered.
 
 1. ~~**The repository (source A).**~~ **Filled:** `pallets/click`, surveyed at `6aabf09`.
    Each task pins its own pre-fix commit; see the manifest.
-2. **The task selection rules**, and the resulting disjoint development / harness / held-out
-   sets, each with its pinned pre-fix commit, rubric, necessary-fact list, and hidden checks.
+2. ~~**The task selection rules**, and the resulting disjoint development / harness / held-out
+   sets.~~ **Filled** by [`freeze-heldout-a1.md`](freeze-heldout-a1.md) §1: the boundedness
+   admission bar, and three disjoint sets — development `d1`–`d4`, capture `c1`–`c2`,
+   held-out `h1`–`h4`, each with its pinned pre-fix commit. Per-task rubrics and
+   necessary-fact lists are **not** filled: they belong to required-evidence completeness,
+   which §6 of that document defers from A1.
 3. **The memory provenance**: the capture policy text, and the frozen corpus it produced.
+   **The policy is filled** ([`capture-policy-a1.md`](capture-policy-a1.md)) and the
+   held-out capture *procedure* is registered (`freeze-heldout-a1.md` §2). **The held-out
+   corpus itself is still open, and must be**: it is produced by a prior-session run that
+   never sees `h1`–`h4`, so it cannot exist before the tasks are frozen. This slot closes
+   when that run's corpus is frozen and digested.
 4. **The arms as executed**: whether arm 4 runs, `n`, the ceilings, and the auth mechanism
-   `--bare` will use. **Partly filled**, by [`runner-a1.md`](runner-a1.md): the model is
+   `--bare` will use. **Now filled** — `freeze-heldout-a1.md` §3 registers that arm 4 does
+   not run, `n = 3`, a 600 s wall-clock ceiling and a 30-turn in-run ceiling. Previously
+   partly filled, by [`runner-a1.md`](runner-a1.md): the model is
    `deepseek-flash` for **all three arms**, served by DeepSeek's Anthropic-compatible endpoint,
    authenticated by `ANTHROPIC_API_KEY` under `--bare`; ordinary tool calls, Nexus MCP calls
    and `--max-turns` are all verified through it; reasoning is default-on and held fixed by
    holding the request shape fixed. **Still open:** whether arm 4 runs, `n`, the wall-clock
    ceiling, the turn ceiling's value, and the §3 amendment the alias problem forces.
-5. **The analysis, fixed before any scored run** (§12): the rule collapsing `n` attempts to a
-   per-task summary, the paired comparison over tasks, and the interval method with its
-   contributing task count.
+5. ~~**The analysis, fixed before any scored run** (§12).~~ **Filled** by
+   `freeze-heldout-a1.md` §5: the collapsing rule, the three paired contrasts, a percentile
+   bootstrap over tasks reported with its contributing task count — and the registered
+   statement that at four tasks no difference will be called established on that interval.
+   Exclusion rules and every non-binary verdict's bias direction are fixed there too.
 6. **The budget mechanism** (§4): the wall-clock ceiling, the accounting fields, and whether
    an in-run cap exists at all. **The last of these is answered:** `--max-turns` was tested,
-   it terminates the run, and it is registered as the in-run turn ceiling. **Still open:** the
-   wall-clock ceiling and the turn ceiling's *values*, and the accounting fields now that
-   `total_cost_usd` is disqualified as spend and `thinking_tokens` as a reasoning measure.
+   it terminates the run, and it is registered as the in-run turn ceiling. **The rest is now
+   filled** by `freeze-heldout-a1.md` §3: 600 s wall clock, 30 turns, and the accounting
+   fields — input, output and both cache token counts, wall clock, the trace-derived
+   tool-call count, and the terminal classification. `total_cost_usd` and `num_turns` are
+   not reported.
