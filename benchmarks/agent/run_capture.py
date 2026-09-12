@@ -66,7 +66,11 @@ CAPTURE_TOOLS = ("Read,Edit,Write,Bash,Glob,Grep,"
 def prompt_for(task: str) -> str:
     reg = task_set.registration(CFG.bench_path("prompts"))
     spec = task_set.require(reg, task, ("capture",), "run_capture.py")
-    return spec["body"] + reg["tails"][spec["tail"]] + reg["capture_instruction"]
+    # Instruction BEFORE tail, deliberately. The tail ends "When you are done, reply DONE",
+    # and in attempts 1 and 2 the recording guidance came after it -- so the sentence defining
+    # done preceded every word about memory, and all four runs reached the turn ceiling having
+    # recorded almost nothing. See capture-attempt-2.md.
+    return spec["body"] + reg["capture_instruction"] + reg["tails"][spec["tail"]]
 
 
 def task_dir(task: str) -> Path:
