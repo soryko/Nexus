@@ -19,7 +19,12 @@ import sys
 from pathlib import Path
 
 #: Fields a memory carries into the store, and therefore the only fields arm 3 may see.
-DELIVERED = ("kind", "tags", "content")
+#:
+#: `superseded` is here because arm 2 holds `history`: when a capture session revised a
+#: memory, that arm can retrieve the earlier revision, and notes that showed only the current
+#: one would differ from the store in SUBSTANCE rather than in access mechanism. A corpus with
+#: no revisions renders exactly as before.
+DELIVERED = ("kind", "tags", "content", "superseded")
 
 HEADINGS = {
     "decision": "Decisions",
@@ -47,7 +52,12 @@ def render(corpus: dict) -> str:
         lines += [f"## {heading}", ""]
         for m in group:
             tags = ", ".join(m["tags"])
-            lines += [f"- {m['content']}" + (f" _(tags: {tags})_" if tags else ""), ""]
+            lines += [f"- {m['content']}" + (f" _(tags: {tags})_" if tags else "")]
+            for old in m.get("superseded", ()):
+                # Mechanical, like everything else here: the earlier wording, marked as
+                # earlier, in the order it was superseded.
+                lines.append(f"  - _(earlier revision, since superseded)_ {old['content']}")
+            lines.append("")
     return "\n".join(lines).rstrip() + "\n", withheld
 
 

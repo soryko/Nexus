@@ -6,7 +6,8 @@
   "person doing it touching the runner.",
   "Every prompt states the observable symptom and the expected outcome. None names the",
   "function, the file or the mechanism. d1-d4 are reproduced byte-for-byte from the",
-  "constants they replace, so the development runs remain comparable."
+  "constants they replace, so the development runs remain comparable.",
+  "c1 and c2 are CAPTURE tasks. They take the capture instruction instead of `consult`, because a capture session has no prior memory to consult and is the thing that writes it."
  ],
  "consult": "\n\nBefore your first source edit, consult any available prior-work memory: Nexus memory tools or `NOTES-FROM-EARLIER-WORK.md`. If neither is available, proceed using the repository. Treat prior notes as potentially outdated and verify relevant claims against current code.",
  "tails": {
@@ -16,19 +17,34 @@
  "tasks": {
   "d1": {
    "body": "In this Click checkout there is a bug in how an option resolves its value from the environment through the context's automatic environment-variable prefix.\n\nReproduction: a command with an option declared `@click.option(\"--mypath\", type=click.Path(exists=True), envvar=\"MYPATH\")`, invoked with `auto_envvar_prefix=\"AUTO\"` and with `AUTO_MYPATH` set to the empty string in the environment, raises instead of completing with `mypath` left as `None`.",
-   "tail": "default"
+   "tail": "default",
+   "role": "evaluation"
   },
   "d2": {
    "body": "In this Click checkout, an option that asks to show its environment variable but has none configured produces a misleading error message.\n\nReproduction: `click.Command(\"cli\", params=[click.Option([\"--foo\"], show_envvar=True, required=True)])`, invoked with no arguments, exits 2 with a message that appends an environment-variable clause even though no environment variable is configured for that option. It should read `Error: Missing option '--foo'.`",
-   "tail": "default"
+   "tail": "default",
+   "role": "evaluation"
   },
   "d3": {
    "body": "In this Click checkout, an `UNSET` entry in a context's `default_map` is not handled correctly.\n\nReproduction: a command declared with `context_settings={\"default_map\": {\"port\": UNSET}}` -- where `UNSET` is imported from `click._utils` -- and an option `@click.option(\"--port\", default=8000)`, invoked with no arguments, prints `port=None`. It should print `port=8000`.",
-   "tail": "default"
+   "tail": "default",
+   "role": "evaluation"
   },
   "d4": {
    "body": "This checkout's test suite is configured to turn warnings into errors, so a test that uses an unregistered pytest marker fails at collection rather than merely warning.\n\nReproduction: a test decorated `@pytest.mark.integration` errors during collection with `PytestUnknownMarkWarning: Unknown pytest.mark.integration`, because that marker is not registered in this project's pytest configuration.\n\nRegister the `integration` marker in this project's pytest configuration so such a test collects and runs cleanly, and add one test under `tests/` that uses it.",
-   "tail": "d4"
+   "tail": "d4",
+   "role": "evaluation"
+  },
+  "c1": {
+   "role": "capture",
+   "tail": "default",
+   "body": "In this Click checkout, an option that declares a flag value while still taking a value cannot be passed on its own.\n\nReproduction: a command with an option declared `@click.option(\"--theflag\", type=str, is_flag=False, flag_value=\"FlagValue\", default=\"Default\")`, invoked with `--theflag` and nothing after it, exits 2 with `Error: Option '--theflag' requires an argument.` It should complete and print `FlagValue`. Invoked with no arguments it prints `Default`, and invoked as `--theflag value` it prints `value`; both of those are already correct and must stay so."
+  },
+  "c2": {
+   "role": "capture",
+   "tail": "default",
+   "body": "In this Click checkout, a callable used as an option's flag value is called when it supplies that option's default.\n\nReproduction: a command with an option declared `@click.option(\"--opt\", \"value\", flag_value=Marker, type=UNPROCESSED, default=True)` -- where `Marker` is a plain class -- invoked with no arguments prints an instance of `Marker`. Invoked as `--opt` it prints the class itself, which is what both cases should print. An entry for that option in a context's `default_map` must still take precedence over the flag value, and a callable sitting in a `default_map` must still be called."
   }
- }
+ },
+ "capture_instruction": "\n\nYou are the first session to work in this repository, and a later session will work in it after you. As you go, record what that later session would want to know, using the memory tools you have (`record`, and `revise` to correct something you already recorded). Record as you work rather than all at the end, and record what you would have wanted to know when you started.\n\nRecord four kinds of thing, and apply the test beside each one before recording it:\n- `decision` — a choice already made in this codebase, and its reason. Could a reader reach this by reading the code as it stands?\n- `constraint` — an invariant or convention the code holds to. Is it stated or evident in the code, the docs or the tests as they stand?\n- `procedure` — how something is done in this repository. Did you actually do it this way?\n- `failure` — something that went wrong and what it turned out to be. Did you observe it, rather than anticipate it?\nUse `observation` only for something that fits none of those four.\n\nDo not record:\n1. Anything you can state only because you did this task — the change you made, where you made it, or a description of the defect specific enough to substitute for finding it.\n2. Anything about the tests that judge this work: no test name, no assertion, no expected output.\n3. Anything that is true only after your change. A convention your own fix introduces is not prior knowledge, however true it is once you are done.\n4. The task statement, or anything that reads as an instruction for a later task.\n\nThe test that separates a recordable constraint from a leak is whether it names the convention or the violation. \"Values of this kind are normalised before they are compared\" is a convention, discoverable in the code as it stands, and is recordable. \"This particular path forgets to normalise them\" is the defect you were asked to find, and is not."
 }

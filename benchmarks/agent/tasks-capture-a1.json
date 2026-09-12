@@ -1,0 +1,15 @@
+{
+ "_comment": [
+  "The two CAPTURE tasks of freeze-heldout-a1.md section 1. Both fixes are ancestors of all",
+  "four held-out pre-fix commits, which is what lets a session that worked them record",
+  "memories admissible under capture-policy-a1 section 1.",
+  "This file names capture tasks only. The held-out tasks are not registered here and must",
+  "not be built by anything that a capture run can reach."
+ ],
+ "tasks": [
+  {"task": "c1", "fix": "ebcd548d50", "pre_fix": "7f7bbe4569",
+   "subject": "Options setting both is_flag=False and flag_value"},
+  {"task": "c2", "fix": "546f2851f4", "pre_fix": "ae46cfd6bc",
+   "subject": "Callable flag_value instantiated when used as a default"}
+ ]
+}

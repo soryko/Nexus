@@ -11,7 +11,12 @@ Only the delivered fields are written: content, kind and tags. `relevance`,
 exactly as `render_notes.py` withholds them from arm 3 -- c13's "outdated" label is the very
 thing d4 exists to test, and a delivered tag would announce it.
 
-Usage:  python3 seed_store.py <db> <namespace> <actor> [--map <store-map.json>]
+Usage:  python3 seed_store.py <db> <namespace> <actor> [--corpus <corpus.json>]
+                             [--map <store-map.json>]
+
+`--corpus` defaults to the development corpus. It is an argument because the held-out corpus
+is a different file, and a seeder that names one corpus in its source can only ever rebuild
+that one.
 """
 from __future__ import annotations
 
@@ -25,7 +30,7 @@ DELIVERED_FIELDS = ("content", "kind", "tags")
 WITHHELD_FIELDS = ("relevance", "discoverability", "outdated_note")
 
 
-def seed(db: Path, namespace: str, actor: str) -> list[dict]:
+def seed(db: Path, namespace: str, actor: str, corpus: Path | None = None) -> list[dict]:
     sys.path.insert(0, str(BENCH.parent.parent / "src"))
     from nexus_memory.domain.models import MemoryInput, Scope
     from nexus_memory.memory import MemoryService
@@ -35,7 +40,7 @@ def seed(db: Path, namespace: str, actor: str) -> list[dict]:
     _prepare_new_storage(db)
     service = MemoryService(SQLiteRepository(db), Scope(namespace, actor), None, None)
     rows = []
-    for m in json.loads(CORPUS.read_text())["memories"]:
+    for m in json.loads(Path(corpus or CORPUS).read_text())["memories"]:
         receipt = service.record(
             MemoryInput(m["content"], m["kind"], tuple(m.get("tags", ())), None, None, ()),
             m["id"])
@@ -47,11 +52,13 @@ def seed(db: Path, namespace: str, actor: str) -> list[dict]:
 def main() -> int:
     db, namespace, actor = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
     out = Path(sys.argv[sys.argv.index("--map") + 1]) if "--map" in sys.argv else None
+    corpus = Path(sys.argv[sys.argv.index("--corpus") + 1]) if "--corpus" in sys.argv else CORPUS
     if db.exists():
         print(f"refusing to seed over an existing store: {db}", file=sys.stderr)
         return 1
-    rows = seed(db, namespace, actor)
-    print(f"seeded {len(rows)} memories into {db} as ({namespace}, {actor}); "
+    rows = seed(db, namespace, actor, corpus)
+    print(f"seeded {len(rows)} memories from {corpus.name} into {db} as ({namespace}, "
+          f"{actor}); "
           f"withheld {', '.join(WITHHELD_FIELDS)}")
     if out:
         out.write_text(json.dumps(rows, indent=1))

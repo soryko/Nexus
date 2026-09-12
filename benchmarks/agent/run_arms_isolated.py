@@ -61,6 +61,13 @@ if TASK not in _reg["tasks"]:
     raise SystemExit(f"{PROMPT_REGISTRATION.name} registers no task {TASK!r}; "
                      f"it has {', '.join(sorted(_reg['tasks']))}")
 _spec = _reg["tasks"][TASK]
+if _spec.get("role") != "evaluation":
+    # A capture task run as an arm would score a task whose memories were captured FROM it,
+    # and an evaluation task run as a capture would put a held-out task in front of the
+    # session that writes the corpus. The registration says which each task is; this refuses
+    # rather than trusting the operator's argv.
+    raise SystemExit(f"{TASK} is registered as {_spec.get('role')!r}, not an evaluation task; "
+                     f"capture tasks are run by run_capture.py")
 PROMPT = _spec["body"] + _reg["tails"][_spec["tail"]] + _reg["consult"]
 
 # What an arm's environment is, and is not: `a1_config.ENV_ALLOWLIST` plus the two names the

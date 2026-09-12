@@ -1,0 +1,30 @@
+{
+ "_comment": [
+  "Template for the held-out task-corpus mix. Copy to mix-heldout-a1.json, fill in from the",
+  "FROZEN corpus, and pass it to freeze_corpus.py with --mix. See mix-declaration-a1.md for",
+  "what declaring is and is not allowed to touch.",
+  "",
+  "memory:          one of useful | unnecessary | outdated, per protocol-a1 section 7. All",
+  "                 three must have at least one task, or the run reports an unmet mix",
+  "                 requirement -- which is a result, not something to repair by capturing",
+  "                 again.",
+  "relevance:       corpus id -> necessary | support | outdated. A memory absent from a task's",
+  "                 map is irrelevant to that task, which is what gives the delivered-context",
+  "                 figures a denominator.",
+  "discoverability: required for every 'necessary' fact, per section 7b: discoverable means",
+  "                 the fixture contains it, absent means it does not. An advantage on a",
+  "                 discoverable fact measures retrieval efficiency, not supplied knowledge.",
+  "",
+  "The ids below (h01, h02 ...) are the corpus ids freeze_corpus.py assigns in capture order.",
+  "The task keys are the held-out tasks of freeze-heldout-a1.md section 1."
+ ],
+ "declared_utc": "FILL IN -- must precede every arm-run",
+ "declared_against_corpus_digest": "FILL IN -- the row digest freeze_corpus.py reports",
+ "tasks": {
+  "h1": {"memory": "useful", "relevance": {"h01": "necessary"},
+         "discoverability": {"h01": "absent"}},
+  "h2": {"memory": "useful", "relevance": {"h02": "support"}},
+  "h3": {"memory": "unnecessary", "relevance": {}},
+  "h4": {"memory": "outdated", "relevance": {"h03": "outdated"}}
+ }
+}
