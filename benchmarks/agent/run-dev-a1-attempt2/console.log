@@ -1,0 +1,15 @@
+seed=20260911  realised arm order: baseline -> nexus -> notes
+
+frozen store digest before any arm: 32426d20e4c5fab8
+
+[baseline] egress control: pip download blocked = True
+[baseline] running ...
+  -> {'is_error': True, 'subtype': 'error_max_turns', 'terminal_reason': 'max_turns', 'num_turns': 31}  patch=1252B  checks: 110 passed in 0.08s  wall=63.2s
+[nexus] egress control: pip download blocked = True
+[nexus] running ...
+  -> {'is_error': False, 'subtype': 'success', 'terminal_reason': 'completed', 'num_turns': 33}  patch=1259B  checks: 110 passed in 0.09s  wall=70.6s
+[notes] egress control: pip download blocked = True
+[notes] running ...
+  -> {'is_error': False, 'subtype': 'success', 'terminal_reason': 'completed', 'num_turns': 34}  patch=2127B  checks: 110 passed in 0.07s  wall=66.7s
+
+frozen store digest after all arms: 32426d20e4c5fab8  unchanged=True

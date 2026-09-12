@@ -1,0 +1,117 @@
+diff --git a/CHANGES.rst b/CHANGES.rst
+index 3521fe1..09caa88 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -5,6 +5,8 @@ Version 8.3.3
+ 
+ Unreleased
+ 
++-   Treat a stored :data:`UNSET` value in a command's ``default_map`` as an
++    absent value, so the parameter's own default is used instead of ``None``.
+ -   Use :func:`shlex.split` to split pager and editor commands into ``argv``
+     lists for :class:`subprocess.Popen`, removing ``shell=True``.
+     :issue:`1026` :pr:`1477` :pr:`2775`
+diff --git a/src/click/core.py b/src/click/core.py
+index 6dc44f3..0e37ba3 100644
+--- a/src/click/core.py
++++ b/src/click/core.py
+@@ -2281,8 +2281,13 @@ class Parameter:
+         name = self.name
+         value = ctx.lookup_default(name, call=False) if name is not None else None
+ 
+-        if value is None and not (
+-            ctx.default_map is not None and name is not None and name in ctx.default_map
++        if value is UNSET or (
++            value is None
++            and not (
++                ctx.default_map is not None
++                and name is not None
++                and name in ctx.default_map
++            )
+         ):
+             value = self.default
+ 
+@@ -2325,8 +2330,13 @@ class Parameter:
+ 
+         if value is UNSET:
+             default_map_value = ctx.lookup_default(self.name)  # type: ignore[arg-type]
+-            if default_map_value is not None or (
+-                ctx.default_map is not None and self.name in ctx.default_map
++
++            # A stored ``UNSET`` means no value was supplied, so it must not mask
++            # the parameter's own default. ``None`` is a real value, so it still
++            # takes precedence over the default.
++            if default_map_value is not UNSET and (
++                default_map_value is not None
++                or (ctx.default_map is not None and self.name in ctx.default_map)
+             ):
+                 value = default_map_value
+                 source = ParameterSource.DEFAULT_MAP
+diff --git a/tests/test_defaults.py b/tests/test_defaults.py
+index 7dc74f0..efef928 100644
+--- a/tests/test_defaults.py
++++ b/tests/test_defaults.py
+@@ -2,6 +2,7 @@ import pytest
+ 
+ import click
+ from click import UNPROCESSED
++from click._utils import UNSET
+ 
+ 
+ @pytest.mark.parametrize(
+@@ -239,6 +240,11 @@ def test_lookup_default_callable_in_default_map(runner):
+         # Falsy values in default_map are not confused with missing keys.
+         ([], {"name": ""}, "", "DEFAULT_MAP"),
+         ([], {"name": 0}, "0", "DEFAULT_MAP"),
++        # UNSET in default_map means no value was supplied, so it falls back to
++        # the parameter default rather than being handed back as a value.
++        ([], {"name": UNSET}, "original", "DEFAULT"),
++        # The command line still wins over an UNSET default_map entry.
++        (["--name", "cli"], {"name": UNSET}, "cli", "COMMANDLINE"),
+         # No default_map falls back to parameter default.
+         ([], None, "original", "DEFAULT"),
+     ],
+@@ -264,6 +270,43 @@ def test_default_map_source(runner, args, default_map, expected_value, expected_
+     assert f"source={expected_source}" in result.output
+ 
+ 
++def test_default_map_unset_falls_back_to_default(runner):
++    """A literal :attr:`UNSET` stored in ``default_map`` means the map did not
++    supply a value, so the parameter's own default is used instead of ``None``.
++
++    The sentinel is internal: reading it back out of a mapping must be treated
++    as absence, not as data to hand to the callback.
++    """
++
++    @click.command(context_settings={"default_map": {"port": UNSET}})
++    @click.option("--port", default=8000)
++    def cli(port):
++        click.echo(f"port={port}")
++
++    result = runner.invoke(cli, [])
++    assert not result.exception
++    assert result.output == "port=8000\n"
++
++    # An explicit value still wins over the parameter default.
++    result = runner.invoke(cli, ["--port", "9000"])
++    assert not result.exception
++    assert result.output == "port=9000\n"
++
++
++def test_default_map_unset_without_parameter_default(runner):
++    """An ``UNSET`` ``default_map`` entry does not invent a value for a
++    parameter that has no default of its own; the value stays missing."""
++
++    @click.command(context_settings={"default_map": {"port": UNSET}})
++    @click.option("--port", required=True)
++    def cli(port):
++        click.echo(f"port={port}")
++
++    result = runner.invoke(cli, [])
++    assert result.exit_code != 0
++    assert "Missing option '--port'" in result.output
++
++
+ def test_lookup_default_override_respected(runner):
+     """A subclass override of ``lookup_default()`` should be called by Click
+     internals, not bypassed by a private method.

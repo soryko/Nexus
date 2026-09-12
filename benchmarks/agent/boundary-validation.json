@@ -1,0 +1,470 @@
+{
+ "task": "d1",
+ "python": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/bin/python",
+ "forwarder_port": 8899,
+ "arms": {
+  "baseline": {
+   "network_egress_blocked": true,
+   "network_probe_tail": [
+    "ERROR: No matching distribution found for click"
+   ],
+   "dns_and_https_blocked": true,
+   "dns_probe_tail": [
+    "curl: (6) Could not resolve host: pypi.org"
+   ],
+   "held_checks_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/smoke/base/checks/d1/tests/test_options.py: Operation not permitted"
+    ],
+    "outside_tail": [
+     "    assert option.is_bool_flag is expected"
+    ]
+   },
+   "held_checks_unreadable": true,
+   "bench_dir_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /Users/soko/Cerebros/nexus-memory/benchmarks/agent/MANIFEST.md: Operation not permitted"
+    ],
+    "outside_tail": [
+     "pytest suite, and that it needs an interpreter with a working `pyexpat`."
+    ]
+   },
+   "bench_dir_unreadable": true,
+   "future_deny_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring/boundary-probe-answers.txt: Operation not permitted"
+    ],
+    "outside_tail": [
+     "held-out answer material would live here"
+    ],
+    "applicable": true,
+    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring"
+   },
+   "future_path_denied": true,
+   "own_checkout_readable": true,
+   "interpreter_runs": true,
+   "interpreter_tail": [],
+   "git_runs": true,
+   "git_tail": [],
+   "runner_starts": true,
+   "runner_version": [
+    "2.1.258 (Claude Code)"
+   ],
+   "runner_tail": [],
+   "runner_scratch_usable": true,
+   "runner_scratch_dir": "/private/tmp/claude-501/-private-tmp-claude-501--Users-soko-Cerebros-nexus-memory-2875a44a-2ea4-4a24-8ab3-dcad1b9ab047-scratchpad-boundary-validation-arms-baseline-repo",
+   "runner_scratch_tail": [],
+   "negative_controls": {
+    "network_egress_blocked": true,
+    "dns_and_https_blocked": true,
+    "held_checks_unreadable": true,
+    "bench_dir_unreadable": true,
+    "future_path_denied": true
+   },
+   "positive_controls": {
+    "own_checkout_readable": true,
+    "interpreter_runs": true,
+    "git_runs": true,
+    "runner_starts": true,
+    "runner_scratch_usable": true
+   },
+   "all_hold": true,
+   "loopback_limited_to_forwarder_port": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "curl: (7) Failed to connect to 127.0.0.1 port 8901 after 0 ms: Couldn't connect to server"
+    ],
+    "outside_tail": []
+   },
+   "memory_reachable": {
+    "applicable": true,
+    "arm_should_reach": false,
+    "reached": false,
+    "as_intended": true,
+    "wal_sidecars_live_during_probe": [
+     "nexus-dev.db-shm",
+     "nexus-dev.db-wal"
+    ],
+    "active_memories": null,
+    "hits": null,
+    "detail": {
+     "db": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/nexus-dev.db",
+     "namespace": "a1-dev",
+     "actor": "agent",
+     "query": "click option parameter",
+     "sidecars_present": [
+      "nexus-dev.db-shm",
+      "nexus-dev.db-wal"
+     ],
+     "reachable": false,
+     "retrieved": false,
+     "error": "ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)"
+    }
+   },
+   "scratch_root_entry_only": {
+    "root": "/private/tmp/claude-501",
+    "entry_openable": true,
+    "held_checks_under_it_denied": true,
+    "runner_starts": true,
+    "subpath_spelling_would_expose_held_checks": true,
+    "entry_only": true
+   }
+  },
+  "nexus": {
+   "network_egress_blocked": true,
+   "network_probe_tail": [
+    "ERROR: No matching distribution found for click"
+   ],
+   "dns_and_https_blocked": true,
+   "dns_probe_tail": [
+    "curl: (6) Could not resolve host: pypi.org"
+   ],
+   "held_checks_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/smoke/base/checks/d1/tests/test_options.py: Operation not permitted"
+    ],
+    "outside_tail": [
+     "    assert option.is_bool_flag is expected"
+    ]
+   },
+   "held_checks_unreadable": true,
+   "bench_dir_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /Users/soko/Cerebros/nexus-memory/benchmarks/agent/MANIFEST.md: Operation not permitted"
+    ],
+    "outside_tail": [
+     "pytest suite, and that it needs an interpreter with a working `pyexpat`."
+    ]
+   },
+   "bench_dir_unreadable": true,
+   "future_deny_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring/boundary-probe-answers.txt: Operation not permitted"
+    ],
+    "outside_tail": [
+     "held-out answer material would live here"
+    ],
+    "applicable": true,
+    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring"
+   },
+   "future_path_denied": true,
+   "own_checkout_readable": true,
+   "interpreter_runs": true,
+   "interpreter_tail": [],
+   "git_runs": true,
+   "git_tail": [],
+   "runner_starts": true,
+   "runner_version": [
+    "2.1.258 (Claude Code)"
+   ],
+   "runner_tail": [],
+   "runner_scratch_usable": true,
+   "runner_scratch_dir": "/private/tmp/claude-501/-private-tmp-claude-501--Users-soko-Cerebros-nexus-memory-2875a44a-2ea4-4a24-8ab3-dcad1b9ab047-scratchpad-boundary-validation-arms-nexus-repo",
+   "runner_scratch_tail": [],
+   "negative_controls": {
+    "network_egress_blocked": true,
+    "dns_and_https_blocked": true,
+    "held_checks_unreadable": true,
+    "bench_dir_unreadable": true,
+    "future_path_denied": true
+   },
+   "positive_controls": {
+    "own_checkout_readable": true,
+    "interpreter_runs": true,
+    "git_runs": true,
+    "runner_starts": true,
+    "runner_scratch_usable": true
+   },
+   "all_hold": true,
+   "loopback_limited_to_forwarder_port": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "curl: (7) Failed to connect to 127.0.0.1 port 8901 after 0 ms: Couldn't connect to server"
+    ],
+    "outside_tail": []
+   },
+   "memory_reachable": {
+    "applicable": true,
+    "arm_should_reach": true,
+    "reached": true,
+    "as_intended": true,
+    "wal_sidecars_live_during_probe": [
+     "nexus-dev.db-shm",
+     "nexus-dev.db-wal"
+    ],
+    "active_memories": 13,
+    "hits": 6,
+    "detail": {
+     "db": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/nexus-dev.db",
+     "namespace": "a1-dev",
+     "actor": "agent",
+     "query": "click option parameter",
+     "sidecars_present": [
+      "nexus-dev.db-shm",
+      "nexus-dev.db-wal"
+     ],
+     "reachable": true,
+     "active_memories": 13,
+     "expected_active": 13,
+     "active_as_expected": true,
+     "hits": 6,
+     "retrieved": true,
+     "first_hit": "3a2ba70a-5513-41b7-9d42-6286635e6b59",
+     "sqlite_version": "3.53.4"
+    }
+   },
+   "scratch_root_entry_only": {
+    "root": "/private/tmp/claude-501",
+    "entry_openable": true,
+    "held_checks_under_it_denied": true,
+    "runner_starts": true,
+    "subpath_spelling_would_expose_held_checks": true,
+    "entry_only": true
+   }
+  },
+  "notes": {
+   "network_egress_blocked": true,
+   "network_probe_tail": [
+    "ERROR: No matching distribution found for click"
+   ],
+   "dns_and_https_blocked": true,
+   "dns_probe_tail": [
+    "curl: (6) Could not resolve host: pypi.org"
+   ],
+   "held_checks_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/smoke/base/checks/d1/tests/test_options.py: Operation not permitted"
+    ],
+    "outside_tail": [
+     "    assert option.is_bool_flag is expected"
+    ]
+   },
+   "held_checks_unreadable": true,
+   "bench_dir_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /Users/soko/Cerebros/nexus-memory/benchmarks/agent/MANIFEST.md: Operation not permitted"
+    ],
+    "outside_tail": [
+     "pytest suite, and that it needs an interpreter with a working `pyexpat`."
+    ]
+   },
+   "bench_dir_unreadable": true,
+   "future_deny_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring/boundary-probe-answers.txt: Operation not permitted"
+    ],
+    "outside_tail": [
+     "held-out answer material would live here"
+    ],
+    "applicable": true,
+    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/scoring"
+   },
+   "future_path_denied": true,
+   "own_checkout_readable": true,
+   "interpreter_runs": true,
+   "interpreter_tail": [],
+   "git_runs": true,
+   "git_tail": [],
+   "runner_starts": true,
+   "runner_version": [
+    "2.1.258 (Claude Code)"
+   ],
+   "runner_tail": [],
+   "runner_scratch_usable": true,
+   "runner_scratch_dir": "/private/tmp/claude-501/-private-tmp-claude-501--Users-soko-Cerebros-nexus-memory-2875a44a-2ea4-4a24-8ab3-dcad1b9ab047-scratchpad-boundary-validation-arms-notes-repo",
+   "runner_scratch_tail": [],
+   "negative_controls": {
+    "network_egress_blocked": true,
+    "dns_and_https_blocked": true,
+    "held_checks_unreadable": true,
+    "bench_dir_unreadable": true,
+    "future_path_denied": true
+   },
+   "positive_controls": {
+    "own_checkout_readable": true,
+    "interpreter_runs": true,
+    "git_runs": true,
+    "runner_starts": true,
+    "runner_scratch_usable": true
+   },
+   "all_hold": true,
+   "loopback_limited_to_forwarder_port": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "curl: (7) Failed to connect to 127.0.0.1 port 8901 after 0 ms: Couldn't connect to server"
+    ],
+    "outside_tail": []
+   },
+   "memory_reachable": {
+    "applicable": true,
+    "arm_should_reach": false,
+    "reached": false,
+    "as_intended": true,
+    "wal_sidecars_live_during_probe": [
+     "nexus-dev.db-shm",
+     "nexus-dev.db-wal"
+    ],
+    "active_memories": null,
+    "hits": null,
+    "detail": {
+     "db": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/nexus-dev.db",
+     "namespace": "a1-dev",
+     "actor": "agent",
+     "query": "click option parameter",
+     "sidecars_present": [
+      "nexus-dev.db-shm",
+      "nexus-dev.db-wal"
+     ],
+     "reachable": false,
+     "retrieved": false,
+     "error": "ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)"
+    }
+   },
+   "scratch_root_entry_only": {
+    "root": "/private/tmp/claude-501",
+    "entry_openable": true,
+    "held_checks_under_it_denied": true,
+    "runner_starts": true,
+    "subpath_spelling_would_expose_held_checks": true,
+    "entry_only": true
+   }
+  }
+ },
+ "prior_profile": {
+  "bench_dir_readable_under_prior_profile": true,
+  "bench_file": "MANIFEST.md",
+  "future_deny_path_readable_under_prior_profile": true,
+  "note": "both True is the defect; the repaired profile denies both"
+ },
+ "prior_store_allow": {
+  "sidecars_live": [
+   "nexus-dev.db-shm",
+   "nexus-dev.db-wal"
+  ],
+  "prior_allow_db_only": {
+   "reached": false,
+   "tail": [
+    "{\"db\": \"/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/nexus-dev.db\", \"namespace\": \"a1-dev\", \"actor\": \"agent\", \"query\": \"click option parameter\", \"sidecars_present\": [\"nexus-dev.db-shm\", \"nexus-dev.db-wal\"], \"reachable\": false, \"retrieved\": false, \"error\": \"ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)\"}"
+   ]
+  },
+  "repaired_allow_db_and_sidecars": {
+   "reached": true,
+   "tail": [
+    "{\"db\": \"/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/nexus-dev.db\", \"namespace\": \"a1-dev\", \"actor\": \"agent\", \"query\": \"click option parameter\", \"sidecars_present\": [\"nexus-dev.db-shm\", \"nexus-dev.db-wal\"], \"reachable\": true, \"active_memories\": 13, \"expected_active\": 13, \"active_as_expected\": true, \"hits\": 6, \"retrieved\": true, \"first_hit\": \"3a2ba70a-5513-41b7-9d42-6286635e6b59\", \"sqlite_version\": \"3.53.4\"}"
+   ]
+  },
+  "repair_is_the_difference": true,
+  "note": "with the sidecars on disk the one-file allow cannot open the store; with them checkpointed away it can, which is why no gate saw this"
+ },
+ "deny_ordering": {
+  "synthetic_denied_child": {
+   "blocked_inside": true,
+   "works_outside": true,
+   "demonstrates_boundary": true,
+   "inside_tail": [
+    "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2875a44a-2ea4-4a24-8ab3-dcad1b9ab047/scratchpad/boundary-validation/ordering-probe/outer/inner/withheld.txt: Operation not permitted"
+   ],
+   "outside_tail": [
+    "withheld: inside the same subtree, denied"
+   ]
+  },
+  "synthetic_allowed_sibling": {
+   "blocked_inside": false,
+   "works_outside": true,
+   "demonstrates_boundary": false,
+   "inside_tail": [
+    "readable: inside an allowed subtree, not denied"
+   ],
+   "outside_tail": [
+    "readable: inside an allowed subtree, not denied"
+   ]
+  },
+  "home_claude_projects": {
+   "blocked_inside": true,
+   "works_outside": true,
+   "demonstrates_boundary": true,
+   "inside_tail": [
+    "ls: /Users/soko/.claude/projects: Operation not permitted"
+   ],
+   "outside_tail": [
+    "-private-tmp-claude-501--Users-soko-Cerebros-nexus-memory-3a1f29bd-bbe5-4757-8711-792724cbc000-scratchpad-turns"
+   ]
+  },
+  "ordering_holds": true
+ },
+ "forwarder": {
+  "provider-side search tool": {
+   "status": 403,
+   "refused": true,
+   "message": "tools[].type='web_search_20250305': provider-executed tools are not available to an arm; only client-side tool definitions are forwarded"
+  },
+  "provider-side code execution": {
+   "status": 403,
+   "refused": true,
+   "message": "tools[].type='code_execution_20250522': provider-executed tools are not available to an arm; only client-side tool definitions are forwarded"
+  },
+  "provider-side MCP connector": {
+   "status": 403,
+   "refused": true,
+   "message": "mcp_servers: provider-side connectors are not available to an arm"
+  },
+  "route off the allowlist": {
+   "status": 403,
+   "refused": true,
+   "message": "route not on the allowlist: /anthropic/v1/models"
+  },
+  "method off the allowlist": {
+   "status": 405,
+   "refused": true,
+   "message": "method GET is not forwarded"
+  },
+  "ordinary client-tool request accepted": {
+   "status": 200,
+   "refused": false,
+   "expected_refused": false,
+   "reached_upstream": true,
+   "upstream_path": "/anthropic/v1/messages",
+   "tools_forwarded_intact": true,
+   "body_echoed": true,
+   "inspect_body_verdict": null
+  },
+  "stub_upstream": "127.0.0.1:8902",
+  "refusals_held": true,
+  "acceptance_held": true,
+  "all_refusals_held": true
+ },
+ "all_hold": true
+}
