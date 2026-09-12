@@ -134,13 +134,34 @@ def prepare(arm: str) -> Path:
     return dst
 
 
+def boundary_paths(arm: str, cwd: Path) -> tuple[list[Path], list[Path]]:
+    """(allow, deny) for one arm's profile.
+
+    Reads are denied by default, so the allow list has to name everything the arm legitimately
+    needs: the runtime, its own checkout, its own `mcp.json`, and -- for the nexus arm -- the
+    editable install the memory server runs from. BENCH is on the deny list and sits inside
+    the repository the nexus server imports from, which is why denies are emitted after
+    allows: `src/` is readable, `benchmarks/agent/` is not.
+    """
+    allow = isolation.default_allow_paths(cwd, PYTEST_PY) + [
+        RUN / "arms" / arm,                 # mcp.json, sandbox.sb
+        RUN / "nexus-dev.db",               # the frozen corpus, for the nexus arm
+        REPO / ".venv-sqlite", REPO / "src", REPO / "pyproject.toml",
+    ]
+    deny = [Path(FIXTURE_BASE) / "checks",
+            *[(RUN / "arms" / a) for a in ARMS if a != arm],
+            RUN / "scoring",                # created part-way through the run; denied anyway
+            Path(SOURCE_CLONE),
+            BENCH]                          # saved patches, reports, corpus, task sheet
+    return allow, deny
+
+
 def invoke(arm: str, cwd: Path) -> dict:
     cfg = RUN / "arms" / arm / "mcp.json"
     cfg.write_text(json.dumps(ARMS[arm]["mcp"]))
-    profile = isolation.write_profile(
-        RUN / "arms" / arm / "sandbox.sb", cwd,
-        [Path(FIXTURE_BASE) / "checks", *[(RUN / "arms" / a) for a in ARMS if a != arm],
-         RUN / "scoring", Path(SOURCE_CLONE)])
+    allow, deny = boundary_paths(arm, cwd)
+    profile = isolation.write_profile(RUN / "arms" / arm / "sandbox.sb", cwd, deny, allow,
+                                      FORWARDER_PORT)
     cmd = ["sandbox-exec", "-f", str(profile),
            "claude", "--bare", "-p", PROMPT, "--model", "deepseek-flash",
            "--mcp-config", str(cfg), "--strict-mcp-config",
@@ -249,17 +270,14 @@ def main() -> int:
     records = []
     for arm in order:
         cwd = prepare(arm)
-        profile = isolation.write_profile(
-            RUN / "arms" / arm / "sandbox.sb", cwd,
-            [Path(FIXTURE_BASE) / "checks", *[(RUN / "arms" / a) for a in ARMS if a != arm],
-             RUN / "scoring", Path(SOURCE_CLONE)])
+        allow, deny = boundary_paths(arm, cwd)
+        profile = isolation.write_profile(RUN / "arms" / arm / "sandbox.sb", cwd, deny, allow,
+                                          FORWARDER_PORT)
         bound = isolation.check_boundary(profile, cwd, Path(FIXTURE_BASE) / "checks" / TASK,
-                                         PYTEST_PY)
-        print(f"[{arm}] boundary: egress={bound['network_egress_blocked']} "
-              f"dns={bound['dns_and_https_blocked']} "
-              f"held-checks={bound['held_checks_unreadable']} "
-              f"(paired control: works_outside="
-              f"{bound.get('held_checks_paired',{}).get('works_outside')})", flush=True)
+                                         PYTEST_PY, deny, BENCH)
+        print(f"[{arm}] boundary negative: {bound['negative_controls']}", flush=True)
+        print(f"[{arm}] boundary positive: {bound['positive_controls']} "
+              f"runner={bound.get('runner_version')}", flush=True)
         if not bound["all_hold"]:
             print(f"[{arm}] ABORT: boundary not demonstrated -> {bound}", flush=True)
             return 1

@@ -1,0 +1,310 @@
+{
+ "task": "d4",
+ "python": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/bin/python",
+ "forwarder_port": 8899,
+ "arms": {
+  "baseline": {
+   "network_egress_blocked": true,
+   "network_probe_tail": [
+    "ERROR: No matching distribution found for click"
+   ],
+   "dns_and_https_blocked": true,
+   "dns_probe_tail": [
+    "curl: (6) Could not resolve host: pypi.org"
+   ],
+   "held_checks_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4/base/checks/d4/tests/test_marker_registration.py: Operation not permitted"
+    ],
+    "outside_tail": [
+     "    assert True"
+    ]
+   },
+   "held_checks_unreadable": true,
+   "bench_dir_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /Users/soko/Cerebros/nexus-memory/benchmarks/agent/MANIFEST.md: Operation not permitted"
+    ],
+    "outside_tail": [
+     "    attempt restarted from a fresh fixture. Recorded so the spend is visible."
+    ]
+   },
+   "bench_dir_unreadable": true,
+   "future_deny_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/cb243e2f-e074-4714-8410-582784b6dbff/scratchpad/boundary-validation/scoring/boundary-probe-answers.txt: Operation not permitted"
+    ],
+    "outside_tail": [
+     "held-out answer material would live here"
+    ],
+    "applicable": true,
+    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/cb243e2f-e074-4714-8410-582784b6dbff/scratchpad/boundary-validation/scoring"
+   },
+   "future_path_denied": true,
+   "own_checkout_readable": true,
+   "interpreter_runs": true,
+   "interpreter_tail": [],
+   "git_runs": true,
+   "git_tail": [],
+   "runner_starts": true,
+   "runner_version": [
+    "2.1.258 (Claude Code)"
+   ],
+   "runner_tail": [],
+   "negative_controls": {
+    "network_egress_blocked": true,
+    "dns_and_https_blocked": true,
+    "held_checks_unreadable": true,
+    "bench_dir_unreadable": true,
+    "future_path_denied": true
+   },
+   "positive_controls": {
+    "own_checkout_readable": true,
+    "interpreter_runs": true,
+    "git_runs": true,
+    "runner_starts": true
+   },
+   "all_hold": true,
+   "loopback_limited_to_forwarder_port": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "curl: (7) Failed to connect to 127.0.0.1 port 8901 after 0 ms: Couldn't connect to server"
+    ],
+    "outside_tail": []
+   },
+   "nexus_server_starts": {
+    "applicable": true,
+    "starts": true,
+    "tail": [
+     "                        identity (requires --repo)"
+    ]
+   }
+  },
+  "nexus": {
+   "network_egress_blocked": true,
+   "network_probe_tail": [
+    "ERROR: No matching distribution found for click"
+   ],
+   "dns_and_https_blocked": true,
+   "dns_probe_tail": [
+    "curl: (6) Could not resolve host: pypi.org"
+   ],
+   "held_checks_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4/base/checks/d4/tests/test_marker_registration.py: Operation not permitted"
+    ],
+    "outside_tail": [
+     "    assert True"
+    ]
+   },
+   "held_checks_unreadable": true,
+   "bench_dir_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /Users/soko/Cerebros/nexus-memory/benchmarks/agent/MANIFEST.md: Operation not permitted"
+    ],
+    "outside_tail": [
+     "    attempt restarted from a fresh fixture. Recorded so the spend is visible."
+    ]
+   },
+   "bench_dir_unreadable": true,
+   "future_deny_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/cb243e2f-e074-4714-8410-582784b6dbff/scratchpad/boundary-validation/scoring/boundary-probe-answers.txt: Operation not permitted"
+    ],
+    "outside_tail": [
+     "held-out answer material would live here"
+    ],
+    "applicable": true,
+    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/cb243e2f-e074-4714-8410-582784b6dbff/scratchpad/boundary-validation/scoring"
+   },
+   "future_path_denied": true,
+   "own_checkout_readable": true,
+   "interpreter_runs": true,
+   "interpreter_tail": [],
+   "git_runs": true,
+   "git_tail": [],
+   "runner_starts": true,
+   "runner_version": [
+    "2.1.258 (Claude Code)"
+   ],
+   "runner_tail": [],
+   "negative_controls": {
+    "network_egress_blocked": true,
+    "dns_and_https_blocked": true,
+    "held_checks_unreadable": true,
+    "bench_dir_unreadable": true,
+    "future_path_denied": true
+   },
+   "positive_controls": {
+    "own_checkout_readable": true,
+    "interpreter_runs": true,
+    "git_runs": true,
+    "runner_starts": true
+   },
+   "all_hold": true,
+   "loopback_limited_to_forwarder_port": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "curl: (7) Failed to connect to 127.0.0.1 port 8901 after 0 ms: Couldn't connect to server"
+    ],
+    "outside_tail": []
+   },
+   "nexus_server_starts": {
+    "applicable": true,
+    "starts": true,
+    "tail": [
+     "                        identity (requires --repo)"
+    ]
+   }
+  },
+  "notes": {
+   "network_egress_blocked": true,
+   "network_probe_tail": [
+    "ERROR: No matching distribution found for click"
+   ],
+   "dns_and_https_blocked": true,
+   "dns_probe_tail": [
+    "curl: (6) Could not resolve host: pypi.org"
+   ],
+   "held_checks_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4/base/checks/d4/tests/test_marker_registration.py: Operation not permitted"
+    ],
+    "outside_tail": [
+     "    assert True"
+    ]
+   },
+   "held_checks_unreadable": true,
+   "bench_dir_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /Users/soko/Cerebros/nexus-memory/benchmarks/agent/MANIFEST.md: Operation not permitted"
+    ],
+    "outside_tail": [
+     "    attempt restarted from a fresh fixture. Recorded so the spend is visible."
+    ]
+   },
+   "bench_dir_unreadable": true,
+   "future_deny_paired": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/cb243e2f-e074-4714-8410-582784b6dbff/scratchpad/boundary-validation/scoring/boundary-probe-answers.txt: Operation not permitted"
+    ],
+    "outside_tail": [
+     "held-out answer material would live here"
+    ],
+    "applicable": true,
+    "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/cb243e2f-e074-4714-8410-582784b6dbff/scratchpad/boundary-validation/scoring"
+   },
+   "future_path_denied": true,
+   "own_checkout_readable": true,
+   "interpreter_runs": true,
+   "interpreter_tail": [],
+   "git_runs": true,
+   "git_tail": [],
+   "runner_starts": true,
+   "runner_version": [
+    "2.1.258 (Claude Code)"
+   ],
+   "runner_tail": [],
+   "negative_controls": {
+    "network_egress_blocked": true,
+    "dns_and_https_blocked": true,
+    "held_checks_unreadable": true,
+    "bench_dir_unreadable": true,
+    "future_path_denied": true
+   },
+   "positive_controls": {
+    "own_checkout_readable": true,
+    "interpreter_runs": true,
+    "git_runs": true,
+    "runner_starts": true
+   },
+   "all_hold": true,
+   "loopback_limited_to_forwarder_port": {
+    "blocked_inside": true,
+    "works_outside": true,
+    "demonstrates_boundary": true,
+    "inside_tail": [
+     "curl: (7) Failed to connect to 127.0.0.1 port 8901 after 0 ms: Couldn't connect to server"
+    ],
+    "outside_tail": []
+   },
+   "nexus_server_starts": {
+    "applicable": true,
+    "starts": true,
+    "tail": [
+     "                        identity (requires --repo)"
+    ]
+   }
+  }
+ },
+ "prior_profile": {
+  "bench_dir_readable_under_prior_profile": true,
+  "bench_file": "MANIFEST.md",
+  "future_deny_path_readable_under_prior_profile": true,
+  "note": "both True is the defect; the repaired profile denies both"
+ },
+ "forwarder": {
+  "provider-side search tool": {
+   "status": 403,
+   "refused": true,
+   "message": "tools[].type='web_search_20250305': provider-executed tools are not available to an arm; only client-side tool definitions are forwarded"
+  },
+  "provider-side code execution": {
+   "status": 403,
+   "refused": true,
+   "message": "tools[].type='code_execution_20250522': provider-executed tools are not available to an arm; only client-side tool definitions are forwarded"
+  },
+  "provider-side MCP connector": {
+   "status": 403,
+   "refused": true,
+   "message": "mcp_servers: provider-side connectors are not available to an arm"
+  },
+  "route off the allowlist": {
+   "status": 403,
+   "refused": true,
+   "message": "route not on the allowlist: /anthropic/v1/models"
+  },
+  "method off the allowlist": {
+   "status": 405,
+   "refused": true,
+   "message": "method GET is not forwarded"
+  },
+  "ordinary client-tool request accepted": {
+   "refused": false,
+   "expected_refused": false
+  },
+  "all_refusals_held": true
+ },
+ "all_hold": true
+}

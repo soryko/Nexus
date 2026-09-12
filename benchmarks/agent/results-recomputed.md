@@ -22,6 +22,13 @@ isolation, and re-running `d4` with the stale advice **unlabelled**. Both are th
 
 ## 2. Isolation is now enforced, and the old control was vacuous
 
+> **Superseded by [`results-review-2.md`](results-review-2.md) §1–§2.** The boundary
+> described below allowed reads by default and denied a short list of paths, which left
+> the benchmark directory readable and silently dropped any denied path that did not
+> exist yet; and the forwarder restricted the host but not the request body. Both were
+> reproduced and repaired. What this section says about the *proxy-variable* era before
+> it still stands.
+
 The previous probe set proxy variables and `PIP_NO_INDEX`, then read a failed `pip download`
 as proof of blocked egress. **`PIP_NO_INDEX` makes pip fail without opening a socket**, so
 that control could pass with the network wide open. Worse, a direct test showed **Claude Code
@@ -88,6 +95,11 @@ ordering, rested on that pairing. Orphan results are now recorded rather than re
 both parsers share one implementation.
 
 ## 6. Compliance: structural checks, one executed test, and an explicit remainder
+
+> **Superseded by [`results-review-2.md`](results-review-2.md) §3–§5.** A single pre-fix
+> run does not establish regression coverage, and consultation was scored on issue order
+> rather than on when the response arrived. The table below is reproduced there with the
+> repaired instruments; no compliance figure changed, and two checks were renamed.
 
 The review broke the old scorer four ways at once — an arbitrary source edit, `assert True`, a
 `status`-only consultation and the reply "NOT DONE" together scored **5/5**. Each heuristic

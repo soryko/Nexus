@@ -7,6 +7,13 @@ Every claim about what a tool returned, and about the order of access, depended 
 pairing being right. It joins by id now.
 
 Also opens `.jsonl` or `.jsonl.gz` transparently, so recomputation works on packaged runs.
+
+Calls carry two clocks, not one. `issued_at` is when the model asked for the tool;
+`resolved_at` is when its result came back. They are separate positions on a single
+monotonic event counter over the whole trace, because with parallel tool use the two orders
+differ: a call issued first can return last. Any claim of the form "X happened before the
+edit" has to say which of the two it means -- a memory call ISSUED before an edit whose
+result ARRIVES after it delivered nothing the edit could have used.
 """
 from __future__ import annotations
 
@@ -34,12 +41,14 @@ def _text(content) -> str:
 def parse(path) -> dict:
     """-> {calls: [...], result: envelope|None}
 
-    Each call carries its own `id`, its `index` in issue order, and — once joined — the
-    `result` text that actually came back for THAT id, plus `is_error`.
+    Each call carries its own `id`, its `index` in issue order, `issued_at`/`resolved_at`
+    positions on a trace-wide event counter, and — once joined — the `result` text that
+    actually came back for THAT id, plus `is_error`.
     """
     calls: list[dict] = []
     by_id: dict[str, dict] = {}
     envelope = None
+    ev = 0                      # one monotonic counter over issues AND arrivals
     with _open(path) as fh:
         for line in fh:
             line = line.strip()
@@ -54,7 +63,9 @@ def parse(path) -> dict:
                 for b in d["message"].get("content", []):
                     if b.get("type") == "tool_use":
                         c = {"id": b.get("id"), "index": len(calls), "name": b.get("name"),
-                             "input": b.get("input"), "result": None, "is_error": None}
+                             "input": b.get("input"), "result": None, "is_error": None,
+                             "issued_at": ev, "resolved_at": None}
+                        ev += 1
                         calls.append(c)
                         if c["id"]:
                             by_id[c["id"]] = c
@@ -72,10 +83,14 @@ def parse(path) -> dict:
                         # whichever call happened to be pending.
                         calls.append({"id": None, "index": len(calls), "name": "<orphan result>",
                                       "input": None, "result": _text(b.get("content")),
-                                      "is_error": b.get("is_error"), "orphan_for": tid})
+                                      "is_error": b.get("is_error"), "orphan_for": tid,
+                                      "issued_at": None, "resolved_at": ev})
+                        ev += 1
                         continue
                     target["result"] = _text(b.get("content"))
                     target["is_error"] = b.get("is_error")
+                    target["resolved_at"] = ev
+                    ev += 1
             elif kind == "result":
                 envelope = d
     return {"calls": calls, "result": envelope,
@@ -88,4 +103,10 @@ if __name__ == "__main__":
     import sys
     for p in sys.argv[1:]:
         t = parse(p)
-        print(f"{p}: calls={len(t['calls'])} orphans={t['orphans']} unresolved={t['unresolved']}")
+        reordered = sum(1 for c in t["calls"]
+                        if c.get("resolved_at") is not None and c.get("issued_at") is not None
+                        and any(o.get("resolved_at") is not None
+                                and o["issued_at"] > c["issued_at"]
+                                and o["resolved_at"] < c["resolved_at"] for o in t["calls"]))
+        print(f"{p}: calls={len(t['calls'])} orphans={t['orphans']} "
+              f"unresolved={t['unresolved']} out-of-order-results={reordered}")

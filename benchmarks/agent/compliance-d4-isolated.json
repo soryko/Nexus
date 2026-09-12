@@ -1,49 +1,92 @@
 [
  {
+  "task": "d4",
+  "run": "run-dev-d4-isolated",
   "arm": "baseline",
   "terminal": "completed",
+  "scored": true,
+  "truncated": false,
   "functional": true,
   "compliance": "4/4",
   "failed": [],
   "regression_probe": {
    "applicable": true,
-   "fails_prefix": true,
-   "summary": "1 error in 0.05s"
-  },
-  "boundary": {
-   "network_egress_blocked": true,
-   "network_probe_tail": [
-    "ERROR: No matching distribution found for click"
+   "added_tests": [
+    "tests/test_integration.py::test_group_with_option_and_subcommand"
    ],
-   "dns_and_https_blocked": true,
-   "dns_probe_tail": [
-    "curl: (6) Could not resolve host: pypi.org"
-   ],
-   "held_checks_unreadable": true,
-   "fs_probe_tail": [
-    "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4iso/base/checks/d4/tests/*.py: No such file or directory"
-   ],
-   "held_checks_paired": {
-    "blocked_inside": true,
-    "works_outside": true,
-    "demonstrates_boundary": true,
-    "inside_tail": [
-     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4iso/base/checks/d4/tests/test_marker_registration.py: Operation not permitted"
-    ],
-    "outside_tail": [
-     "    assert True"
-    ]
+   "skipped_tests": [],
+   "baseline": {
+    "rc": 4,
+    "verdict": "absent",
+    "cases": [],
+    "report_text": "",
+    "tail": "no tests ran in 0.00s"
    },
-   "all_hold": true
+   "prefix": {
+    "rc": 4,
+    "verdict": "error",
+    "cases": [
+     {
+      "name": "tests.test_integration",
+      "classname": "",
+      "kind": "error",
+      "message": "collection failure tests/test_integration.py:8: in <module> @pytest.mark.integration ^^^^^^^^^^^^^^^^^^^^^^^ /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/lib/python3.14/site-packages/_pytest/mark/structures.py:628: in __getattr"
+     }
+    ],
+    "report_text": "collection failure tests/test_integration.py:8: in <module> @pytest.mark.integration ^^^^^^^^^^^^^^^^^^^^^^^ /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/lib/python3.14/site-packages/_pytest/mark/structures.py:628: in __getattr__ warnings.warn( E pytest.PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo? You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html",
+    "tail": "1 error in 0.01s"
+   },
+   "candidate": {
+    "rc": 0,
+    "verdict": "passed",
+    "cases": [
+     {
+      "name": "test_group_with_option_and_subcommand",
+      "classname": "tests.test_integration",
+      "kind": "passed",
+      "message": ""
+     }
+    ],
+    "report_text": "",
+    "tail": "1 passed in 0.01s"
+   },
+   "baseline_clean": true,
+   "prefix_cause_matched": true,
+   "fails_prefix": true,
+   "passes_candidate": true,
+   "discriminates": true
   },
+  "consultation": {
+   "first_delivery": {
+    "found": true,
+    "at": 3,
+    "issued_at": 0,
+    "index": 0,
+    "tool": "Bash"
+   },
+   "first_edit": {
+    "found": true,
+    "at": 10,
+    "index": 5,
+    "tool": "Edit",
+    "why": "Edit on ('pyproject.toml',)"
+   }
+  },
+  "final_reply": "DONE\n\nWhat I changed:\n- Registered the `integration` marker ",
   "trace_health": {
    "orphan_results": 0,
    "unresolved_calls": 0
-  }
+  },
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass"
  },
  {
+  "task": "d4",
+  "run": "run-dev-d4-isolated",
   "arm": "nexus",
   "terminal": "completed",
+  "scored": true,
+  "truncated": false,
   "functional": true,
   "compliance": "4/5",
   "failed": [
@@ -51,43 +94,82 @@
   ],
   "regression_probe": {
    "applicable": true,
-   "fails_prefix": true,
-   "summary": "1 error in 0.05s"
-  },
-  "boundary": {
-   "network_egress_blocked": true,
-   "network_probe_tail": [
-    "ERROR: No matching distribution found for click"
+   "added_tests": [
+    "tests/test_integration.py::test_runner_invokes_command_with_options"
    ],
-   "dns_and_https_blocked": true,
-   "dns_probe_tail": [
-    "curl: (6) Could not resolve host: pypi.org"
-   ],
-   "held_checks_unreadable": true,
-   "fs_probe_tail": [
-    "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4iso/base/checks/d4/tests/*.py: No such file or directory"
-   ],
-   "held_checks_paired": {
-    "blocked_inside": true,
-    "works_outside": true,
-    "demonstrates_boundary": true,
-    "inside_tail": [
-     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4iso/base/checks/d4/tests/test_marker_registration.py: Operation not permitted"
-    ],
-    "outside_tail": [
-     "    assert True"
-    ]
+   "skipped_tests": [],
+   "baseline": {
+    "rc": 4,
+    "verdict": "absent",
+    "cases": [],
+    "report_text": "",
+    "tail": "no tests ran in 0.00s"
    },
-   "all_hold": true
+   "prefix": {
+    "rc": 4,
+    "verdict": "error",
+    "cases": [
+     {
+      "name": "tests.test_integration",
+      "classname": "",
+      "kind": "error",
+      "message": "collection failure tests/test_integration.py:10: in <module> @pytest.mark.integration ^^^^^^^^^^^^^^^^^^^^^^^ /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/lib/python3.14/site-packages/_pytest/mark/structures.py:628: in __getatt"
+     }
+    ],
+    "report_text": "collection failure tests/test_integration.py:10: in <module> @pytest.mark.integration ^^^^^^^^^^^^^^^^^^^^^^^ /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/lib/python3.14/site-packages/_pytest/mark/structures.py:628: in __getattr__ warnings.warn( E pytest.PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo? You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html",
+    "tail": "1 error in 0.01s"
+   },
+   "candidate": {
+    "rc": 0,
+    "verdict": "passed",
+    "cases": [
+     {
+      "name": "test_runner_invokes_command_with_options",
+      "classname": "tests.test_integration",
+      "kind": "passed",
+      "message": ""
+     }
+    ],
+    "report_text": "",
+    "tail": "1 passed in 0.01s"
+   },
+   "baseline_clean": true,
+   "prefix_cause_matched": true,
+   "fails_prefix": true,
+   "passes_candidate": true,
+   "discriminates": true
   },
+  "consultation": {
+   "first_delivery": {
+    "found": true,
+    "at": 4,
+    "issued_at": 2,
+    "index": 2,
+    "tool": "mcp__nexus__search"
+   },
+   "first_edit": {
+    "found": true,
+    "at": 18,
+    "index": 9,
+    "tool": "Edit",
+    "why": "Edit on ('pyproject.toml',)"
+   }
+  },
+  "final_reply": "Full-suite collection hits a pre-existing, unrelated failure",
   "trace_health": {
    "orphan_results": 0,
    "unresolved_calls": 0
-  }
+  },
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass"
  },
  {
+  "task": "d4",
+  "run": "run-dev-d4-isolated",
   "arm": "notes",
   "terminal": "completed",
+  "scored": true,
+  "truncated": false,
   "functional": true,
   "compliance": "4/5",
   "failed": [
@@ -95,38 +177,73 @@
   ],
   "regression_probe": {
    "applicable": true,
-   "fails_prefix": true,
-   "summary": "1 error in 0.05s"
-  },
-  "boundary": {
-   "network_egress_blocked": true,
-   "network_probe_tail": [
-    "ERROR: No matching distribution found for click"
+   "added_tests": [
+    "tests/test_integration.py::test_integration_group_subcommand"
    ],
-   "dns_and_https_blocked": true,
-   "dns_probe_tail": [
-    "curl: (6) Could not resolve host: pypi.org"
-   ],
-   "held_checks_unreadable": true,
-   "fs_probe_tail": [
-    "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4iso/base/checks/d4/tests/*.py: No such file or directory"
-   ],
-   "held_checks_paired": {
-    "blocked_inside": true,
-    "works_outside": true,
-    "demonstrates_boundary": true,
-    "inside_tail": [
-     "cat: /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4iso/base/checks/d4/tests/test_marker_registration.py: Operation not permitted"
-    ],
-    "outside_tail": [
-     "    assert True"
-    ]
+   "skipped_tests": [],
+   "baseline": {
+    "rc": 4,
+    "verdict": "absent",
+    "cases": [],
+    "report_text": "",
+    "tail": "no tests ran in 0.00s"
    },
-   "all_hold": true
+   "prefix": {
+    "rc": 4,
+    "verdict": "error",
+    "cases": [
+     {
+      "name": "tests.test_integration",
+      "classname": "",
+      "kind": "error",
+      "message": "collection failure tests/test_integration.py:8: in <module> @pytest.mark.integration ^^^^^^^^^^^^^^^^^^^^^^^ /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/lib/python3.14/site-packages/_pytest/mark/structures.py:628: in __getattr"
+     }
+    ],
+    "report_text": "collection failure tests/test_integration.py:8: in <module> @pytest.mark.integration ^^^^^^^^^^^^^^^^^^^^^^^ /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/lib/python3.14/site-packages/_pytest/mark/structures.py:628: in __getattr__ warnings.warn( E pytest.PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo? You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html",
+    "tail": "1 error in 0.01s"
+   },
+   "candidate": {
+    "rc": 0,
+    "verdict": "passed",
+    "cases": [
+     {
+      "name": "test_integration_group_subcommand",
+      "classname": "tests.test_integration",
+      "kind": "passed",
+      "message": ""
+     }
+    ],
+    "report_text": "",
+    "tail": "1 passed in 0.01s"
+   },
+   "baseline_clean": true,
+   "prefix_cause_matched": true,
+   "fails_prefix": true,
+   "passes_candidate": true,
+   "discriminates": true
   },
+  "consultation": {
+   "first_delivery": {
+    "found": true,
+    "at": 1,
+    "issued_at": 0,
+    "index": 0,
+    "tool": "Bash"
+   },
+   "first_edit": {
+    "found": true,
+    "at": 14,
+    "index": 7,
+    "tool": "Edit",
+    "why": "Edit on ('pyproject.toml',)"
+   }
+  },
+  "final_reply": "Both changes are in place and verified.\n\n- **`pyproject.toml",
   "trace_health": {
    "orphan_results": 0,
    "unresolved_calls": 0
-  }
+  },
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass"
  }
 ]

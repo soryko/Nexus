@@ -7,8 +7,12 @@ from terminal_status import classify
 
 BENCH = Path(__file__).parent
 PY_CLICK = sys.argv[1]
+# `run-dev-d4-isolated` is the enforced-boundary re-run of d4 with the stale advice
+# unlabelled. Its scores lived in a separate `compliance-d4-isolated.json` produced by hand
+# and were therefore still on the old scorer; it is recomputed here with everything else.
 RUNS = [("d1", "run-dev-a1-attempt4"), ("d2", "run-dev-d2"),
-        ("d3", "run-dev-d3"), ("d4", "run-dev-d4")]
+        ("d3", "run-dev-d3"), ("d4", "run-dev-d4"),
+        ("d4", "run-dev-d4-isolated")]
 PRISTINE = {"d1": "d1", "d2": "d2", "d3": "d3", "d4": "d4"}
 
 rows = []
@@ -21,12 +25,13 @@ for task, d in RUNS:
         term = classify(rec)
         c = score(run, task, arm, pristine, PY_CLICK)
         rows.append({
-            "task": task, "arm": arm,
+            "task": task, "run": d, "arm": arm,
             "terminal": term["terminal"], "scored": term["scored"],
             "truncated": term["truncated"],
             "functional": (rec["scored"]["passed"] if term["scored"] else None),
             "compliance": c["compliance"], "failed": c["failed"],
             "regression_probe": c["regression_probe"],
+            "consultation": c["consultation"],
             "final_reply": c["final_reply"],
             "trace_health": c["trace_health"],
             "outcome_original_rule": (
@@ -38,13 +43,26 @@ for task, d in RUNS:
                 else ("pass" if rec["scored"]["passed"] else "fail")),
         })
 (BENCH / "recomputed.json").write_text(json.dumps(rows, indent=1))
-hdr = f"{'task':4} {'arm':9} {'term':10} {'func':5} {'compl':6} {'orig':18} {'amended':8} {'reg-probe':22} failed"
+# keep the per-run artifact in step with the recomputation rather than beside it
+(BENCH / "compliance-d4-isolated.json").write_text(json.dumps(
+    [r for r in rows if r["run"] == "run-dev-d4-isolated"], indent=1))
+hdr = (f"{'run':22} {'arm':9} {'term':10} {'func':5} {'compl':6} {'orig':18} "
+       f"{'amended':8} {'base':8} {'pre-fix':9} {'cand':9} {'discr':5} failed")
 print(hdr); print("-"*len(hdr))
 for r in rows:
     rp = r["regression_probe"]
-    probe = ("fails pre-fix" if rp.get("fails_prefix") else
-             "PASSES pre-fix" if rp.get("applicable") else f"n/a: {rp.get('reason','')[:16]}")
-    print(f"{r['task']:4} {r['arm']:9} {r['terminal']:10} "
+    if not rp.get("applicable"):
+        base = pre = cand = "-"
+        disc = f"n/a"
+    else:
+        base = rp["baseline"]["verdict"][:8]
+        pre = rp["prefix"]["verdict"][:9]
+        cand = rp["candidate"]["verdict"][:9]
+        disc = "yes" if rp.get("discriminates") else "NO"
+    print(f"{r['run']:22} {r['arm']:9} {r['terminal']:10} "
           f"{('pass' if r['functional'] else 'fail' if r['functional'] is not None else '-'):5} "
           f"{r['compliance']:6} {r['outcome_original_rule']:18} {r['outcome_amended_rule']:8} "
-          f"{probe:22} {','.join(x.replace('_',' ')[:18] for x in r['failed'])}")
+          f"{base:8} {pre:9} {cand:9} {disc:5} "
+          f"{','.join(x.replace('_',' ')[:20] for x in r['failed'])}")
+    if not rp.get("applicable"):
+        print(f"{'':>60}   probe n/a: {rp.get('reason','')}")
