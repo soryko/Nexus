@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 from dataclasses import asdict, dataclass, field
@@ -68,9 +69,23 @@ class Config:
     repo: str = str(REPO)
     bench: str = str(BENCH)
 
+    # The corpus, and the scope it is seeded under. These were constants in the runner naming
+    # the development corpus, so a held-out run could not be configured without editing the
+    # harness -- and an edited harness is a different instrument mid-experiment.
+    store_master: str = ""      # the frozen store, copied per arm-run; "" = the legacy in-run one
+    corpus_digest: str = ""     # the registered row digest of that store; "" = ungated, and said so
+    namespace: str = "a1-dev"
+    actor: str = "agent"
+    notes_file: str = "notes-dev-a1.md"     # arm 3's rendering of the same corpus
+    prompts: str = "prompts-a1.json"        # task prompt registration, relative to `bench`
+
     # (field, what it must be) -- checked by preflight in this order
     _PATHS = (("source_clone", "dir"), ("pytest_python", "exec"), ("venv_python", "exec"),
               ("nexus_server", "exec"), ("repo", "dir"), ("bench", "dir"))
+    # Optional: validated only when set, since the development configuration predates them.
+    _OPTIONAL_PATHS = (("store_master", "file"),)
+    # Resolved against `bench` when relative, so a configuration stays portable.
+    _BENCH_RELATIVE = ("notes_file", "prompts")
 
     def preflight(self) -> list[str]:
         """-> a list of problems, empty when the configuration is usable.
@@ -92,6 +107,21 @@ class Config:
         for name in ("corpus_size", "max_turns", "wall_clock_s"):
             if getattr(self, name) <= 0:
                 bad.append(f"{name}: {getattr(self, name)} must be positive")
+        for name, kind in self._OPTIONAL_PATHS:
+            value = getattr(self, name)
+            if value and not Path(value).exists():
+                bad.append(f"{name}: {value} does not exist")
+            elif value and kind == "file" and not Path(value).is_file():
+                bad.append(f"{name}: {value} is not a file")
+        for name in self._BENCH_RELATIVE:
+            resolved = self.bench_path(name)
+            if not resolved.is_file():
+                bad.append(f"{name}: {resolved} is not a file")
+        if self.corpus_digest and not re.fullmatch(r"[0-9a-f]{16}", self.corpus_digest):
+            bad.append(f"corpus_digest: {self.corpus_digest!r} is not a 16-hex-digit digest")
+        for name in ("namespace", "actor"):
+            if not getattr(self, name).strip():
+                bad.append(f"{name}: must not be empty")
         if not self.memory_probe_query.strip():
             bad.append("memory_probe_query: must not be empty")
         # only asked once the path is known to be a directory, so one wrong field yields one
@@ -99,6 +129,11 @@ class Config:
         if (src := Path(self.source_clone)).is_dir() and not (src / ".git").exists():
             bad.append(f"source_clone: {src} is not a git checkout")
         return bad
+
+    def bench_path(self, name: str) -> Path:
+        """A bench-relative field as an absolute path. An absolute value is left alone."""
+        value = Path(getattr(self, name))
+        return value if value.is_absolute() else Path(self.bench) / value
 
     def require(self) -> Config:
         if bad := self.preflight():

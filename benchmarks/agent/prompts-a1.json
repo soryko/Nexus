@@ -1,0 +1,34 @@
+{
+ "_comment": [
+  "Task prompt registration for A1. Held out of run_arms_isolated.py so that adding a",
+  "task never means editing harness code, and -- the reason that matters here -- so the",
+  "held-out prompts can be authored and reviewed as data, on their own, without the",
+  "person doing it touching the runner.",
+  "Every prompt states the observable symptom and the expected outcome. None names the",
+  "function, the file or the mechanism. d1-d4 are reproduced byte-for-byte from the",
+  "constants they replace, so the development runs remain comparable."
+ ],
+ "consult": "\n\nBefore your first source edit, consult any available prior-work memory: Nexus memory tools or `NOTES-FROM-EARLIER-WORK.md`. If neither is available, proceed using the repository. Treat prior notes as potentially outdated and verify relevant claims against current code.",
+ "tails": {
+  "default": " Fix the behaviour in `src/`, and extend the existing test suite to cover it. Do not change behaviour unrelated to this bug. When you are done, reply DONE.",
+  "d4": " Do not change behaviour unrelated to this. When you are done, reply DONE."
+ },
+ "tasks": {
+  "d1": {
+   "body": "In this Click checkout there is a bug in how an option resolves its value from the environment through the context's automatic environment-variable prefix.\n\nReproduction: a command with an option declared `@click.option(\"--mypath\", type=click.Path(exists=True), envvar=\"MYPATH\")`, invoked with `auto_envvar_prefix=\"AUTO\"` and with `AUTO_MYPATH` set to the empty string in the environment, raises instead of completing with `mypath` left as `None`.",
+   "tail": "default"
+  },
+  "d2": {
+   "body": "In this Click checkout, an option that asks to show its environment variable but has none configured produces a misleading error message.\n\nReproduction: `click.Command(\"cli\", params=[click.Option([\"--foo\"], show_envvar=True, required=True)])`, invoked with no arguments, exits 2 with a message that appends an environment-variable clause even though no environment variable is configured for that option. It should read `Error: Missing option '--foo'.`",
+   "tail": "default"
+  },
+  "d3": {
+   "body": "In this Click checkout, an `UNSET` entry in a context's `default_map` is not handled correctly.\n\nReproduction: a command declared with `context_settings={\"default_map\": {\"port\": UNSET}}` -- where `UNSET` is imported from `click._utils` -- and an option `@click.option(\"--port\", default=8000)`, invoked with no arguments, prints `port=None`. It should print `port=8000`.",
+   "tail": "default"
+  },
+  "d4": {
+   "body": "This checkout's test suite is configured to turn warnings into errors, so a test that uses an unregistered pytest marker fails at collection rather than merely warning.\n\nReproduction: a test decorated `@pytest.mark.integration` errors during collection with `PytestUnknownMarkWarning: Unknown pytest.mark.integration`, because that marker is not registered in this project's pytest configuration.\n\nRegister the `integration` marker in this project's pytest configuration so such a test collects and runs cleanly, and add one test under `tests/` that uses it.",
+   "tail": "d4"
+  }
+ }
+}

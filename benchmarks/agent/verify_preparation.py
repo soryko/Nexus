@@ -11,6 +11,10 @@ traces, against synthetic ones, or against an instrument deliberately broken for
                         check in the record reportable.
   verdict round-trip    a scored record survives JSON with all four states intact, and its
                         counts still agree with its own checks after reloading.
+  arm-run isolation     two attempts do not share an output path, an arm-run is given a
+                        COPY of the corpus rather than the corpus, a write to that copy cannot
+                        reach the master or the next arm-run, and the profile withholds the
+                        master from all three arms.
   configuration         a valid config passes preflight, each kind of broken path is named
                         rather than raising at the point of use, and the child environment
                         carries the declared names and nothing else -- then the runner is
@@ -28,6 +32,7 @@ an interpreter argument and it is not collected by the Nexus suite, whose `testp
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -36,6 +41,7 @@ BENCH = Path(__file__).parent
 sys.path.insert(0, str(BENCH))
 
 import a1_config                                                        # noqa: E402
+import isolation                                                        # noqa: E402
 import schedule as sched                                                # noqa: E402
 import score_compliance as SC                                           # noqa: E402
 
@@ -369,6 +375,130 @@ def verify_minimal_env_live() -> None:
         srv.server_close()
 
 
+# ------------------------------------------------------------ 6. arm-run isolation ------
+def _mini_store(path: Path, body: str) -> None:
+    """The three tables `store_digest` reads, and one row. Not a Nexus store.
+
+    Deliberately not built through `SQLiteRepository`: this section checks the harness's
+    copying and digesting, and borrowing the real stack would drag a SQLite floor into a
+    script that has to run under the Click venv's interpreter.
+    """
+    import sqlite3
+    con = sqlite3.connect(path)
+    con.execute("PRAGMA journal_mode = WAL")
+    con.executescript(
+        "create table blobs(id integer primary key, body text);"
+        "create table revisions(revision_id text primary key, blob_id integer, kind text,"
+        " tags_json text);"
+        "create table memories(memory_id text primary key, current_revision_id text,"
+        " tombstoned integer);")
+    con.execute("insert into blobs values (1, ?)", (body,))
+    con.execute("insert into revisions values ('r1', 1, 'decision', '[]')")
+    con.execute("insert into memories values ('m1', 'r1', 0)")
+    con.commit()
+    con.close()
+
+
+def _runner_for(scratch: Path, task: str, attempt: int, master: Path):
+    """Import `run_arms_isolated` under a chosen argv and configuration, fresh each time."""
+    import importlib
+    saved_argv, saved_env = sys.argv[:], os.environ.get("A1_CONFIG")
+    cfg = json.loads((BENCH / "a1-config.json").read_text())
+    cfg["store_master"] = str(master)
+    cfg_path = scratch / f"config-{task}-{attempt}.json"
+    cfg_path.write_text(json.dumps(cfg))
+    sys.argv = ["run_arms_isolated.py", str(scratch), task, str(attempt)]
+    os.environ["A1_CONFIG"] = str(cfg_path)
+    try:
+        sys.modules.pop("run_arms_isolated", None)
+        return importlib.import_module("run_arms_isolated")
+    finally:
+        sys.argv = saved_argv
+        if saved_env is None:
+            os.environ.pop("A1_CONFIG", None)
+        else:
+            os.environ["A1_CONFIG"] = saved_env
+
+
+def verify_arm_run_isolation() -> None:
+    """Two attempts must not share an output path, and no arm-run may share a store.
+
+    Both were true of the previous harness and neither was checked. `ATTEMPT` was parsed and
+    recorded but appeared in no path, so three attempts overwrote one another; and one store
+    served every arm of every attempt, with the digest taken before the first arm and after
+    the last -- detection after the contaminated run rather than prevention before it.
+    """
+    print("\n6. arm-run isolation: paths per attempt, store per arm-run")
+    with tempfile.TemporaryDirectory() as tmp:
+        scratch = Path(tmp)
+        master = scratch / "master" / "corpus.db"
+        master.parent.mkdir(parents=True)
+        _mini_store(master, "the frozen corpus")
+
+        one = _runner_for(scratch, "d1", 1, master)
+        frozen = one.store_digest(master)
+
+        # (a) attempts do not share an output path
+        two = _runner_for(scratch, "d1", 2, master)
+        check("attempt 1 and attempt 2 write to different trees",
+              one.OUT != two.OUT, True)
+        check("and to different records.json",
+              (one.OUT / "records.json") != (two.OUT / "records.json"), True)
+        check("nor do the two share an arm's store",
+              one.arm_store("nexus") != two.arm_store("nexus"), True)
+        note(f"attempt 1 -> {one.OUT.name}/ ; attempt 2 -> {two.OUT.name}/")
+
+        # (b) an arm-run is given a copy, and writing it cannot reach the master
+        copy = one.provision_store("nexus")
+        check("the nexus arm is given its own store", copy != master, True)
+        check("seeded from the master, identically", one.store_digest(copy), frozen)
+        check("the arms without memory are given none",
+              [one.provision_store(a) for a in ("baseline", "notes")], [None, None])
+        import sqlite3
+        con = sqlite3.connect(copy)
+        con.execute("update blobs set body = 'an arm wrote this' where id = 1")
+        con.commit()
+        con.close()
+        check("a write to the copy changes the copy", one.store_digest(copy) != frozen, True)
+        check("and leaves the master untouched", one.store_digest(master), frozen)
+        check("so the next arm-run is seeded from the corpus, not the last arm's edit",
+              one.store_digest(one.provision_store("nexus")), frozen)
+
+        # (c) the profile withholds the master from every arm, and the store from two of them
+        for arm in ("baseline", "nexus", "notes"):
+            cwd = one.OUT / "arms" / arm / "repo"
+            cwd.mkdir(parents=True, exist_ok=True)
+            allow, deny = one.boundary_paths(arm, cwd)
+            profile = isolation.write_profile(
+                one.OUT / "arms" / arm / "check.sb", cwd, deny, allow, one.FORWARDER_PORT)
+            text = profile.read_text()
+            m = os.path.realpath(master.parent)
+            check(f"[{arm}] the master corpus is denied",
+                  f'(deny file-read* (subpath "{m}"))' in text, True)
+            check(f"[{arm}] and cannot be written either",
+                  f'(deny file-write* (subpath "{m}"))' in text, True)
+            # Allows are emitted as given and denies are realpath'd -- `write_profile`
+            # resolves one list and not the other. Under a symlinked scratch root the two
+            # spellings differ, so each is asked for in the spelling its own list uses, and
+            # the divergence is reported rather than hidden by normalising both.
+            raw, real = str(one.arm_store(arm)), os.path.realpath(one.arm_store(arm))
+            if arm == "nexus":
+                check(f"[{arm}] its own copy is readable", f'"{raw}"' in text, True)
+            else:
+                check(f"[{arm}] the store is denied by name, not by omission",
+                      f'(deny file-read* (subpath "{real}"))' in text, True)
+                check(f"[{arm}] including writes", f'(deny file-write* (subpath "{real}"))' in text,
+                      True)
+            if raw != real and arm == "nexus":
+                note(f"allow/deny spellings differ here (allows are not realpath'd): "
+                     f"{raw} vs {real}. Over-restriction, not a hole -- an allow that does "
+                     f"not match blocks the arm loudly -- but the two lists should agree.")
+
+        # (d) a task with no registered prompt is refused, not run with an empty one
+        check("an unregistered task is refused at startup",
+              _raises_systemexit(lambda: _runner_for(scratch, "nope", 1, master)), True)
+
+
 def _raises_systemexit(fn) -> bool:
     try:
         fn()
@@ -385,6 +515,7 @@ def main() -> int:
     verify_round_trip()
     verify_configuration()
     verify_minimal_env_live()
+    verify_arm_run_isolation()
     print("\nRESULT:", "all preparation checks hold" if OK else "SOMETHING IS WRONG")
     return 0 if OK else 1
 
