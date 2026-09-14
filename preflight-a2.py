@@ -6,6 +6,8 @@ At the repository ROOT, not under `benchmarks/agent`: a file there would change 
 It exists because no single guard covers the ways the instrument can move:
 
   a commit under benchmarks/agent   changes harness_revision   -- caught by the revision check
+                                    (a commit to a ROOT-level file changes neither, which is
+                                    why the checkout SHA is reported rather than pinned)
   an UNCOMMITTED edit there         changes the executing code but NOT the recorded revision,
                                     because `git log` reads commit history, not the worktree
                                     -- caught only by the clean-tree check
@@ -21,8 +23,12 @@ REPO = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO / "benchmarks/agent"))
 import a1_config, identity as I, run_calibration as RC
 
-FROZEN = {"checkout": "8ea2f84cf645bab61ee10a2bed627b6347065d83",
-          "product": "2cd531f9d7c274a065533e58ba3fde8582f8c269",
+# No checkout SHA is pinned here. Pinning one made this file invalidate itself: every commit
+# to a root-level note moves HEAD while changing nothing the measurement records. What is
+# frozen is the MEASURED identity -- the two revisions and the digests, which are exactly what
+# a row records and what decides whether two rows may be pooled. HEAD is reported, not
+# asserted, and the HEAD this script approves is the checkout to run from and to leave alone.
+FROZEN = {"product": "2cd531f9d7c274a065533e58ba3fde8582f8c269",
           "harness": "19b843e437f2b1bf68080ae4e38f373f1c3d7715",
           "config": {30: "69df5d49a39142c4", 45: "396c0d2d48a22eed", 60: "b64cc9c137544b7a"},
           "prompt": {"k1": "6bbe10c01d7e520d", "k2": "d47e3eaa44a8d22c",
@@ -36,7 +42,8 @@ def ck(name, got, want):
     if not ok:
         bad.append(f"{name}: {got!r} != {want!r}")
 
-ck("checkout", git("rev-parse", "HEAD"), FROZEN["checkout"])
+head = git("rev-parse", "HEAD")
+print(f"      {'checkout (reported, not pinned)':34s} {head}")
 ck("product_revision", git("log", "-1", "--format=%H", "--", "src/nexus_memory"), FROZEN["product"])
 ck("harness_revision", git("log", "-1", "--format=%H", "--", "benchmarks/agent"), FROZEN["harness"])
 ck("working tree (tracked)", git("status", "--porcelain") or "clean", "clean")
@@ -50,4 +57,6 @@ ck("ledger charged", str(led["tokens_budgeted"]), str(FROZEN["charged"]))
 ck("unresolved arm-runs", str(led["unresolved"]), "0")
 print(f"\n{'PREFLIGHT OK' if not bad else 'PREFLIGHT FAILED: ' + '; '.join(bad)}")
 print(f"remaining against the cap: {RC.CAP_TOKENS - led['tokens_budgeted']:,} tokens")
+if not bad:
+    print(f"run from, and do not change, checkout {head}")
 raise SystemExit(1 if bad else 0)

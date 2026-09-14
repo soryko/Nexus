@@ -7,14 +7,18 @@ is read by the harness; it is what a later reader compares an artifact against.
 
 ## The checkout
 
-The execution checkout is **the commit that introduced this file**:
+The execution checkout is **the HEAD that `preflight-a2.py` approved**, which it prints:
 
-```bash
-git log -1 --format=%H -- LAUNCH-A2.md
+```
+run from, and do not change, checkout <sha>
 ```
 
-A full commit identifier, not a branch name: `docs/a2-calibration` moves. Detaching at that
-commit does not by itself make the tree match it.
+A full commit identifier, not a branch name — `docs/a2-calibration` moves. It is reported at
+preflight rather than pinned in advance here, because a pinned one invalidates itself: every
+commit to a root-level note moves HEAD while changing nothing a row records. What is *frozen*
+is the measured identity below — the two revisions and the digests — which is what a row
+actually records and what decides whether two rows may be pooled. Detaching at a commit does
+not by itself make the tree match it.
 
 **Do not edit, commit, rebase or update dependencies in the execution checkout during the
 sweep.** An earlier version of this note justified that by saying a local edit under
