@@ -4,6 +4,6 @@
   tmpprefix_set: True
   heredoc_tail: ['heredoc-ok']
   other_control_tail: ['CONTROL-FOR-ARM-B']
-  cross_arm_tail: ['cat: /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpy9gf2st5/armA/tmp/zsh_sentinel: Operation not permitted']
+  cross_arm_tail: ['cat: /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpa60c0m8o/armA/tmp/zsh_sentinel: Operation not permitted']
 
 isolation demonstrated: heredocs work, the sibling sandbox runs, and it cannot read this arm's heredoc scratch

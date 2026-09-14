@@ -6,4 +6,4 @@
 =========================== short test summary info ============================
 SKIPPED [1] ../../tests/core/test_b2a_mutations.py:138: development run: set NEXUS_MUTATION_MATRIX=1
 SKIPPED [1] ../../tests/core/test_b2b_mutations.py:410: development run: set NEXUS_MUTATION_MATRIX=1
-334 passed, 2 skipped in 26.80s
+334 passed, 2 skipped in 28.33s
