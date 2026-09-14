@@ -67,7 +67,12 @@ FIXTURE_BASE = str(RUN / "base")
 PROMPT_REGISTRATION = CFG.bench_path("prompts")
 _reg = task_set.registration(PROMPT_REGISTRATION)
 _spec = task_set.require(_reg, TASK, ("development", "heldout"), "run_arms_isolated.py")
-PROMPT = _spec["body"] + _reg["tails"][_spec["tail"]] + _reg["consult"]
+# body + tail + environment + consult. `environment` is OPTIONAL and absent from
+# prompts-a1.json, so every A1 prompt still reconstructs byte-for-byte; it exists because A1
+# measured agents spending turns rediscovering how to run the checkout, which is a property of
+# the harness and not of any arm. When present it is appended identically for all three arms.
+PROMPT = (_spec["body"] + _reg["tails"][_spec["tail"]]
+          + _reg.get("environment", "") + _reg["consult"])
 
 # What an arm's environment is, and is not: `a1_config.ENV_ALLOWLIST` plus the two names the
 # harness sets itself. It used to be `dict(os.environ)` -- the operator's whole shell, none of

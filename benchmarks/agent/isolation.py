@@ -94,6 +94,20 @@ HEADER = """(version 1)
 (deny file-read*)
 (allow file-read-metadata)   ; path resolution only -- conveys no file contents
 (allow file-read* (literal "/"))   ; the root directory entry; dyld aborts without it
+
+; ---- shell here-documents ----
+; zsh writes a here-document's body to a temp file under /private/tmp and reads it back to
+; feed stdin. With /private/tmp admitted only as a bare directory entry, that read is denied
+; and EVERY heredoc in EVERY arm-run fails with "can't create temp file for here document:
+; operation not permitted" -- measured in all 36 A1 arm-runs and all 9 A2 calibration
+; arm-runs. Agents fall back to printf chains, which costs turns and confounds a turn-ceiling
+; measurement.
+;
+; This is a prefix match on the shell's own temp-file name, NOT a subpath grant: /private/tmp
+; itself stays unreadable and unlistable, and nothing pre-existing is named /private/tmp/zsh*.
+; An arm gains no path it could not already write and read inside its own checkout.
+; `heredoc_probe` in this module asserts both halves.
+(allow file-read* (regex #"^/private/tmp/zsh"))
 """
 
 
@@ -215,6 +229,25 @@ def paired(profile: Path, argv: list[str], cwd: Path) -> dict:
             "demonstrates_boundary": inside.returncode != 0 and outside.returncode == 0,
             "inside_tail": (inside.stderr or inside.stdout).strip().splitlines()[-1:],
             "outside_tail": (outside.stderr or outside.stdout).strip().splitlines()[-1:]}
+
+
+def heredoc_probe(profile: Path, cwd: Path) -> dict:
+    """A here-document must work, and /private/tmp must stay shut. Both, or neither counts.
+
+    The positive half is the repair; the negative half is what keeps the repair from being a
+    hole. A profile that passes the first and fails the second has bought working heredocs by
+    opening the runner's scratch tree to the arm.
+    """
+    works = subprocess.run(["sandbox-exec", "-f", str(profile), "/bin/zsh", "-c",
+                            "cat <<EOF\nheredoc-ok\nEOF"],
+                           cwd=str(cwd), capture_output=True, text=True, timeout=60)
+    listed = subprocess.run(["sandbox-exec", "-f", str(profile), "/bin/zsh", "-c",
+                             "ls /private/tmp"],
+                            cwd=str(cwd), capture_output=True, text=True, timeout=60)
+    return {"heredoc_works": works.returncode == 0 and "heredoc-ok" in works.stdout,
+            "private_tmp_still_denied": listed.returncode != 0,
+            "heredoc_tail": (works.stderr or works.stdout).strip().splitlines()[-1:],
+            "listing_tail": (listed.stderr or listed.stdout).strip().splitlines()[-1:]}
 
 
 def _first_file(root: Path) -> Path | None:

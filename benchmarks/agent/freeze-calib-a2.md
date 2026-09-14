@@ -1,4 +1,11 @@
-# A2 budget calibration — registration
+# A2 budget calibration — registration (**configuration v2**)
+
+> **v1 is void and is not pooled with v2.** Nine arm-runs executed on 2026-09-14 against an
+> unrepaired sandbox in which here-documents failed, the documented interpreter invocation was
+> absent, and `/tmp` was write-only. All three consume turns, which is the quantity this
+> calibration measures, so those rows cannot be compared with repaired ones. They are retained
+> under `v1-c30-unrepaired-sandbox/` with a `DO-NOT-POOL.md`, counted in the token budget and
+> in no ceiling selection. See §8.
 
 **Registered 2026-09-14, before any calibration arm-run.** This registers a *development*
 measurement, not held-out evidence. Its only output is a turn ceiling for A2 and the evidence
@@ -116,16 +123,32 @@ deliberate: A1 measured run-to-run variability at nil in 11 of 12 cells, and a c
 does not need a variance estimate. It follows that **no cell here supports a per-task claim**,
 and none will be made.
 
-## 4. Spend cap
+## 4. Budget, in tokens
 
-**Maximum calibration spend: US$60.** A1 cost $25.78 for 36 arm-runs ($0.716 mean), and higher
-ceilings cost more per run because a truncated run spends its whole budget.
+**The budget is 36 000 000 tokens** (input + cache-read + cache-creation + output), **not a
+dollar figure.** `runner-a1.md` §3 found `"costBasis":"unknown"` on this model and concluded the
+CLI's dollar field has no established provenance, so A1 quotes no cost and neither does this.
+Token counts come from the provider and are valid accounting. The dollar field is still
+recorded, under the name `usd_unprovenanced`, and is never used for enforcement.
 
-**Stopping rule.** Cost is accumulated from each run's envelope after every arm-run. At $60 the
-calibration **stops where it is**. Partial results are kept, reported as partial, and the
-ceilings that did not run are named. A partial grid does not license a ceiling choice by
-extrapolation: if the rule in §5 cannot be applied to the grid that actually ran, the outcome
-is "no ceiling selected", not a guess.
+Scale: A1's 36 arm-runs at ceiling 30 consumed 20 050 240 input+cache-read tokens. This grid is
+36 arm-runs across three ceilings, where a higher ceiling consumes more per run because a
+truncated run spends its whole budget. 36 000 000 is that scale with headroom.
+
+**Accounting source.** Summed from `records.json` where a row completed and from each arm's
+`trace.jsonl` where it did not — an aborted or failed row still consumed, and counting only
+completed rows would understate the total. A file that will not parse raises rather than
+counting as zero.
+
+**Pre-launch check, not post-hoc.** Before a row is *started*, the driver requires
+`consumed + row_reserve ≤ cap`, where `row_reserve` is the largest row yet observed at that
+ceiling (seeded at 2 500 000 until one has). 
+
+**Overshoot is possible and is stated rather than implied.** An arm-run cannot be interrupted
+part-way, and tokens per turn are not bounded by `--max-turns`, so the total can pass the cap by
+at most one row. That amount is recorded in `calibration-summary.json` as `overshoot`. One
+further gap is disclosed: a row killed in flight leaves no envelope, and its consumption is
+therefore unrecorded and uncounted — this happened once, to a k4 baseline arm-run under v1.
 
 Runs execute in ceiling order 30 → 45 → 60 so that a cap hit costs the most expensive cell.
 
@@ -145,6 +168,14 @@ The correctness clause matters: a larger ceiling that raises truncation-free run
 The rule is applied **across arms**, on the pooled 12 arm-runs at each ceiling — not per arm.
 Choosing a ceiling that suits one arm would build the comparison's answer into its budget.
 
+**Unequal coverage.** The rule is applied only to ceilings whose **all 12 arm-runs at that
+ceiling completed under one configuration**. A ceiling with missing cells — because the budget
+stopped the sweep, because a row failed, or because its rows span two configurations — is
+reported with its missing cells named and is **not eligible for selection**. Comparing a
+complete ceiling against a partial one would let coverage, not the ceiling, decide. If that
+leaves fewer than two eligible ceilings, the outcome is "no ceiling selected": a grid of one
+point cannot show that a lower ceiling was insufficient.
+
 **If no ceiling qualifies**, no ceiling is selected and A2 does not proceed to a held-out
 registration. The response is to revise the workload or the agent configuration — a harder
 question than this measurement, and one that must not be settled by raising the grid until
@@ -163,7 +194,54 @@ A1 so the ceiling is the only thing that moves.
 **The product revision is recorded in the run record itself**, closing the gap A1 left, where it
 had to be inferred from git history after the fact.
 
-## 7. What this cannot establish
+## 7. The environment gate, added in v2
+
+Before any row is run, the driver builds a throwaway arm from that row's own fixture and probes
+it inside `sandbox-exec` with the arm's own child environment
+([`verify_arm_environment.py`](verify_arm_environment.py)). A failure **refuses the run**; it is
+not a warning.
+
+| check | protects against |
+| --- | --- |
+| `PYTHONPATH=src python3 -c "import click"` succeeds | A1's arms ran `python3 -c "import click"` against an uninstalled `src/` layout, which cannot work, then spent turns on venv and `pip` against a denied network |
+| `PYTHONPATH=src python3 -m pytest tests/test_context.py -q` passes | a documented test command that does not execute a test |
+| a here-document works | heredocs failed in all 36 A1 and all 9 v1 arm-runs |
+| a scratch file round-trips inside the checkout | arms wrote repro scripts to `/tmp` and could not read them back |
+| `python3` is already on `PATH` | turns spent hunting an interpreter |
+| the network is still denied | the repair silently opening egress |
+| `/private/tmp` is still unlistable | the heredoc repair opening the runner's scratch tree |
+
+**The heredoc repair, and why it is narrow.** zsh writes a here-document's body to a temp file
+under `/private/tmp` and reads it back; the profile admitted `/private/tmp` only as a bare
+directory entry, so the read was denied. The fix is a prefix match on the shell's own temp-file
+name — `(allow file-read* (regex #"^/private/tmp/zsh"))` — not a subpath grant. `/private/tmp`
+stays unreadable and unlistable, nothing pre-existing carries that prefix, and an arm gains no
+path it could not already write and read inside its own checkout. `isolation.heredoc_probe`
+asserts both halves, because a repair that only proves the positive half has bought working
+heredocs by opening the scratch tree.
+
+**The prompt gained an `environment` block**, appended identically to all three arms, stating
+that the checkout is a `src/` layout, how to run it and its tests, that there is no network, and
+that scratch files belong in the checkout. It names no task and no fix. `prompts-a1.json` has no
+such key and every A1 prompt still reconstructs byte-for-byte — verified.
+
+**This is a change to the instrument**, which is why the configuration is versioned and why v1
+is not pooled with v2.
+
+## 8. v1: what it was, and why it is not evidence
+
+| | v1 | v2 |
+| --- | --- | --- |
+| arm-runs | 9 (ceiling 30, k1–k3) + 1 killed in flight | pending |
+| here-documents | fail in every arm-run | work (gated) |
+| interpreter invocation | not stated to the arm | stated identically to all arms |
+| tokens consumed | 6 425 690 | — |
+
+v1's rows are kept, not deleted: they are the evidence that the defect was real and pervasive,
+and they carry real consumption that the budget must count. They are excluded from any ceiling
+selection. **Pooling them with v2 would compare a ceiling against a different harness.**
+
+## 9. What this cannot establish
 
 Whether memory helps. Whether bounded consultation helps. Any per-task result. Anything about
 `h1`–`h4`, which are exposed and not in this set. Whether a ceiling outside {30, 45, 60} would

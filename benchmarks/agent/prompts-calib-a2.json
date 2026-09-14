@@ -8,7 +8,14 @@
   "",
   "Each body describes only what the checkout DOES, observed from the failing acceptance",
   "checks, and never how to fix it. Every task declares set=development: these are development",
-  "tasks and run_arms_isolated accepts them; none is held-out evidence."
+  "tasks and run_arms_isolated accepts them; none is held-out evidence.",
+  "",
+  "`environment` (added 2026-09-14, calibration config v2) states how to run the checkout. It is",
+  "appended IDENTICALLY to all three arms and names no task and no fix. It exists because A1 and",
+  "the v1 calibration rows measured agents spending turns rediscovering that the checkout is a",
+  "src/ layout -- with the network denied, the venv and pip attempts they reached for could not",
+  "have worked. That is harness friction, uniform across arms, and it confounds a turn-ceiling",
+  "measurement. Runs made before this block existed are config v1 and are NOT pooled with v2."
  ],
  "consult": "\n\nBefore your first source edit, consult any available prior-work memory: Nexus memory tools or `NOTES-FROM-EARLIER-WORK.md`. If neither is available, proceed using the repository. Treat prior notes as potentially outdated and verify relevant claims against current code.",
  "tails": {
@@ -37,5 +44,6 @@
    "tail": "default",
    "body": "In this Click checkout, the eagerness of the help option generated from `help_option_names` is not respected, because the option is generated more than once.\n\nReproduction: a command declared `context_settings={\"help_option_names\": (\"--my-help\",)}` with two options whose callbacks echo and then call `ctx.exit()` \u2014 `-a` declared without `is_eager`, and `-b` declared `is_eager=True`. Invoking with `--my-help` should print the help text and exit without running either callback. Invoking with `-a` should run only `-a`'s callback. Invoking with `-a -b` should run only `-b`'s callback, because `-b` is eager and `-a` is not."
   }
- }
+ },
+ "environment": "\n\nHow to run this checkout: it is a `src/` layout and is NOT installed, so plain `python3 -c \"import click\"` will fail. Use `PYTHONPATH=src python3 ...`, and run tests with `PYTHONPATH=src python3 -m pytest <paths> -q`. There is no network: `pip`, `uv` and any download will fail, and nothing needs to be installed. Write any scratch or reproduction file inside the checkout rather than in /tmp."
 }
