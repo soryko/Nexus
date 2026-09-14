@@ -31,6 +31,7 @@ history and not the working tree. Three cases, and no single guard covers them:
 | a commit under `benchmarks/agent` | **changes** | clean | the revision check |
 | an **uncommitted edit** to a tracked file there | **unchanged** | ` M …` | the clean-tree check only |
 | an edit to `calib-config-*.json` | **unchanged** | **empty** (gitignored) | the config digest only |
+| an **activated virtualenv** | **unchanged** | **empty** (not a file) | the PATH check only |
 
 The middle row is the one that matters: rows written after such an edit record an identical
 harness revision while having been produced by different code, so the identity check cannot
@@ -105,6 +106,37 @@ and silently grant a second full budget.
 
 `consumption_certain` is **false** while the k4 allowance is carried; it is a deliberately high
 assumption, not a measurement. See `benchmarks/agent/freeze-calib-a2.md` §4.
+
+## Launch from a shell with no virtualenv activated
+
+`PATH` is on `a1_config.ENV_ALLOWLIST` by necessity — it is what resolves the runner, git and
+the interpreter — so **whatever `python3` means in the shell that launches the sweep is what
+`python3` means inside every arm's sandbox.**
+
+This is not hypothetical. The 2026-09-14 launch attempt was made from a shell with the
+project's `.venv` activated, which put `.venv/bin` first on `PATH`. That prefix is not among
+the arm profile's readable subpaths, so the interpreter died at startup:
+
+```
+Fatal Python error: Failed to import encodings module
+ModuleNotFoundError: No module named 'encodings'
+Current thread 0x00000001f6306080 (most recent call first):
+  <no Python frame>
+```
+
+The per-arm gate refused on `interpreter imports the intended checkout` and
+`documented test command executes a test`, the driver stopped the sweep, and **nothing was
+spent** — no `launched.json`, no trace, no model call, the ledger unmoved at 7 825 690.
+
+The gate working is not a reason to rely on it here. Had `.venv` happened to be *readable*
+inside the boundary, the arms would have run a different interpreter from the one A1 measured
+and nothing would have said so. The intended interpreter on this host is
+`/opt/homebrew/bin/python3`; `preflight-a2.py` checks for both an active `VIRTUAL_ENV` and the
+resolution of `python3`, and refuses.
+
+```bash
+deactivate 2>/dev/null; python3 preflight-a2.py    # must print PREFLIGHT OK
+```
 
 ## The invocation
 

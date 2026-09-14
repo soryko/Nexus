@@ -14,10 +14,13 @@ It exists because no single guard covers the ways the instrument can move:
   an edit to calib-config-*.json    changes neither: those files are gitignored, so
                                     `git status --porcelain` does not mention them
                                     -- caught only by the configuration digest
+  an activated virtualenv           changes neither, and is not a file at all: it changes what
+                                    `python3` means inside every arm, because PATH is
+                                    allowlisted -- caught only by the PATH check below
 
 Exits nonzero if anything has moved.  Usage:  python3 preflight-a2.py
 """
-import subprocess, sys
+import os, subprocess, sys
 from pathlib import Path
 REPO = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO / "benchmarks/agent"))
@@ -52,6 +55,17 @@ for c, want in FROZEN["config"].items():
 cfg = a1_config.load(REPO / "benchmarks/agent/calib-config-30.json")
 for t, want in FROZEN["prompt"].items():
     ck(f"prompt_digest {t}", I.prompt_digest(cfg, t), want)
+# The shell's own PATH reaches the arms. `PATH` is on a1_config's allowlist by necessity --
+# it resolves the runner, git and the interpreter -- so whatever `python3` means in the shell
+# that launches the sweep is what `python3` means inside every arm's sandbox. A launch from a
+# shell with `.venv` activated put `.venv/bin` first; that prefix is not among the profile's
+# readable subpaths, so the interpreter died at startup with `Failed to import encodings
+# module` and the per-arm gate refused before spending. Even readable, it would have been a
+# different interpreter from the one A1 measured, and silently so.
+import shutil
+ck("no virtualenv active", os.environ.get("VIRTUAL_ENV") or "none", "none")
+ck("python3 resolves to", shutil.which("python3") or "(not found)", "/opt/homebrew/bin/python3")
+
 led = RC.consumed(Path("/Users/soko/Cerebros/nexus-a1-fixtures/calib-run"))
 ck("ledger charged", str(led["tokens_budgeted"]), str(FROZEN["charged"]))
 ck("unresolved arm-runs", str(led["unresolved"]), "0")
