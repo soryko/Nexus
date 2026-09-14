@@ -55,9 +55,27 @@ and "irrelevant" count memories delivered in those buckets, per the declared mix
 - `notes − baseline`: tied on **4**.
 - `nexus − notes`: notes favoured on **1**, tied on 3, nexus favoured on **0**.
 
-No confidence interval is computed. §5 registered that four tasks do not support an
-inferential claim and that none would be made from one; a bootstrap here would invite exactly
-the reading that registration forbids.
+**Percentile bootstrap over tasks, 10 000 resamples, seed 20260912** — computed by
+[`bootstrap_heldout.py`](bootstrap_heldout.py) from the saved records:
+
+| contrast | contributing tasks | point | 2.5% | 97.5% |
+| --- | --- | --- | --- | --- |
+| nexus − baseline | 4 | −0.167 | −0.500 | 0.000 |
+| notes − baseline | 4 | 0.000 | 0.000 | 0.000 |
+| nexus − notes | 4 | −0.167 | −0.500 | 0.000 |
+
+**No inferential claim is made from this interval and no difference is called established on
+it**, exactly as §5 requires. With one non-zero task contrast among four, the resampling
+distribution is degenerate: the interval describes the arithmetic of four numbers, not a
+population. The primary reporting remains the per-task table and the sign count above.
+
+**Reporting deviation, disclosed.** The first release of this document computed no interval,
+on the reasoning that §5 forbade one. §5 forbade an *inferential claim from* the interval; it
+required the interval itself — "a percentile bootstrap over tasks, 10 000 resamples, reported
+with the contributing task count". Revision 2 §5 lists "the analysis and exclusion rules in
+§5" among what stands unchanged, so r2 did not relax the requirement. The frozen registration
+is not edited; the omission is corrected here and recorded as a deviation of the report, not
+of the run.
 
 ## The one non-tied cell, and what it is not
 
@@ -70,6 +88,12 @@ arm was delivered **zero** outdated memories and ~9.7 irrelevant ones.
 What the traces show is turn allocation. Across all 12 nexus arm-runs the arm spent 2–11 calls
 on `status`/`search`/`get` **before any source edit**, which is what its prompt asks of it, and
 in 8 of 12 it never reached an `Edit`/`Write` call at all.
+
+That last count has since been checked against shell activity rather than trusted: an agent
+can edit through `sed -i`, a heredoc or `patch` without a direct-mutator call, and six of the
+36 arm-runs did write files through Bash alone. Every Bash write target was resolved against
+the task's base tree. **All six wrote scratch or reproduction files; none reached tracked
+source.** The count stands, and now means what it appeared to mean.
 
 **Whether that turn cost caused the h2 failures is not established.** The two failing attempts
 spent 11 and 4 memory calls; the passing one spent 8. There is no dose-response across n = 3 on
@@ -85,8 +109,12 @@ it front-loads retrieval, and that this run cannot separate those two facts.
 | nexus | 12/12 | 0 | 11 |
 | notes | 12/12 | 0 | 8 |
 
-Exclusions are balanced at zero: **no arm is disadvantaged by environment failure**, so the
-§5.3 imbalance threat does not apply. Truncation is not balanced — the notes arm finished
+Exclusions are balanced at zero: **no environment exclusion was recorded for any arm**, so
+the §5.3 imbalance threat does not apply on the evidence recorded. This establishes the
+absence of *recorded* exclusions, not the absence of every environment defect or of a
+differential tool problem that never produced one. Tool-error counts (baseline 38, nexus 39,
+notes 24) and a single permission denial in 36 arm-runs are reported in the diagnostics and
+likewise separate no arm. Truncation is not balanced — the notes arm finished
 within the ceiling more often — and it is reported as a fact, not a verdict.
 
 ## Attempt-level spread (never a test of the comparison)
@@ -109,19 +137,34 @@ ratio is computable.
 
 ## What this cannot establish
 
-1. **Two of four tasks were solved by nobody.** h1 and h3 are 0/9 across all arms. They
-   contribute a tie to every contrast and carry no information about memory. The effective
-   comparison rests on h2 and h4.
-2. **The ceiling dominates.** 29 of 36 arm-runs ended at `max_turns`. The registered 30-turn
-   ceiling was calibrated on development tasks of 1–7 hunks; the held-out set runs to 5 hunks
-   and 6 functions. It was **not** changed after seeing this, and must not be: the first result
-   was in hand from the pilot row onwards. A future registration may set a different ceiling;
-   this one may not.
+1. **Two of four tasks were solved by nobody.** h1 and h3 are 0/9 across all arms. That is
+   informative about this configuration — it shows every arm failed these tasks under the
+   registered conditions — but it does not **discriminate between arms**: each contributes a
+   tie to every contrast. The discriminating comparison rests on h2 and h4.
+   The diagnostics add what the zeros were made of: across all 18 arm-runs on h1 and h3, **no
+   arm modified a tracked source file even once**. These are not failed patches; they are runs
+   that never produced a patch. See [`diagnostics-heldout-a1.md`](diagnostics-heldout-a1.md).
+2. **Truncation is pervasive, and its effect is not established.** 29 of 36 arm-runs ended at
+   `max_turns`. The registered 30-turn ceiling was calibrated on development tasks of 1–7
+   hunks; the held-out set runs to 5 hunks and 6 functions. What can be said is that
+   truncation was extensive and co-occurs with the zeros; what cannot be said is that a larger
+   ceiling would have produced a fix — that is a claim about runs nobody executed, and the
+   diagnostics show h1 and h3 exhausted their budgets without any arm entering implementation,
+   which is consistent with a budget that is too small and equally consistent with tasks these
+   arms do not solve. Calibrating a ceiling is A2 development work, on a separate task set.
+   The ceiling was **not** changed after seeing this, and must not be: the first result was in
+   hand from the pilot row onwards. A future registration may set a different ceiling; this
+   one may not.
 3. **The outdated-memory hypothesis was not tested.** h1 is the task whose mix is *outdated*,
    and both memory arms were duly delivered both stale memories (`h02`, `h09`) as full bodies.
-   But no arm solved h1 under any condition, so whether stale advice misleads an agent could
-   not be observed. This is the question §7 most wanted an instance for, and the instance
-   existed; the ceiling prevented its use.
+   **Exposure did occur**: both stale bodies reached both memory arms. What A1 could not do
+   is distinguish harm **through the correctness endpoint** — no arm solved h1 under any
+   condition, and extensive truncation limits interpretation further, so task success cannot
+   separate an arm that was misled from an arm that was not. Whether the stale advice was
+   adopted or rejected may still be legible in the saved traces, but reading it out needs a
+   rubric this registration does not contain, and any such reading would be an exploratory
+   analysis reported as one. The instance existed and remains available; A1's endpoint could
+   not use it.
 4. **No memory is *necessary* for any task** (declared at freeze, reported by the validator).
    §7b's discoverable/absent labels therefore have nothing to apply to, so this corpus measures
    neither retrieval efficiency nor retrieval necessity on a required fact.
@@ -140,3 +183,12 @@ ratio is computable.
 - **A memory arm that retrieves is not thereby a better arm.** On the evidence here it
   retrieved fluently — 11 of 13 memories delivered on h1, correctly including both stale ones —
   and converted none of it into a better outcome on any task.
+- **It cost more to do so.** Over all 12 arm-runs each, including failures, `nexus` spent
+  **1.43×** baseline's input tokens and **1.20×** its output tokens. Cost is reported across
+  all attempts rather than over successes only, because averaging an arm's cost over just its
+  wins flatters whichever arm fails more often. Measured in
+  [`diagnostics-heldout-a1.md`](diagnostics-heldout-a1.md).
+- **Retrieval is front-loaded and never repeated.** 22 retrieval calls fell before the first
+  source mutation and 1 after it, across the four `nexus` arm-runs that reached one; no memory
+  body was fetched twice in any arm-run. Both are descriptions of the observed workflow, not
+  explanations of any failure.
