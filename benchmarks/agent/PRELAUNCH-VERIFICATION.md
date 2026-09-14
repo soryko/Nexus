@@ -5,9 +5,9 @@ check fails. Full untruncated output for every check is in `verification-logs/`;
 are excerpts, and the logs are the record.
 
 ```
-revision           0a3aca184515d83a20cd99948c60df8a9b0e82b1
+revision           5124130feed941b685d8ae2acb32981561fbbca8
 branch             docs/a2-calibration
-date (UTC)         2026-09-14T11:49:13Z
+date (UTC)         2026-09-14T17:32:11Z
 config version     calib-v2
 schedule digest    0a352b82ced14f10
 checks failed      0
@@ -23,26 +23,26 @@ checks failed      0
 
 ## Accounting and driver counterexamples
 ```
-=== ceiling 30  k1 attempt 1  (0 of 7,000 tokens charged, reserving 3,000 for this row)  2026-09-14T11:48:36+00:00
-    exit 0  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmp2lo4k9l3/c30/run-k1/attempt1.log
+    /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpoyxlfw_6/c30/run-k4/attempt1/arms/baseline
+    /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpoyxlfw_6/c30/run-k4/attempt1/arms/nexus
+    /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpoyxlfw_6/c30/run-k4/attempt1/arms/notes
 
-=== ceiling 30  k2 attempt 1  (3,000 of 7,000 tokens charged, reserving 3,000 for this row)  2026-09-14T11:48:36+00:00
-    exit 0  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmp2lo4k9l3/c30/run-k2/attempt1.log
-
-charged 6,000 of 7,000 tokens over 6 arm-runs (6,000 measured + 0 allowance)
-STOPPED AT BUDGET before ceiling 30 k3. The grid is PARTIAL: §5 forbids selecting a ceiling from unequal coverage.
+STOPPED BEFORE THE NEXT ROW: 3 arm-run(s) have no usable usage record, so consumption so far is only a lower bound and the budget cannot be enforced. Reconcile them or assign a documented allowance before continuing:
+    /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpoyxlfw_6/c30/run-k4/attempt1/arms/baseline
+    /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpoyxlfw_6/c30/run-k4/attempt1/arms/nexus
+    /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpoyxlfw_6/c30/run-k4/attempt1/arms/notes
 calibration: schedule 0a352b82ced14f10 seed 20260914
 ceilings [30, 45]  |  4 rows each  |  24 arm-runs  |  cap 10,000,000 tokens
 
-=== ceiling 30  k1 attempt 1  (0 of 10,000,000 tokens charged, reserving 2,500,000 for this row)  2026-09-14T11:48:36+00:00
-    exit 1  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmplbzmkqq3/c30/run-k1/attempt1.log
+=== ceiling 30  k1 attempt 1  (0 of 10,000,000 tokens charged, reserving 2,500,000 for this row)  2026-09-14T17:31:42+00:00
+    exit 1  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmp88zi8rrw/c30/run-k1/attempt1.log
     row did not complete; stopping rather than spending the next one
 
 charged 0 of 10,000,000 tokens over 1 arm-runs (0 measured + 0 allowance)
 UNRESOLVED: 1 arm-run(s) have no usable usage record. Total consumption is a LOWER BOUND and overshoot cannot be computed.
-    /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmplbzmkqq3/c30/run-k1/attempt1/arms/baseline
+    /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmp88zi8rrw/c30/run-k1/attempt1/arms/baseline
 A ROW DID NOT COMPLETE. The sweep stopped; no further ceiling was started.
-22/22 counterexample groups pass
+37/37 counterexample groups pass
 ```
 
 ## Write-detector counterexamples
@@ -69,7 +69,7 @@ ALL CHECKS PASS
   tmpprefix_set: True
   heredoc_tail: ['heredoc-ok']
   other_control_tail: ['CONTROL-FOR-ARM-B']
-  cross_arm_tail: ['cat: /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmp7lo8mynd/armA/tmp/zsh_sentinel: Operation not permitted']
+  cross_arm_tail: ['cat: /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpy9gf2st5/armA/tmp/zsh_sentinel: Operation not permitted']
 
 isolation demonstrated: heredocs work, the sibling sandbox runs, and it cannot read this arm's heredoc scratch
 ```
@@ -84,5 +84,5 @@ isolation demonstrated: heredocs work, the sibling sandbox runs, and it cannot r
 =========================== short test summary info ============================
 SKIPPED [1] ../../tests/core/test_b2a_mutations.py:138: development run: set NEXUS_MUTATION_MATRIX=1
 SKIPPED [1] ../../tests/core/test_b2b_mutations.py:410: development run: set NEXUS_MUTATION_MATRIX=1
-334 passed, 2 skipped in 34.81s
+334 passed, 2 skipped in 26.80s
 ```
