@@ -96,18 +96,15 @@ HEADER = """(version 1)
 (allow file-read* (literal "/"))   ; the root directory entry; dyld aborts without it
 
 ; ---- shell here-documents ----
-; zsh writes a here-document's body to a temp file under /private/tmp and reads it back to
-; feed stdin. With /private/tmp admitted only as a bare directory entry, that read is denied
-; and EVERY heredoc in EVERY arm-run fails with "can't create temp file for here document:
-; operation not permitted" -- measured in all 36 A1 arm-runs and all 9 A2 calibration
-; arm-runs. Agents fall back to printf chains, which costs turns and confounds a turn-ceiling
-; measurement.
+; zsh writes a here-document's body to a temp file and reads it back to feed stdin. Its
+; location is `$TMPPREFIX`, which defaults to /tmp/zsh -- NOT $TMPDIR, which does not control
+; it (measured: setting TMPDIR leaves heredocs failing). With /private/tmp admitted only as a
+; bare directory entry, that read is denied and EVERY heredoc in EVERY arm-run fails.
 ;
-; This is a prefix match on the shell's own temp-file name, NOT a subpath grant: /private/tmp
-; itself stays unreadable and unlistable, and nothing pre-existing is named /private/tmp/zsh*.
-; An arm gains no path it could not already write and read inside its own checkout.
-; `heredoc_probe` in this module asserts both halves.
-(allow file-read* (regex #"^/private/tmp/zsh"))
+; The fix is NOT a grant on /private/tmp. A prefix rule there names a filename pattern, not a
+; process: one arm could write /private/tmp/zshXXX and another could read it by name, which is
+; a channel between arms. Measured, and it worked. Instead each arm gets its own TMPPREFIX
+; inside its own directory, which only that arm's profile admits.
 """
 
 
@@ -231,23 +228,42 @@ def paired(profile: Path, argv: list[str], cwd: Path) -> dict:
             "outside_tail": (outside.stderr or outside.stdout).strip().splitlines()[-1:]}
 
 
-def heredoc_probe(profile: Path, cwd: Path) -> dict:
-    """A here-document must work, and /private/tmp must stay shut. Both, or neither counts.
+def heredoc_probe(profile: Path, cwd: Path, env: dict,
+                  other_profile: Path | None = None, other_cwd: Path | None = None) -> dict:
+    """A here-document must work for this arm, and its body must be unreadable to another.
 
-    The positive half is the repair; the negative half is what keeps the repair from being a
-    hole. A profile that passes the first and fails the second has bought working heredocs by
-    opening the runner's scratch tree to the arm.
+    The second half is the one that matters and the one a directory listing does not test.
+    The first repair attempt granted `^/private/tmp/zsh` to every arm: /private/tmp stayed
+    unlistable, which looked like isolation, while arm A could write
+    /private/tmp/zshSENTINEL and arm B could read it BY NAME. Measured, and it worked. So the
+    control is a sentinel written through one profile and read through the other, not a
+    listing.
     """
     works = subprocess.run(["sandbox-exec", "-f", str(profile), "/bin/zsh", "-c",
                             "cat <<EOF\nheredoc-ok\nEOF"],
-                           cwd=str(cwd), capture_output=True, text=True, timeout=60)
-    listed = subprocess.run(["sandbox-exec", "-f", str(profile), "/bin/zsh", "-c",
-                             "ls /private/tmp"],
-                            cwd=str(cwd), capture_output=True, text=True, timeout=60)
-    return {"heredoc_works": works.returncode == 0 and "heredoc-ok" in works.stdout,
-            "private_tmp_still_denied": listed.returncode != 0,
-            "heredoc_tail": (works.stderr or works.stdout).strip().splitlines()[-1:],
-            "listing_tail": (listed.stderr or listed.stdout).strip().splitlines()[-1:]}
+                           cwd=str(cwd), capture_output=True, text=True, env=env, timeout=60)
+    out = {"heredoc_works": works.returncode == 0 and "heredoc-ok" in works.stdout,
+           "heredoc_tail": (works.stderr or works.stdout).strip().splitlines()[-1:]}
+
+    prefix = env.get("TMPPREFIX")
+    out["tmpprefix_set"] = bool(prefix)
+    if not (other_profile and prefix):
+        out["cross_arm_read_blocked"] = None      # not tested; never reported as passing
+        return out
+
+    sentinel = Path(prefix + "_sentinel")
+    sentinel.parent.mkdir(parents=True, exist_ok=True)
+    sentinel.write_text("SENTINEL-FROM-THIS-ARM")
+    try:
+        other = subprocess.run(["sandbox-exec", "-f", str(other_profile), "/bin/zsh", "-c",
+                                f"cat {sentinel}"],
+                               cwd=str(other_cwd or cwd), capture_output=True, text=True,
+                               env=env, timeout=60)
+        out["cross_arm_read_blocked"] = "SENTINEL-FROM-THIS-ARM" not in other.stdout
+        out["cross_arm_tail"] = (other.stderr or other.stdout).strip().splitlines()[-1:]
+    finally:
+        sentinel.unlink(missing_ok=True)
+    return out
 
 
 def _first_file(root: Path) -> Path | None:

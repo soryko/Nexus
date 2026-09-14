@@ -96,7 +96,11 @@ in separate columns and never substituted.
 the memory arm free retrieval turns would measure a different system from the one that ships.
 
 Arms are A1's: `baseline`, `nexus`, `notes`, with identical prompts, tool inventories and
-retrieval policy. **This calibration changes no prompt and no policy** — a bounded consultation
+retrieval policy. **This calibration changes no *task* prompt and no retrieval policy** — the
+task bodies, the tails and the consultation instruction are the A1 text, byte-for-byte. It does
+add one shared `environment` block, appended identically to all three arms, describing how to
+run the checkout; that is a change to the instrument, which is why the configuration is
+versioned at v2 and why v1 rows are not pooled with v2 (§7, §8). A bounded consultation
 policy is the *next* experiment and cannot be tested in the same run that moves the ceiling,
 because the two would confound.
 
@@ -211,14 +215,23 @@ not a warning.
 | the network is still denied | the repair silently opening egress |
 | `/private/tmp` is still unlistable | the heredoc repair opening the runner's scratch tree |
 
-**The heredoc repair, and why it is narrow.** zsh writes a here-document's body to a temp file
-under `/private/tmp` and reads it back; the profile admitted `/private/tmp` only as a bare
-directory entry, so the read was denied. The fix is a prefix match on the shell's own temp-file
-name — `(allow file-read* (regex #"^/private/tmp/zsh"))` — not a subpath grant. `/private/tmp`
-stays unreadable and unlistable, nothing pre-existing carries that prefix, and an arm gains no
-path it could not already write and read inside its own checkout. `isolation.heredoc_probe`
-asserts both halves, because a repair that only proves the positive half has bought working
-heredocs by opening the scratch tree.
+**The heredoc repair, and the first attempt at it that was wrong.** zsh writes a
+here-document's body to a temp file and reads it back. Its location is `$TMPPREFIX` (default
+`/tmp/zsh`) — **not** `$TMPDIR`, which was measured and does not control it. With `/private/tmp`
+admitted only as a bare directory entry, the read was denied and every heredoc failed.
+
+The first repair granted `(allow file-read* (regex #"^/private/tmp/zsh"))` to every arm and
+argued it was safe because `/private/tmp` stayed unlistable and nothing pre-existing carried
+that prefix. **That reasoning was wrong and the grant was a channel between arms**: a filename
+prefix names a pattern, not a process, so arm A could write `/private/tmp/zshSENTINEL` and arm B
+could read it *by name* without listing anything. Measured, and it worked.
+
+The repair now gives each arm **its own `TMPPREFIX` inside its own directory**. The existing
+boundary already grants an arm its own directory and denies every sibling's, so one arm's
+heredoc bodies are unreadable to the others by the same rule that protects everything else it
+writes. `isolation.heredoc_probe` asserts both halves — heredocs work, and a sentinel written
+through one arm's profile is unreadable through another's. A directory listing does not test
+that property, which is why the first version passed while the channel was open.
 
 **The prompt gained an `environment` block**, appended identically to all three arms, stating
 that the checkout is a `src/` layout, how to run it and its tests, that there is no network, and

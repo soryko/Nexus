@@ -80,6 +80,10 @@ PROMPT = (_spec["body"] + _reg["tails"][_spec["tail"]]
 # rather than kept as decoration: they were never merged into the child environment, so the
 # comment claiming they kept the arms identical described nothing the code did.
 
+# The per-arm environment gate. On by default; A1's frozen runs predate it and reproduce with
+# NEXUS_A1_ENV_GATE=0, which is how a historical run is re-executed unchanged.
+ENV_GATE = os.environ.get("NEXUS_A1_ENV_GATE", "1") != "0"
+
 BASE_TOOLS = "Read,Edit,Write,Bash,Glob,Grep"
 NEXUS_TOOLS = "mcp__nexus__search,mcp__nexus__get,mcp__nexus__history,mcp__nexus__status"
 
@@ -226,9 +230,34 @@ def invoke(arm: str, cwd: Path) -> dict:
            "--disable-slash-commands",
            "--max-turns", str(MAX_TURNS),
            "--output-format", "stream-json", "--verbose"]
+    # Per-arm here-document scratch. zsh writes a heredoc body to $TMPPREFIX* and reads it
+    # back; the default /tmp/zsh is unreadable under the profile, so every heredoc failed. It
+    # is NOT $TMPDIR -- measured, setting that leaves heredocs failing. Pointing it inside the
+    # arm's own directory keeps the fix arm-private: `allow` grants this arm its own directory
+    # and `deny` withholds every sibling's, so one arm's heredoc bodies are unreadable to the
+    # others. A shared grant under /private/tmp would have been a channel between arms.
+    heredoc_tmp = OUT / "arms" / arm / "tmp"
+    heredoc_tmp.mkdir(parents=True, exist_ok=True)
     # the sandbox denies every host but localhost; the forwarder is the only egress
     env = a1_config.child_env(f"http://127.0.0.1:{FORWARDER_PORT}/anthropic",
-                              os.environ["DEEPSEEK_API_KEY"])
+                              os.environ["DEEPSEEK_API_KEY"],
+                              {"TMPPREFIX": str(heredoc_tmp / "zsh")})
+    # Gate THIS arm, with the profile and environment it is about to run under -- not a
+    # representative one built elsewhere. A1's arms were measured in a sandbox where the
+    # documented interpreter invocation and here-documents did not work; none of it reached
+    # `permission_denials`, and nothing was checking the thing the arm would actually use.
+    # Refusing costs one row; not refusing cost 45 arm-runs.
+    if ENV_GATE:
+        import verify_arm_environment as VENV
+        others = [OUT / "arms" / a for a in ARMS if a != arm]
+        gate = VENV.run(OUT / "arms" / arm, env, other_arm=others[0] if others else None)
+        (OUT / "arms" / arm / "envcheck.json").write_text(json.dumps(gate, indent=1))
+        if not gate["all_passed"]:
+            failed = [c["check"] for c in gate["checks"] if not c["passed"]]
+            raise SystemExit(f"[{arm}] environment gate FAILED: {failed}\n"
+                             f"  Not spending on this arm. See {OUT}/arms/{arm}/envcheck.json")
+        print(f"[{arm}] environment gate: {len(gate['checks'])} checks pass", flush=True)
+
     started = datetime.now(timezone.utc)
     t0 = time.monotonic()
     verdict = None
@@ -340,6 +369,42 @@ def store_digest(db: Path) -> str:
         "join blobs b on b.id = r.blob_id order by m.memory_id"))
     con.close()
     return hashlib.sha256(repr(rows).encode()).hexdigest()[:16]
+
+
+def run_identity() -> dict:
+    """Everything that has to match for two arm-runs to be poolable.
+
+    The registration promised the product revision would be recorded in the run record; it was
+    not, and A1's had to be inferred from git history afterwards. It is recorded here, beside
+    the harness revision, the configuration version and digest, and the ceiling AS APPLIED --
+    the config's filename does not establish its `max_turns`.
+    """
+    import hashlib
+    import subprocess as sp
+
+    def rev(path: str) -> str | None:
+        try:
+            out = sp.run(["git", "-C", str(REPO), "log", "-1", "--format=%H", "--", path],
+                         capture_output=True, text=True, timeout=30)
+            return (out.stdout.strip() or None) if out.returncode == 0 else None
+        except Exception:
+            return None
+
+    return {
+        "product_revision": rev("src/nexus_memory"),
+        "harness_revision": rev("benchmarks/agent"),
+        "config_version": CFG.config_version,
+        "config_digest": hashlib.sha256(
+            json.dumps(CFG.as_recorded(), sort_keys=True).encode()).hexdigest()[:16],
+        "prompt_registration": str(PROMPT_REGISTRATION),
+        "prompt_digest": hashlib.sha256(PROMPT.encode()).hexdigest()[:16],
+        "schedule_digest": None,
+        "corpus_digest_registered": CFG.corpus_digest or None,
+        "max_turns_applied": MAX_TURNS,
+        "wall_clock_s_applied": WALL_CLOCK_S,
+        "functional_scorer_version": __import__("build_fixture").FUNCTIONAL_SCORER_VERSION,
+        "scorer_version": __import__("score_compliance").SCORER_VERSION,
+    }
 
 
 def main() -> int:
@@ -464,6 +529,13 @@ def main() -> int:
         print(f"  -> {rec['terminal']}  patch={rec['patch_bytes']}B  "
               f"checks: {rec['scored']['summary']}  wall={rec['wall_clock_s']}s", flush=True)
         records.append(rec)
+        # Persist THIS arm before starting the next. The row-level records.json is written
+        # only after all three arms, so a row interrupted mid-way used to leave two completed
+        # arm-runs with no record of their consumption at all -- spend that no budget could
+        # count. One file per arm, written the moment it finishes.
+        (OUT / "arms" / arm / "record.json").write_text(json.dumps(
+            {"task": TASK, "attempt": ATTEMPT, "arm": arm,
+             "identity": run_identity(), "record": rec}, indent=1))
 
     after = store_digest(STORE_MASTER)
     print(f"\nmaster store digest after all arms: {after}  unchanged={before == after}")
@@ -486,6 +558,7 @@ def main() -> int:
          "store_unchanged": before == after,
          "arm_runs_with_mutated_store": mutated,
          "prompt_registration": str(PROMPT_REGISTRATION),
+         "identity": {**run_identity(), "schedule_digest": plan.schedule_digest},
          "records": records}, indent=1))
     return 0
 

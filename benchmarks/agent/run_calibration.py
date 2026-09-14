@@ -4,15 +4,23 @@ Registered in `freeze-calib-a2.md`. This runs it and nothing else -- it selects 
 computes no figure, and reports no contrast between arms. `report_calibration.py` applies the
 selection rule to what this produces.
 
-Three things it is responsible for:
+Four things it is responsible for:
 
-  cap        US$60, checked from the saved envelopes AFTER EVERY ARM-RUN, across every ceiling
-             run so far. At the cap it stops where it is. A partial grid is kept and reported
-             as partial; it never licenses a ceiling by extrapolation.
-  order      ceilings ascending, so a cap hit costs the most expensive cell rather than the
-             cheapest. Within a ceiling, rows come from the frozen schedule in its own order.
-  isolation  each ceiling writes to its own scratch subtree. No run reads another's output,
-             and a resumed run skips only rows whose `records.json` already exists.
+  budget     36 000 000 TOKENS, not dollars -- runner-a1 section 3 established the CLI's cost
+             field has no provenance on this model. Checked BEFORE a row starts, against the
+             largest row yet seen at that ceiling, so a row is never begun without room for
+             one of its size. Consumption that cannot be accounted for is `unresolved` and
+             BLOCKS continuation; it is never counted as zero.
+  identity   every row records product and harness revisions, configuration version and
+             digest, prompt and schedule digests, and the ceiling AS APPLIED. On resume an
+             existing row whose identity does not match is REFUSED, not skipped.
+  order      ceilings ascending, so a budget stop costs the most expensive cell. Within a
+             ceiling, rows come from the frozen schedule in its own order.
+  isolation  each ceiling writes to its own scratch subtree, and an interrupted attempt is
+             moved aside rather than overwritten by its own rerun.
+
+The environment gate is NOT here: it runs inside `run_arms_isolated`, per arm, against the
+profile and environment that arm actually uses.
 
 Usage:  run_calibration.py <scratch> [--ceilings 30,45,60] [--dry-run]
 """
@@ -29,7 +37,6 @@ BENCH = Path(__file__).parent
 sys.path.insert(0, str(BENCH))
 
 import schedule as sched                                                # noqa: E402
-import verify_arm_environment as VENV                                   # noqa: E402
 
 CEILINGS = (30, 45, 60)
 CONFIG_VERSION = "calib-v2"   # v1 ran against the unrepaired sandbox; the two are not pooled
@@ -54,48 +61,74 @@ CLONE = "/Users/soko/Cerebros/nexus-a1-fixtures/click"
 
 
 def consumed(scratch: Path) -> dict:
-    """Every token this calibration has consumed, read from what it saved.
+    """Every token this calibration is KNOWN to have consumed, plus what it cannot account for.
 
-    Counted from `records.json` where a row completed, and from the per-arm `trace.jsonl`
-    where it did not -- an aborted or failed row still spent, and counting only completed rows
-    would make the budget look smaller than it is. The dollar field is recorded for the record
-    and is NOT used for enforcement.
+    Three sources, most durable first: each arm's own `record.json`, written the moment that
+    arm finishes; the row's `records.json`; the arm's `trace.jsonl`. An arm found in none of
+    them, or found with no usage block, is counted in `unresolved` -- it is never counted as
+    zero. The earlier version returned 0 tokens for a trace with no terminal envelope and 0
+    tokens for a record with no usage, both silently.
 
-    A file that cannot be read raises rather than counting as zero: a budget enforced on a
-    silently-partial sum is not a budget.
+    The glob matches ANY top-level directory, not `c<ceiling>` only: quarantining rows by
+    renaming their directory once dropped 6 425 690 consumed tokens from this sum.
+
+    `usd_unprovenanced` is recorded and used for nothing. runner-a1 section 3 established the
+    CLI's dollar field has no provenance on this model.
     """
-    # The glob matches ANY top-level directory, not `c<ceiling>` only. Quarantining the v1
-    # rows by renaming their directory once made this sum silently drop 6 425 690 consumed
-    # tokens -- a budget that stops counting when a directory is renamed is not a budget.
-    tokens, usd, runs, from_trace = 0, 0.0, 0, 0
-    counted: set[Path] = set()
-    for rec in sorted(scratch.glob("*/run-*/attempt*/records.json")):
-        data = json.loads(rec.read_text())
-        for r in data["records"]:
-            u = r.get("usage") or {}
-            tokens += (u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0)
-                       + u.get("cache_creation_input_tokens", 0) + u.get("output_tokens", 0))
-            usd += (r.get("result") or {}).get("total_cost_usd") or 0.0
+    def toks(u: dict) -> int | None:
+        if not u:
+            return None
+        return (u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0)
+                + u.get("cache_creation_input_tokens", 0) + u.get("output_tokens", 0))
+
+    tokens, usd, runs = 0, 0.0, 0
+    unresolved: list[str] = []
+    seen: set[Path] = set()
+
+    for f in sorted(scratch.glob("*/run-*/attempt*/arms/*/record.json")):
+        data = json.loads(f.read_text())
+        t = toks((data.get("record") or {}).get("usage") or {})
+        seen.add(f.parent)
+        runs += 1
+        if t is None:
+            unresolved.append(str(f.parent))
+        else:
+            tokens += t
+            usd += ((data.get("record") or {}).get("result") or {}).get("total_cost_usd") or 0.0
+
+    for f in sorted(scratch.glob("*/run-*/attempt*/records.json")):
+        data = json.loads(f.read_text())
+        for r in data.get("records", []):
+            armdir = f.parent / "arms" / r.get("arm", "?")
+            if armdir in seen:
+                continue
+            seen.add(armdir)
             runs += 1
-            counted.add(rec.parent / "arms" / r["arm"] / "trace.jsonl")
-    # Arm-runs whose row never completed: their tokens were still spent.
+            t = toks(r.get("usage") or {})
+            if t is None:
+                unresolved.append(str(armdir))
+            else:
+                tokens += t
+                usd += (r.get("result") or {}).get("total_cost_usd") or 0.0
+
     for tr in sorted(scratch.glob("*/run-*/attempt*/arms/*/trace.jsonl")):
-        if tr in counted:
+        if tr.parent in seen:
             continue
+        seen.add(tr.parent)
+        runs += 1
         env = None
         for line in tr.open(errors="replace"):
-            if line.startswith('{"type":"result"') or '"type": "result"' in line[:40]:
+            if '"type":"result"' in line[:40] or '"type": "result"' in line[:40]:
                 env = json.loads(line)
-        if not env:
-            continue
-        u = env.get("usage") or {}
-        tokens += (u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0)
-                   + u.get("cache_creation_input_tokens", 0) + u.get("output_tokens", 0))
-        usd += env.get("total_cost_usd") or 0.0
-        runs += 1
-        from_trace += 1
-    return {"tokens": tokens, "usd_unprovenanced": round(usd, 4), "arm_runs": runs,
-            "from_incomplete_rows": from_trace}
+        t = toks((env or {}).get("usage") or {})
+        if t is None:
+            unresolved.append(str(tr.parent))      # started, no envelope: consumption unknown
+        else:
+            tokens += t
+            usd += (env or {}).get("total_cost_usd") or 0.0
+
+    return {"tokens_known": tokens, "usd_unprovenanced": round(usd, 4), "arm_runs": runs,
+            "unresolved_arm_runs": unresolved, "unresolved": len(unresolved)}
 
 
 def row_reserve(scratch: Path, ceiling: int) -> int:
@@ -133,24 +166,42 @@ def build_fixture_for(task: str, ceiling_root: Path, python: str) -> None:
         raise SystemExit(f"fixture for {task} was not admitted; not spending on it\n{done.stdout}")
 
 
-def _gate_arm(root: Path, task: str, attempt: int, config: Path, python: str) -> dict:
-    """Build one throwaway baseline arm from this row's fixture and probe it. No model runs."""
-    import shutil
-    import a1_config
-    import isolation
-    base = root / f"run-{task}" / "base"
-    arm = root / f"run-{task}" / f"attempt{attempt}" / "arms" / "_envcheck"
-    if arm.exists():
-        shutil.rmtree(arm)
-    arm.mkdir(parents=True)
-    shutil.copytree(base / task, arm / "repo", symlinks=True)
-    cfg = a1_config.load(str(config)).require()
-    deny = [base / "checks", Path(cfg.source_clone), BENCH]
-    isolation.write_profile(arm / "sandbox.sb", arm / "repo", deny,
-                            forwarder_port=cfg.forwarder_port)
-    report = VENV.run(arm)
-    shutil.rmtree(arm, ignore_errors=True)
-    return report
+def incompatible(records: Path, cfg_json: dict, plan) -> str | None:
+    """-> a reason this existing row may not be pooled with the current configuration.
+
+    `CONFIG_VERSION` used to appear only at its own definition: the resume path skipped any
+    existing records.json without ever asking what produced it, so a v1 row and a v2 row in
+    one tree were indistinguishable to the driver that was about to average them.
+    """
+    data = json.loads(records.read_text())
+    ident = data.get("identity") or {}
+    checks = [
+        ("config_version", ident.get("config_version"), cfg_json.get("config_version")),
+        ("max_turns", data.get("max_turns"), cfg_json.get("max_turns")),
+        ("schedule_digest", data.get("schedule_digest"), plan.schedule_digest),
+        ("corpus_digest", data.get("corpus_digest_registered"), cfg_json.get("corpus_digest")),
+    ]
+    bad = [f"{k}: recorded {a!r} != requested {b!r}" for k, a, b in checks if a != b]
+    if not ident:
+        bad.append("no identity block: predates configuration recording")
+    return "; ".join(bad) or None
+
+
+def preserve_partial(attempt_dir: Path) -> Path | None:
+    """Move an interrupted attempt aside instead of letting the rerun overwrite its traces.
+
+    An absent records.json used to send the row straight back through the same paths, so the
+    rerun overwrote the traces of arm-runs that had already consumed. Evidence of spend is not
+    something to reclaim disk space with.
+    """
+    if not attempt_dir.exists() or (attempt_dir / "records.json").exists():
+        return None
+    if not any(attempt_dir.glob("arms/*/trace.jsonl")):
+        return None
+    dest = attempt_dir.with_name(
+        attempt_dir.name + ".partial-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
+    attempt_dir.rename(dest)
+    return dest
 
 
 def main(argv: list[str]) -> int:
@@ -174,47 +225,81 @@ def main(argv: list[str]) -> int:
                       f"order {'->'.join(row['order'])}")
         return 0
 
-    stopped = None
+    stopped, errored = None, False
     for ceiling in ceilings:
         root = scratch / f"c{ceiling}"
         config = BENCH / f"calib-config-{ceiling}.json"
         if not config.exists():
             raise SystemExit(f"no config for ceiling {ceiling}: {config}")
+        # The filename does not establish the ceiling. Check what the config actually says,
+        # and that it declares the configuration version this run is pooling under.
+        cfg_json = json.loads(config.read_text())
+        if cfg_json.get("max_turns") != ceiling:
+            raise SystemExit(f"{config.name} declares max_turns={cfg_json.get('max_turns')}, "
+                             f"not the requested grid point {ceiling}")
+        if cfg_json.get("config_version") != CONFIG_VERSION:
+            raise SystemExit(f"{config.name} is config_version "
+                             f"{cfg_json.get('config_version')!r}, not {CONFIG_VERSION!r}; "
+                             f"rows from different configurations are not pooled")
         for row in plan.rows:
             task, attempt = row["task"], row["attempt"]
-            out = root / f"run-{task}" / f"attempt{attempt}" / "records.json"
+            attempt_dir = root / f"run-{task}" / f"attempt{attempt}"
+            out = attempt_dir / "records.json"
             if out.exists():
-                print(f"  [skip] ceiling {ceiling} {task}: records.json exists")
+                why = incompatible(out, cfg_json, plan)
+                if why:
+                    raise SystemExit(
+                        f"{out} was produced under a different configuration ({why}). "
+                        f"Refusing to resume: rows from different configurations are not "
+                        f"pooled. Move it aside or run into a fresh scratch directory.")
+                print(f"  [skip] ceiling {ceiling} {task}: records.json exists, identity matches")
                 continue
 
+            # A row whose records.json is absent but whose arm directories exist was
+            # interrupted. Re-running it into the same paths would overwrite its traces --
+            # evidence of consumption that already happened. Move it aside instead.
+            preserved = preserve_partial(attempt_dir)
+            if preserved:
+                print(f"  [preserved] partial attempt moved to {preserved.name}")
+
             before = consumed(scratch)
+            if before["unresolved"]:
+                raise SystemExit(
+                    f"{before['unresolved']} arm-run(s) have no usable usage record, so "
+                    f"consumption so far is only a lower bound and the budget cannot be "
+                    f"enforced. Reconcile them or assign a documented allowance before "
+                    f"continuing:\n    " + "\n    ".join(before["unresolved_arm_runs"]))
             reserve = row_reserve(scratch, ceiling)
             # PRE-launch: do not START a row without room for one of its size.
-            if before["tokens"] + reserve > CAP_TOKENS:
-                stopped = (ceiling, task, before["tokens"], reserve)
+            if before["tokens_known"] + reserve > CAP_TOKENS:
+                stopped = (ceiling, task, before["tokens_known"], reserve)
                 break
+
+            # Durable record of the invocation BEFORE it starts, so a row that dies without
+            # an envelope is still identifiable as having been launched.
+            attempt_dir.mkdir(parents=True, exist_ok=True)
+            (attempt_dir / "launch.json").write_text(json.dumps({
+                "run_id": f"{CONFIG_VERSION}-c{ceiling}-{task}-a{attempt}-"
+                          f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
+                "config_version": CONFIG_VERSION, "ceiling_requested": ceiling,
+                "max_turns_declared": cfg_json.get("max_turns"),
+                "schedule_digest": plan.schedule_digest,
+                "corpus_digest": cfg_json.get("corpus_digest"),
+                "prompts": cfg_json.get("prompts"),
+                "started_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            }, indent=1) + "\n")
+
             print(f"\n=== ceiling {ceiling}  {task} attempt {attempt}  "
-                  f"({before['tokens']:,} of {CAP_TOKENS:,} tokens, "
+                  f"({before['tokens_known']:,} of {CAP_TOKENS:,} tokens known, "
                   f"reserving {reserve:,} for this row)  "
                   f"{datetime.now(timezone.utc).isoformat(timespec='seconds')}")
 
             if not (root / f"run-{task}" / "base" / task).exists():
                 build_fixture_for(task, root, python)
 
-            # The environment gate. A1 and the v1 rows were measured in a sandbox where
-            # here-documents and the documented interpreter invocation silently did not work,
-            # and nothing was looking: those failures appear in tool OUTPUT, not in
-            # `permission_denials`. A gate that runs after the spend is a post-mortem, so this
-            # runs before it, on this row's own fixture, and refuses rather than warns.
-            gate = _gate_arm(root, task, attempt, config, python)
-            (root / f"run-{task}" / f"attempt{attempt}-envcheck.json").write_text(
-                json.dumps(gate, indent=1) + "\n")
-            if not gate["all_passed"]:
-                failed = [c["check"] for c in gate["checks"] if not c["passed"]]
-                raise SystemExit(
-                    f"environment gate FAILED for {task} at ceiling {ceiling}: {failed}\n"
-                    f"  Not spending. Repair the environment and version the configuration; "
-                    f"do not pool rows across configurations.")
+            # The environment gate runs inside run_arms_isolated, per arm, against the
+            # profile and environment that arm will actually use, and refuses there. A gate
+            # here would test a throwaway profile built by this file instead of the real one.
 
             log = root / f"run-{task}" / f"attempt{attempt}.log"
             log.parent.mkdir(parents=True, exist_ok=True)
@@ -231,22 +316,50 @@ def main(argv: list[str]) -> int:
                      str(attempt), str(SCHEDULE)],
                     stdout=fh, stderr=subprocess.STDOUT, env=env)
             print(f"    exit {done.returncode}  log {log}")
+            if done.returncode != 0:
+                errored = True
+                print(f"    row did not complete; stopping rather than spending the next one")
+                break
 
         if stopped:
             break
 
-    total = spent(scratch)
-    summary = {"cap_usd": CAP_USD, "spent_usd": round(total, 4),
-               "ceilings_requested": ceilings,
-               "stopped_at_cap": None if not stopped else
-                   {"ceiling": stopped[0], "task": stopped[1], "spent": round(stopped[2], 4)},
-               "schedule_digest": plan.schedule_digest, "seed": plan.seed,
-               "written_utc": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    total = consumed(scratch)
+    over = max(0, total["tokens_known"] - CAP_TOKENS)
+    summary = {
+        "cap_tokens": CAP_TOKENS,
+        "config_version": CONFIG_VERSION,
+        "tokens_known": total["tokens_known"],
+        "arm_runs": total["arm_runs"],
+        "unresolved_arm_runs": total["unresolved_arm_runs"],
+        "usd_unprovenanced": total["usd_unprovenanced"],
+        "row_reserve_used": {str(c): row_reserve(scratch, c) for c in ceilings},
+        "stopping_reason": ("budget" if stopped else
+                            "gate_or_error" if errored else "completed"),
+        "stopped_at": None if not stopped else
+            {"ceiling": stopped[0], "task": stopped[1],
+             "tokens_before": stopped[2], "row_reserve": stopped[3]},
+        # Overshoot is only a number when consumption is fully accounted. With an unresolved
+        # arm-run outstanding the true total is unknown and so is any excess over the cap.
+        "overshoot_tokens": (over if not total["unresolved"] else None),
+        "overshoot_certain": not total["unresolved"],
+        "schedule_digest": plan.schedule_digest, "seed": plan.seed,
+        "written_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
     (scratch / "calibration-summary.json").write_text(json.dumps(summary, indent=1) + "\n")
-    print(f"\nspent ${total:.2f} of ${CAP_USD:.2f}")
+    print(f"\nknown consumption {total['tokens_known']:,} of {CAP_TOKENS:,} tokens over "
+          f"{total['arm_runs']} arm-runs")
+    if total["unresolved"]:
+        print(f"UNRESOLVED: {total['unresolved']} arm-run(s) have no usable usage record. "
+              f"Total consumption is a LOWER BOUND and overshoot cannot be computed.")
+        for u in total["unresolved_arm_runs"]:
+            print(f"    {u}")
+    elif over:
+        print(f"OVERSHOT by {over:,} tokens: a row cannot be interrupted part-way, so "
+              f"overshoot by at most one row is possible by design.")
     if stopped:
-        print(f"STOPPED AT CAP before ceiling {stopped[0]} {stopped[1]}. The grid is PARTIAL: "
-              f"the selection rule may not be applied to it by extrapolation.")
+        print(f"STOPPED AT BUDGET before ceiling {stopped[0]} {stopped[1]}. The grid is "
+              f"PARTIAL: §5 forbids selecting a ceiling from unequal coverage.")
     return 0
 
 

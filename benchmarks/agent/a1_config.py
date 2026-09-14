@@ -50,7 +50,7 @@ ENV_ALLOWLIST = {
     "TERM":        "absent, some tools assume a dumb terminal and change their output",
 }
 # Set by the harness itself, per arm, and never inherited.
-ENV_HARNESS_SET = ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY")
+ENV_HARNESS_SET = ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "TMPPREFIX")
 # Read from the operator's environment but NEVER written to an artifact.
 ENV_SECRET = ("DEEPSEEK_API_KEY",)
 
@@ -61,6 +61,7 @@ class Config:
     pytest_python: str          # interpreter the task's own test suite runs under
     venv_python: str            # interpreter Nexus runs on (.venv-sqlite)
     nexus_server: str           # the MCP server executable
+    config_version: str = "a1"  # identity of the CONFIGURATION, not of the file it came from
     forwarder_port: int = 8899
     corpus_size: int = 13
     max_turns: int = 30
