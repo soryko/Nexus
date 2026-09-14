@@ -93,6 +93,24 @@ retrieval policy. **This calibration changes no prompt and no policy** — a bou
 policy is the *next* experiment and cannot be tested in the same run that moves the ceiling,
 because the two would confound.
 
+### The corpus the memory arms consult
+
+`k1`–`k4` have no corpus of their own, and capturing one is not needed to answer a ceiling
+question. **The memory arms consult A1's frozen held-out corpus** (digest `9ae2a9f268dd894d`),
+unchanged, per-arm-run private as in A1, with the master digest checked either side.
+
+**What that makes this measurement.** The corpus is *not matched* to `k1`–`k4`: it was captured
+against `c1`/`c2`, which are option and flag-value fixes. Some incidental relevance to `k2` is
+possible and nothing is arranged to prevent it. For the most part the memory arms will consult
+an irrelevant corpus and spend turns doing so — which mirrors A1's `h2` and `h3`, whose declared
+mix was *unnecessary*.
+
+This is the right corpus for the question actually being asked. A2's arms will consult, so a
+ceiling that ignores consultation cost would be a ceiling the memory arms truncate at. It is
+the wrong corpus for any statement about retrieval quality, and none is made: **no contrast
+between arms is reported from this calibration.** Arm identity exists here only so the ceiling
+is chosen under the turn pressure all three arms actually exert.
+
 **Design: 4 tasks × 3 arms × 3 ceilings × 1 attempt = 36 arm-runs.** One attempt per cell is
 deliberate: A1 measured run-to-run variability at nil in 11 of 12 cells, and a ceiling choice
 does not need a variance estimate. It follows that **no cell here supports a per-task claim**,
