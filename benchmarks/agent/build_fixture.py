@@ -37,6 +37,12 @@ from pathlib import Path
 #: both numbers to be readable later.
 #:
 #: `a1-functional-1` ran pytest with no `-W`. `a1-functional-2` adds `PYTEST_IGNORE`, below.
+# A scorer that never returns is not a failing check, it is a wedged harness. A1's excluded
+# classes (tasks-click-a1 section 3) include pager and TTY behaviour for exactly this reason,
+# and a candidate whose own tests reach that code hangs here rather than failing. Bounded, so
+# such a candidate is REJECTED with a recorded reason instead of stopping the run.
+SCORER_TIMEOUT_S = 300
+
 FUNCTIONAL_SCORER_VERSION = "a1-functional-2"
 
 #: One warning class, demoted from error to ignored, for every task equally.
@@ -90,10 +96,17 @@ def fix_oracle(clone: Path, task: dict, checks: list[str], python: str, workdir:
     exported = subprocess.run(["git", "-C", str(clone), "archive", task["fix"]],
                               capture_output=True, check=True)
     subprocess.run(["tar", "-x", "-C", str(workdir)], input=exported.stdout, check=True)
-    done = subprocess.run([python, "-m", "pytest", *checks, "-q", "-p", "no:randomly",
-                           *PYTEST_IGNORE],
-                          cwd=workdir, capture_output=True, text=True,
-                          env={"PYTHONPATH": "src", "PATH": "/usr/bin:/bin"})
+    try:
+        done = subprocess.run([python, "-m", "pytest", *checks, "-q", "-p", "no:randomly",
+                               *PYTEST_IGNORE],
+                              cwd=workdir, capture_output=True, text=True,
+                              timeout=SCORER_TIMEOUT_S,
+                              env={"PYTHONPATH": "src", "PATH": "/usr/bin:/bin"})
+    except subprocess.TimeoutExpired:
+        return {"exit": None, "summary": f"TIMEOUT after {SCORER_TIMEOUT_S}s",
+                "failing_instances": None, "failing_functions": None,
+                "scorer_version": FUNCTIONAL_SCORER_VERSION,
+                "passed": None, "timed_out": True}
     tail = done.stdout.strip().splitlines()[-1] if done.stdout.strip() else ""
     return {"exit": done.returncode, "summary": tail, "passed": done.returncode == 0,
             "scorer_version": FUNCTIONAL_SCORER_VERSION,
@@ -172,10 +185,17 @@ def score(tree: Path, held: Path, checks: list[str], python: str, workdir: Path)
         target = workdir / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(held / relative, target)
-    done = subprocess.run([python, "-m", "pytest", *checks, "-q", "-p", "no:randomly",
-                           *PYTEST_IGNORE],
-                          cwd=workdir, capture_output=True, text=True,
-                          env={"PYTHONPATH": "src", "PATH": "/usr/bin:/bin"})
+    try:
+        done = subprocess.run([python, "-m", "pytest", *checks, "-q", "-p", "no:randomly",
+                               *PYTEST_IGNORE],
+                              cwd=workdir, capture_output=True, text=True,
+                              timeout=SCORER_TIMEOUT_S,
+                              env={"PYTHONPATH": "src", "PATH": "/usr/bin:/bin"})
+    except subprocess.TimeoutExpired:
+        return {"exit": None, "summary": f"TIMEOUT after {SCORER_TIMEOUT_S}s",
+                "failing_instances": None, "failing_functions": None,
+                "scorer_version": FUNCTIONAL_SCORER_VERSION,
+                "passed": None, "timed_out": True}
     tail = done.stdout.strip().splitlines()[-1] if done.stdout.strip() else ""
     failed = [l for l in done.stdout.splitlines() if l.startswith("FAILED ")]
     # `passed` is the fact. What it *means* depends on the caller: on an unpatched tree
@@ -184,7 +204,41 @@ def score(tree: Path, held: Path, checks: list[str], python: str, workdir: Path)
     return {"exit": done.returncode, "summary": tail, "failing_instances": len(failed),
             "failing_functions": len({l.split("[")[0] for l in failed}),
             "scorer_version": FUNCTIONAL_SCORER_VERSION,
-            "passed": done.returncode == 0}
+            "passed": done.returncode == 0, "timed_out": False}
+
+
+def admissible(built: dict, task: dict) -> tuple[bool, list[str]]:
+    """-> (admitted, reasons it was not).
+
+    Every clause must be answered EXPLICITLY. `passed: None` means the scorer did not reach a
+    verdict -- it timed out -- and an unreached verdict is a rejection, never a pass. The one
+    place None is legitimate is an authored task with no upstream fix commit to check against,
+    and that case is named by `task["fix"]` being empty rather than by the None itself.
+
+    Written this way because the previous rule was `fix_oracle["passed"] is not False`, which
+    admits None. Adding a scorer timeout would have made every hanging candidate admissible
+    and silent -- the failure mode where a check that cannot run counts as a check that passed.
+    """
+    why = []
+    if not built["oracle"]["isolated"]:
+        why.append("fix reachable from the fixture")
+    if not built["checks_absent_from_fixture"]:
+        why.append("hidden checks present in the fixture the agent sees")
+
+    nm = built["no_model"]
+    if nm.get("timed_out"):
+        why.append(f"no-model control did not terminate ({nm['summary']})")
+    elif nm["passed"] is not False:
+        why.append("no-model control did not fail: the task is vacuous")
+
+    fo = built["fix_oracle"]
+    if not task["fix"]:
+        pass                                   # authored task: no upstream fix to check
+    elif fo.get("timed_out"):
+        why.append(f"fix-oracle did not terminate ({fo['summary']})")
+    elif fo["passed"] is not True:
+        why.append("the checks cannot pass even with the fix applied")
+    return not why, why
 
 
 def main(argv: list[str]) -> int:
@@ -206,14 +260,15 @@ def main(argv: list[str]) -> int:
             out / "fix-oracle" / task["task"]) if task["fix"] else {
                 "passed": None, "summary": "authored task: no upstream fix to check against"}
         report.append(built)
-        ok = (built["oracle"]["isolated"] and not built["no_model"]["passed"]
-              and built["checks_absent_from_fixture"]
-              and built["fix_oracle"]["passed"] is not False)
+        ok, why = admissible(built, task)
+        built["admitted"], built["rejected_because"] = ok, why
         print(f"[{'OK ' if ok else 'BAD'}] {task['task']} {task['fix'][:7]}  "
               f"isolated={built['oracle']['isolated']}  "
               f"checks_hidden={built['checks_absent_from_fixture']}  "
               f"no-model: {built['no_model']['summary']}  |  "
               f"fix-oracle: {built['fix_oracle']['summary']}")
+        for reason in why:
+            print(f"       rejected: {reason}")
         if built["fix_oracle"]["passed"] is False:
             print("       ^ THE CHECKS CANNOT PASS EVEN WITH THE FIX APPLIED. This task is "
                   "not scoreable as registered: every arm scores zero on it, and the result "
@@ -221,9 +276,7 @@ def main(argv: list[str]) -> int:
             for line in built["fix_oracle"]["detail"].splitlines()[-4:]:
                 print(f"         {line}")
     Path(out / "fixtures.json").write_text(json.dumps(report, indent=1))
-    return 0 if all(r["oracle"]["isolated"] and not r["no_model"]["passed"]
-                    and r["checks_absent_from_fixture"]
-                    and r["fix_oracle"]["passed"] is not False for r in report) else 1
+    return 0 if all(r["admitted"] for r in report) else 1
 
 
 if __name__ == "__main__":
