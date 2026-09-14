@@ -1,5 +1,5 @@
   [PASS] interpreter imports the intended checkout  click.__file__=/Users/soko/Cerebros/nexus-a1-fixtures/calib-run/c30/run-k1/attem
-  [PASS] documented test command executes a test    rc=0 passed=23 failures_or_errors=False :: 23 passed in 0.03s
+  [PASS] documented test command executes a test    rc=0 passed=23 failures_or_errors=False :: 23 passed in 0.01s
   [PASS] here-document works                        ['HEREDOC-OK']
   [PASS] scratch file round-trips in the checkout   ['SCRATCH-OK']
   [PASS] egress denied (paired control)             blocked_inside=True works_outside=True

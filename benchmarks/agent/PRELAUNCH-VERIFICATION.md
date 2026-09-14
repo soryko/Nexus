@@ -5,9 +5,9 @@ check fails. Full untruncated output for every check is in `verification-logs/`;
 are excerpts, and the logs are the record.
 
 ```
-revision           ef4fe8ae157e3a1ab1b3776cd5301fe135710312
+revision           0a3aca184515d83a20cd99948c60df8a9b0e82b1
 branch             docs/a2-calibration
-date (UTC)         2026-09-14T11:47:12Z
+date (UTC)         2026-09-14T11:49:13Z
 config version     calib-v2
 schedule digest    0a352b82ced14f10
 checks failed      0
@@ -23,24 +23,24 @@ checks failed      0
 
 ## Accounting and driver counterexamples
 ```
-=== ceiling 30  k1 attempt 1  (0 of 7,000 tokens charged, reserving 3,000 for this row)  2026-09-14T11:46:38+00:00
-    exit 0  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpqmb9126j/c30/run-k1/attempt1.log
+=== ceiling 30  k1 attempt 1  (0 of 7,000 tokens charged, reserving 3,000 for this row)  2026-09-14T11:48:36+00:00
+    exit 0  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmp2lo4k9l3/c30/run-k1/attempt1.log
 
-=== ceiling 30  k2 attempt 1  (3,000 of 7,000 tokens charged, reserving 3,000 for this row)  2026-09-14T11:46:38+00:00
-    exit 0  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpqmb9126j/c30/run-k2/attempt1.log
+=== ceiling 30  k2 attempt 1  (3,000 of 7,000 tokens charged, reserving 3,000 for this row)  2026-09-14T11:48:36+00:00
+    exit 0  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmp2lo4k9l3/c30/run-k2/attempt1.log
 
 charged 6,000 of 7,000 tokens over 6 arm-runs (6,000 measured + 0 allowance)
 STOPPED AT BUDGET before ceiling 30 k3. The grid is PARTIAL: §5 forbids selecting a ceiling from unequal coverage.
 calibration: schedule 0a352b82ced14f10 seed 20260914
 ceilings [30, 45]  |  4 rows each  |  24 arm-runs  |  cap 10,000,000 tokens
 
-=== ceiling 30  k1 attempt 1  (0 of 10,000,000 tokens charged, reserving 2,500,000 for this row)  2026-09-14T11:46:38+00:00
-    exit 1  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmp6helmj7s/c30/run-k1/attempt1.log
+=== ceiling 30  k1 attempt 1  (0 of 10,000,000 tokens charged, reserving 2,500,000 for this row)  2026-09-14T11:48:36+00:00
+    exit 1  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmplbzmkqq3/c30/run-k1/attempt1.log
     row did not complete; stopping rather than spending the next one
 
 charged 0 of 10,000,000 tokens over 1 arm-runs (0 measured + 0 allowance)
 UNRESOLVED: 1 arm-run(s) have no usable usage record. Total consumption is a LOWER BOUND and overshoot cannot be computed.
-    /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmp6helmj7s/c30/run-k1/attempt1/arms/baseline
+    /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmplbzmkqq3/c30/run-k1/attempt1/arms/baseline
 A ROW DID NOT COMPLETE. The sweep stopped; no further ceiling was started.
 22/22 counterexample groups pass
 ```
@@ -53,7 +53,7 @@ A ROW DID NOT COMPLETE. The sweep stopped; no further ceiling was started.
 ## Arm environment gate, against a prepared arm
 ```
   [PASS] interpreter imports the intended checkout  click.__file__=/Users/soko/Cerebros/nexus-a1-fixtures/calib-run/c30/run-k1/attem
-  [PASS] documented test command executes a test    rc=0 passed=23 failures_or_errors=False :: 23 passed in 0.03s
+  [PASS] documented test command executes a test    rc=0 passed=23 failures_or_errors=False :: 23 passed in 0.01s
   [PASS] here-document works                        ['HEREDOC-OK']
   [PASS] scratch file round-trips in the checkout   ['SCRATCH-OK']
   [PASS] egress denied (paired control)             blocked_inside=True works_outside=True
@@ -69,7 +69,7 @@ ALL CHECKS PASS
   tmpprefix_set: True
   heredoc_tail: ['heredoc-ok']
   other_control_tail: ['CONTROL-FOR-ARM-B']
-  cross_arm_tail: ['cat: /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmptb5b8_ak/armA/tmp/zsh_sentinel: Operation not permitted']
+  cross_arm_tail: ['cat: /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmp7lo8mynd/armA/tmp/zsh_sentinel: Operation not permitted']
 
 isolation demonstrated: heredocs work, the sibling sandbox runs, and it cannot read this arm's heredoc scratch
 ```
@@ -84,5 +84,5 @@ isolation demonstrated: heredocs work, the sibling sandbox runs, and it cannot r
 =========================== short test summary info ============================
 SKIPPED [1] ../../tests/core/test_b2a_mutations.py:138: development run: set NEXUS_MUTATION_MATRIX=1
 SKIPPED [1] ../../tests/core/test_b2b_mutations.py:410: development run: set NEXUS_MUTATION_MATRIX=1
-334 passed, 2 skipped in 31.22s
+334 passed, 2 skipped in 34.81s
 ```
