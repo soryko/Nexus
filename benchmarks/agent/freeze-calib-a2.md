@@ -139,10 +139,14 @@ Scale: A1's 36 arm-runs at ceiling 30 consumed 20 050 240 input+cache-read token
 36 arm-runs across three ceilings, where a higher ceiling consumes more per run because a
 truncated run spends its whole budget. 36 000 000 is that scale with headroom.
 
-**Accounting source.** Summed from `records.json` where a row completed and from each arm's
-`trace.jsonl` where it did not — an aborted or failed row still consumed, and counting only
-completed rows would understate the total. A file that will not parse raises rather than
-counting as zero.
+**Accounting source.** Four sources, most durable first: each arm's own `record.json`, written
+the moment that arm finishes; the row's `records.json`; the arm's `trace.jsonl`; and a bare
+`launched.json`, which establishes that an arm-run started and nothing about what it spent. An
+aborted or failed row still consumed, and counting only completed rows would understate the
+total. **Each arm-run is resolved exactly once**, by the first source carrying a usable usage
+block; the later sources are the same arm-run seen again, not another one. A file that will not
+parse raises rather than counting as zero, and a usage block whose token fields are all null —
+which is what the runner writes when the envelope carried no usage — is *unknown*, never zero.
 
 **Pre-launch check, not post-hoc.** Before a row is *started*, the driver requires
 `consumed + row_reserve ≤ cap`, where `row_reserve` is the largest row yet observed at that
@@ -150,7 +154,10 @@ ceiling (seeded at 2 500 000 until one has).
 
 **Overshoot is possible and is stated rather than implied.** An arm-run cannot be interrupted
 part-way, and tokens per turn are not bounded by `--max-turns`, so the total can pass the cap by
-at most one row. That amount is recorded in `calibration-summary.json` as `overshoot`. A row killed in flight leaves
+at most one row. `calibration-summary.json` records it twice, because they are two questions:
+`budget_overshoot_tokens` is by how much the *charge* exceeds the cap and is always a number,
+and `overshoot_tokens` is by how much *consumption* exceeded it and is `null` unless
+`consumption_certain`. A row killed in flight leaves
 no envelope at all, and the runner buffers its whole trace until the subprocess returns, so the
 interruption window produces no usage record of any kind.
 
@@ -161,6 +168,18 @@ shrinking the total. Where consumption cannot be recovered, it is resolved by a 
 `resolution.json` recording a conservative allowance, its basis, and the fact that it is not a
 measurement. Allowances are carried in `tokens_allowance`, never in `tokens_known`; the budget
 is enforced on the sum, so an assumption can never make the sweep look cheaper than it is.
+
+**An allowance is the only thing that can unblock the sweep, so it is validated like an input.**
+It must give a non-negative integer number of tokens, name the `task`, `attempt` and `arm` it
+stands for — matching the directory it sits in — and state a `basis`. One that does not is
+refused, charges nothing, and **leaves its arm-run outstanding**, which still blocks: a refused
+allowance is somebody's statement that an arm-run happened there. An allowance is applied only
+where no measurement was recovered; if one is recovered later, **the measurement supersedes the
+allowance** rather than being added to it, and the superseded allowance is kept in
+`allowance_superseded_arm_runs` for audit.
+
+**An allowance clears the blocker; it does not establish a fact.** While one is applied,
+`consumption_certain` is false and `overshoot_tokens` is `null`, however exact the charge is.
 
 The one instance: **k4/baseline under v1**, stopped in flight on 2026-09-14. Recovery was
 attempted and failed — the arm directory holds only its profile and checkout, and the forwarder
@@ -213,6 +232,17 @@ A1 so the ceiling is the only thing that moves.
 
 **The product revision is recorded in the run record itself**, closing the gap A1 left, where it
 had to be inferred from git history after the fact.
+
+**Identity is computed once and compared in full.** `identity.py` builds the poolable fields —
+configuration version, product and harness revisions, configuration digest, ceiling as applied,
+registered corpus digest, schedule digest and **prompt digest** — and both the runner that
+records them and the resume check that refuses on them call it. They used to be two
+implementations over different inputs: the runner hashed the resolved configuration, the resume
+check hashed the raw configuration file, so an unchanged configuration produced a row the
+resume check refused. The prompt digest was required to be present and never compared against
+anything, so a changed prompt at the same filename would have resumed silently. The digest is
+over the **resolved** configuration, defaults included, so a default changed between rows is
+inside it.
 
 ## 7. The environment gate, added in v2
 

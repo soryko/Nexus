@@ -30,6 +30,7 @@ from build_fixture import score  # the same scorer the controls used
 from trace_parse import parse as parse_trace
 from terminal_status import classify
 import isolation
+import identity as ident
 import schedule as sched
 import task_set
 
@@ -67,12 +68,11 @@ FIXTURE_BASE = str(RUN / "base")
 PROMPT_REGISTRATION = CFG.bench_path("prompts")
 _reg = task_set.registration(PROMPT_REGISTRATION)
 _spec = task_set.require(_reg, TASK, ("development", "heldout"), "run_arms_isolated.py")
-# body + tail + environment + consult. `environment` is OPTIONAL and absent from
-# prompts-a1.json, so every A1 prompt still reconstructs byte-for-byte; it exists because A1
-# measured agents spending turns rediscovering how to run the checkout, which is a property of
-# the harness and not of any arm. When present it is appended identically for all three arms.
-PROMPT = (_spec["body"] + _reg["tails"][_spec["tail"]]
-          + _reg.get("environment", "") + _reg["consult"])
+# Assembled by `task_set.assemble`, which the resume check also calls -- the prompt is part of
+# a row's identity, so the two sides must render it the same way or the comparison is empty.
+# The `environment` section exists because A1 measured agents spending turns rediscovering how
+# to run the checkout, which is a property of the harness and not of any arm.
+PROMPT = task_set.assemble(_reg, _spec)
 
 # What an arm's environment is, and is not: `a1_config.ENV_ALLOWLIST` plus the two names the
 # harness sets itself. It used to be `dict(os.environ)` -- the operator's whole shell, none of
@@ -402,29 +402,17 @@ def run_identity() -> dict:
     not, and A1's had to be inferred from git history afterwards. It is recorded here, beside
     the harness revision, the configuration version and digest, and the ceiling AS APPLIED --
     the config's filename does not establish its `max_turns`.
+
+    The poolable fields come from `identity.expected`, which the resume check in
+    run_calibration also calls. They used to be computed here and computed AGAIN there, from
+    different inputs: this side hashed the resolved configuration, that side hashed the raw
+    file, and an unchanged configuration produced a row the resume check refused. One
+    implementation now, called by both. The rest below is recorded for the reader and is not
+    part of the pooling decision.
     """
-    import hashlib
-    import subprocess as sp
-
-    def rev(path: str) -> str | None:
-        try:
-            out = sp.run(["git", "-C", str(REPO), "log", "-1", "--format=%H", "--", path],
-                         capture_output=True, text=True, timeout=30)
-            return (out.stdout.strip() or None) if out.returncode == 0 else None
-        except Exception:
-            return None
-
     return {
-        "product_revision": rev("src/nexus_memory"),
-        "harness_revision": rev("benchmarks/agent"),
-        "config_version": CFG.config_version,
-        "config_digest": hashlib.sha256(
-            json.dumps(CFG.as_recorded(), sort_keys=True).encode()).hexdigest()[:16],
+        **ident.expected(CFG, TASK, None, MAX_TURNS),
         "prompt_registration": str(PROMPT_REGISTRATION),
-        "prompt_digest": hashlib.sha256(PROMPT.encode()).hexdigest()[:16],
-        "schedule_digest": None,
-        "corpus_digest_registered": CFG.corpus_digest or None,
-        "max_turns_applied": MAX_TURNS,
         "wall_clock_s_applied": WALL_CLOCK_S,
         "functional_scorer_version": __import__("build_fixture").FUNCTIONAL_SCORER_VERSION,
         "scorer_version": __import__("score_compliance").SCORER_VERSION,

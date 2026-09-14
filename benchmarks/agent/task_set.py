@@ -27,6 +27,18 @@ def registration(path: Path) -> dict:
     return json.loads(Path(path).read_text())
 
 
+def assemble(reg: dict, spec: dict) -> str:
+    """The prompt one arm is given, from the registration: body + tail + environment + consult.
+
+    Here rather than in the runner because the resume check has to reconstruct it to compare
+    against, and a second copy of these four lines is a second thing to keep in step.
+    `environment` is OPTIONAL and absent from prompts-a1.json, so every A1 prompt still
+    reconstructs byte-for-byte; when present it is appended identically for all three arms.
+    """
+    return (spec["body"] + reg["tails"][spec["tail"]]
+            + reg.get("environment", "") + reg["consult"])
+
+
 def require(reg: dict, task: str, allowed: tuple[str, ...], harness: str) -> dict:
     """-> the task's registration entry, or raise SystemExit saying which harness to use."""
     spec = reg["tasks"].get(task)

@@ -13,6 +13,8 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+import a1_config                                                        # noqa: E402
+import identity as ident                                                # noqa: E402
 import run_calibration as RC                                            # noqa: E402
 import verify_arm_environment as V                                      # noqa: E402
 
@@ -84,6 +86,175 @@ def test_arm_counted_once_across_sources():
     check("no double count", c["tokens_known"] == 7 and c["arm_runs"] == 1, json.dumps(c))
 
 
+# ------------------------------------------------------------------- allowance accounting
+def _allowance(arm_dir: Path, tokens, **over) -> None:
+    arm_dir.mkdir(parents=True, exist_ok=True)
+    data = {"kind": "conservative_allowance", "tokens_allowance": tokens,
+            "task": arm_dir.parents[2].name.replace("run-", "", 1),
+            "attempt": int(arm_dir.parents[1].name.replace("attempt", "", 1)),
+            "arm": arm_dir.name, "basis": "above the largest completed v1 arm-run"}
+    data.update(over)
+    (arm_dir / "resolution.json").write_text(json.dumps(data))
+
+
+def _arm(d: Path, task="k1", arm="baseline") -> Path:
+    a = d / "c30" / f"run-{task}" / "attempt1" / "arms" / arm
+    a.mkdir(parents=True, exist_ok=True)
+    return a
+
+
+def test_recovered_usage_supersedes_an_allowance_whatever_source_it_came_from():
+    """One arm-run, one charge -- from every source the usage can be recovered through.
+
+    The allowance was applied FIRST and then the sources were treated inconsistently: a
+    `record.json` was counted again on top of it (3.4M charged, two runs, for one arm-run that
+    spent 2M), while a `records.json` row or a trace was skipped as already-seen and its
+    recovered measurement silently DISCARDED (1.4M charged for the same 2M spend). The same
+    recovered consumption gave three different budget answers.
+    """
+    usage = {"input_tokens": 2_000_000}
+    for label, place in (
+        ("per-arm record", lambda a: (a / "record.json").write_text(
+            json.dumps({"arm": a.name, "record": {"usage": usage}}))),
+        ("row record", lambda a: (a.parents[1] / "records.json").write_text(
+            json.dumps({"records": [{"arm": a.name, "usage": usage}]}))),
+        ("trace envelope", lambda a: (a / "trace.jsonl").write_text(
+            json.dumps({"type": "result", "usage": usage}) + "\n")),
+    ):
+        d = _tmp()
+        a = _arm(d)
+        _allowance(a, 1_400_000)
+        place(a)
+        c = RC.consumed(d)
+        check(f"{label}: one arm-run", c["arm_runs"] == 1, json.dumps(c))
+        check(f"{label}: measurement is the charge", c["tokens_budgeted"] == 2_000_000,
+              json.dumps(c))
+        check(f"{label}: measurement not lost", c["tokens_known"] == 2_000_000, json.dumps(c))
+        check(f"{label}: allowance not added", c["tokens_allowance"] == 0, json.dumps(c))
+        check(f"{label}: superseded allowance kept for audit",
+              c["allowance_superseded_arm_runs"] == [str(a)], json.dumps(c))
+
+
+def test_allowance_applies_only_where_nothing_was_recovered():
+    d = _tmp()
+    a = _arm(d)
+    (a / "launched.json").write_text("{}")
+    _allowance(a, 1_400_000)
+    c = RC.consumed(d)
+    check("allowance resolves the blocker", c["unresolved"] == 0, json.dumps(c))
+    check("allowance is the charge", c["tokens_budgeted"] == 1_400_000, json.dumps(c))
+    check("allowance is not a measurement", c["tokens_known"] == 0, json.dumps(c))
+    check("one arm-run", c["arm_runs"] == 1, json.dumps(c))
+
+
+def test_an_allowance_does_not_make_consumption_certain():
+    """It cleared `unresolved`, and the summary read that as certainty about SPEND. It
+    establishes a budget charge; the registration's own upper-bound claim is an argument about
+    the killed run, not a measurement of it."""
+    d = _tmp()
+    a = _arm(d)
+    (a / "launched.json").write_text("{}")
+    _allowance(a, 1_400_000)
+    check("allowance -> consumption not certain", RC.consumed(d)["consumption_certain"] is False)
+    d2 = _tmp()
+    (_arm(d2) / "record.json").write_text(json.dumps({"record": {"usage": {"input_tokens": 5}}}))
+    check("measurement only -> consumption certain",
+          RC.consumed(d2)["consumption_certain"] is True)
+
+
+def test_a_refused_allowance_leaves_the_arm_run_outstanding():
+    """Even with no other evidence in the directory. A refused allowance is still somebody's
+    statement that an arm-run happened there; dropping it made the accounting look complete."""
+    for label, kwargs in (("negative", dict(tokens=-100)),
+                          ("unrecognised kind", dict(tokens=10, kind="note_to_self"))):
+        d = _tmp()
+        _allowance(_arm(d), kwargs.pop("tokens"), **kwargs)
+        c = RC.consumed(d)
+        check(f"{label}: arm-run still outstanding", c["unresolved"] == 1, json.dumps(c))
+        check(f"{label}: counted as a run", c["arm_runs"] == 1, json.dumps(c))
+        check(f"{label}: consumption not certain", c["consumption_certain"] is False,
+              json.dumps(c))
+
+
+def test_an_unusable_allowance_does_not_clear_the_blocker():
+    for label, kwargs in (
+        ("negative", dict(tokens=-100)),
+        ("boolean", dict(tokens=True)),
+        ("fractional", dict(tokens=1.5)),
+        ("string", dict(tokens="1400000")),
+        ("filed against another arm", dict(tokens=10, arm="nexus")),
+        ("filed against another task", dict(tokens=10, task="k9")),
+        ("filed against another attempt", dict(tokens=10, attempt=7)),
+        ("no basis", dict(tokens=10, basis="   ")),
+    ):
+        d = _tmp()
+        a = _arm(d)
+        (a / "launched.json").write_text("{}")
+        _allowance(a, kwargs.pop("tokens"), **kwargs)
+        c = RC.consumed(d)
+        check(f"{label} allowance refused", c["unresolved"] == 1, json.dumps(c))
+        check(f"{label} allowance charges nothing", c["tokens_budgeted"] == 0, json.dumps(c))
+        check(f"{label} allowance says why", len(c["allowance_rejected"]) == 1, json.dumps(c))
+
+
+# ------------------------------------------------------- the runner's missing-usage record
+# What run_arms_isolated actually writes when the envelope carried no usage: NOT an absent key
+# and NOT an empty dict, but four keys whose values are null. The emptiness test admitted it
+# and the sum then raised TypeError on the only path that writes a summary.
+RUNNER_MISSING_USAGE = {k: None for k in
+                        ("input_tokens", "output_tokens", "cache_read_input_tokens",
+                         "cache_creation_input_tokens")}
+
+
+def test_runners_missing_usage_record_is_unresolved_not_a_crash():
+    for label, place in (
+        ("per-arm record", lambda d, a: (a / "record.json").write_text(
+            json.dumps({"arm": a.name, "record": {"usage": RUNNER_MISSING_USAGE}}))),
+        ("row record", lambda d, a: (a.parents[1] / "records.json").write_text(
+            json.dumps({"records": [{"arm": a.name, "usage": RUNNER_MISSING_USAGE}]}))),
+        ("trace envelope", lambda d, a: (a / "trace.jsonl").write_text(
+            json.dumps({"type": "result", "usage": RUNNER_MISSING_USAGE}) + "\n")),
+    ):
+        d = _tmp()
+        place(d, _arm(d))
+        c = RC.consumed(d)
+        check(f"{label}: unresolved, not zero", c["unresolved"] == 1, json.dumps(c))
+        check(f"{label}: counted as a run", c["arm_runs"] == 1, json.dumps(c))
+        check(f"{label}: contributes no tokens", c["tokens_known"] == 0, json.dumps(c))
+
+
+def test_row_reserve_survives_the_runners_missing_usage_record():
+    """The same shape crashed the reserve calculation, which runs BEFORE a row is started."""
+    d = _tmp()
+    at = d / "c30" / "run-k1" / "attempt1"
+    at.mkdir(parents=True)
+    (at / "records.json").write_text(json.dumps({"records": [
+        {"arm": "baseline", "usage": RUNNER_MISSING_USAGE},
+        {"arm": "nexus", "usage": {"input_tokens": 400}}]}))
+    got = RC.row_reserve(d, 30)
+    check("reserve is the measurable part", got == 400, str(got))
+
+
+def test_partial_usage_still_measures():
+    """A1's records carry only the fields the envelope had. Absent is zero WHEN something else
+    in the block was measured; the whole block being null is what is unknown."""
+    d = _tmp()
+    (_arm(d) / "record.json").write_text(json.dumps(
+        {"record": {"usage": dict(RUNNER_MISSING_USAGE, input_tokens=10, output_tokens=5)}}))
+    c = RC.consumed(d)
+    check("partial usage measured", c["tokens_known"] == 15 and c["unresolved"] == 0,
+          json.dumps(c))
+
+
+def test_corrupt_usage_is_unknown_not_a_partial_sum():
+    d = _tmp()
+    (_arm(d) / "record.json").write_text(json.dumps(
+        {"record": {"usage": {"input_tokens": 10, "output_tokens": "many"}}}))
+    c = RC.consumed(d)
+    check("corrupt usage -> unresolved", c["unresolved"] == 1 and c["tokens_known"] == 0,
+          json.dumps(c))
+
+
 # --------------------------------------------------------------------------- restart
 def test_partial_attempt_is_preserved_not_overwritten():
     d = _tmp()
@@ -109,22 +280,110 @@ def test_completed_attempt_is_not_moved():
 class _Plan:
     schedule_digest = "abc123"
 
-
-def _cfg():
-    return {"config_version": "calib-v2", "max_turns": 30, "corpus_digest": "d"}
+TASKS = ("k1", "k2", "k3", "k4")
 
 
-def _good_record(tmp: Path) -> Path:
-    """A record whose identity matches what this configuration would produce."""
-    want = RC.expected_identity(_cfg(), _Plan(), 30)
+def _write_prompts(bench: Path, body: str = "BODY", name: str = "test-prompts.json") -> Path:
+    """A prompt registration of the shape run_arms_isolated assembles from."""
+    bench.mkdir(parents=True, exist_ok=True)
+    f = bench / name
+    f.write_text(json.dumps({
+        "consult": "CONSULT", "environment": "ENV", "tails": {"default": "TAIL"},
+        "tasks": {t: {"set": "development", "tail": "default", "body": f"{body}-{t}"}
+                  for t in TASKS}}))
+    return f
+
+
+def _cfg(tmp: Path | None = None, **over):
+    """A real a1_config.Config, loaded the way the driver loads one.
+
+    Not a raw dict: the digest under test is over the RESOLVED configuration, and a dict that
+    skips `a1_config.load` would be testing neither side of the contract.
+    """
+    tmp = tmp or _tmp()
+    bench = tmp / "_bench"
+    _write_prompts(bench)
+    data = {"source_clone": str(tmp), "pytest_python": str(tmp), "venv_python": str(tmp),
+            "nexus_server": str(tmp), "config_version": "calib-v2", "max_turns": 30,
+            "corpus_digest": "0123456789abcdef", "bench": str(bench),
+            "prompts": "test-prompts.json"}
+    data.update(over)
+    f = tmp / "cfg.json"
+    f.write_text(json.dumps(data))
+    return a1_config.load(f)
+
+
+def _good_record(tmp: Path, cfg=None) -> Path:
+    """A record carrying the identity THE PRODUCER writes.
+
+    Built from `identity.expected` -- the function `run_identity` in run_arms_isolated
+    delegates to -- not from the consumer's own expectation. The old version of this fixture
+    called `RC.expected_identity` and then handed it straight back to `RC.incompatible`, so it
+    checked the consumer against itself and passed while the real producer-consumer pair
+    disagreed on every row.
+    """
+    cfg = cfg or _cfg(tmp)
+    want = ident.expected(cfg, "k1", _Plan.schedule_digest, 30)
     rec = tmp / "records.json"
-    rec.write_text(json.dumps({"identity": dict(want, prompt_digest="pd")}))
+    rec.write_text(json.dumps({"identity": want}))
     return rec
 
 
 def test_matching_identity_resumes():
+    t = _tmp()
+    cfg = _cfg(t)
     check("matching identity resumes",
-          RC.incompatible(_good_record(_tmp()), _cfg(), _Plan(), 30) is None)
+          RC.incompatible(_good_record(t, cfg), cfg, "k1", _Plan(), 30) is None,
+          str(RC.incompatible(_good_record(t, cfg), cfg, "k1", _Plan(), 30)))
+
+
+def test_unchanged_configuration_resumes_across_the_producer_consumer_boundary():
+    """The defect this file exists to catch: a valid row, an unchanged configuration, and a
+    resume that refused it. The producer hashed `CFG.as_recorded()` (resolved, defaults filled
+    in); the consumer hashed the raw configuration file. Different inputs, different digest,
+    every real row refused."""
+    t = _tmp()
+    cfg = _cfg(t)
+    produced = ident.expected(cfg, "k1", _Plan.schedule_digest, 30)
+    rec = t / "records.json"
+    rec.write_text(json.dumps({"identity": produced}))
+    why = RC.incompatible(rec, cfg, "k1", _Plan(), 30)
+    check("producer identity resumes under an unchanged config", why is None, str(why))
+    raw = json.loads((t / "cfg.json").read_text())
+    check("digest is over the resolved config, not the raw file",
+          ident.config_digest(cfg) != __import__("hashlib").sha256(
+              json.dumps(raw, sort_keys=True).encode()).hexdigest()[:16])
+
+
+def test_runner_does_not_compute_identity_itself():
+    """A tripwire, because the two implementations are the defect. run_arms_isolated cannot be
+    imported here -- it resolves and preflights a real host configuration at import -- so the
+    delegation is asserted against its source."""
+    src = (Path(__file__).parent / "run_arms_isolated.py").read_text()
+    body = src[src.index("def run_identity()"):src.index("def main()")]
+    check("run_identity delegates to identity.expected", "ident.expected(" in body, body[:200])
+    check("run_identity hashes nothing itself", "sha256" not in body, body[:200])
+
+
+def test_changed_prompt_at_the_same_filename_refuses():
+    """`prompt_digest` was required to be PRESENT and never compared, so a row produced under
+    a different prompt resumed silently. The config mismatch above is what hid it: it refused
+    every real row first, so nothing ever reached this comparison."""
+    t = _tmp()
+    cfg = _cfg(t)
+    rec = _good_record(t, cfg)
+    _write_prompts(t / "_bench", body="A DIFFERENT PROMPT")     # same filename, new contents
+    why = RC.incompatible(rec, cfg, "k1", _Plan(), 30)
+    check("changed prompt refuses", why is not None and "prompt_digest" in (why or ""), str(why))
+
+
+def test_prompt_digest_is_per_task():
+    t = _tmp()
+    cfg = _cfg(t)
+    rec = _good_record(t, cfg)                                   # written for k1
+    why = RC.incompatible(rec, cfg, "k2", _Plan(), 30)
+    check("another task's prompt refuses", why is not None and "prompt_digest" in (why or ""),
+          str(why))
 
 
 def test_every_identity_field_is_compared():
@@ -132,30 +391,38 @@ def test_every_identity_field_is_compared():
     PRODUCT revision, which is the comparison the function exists to make."""
     for field in RC.IDENTITY_FIELDS:
         t = _tmp()
-        rec = _good_record(t)
+        cfg = _cfg(t)
+        rec = _good_record(t, cfg)
         data = json.loads(rec.read_text())
         data["identity"][field] = "CHANGED-VALUE"
         rec.write_text(json.dumps(data))
-        why = RC.incompatible(rec, _cfg(), _Plan(), 30)
+        why = RC.incompatible(rec, cfg, "k1", _Plan(), 30)
         check(f"{field} mismatch refused", why is not None and field in why, str(why))
 
 
 def test_absent_identity_field_refuses():
-    for field in RC.IDENTITY_FIELDS + ("prompt_digest",):
+    for field in RC.IDENTITY_FIELDS:
         t = _tmp()
-        rec = _good_record(t)
+        cfg = _cfg(t)
+        rec = _good_record(t, cfg)
         data = json.loads(rec.read_text())
         data["identity"].pop(field, None)
         rec.write_text(json.dumps(data))
-        why = RC.incompatible(rec, _cfg(), _Plan(), 30)
+        why = RC.incompatible(rec, cfg, "k1", _Plan(), 30)
         check(f"{field} absent refused", why is not None and field in why, str(why))
+
+
+def test_prompt_digest_is_one_of_the_pooling_fields():
+    check("prompt_digest is compared, not merely required",
+          "prompt_digest" in RC.IDENTITY_FIELDS, str(RC.IDENTITY_FIELDS))
 
 
 def test_records_without_identity_are_refused():
     t = _tmp()
+    cfg = _cfg(t)
     rec = t / "records.json"
     rec.write_text(json.dumps({"max_turns": 30}))
-    why = RC.incompatible(rec, _cfg(), _Plan(), 30)
+    why = RC.incompatible(rec, cfg, "k1", _Plan(), 30)
     check("no identity block refused", why and "identity" in why, str(why))
 
 
@@ -243,16 +510,25 @@ def _stub_configs(tmp: Path, ceilings=(30, 45, 60)) -> dict:
     out = {}
     d = tmp / "_configs"
     d.mkdir(parents=True, exist_ok=True)
+    bench = tmp / "_bench"
+    _write_prompts(bench)
     for c in ceilings:
         f = d / f"calib-config-{c}.json"
-        f.write_text(json.dumps({"config_version": "calib-v2", "max_turns": c,
-                                 "corpus_digest": "testdigest", "prompts": "test-prompts.json"}))
+        # Loadable by a1_config: the driver resolves the configuration now rather than reading
+        # the file as a dict, because that is what the runner records its digest from. The
+        # paths are never opened (no preflight here) but the fields must exist.
+        f.write_text(json.dumps({
+            "source_clone": str(tmp), "pytest_python": str(tmp), "venv_python": str(tmp),
+            "nexus_server": str(tmp), "config_version": "calib-v2", "max_turns": c,
+            "corpus_digest": "0123456789abcdef", "bench": str(bench),
+            "prompts": "test-prompts.json"}))
         out[c] = f
     return out
 
 
 def _stub_driver(tmp: Path, cap: int, tokens_per_arm: int, seed_reserve=None,
-                 runner_rc: int = 0, launches: list | None = None):
+                 runner_rc: int = 0, launches: list | None = None,
+                 no_usage_on: str | None = None):
     """Run the real driver with a stubbed runner. No model, no sandbox, no network.
 
     The published revision crashed HERE, on the line after the last row, with
@@ -280,10 +556,15 @@ def _stub_driver(tmp: Path, cap: int, tokens_per_arm: int, seed_reserve=None,
                 returncode = runner_rc
             return F()
         recs = []
+        # The runner's own missing-usage shape, not an absent key: four nulls in a non-empty
+        # dict, which is what it writes when the envelope carried no usage block.
+        blank = {k: None for k in ("input_tokens", "output_tokens",
+                                   "cache_read_input_tokens", "cache_creation_input_tokens")}
         for arm in ("baseline", "nexus", "notes"):
             (at / "arms" / arm).mkdir(parents=True, exist_ok=True)
             (at / "arms" / arm / "trace.jsonl").write_text('{"type":"result","usage":{}}\n')
-            recs.append({"arm": arm, "usage": {"input_tokens": tokens_per_arm}})
+            recs.append({"arm": arm, "usage": dict(blank) if no_usage_on == task
+                         else {"input_tokens": tokens_per_arm}})
         (at / "records.json").write_text(json.dumps({
             "max_turns": cfg["max_turns"], "schedule_digest": R.sched.load(R.SCHEDULE).schedule_digest,
             "corpus_digest_registered": cfg.get("corpus_digest"),
@@ -352,6 +633,36 @@ def test_failed_row_stops_the_whole_sweep():
               summary["stopping_reason"] == "gate_or_error", summary["stopping_reason"])
         check("failed launch is unresolved", summary["unresolved_arm_runs"] != [],
               str(summary["unresolved_arm_runs"]))
+
+
+def test_driver_survives_the_runners_missing_usage_record():
+    """End to end, through the real driver: a row whose usage block is the runner's four nulls.
+
+    `consumed` raised TypeError on it and the driver died with no calibration-summary.json --
+    on the one path where the accounting is the thing that matters. Injected at a MIDDLE row
+    and at the FINAL row, because the summary is written after the loop and only the middle
+    case also exercises the next row's pre-launch check.
+    """
+    for label, task, want_launches in (("middle row", "k1", 1), ("final row", "k4", 4)):
+        tmp = _tmp()
+        launches: list = []
+        rc, summary = _stub_driver(tmp, cap=10_000_000, tokens_per_arm=1000,
+                                   launches=launches, no_usage_on=task)
+        check(f"{label}: driver exits nonzero", rc != 0, str(rc))
+        check(f"{label}: summary still written", summary is not None)
+        check(f"{label}: nothing launched after the blockage",
+              len(launches) == want_launches, str(launches))
+        if summary:
+            check(f"{label}: the arm-runs are unresolved",
+                  len(summary["unresolved_arm_runs"]) == 3,
+                  str(summary["unresolved_arm_runs"]))
+            check(f"{label}: consumption is not certain",
+                  summary["consumption_certain"] is False, json.dumps(summary)[:200])
+            check(f"{label}: overshoot is not a number",
+                  summary["overshoot_tokens"] is None, json.dumps(summary)[:200])
+            check(f"{label}: reason names the accounting",
+                  summary["stopping_reason"] == "unresolved_accounting",
+                  summary["stopping_reason"])
 
 
 def test_cross_arm_probe_needs_a_working_sibling():
