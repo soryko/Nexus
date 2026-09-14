@@ -14,10 +14,31 @@ git log -1 --format=%H -- LAUNCH-A2.md
 ```
 
 A full commit identifier, not a branch name: `docs/a2-calibration` moves. Detaching at that
-commit does not by itself make the tree match it — **`git status --porcelain` must be empty at
-launch and must stay empty for the whole sweep.** A local edit under `benchmarks/agent` during
-the sweep changes `harness_revision` for every row written after it, and rows recording
-different harness revisions are not poolable.
+commit does not by itself make the tree match it.
+
+**Do not edit, commit, rebase or update dependencies in the execution checkout during the
+sweep.** An earlier version of this note justified that by saying a local edit under
+`benchmarks/agent` changes `harness_revision`. **That is wrong, and wrong in the dangerous
+direction.** `identity.rev()` runs `git log -1 --format=%H -- <path>`, which reads commit
+history and not the working tree. Three cases, and no single guard covers them:
+
+| what changes | `harness_revision` | `git status --porcelain` | caught by |
+| --- | --- | --- | --- |
+| a commit under `benchmarks/agent` | **changes** | clean | the revision check |
+| an **uncommitted edit** to a tracked file there | **unchanged** | ` M …` | the clean-tree check only |
+| an edit to `calib-config-*.json` | **unchanged** | **empty** (gitignored) | the config digest only |
+
+The middle row is the one that matters: rows written after such an edit record an identical
+harness revision while having been produced by different code, so the identity check cannot
+tell them apart and nothing downstream ever will. **The recorded revision is not a substitute
+for leaving the checkout alone.** The bottom row is why `git status --porcelain` being empty is
+not sufficient either — the host-local configurations are ignored files and are invisible to it.
+
+`preflight-a2.py`, at the repository root, checks all three and the ledger together:
+
+```bash
+python3 preflight-a2.py && echo "safe to launch"
+```
 
 ## Identifiers as frozen, 2026-09-14
 
@@ -80,6 +101,28 @@ and silently grant a second full budget.
 
 `consumption_certain` is **false** while the k4 allowance is carried; it is a deliberately high
 assumption, not a measurement. See `benchmarks/agent/freeze-calib-a2.md` §4.
+
+## The invocation
+
+From the frozen repository root, after `preflight-a2.py` exits 0:
+
+```bash
+NEXUS_A1_ENV_GATE=1 python3 benchmarks/agent/run_calibration.py \
+  /Users/soko/Cerebros/nexus-a1-fixtures/calib-run \
+  --ceilings 30,45,60
+```
+
+`NEXUS_A1_ENV_GATE=1` is the default and is stated anyway, because the variable that turns the
+per-arm gate off (`=0`) exists for re-executing A1's frozen runs, and a sweep that silently
+inherited it from a shell would spend without the gate having run.
+
+## At closeout, the selection rule as registered
+
+§5 was written before any number exists and is applied exactly: only complete, compatible
+ceilings are eligible; **fewer than two eligible ceilings means no selection**; no qualifying
+ceiling means **no selection**, not a larger grid. This calibration selects a ceiling. It does
+not produce a claim that memory, or any arm, is better — §2 and §9 forbid that, and the corpus
+is deliberately unmatched to k1–k4.
 
 ## What is still true at freeze time
 
