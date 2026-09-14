@@ -183,11 +183,15 @@ allowance** rather than being added to it, and the superseded allowance is kept 
 
 The one instance: **k4/baseline under v1**, stopped in flight on 2026-09-14. Recovery was
 attempted and failed — the arm directory holds only its profile and checkout, and the forwarder
-keeps no per-request accounting. Allowance **1 400 000 tokens**, an upper bound chosen above the
-largest *completed* v1 arm-run (k2/nexus, 1 371 306); the killed run had executed for well under
-a minute against a 600 s ceiling, so its true consumption is far below that. Erring high is
-deliberate — an allowance that flattered the budget would let the sweep spend more than it was
-authorised to. **No terminal usage record was fabricated.**
+keeps no per-request accounting. Allowance **1 400 000 tokens**, a deliberately high
+*assumption* and not a demonstrated bound: it sits above the largest *completed* v1 arm-run
+(k2/nexus, 1 371 306), and the killed run had executed for well under a minute against a 600 s
+ceiling. Neither of those bounds what a killed run spent — a truncated run is not limited by
+what completed runs used, and tokens per turn are not a function of wall clock. Erring high is
+deliberate: an allowance that flattered the budget would let the sweep spend more than it was
+authorised to. The accounting treats it as the assumption it is — while it is carried,
+`consumption_certain` is false and no overshoot is computed. **No terminal usage record was
+fabricated.**
 
 Runs execute in ceiling order 30 → 45 → 60 so that a cap hit costs the most expensive cell.
 
