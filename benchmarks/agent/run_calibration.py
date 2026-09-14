@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -100,6 +101,11 @@ def usage_tokens(u) -> int | None:
     return total if measured else None
 
 
+# `attempt<n>`, optionally carrying the suffix `preserve_partial` appends when it moves an
+# interrupted attempt aside. Both name attempt <n>; only the canonical number is its identity.
+ATTEMPT_DIR = re.compile(r"attempt(\d+)(?:\.partial-\d{8}T\d{6}Z)?")
+
+
 def read_allowance(path: Path) -> tuple[int | None, str | None]:
     """-> (tokens, None) for a usable allowance, (None, why) for one that may not be used.
 
@@ -124,10 +130,19 @@ def read_allowance(path: Path) -> tuple[int | None, str | None]:
     if v < 0:
         return None, (f"{path}: tokens_allowance {v} is negative; an allowance stands in for "
                       f"consumption, and no run consumed less than nothing")
-    # <scratch>/<ceiling>/run-<task>/attempt<n>/arms/<arm>/resolution.json
-    want = {"arm": path.parent.name,
-            "attempt": path.parents[2].name.replace("attempt", "", 1),
-            "task": path.parents[3].name.replace("run-", "", 1)}
+    # <scratch>/<ceiling>/run-<task>/attempt<n>/arms/<arm>/resolution.json -- where <n> may
+    # carry the `.partial-<timestamp>` suffix `preserve_partial` appends. Stripping the word
+    # `attempt` and taking the rest read that suffix as part of the attempt NUMBER, so a
+    # correctly filed allowance was refused the moment its interrupted attempt was preserved:
+    # the two functions disagreed about what a directory name means, and preservation runs
+    # first. The directory format is validated rather than the identity check weakened.
+    attempt_dir = path.parents[2].name
+    if not (m := ATTEMPT_DIR.fullmatch(attempt_dir)):
+        return None, f"{path}: {attempt_dir!r} is not an attempt directory"
+    run_dir = path.parents[3].name
+    if not run_dir.startswith("run-"):
+        return None, f"{path}: {run_dir!r} is not a task directory"
+    want = {"arm": path.parent.name, "attempt": m.group(1), "task": run_dir[len("run-"):]}
     for field, expected in want.items():
         got = data.get(field)
         if got is None:
@@ -484,9 +499,14 @@ def main(argv: list[str]) -> int:
         "unresolved_arm_runs": total["unresolved_arm_runs"],
         "usd_unprovenanced": total["usd_unprovenanced"],
         "row_reserve_used": {str(c): row_reserve(scratch, c) for c in ceilings},
-        "stopping_reason": ("budget" if stopped else
-                            "gate_or_error" if errored else
-                            "unresolved_accounting" if blocked else "completed"),
+        # Read off the FINAL ledger, not off `blocked`. `blocked` is set by the NEXT row's
+        # pre-launch check, and after the last row of the last ceiling there is no next row --
+        # nor is there one when a resume skips every row. An unaccounted sweep therefore
+        # reported `completed` and exited 0 in exactly the two cases where nothing downstream
+        # would ever look again.
+        "stopping_reason": ("gate_or_error" if errored else
+                            "unresolved_accounting" if total["unresolved"] else
+                            "budget" if stopped else "completed"),
         "stopped_at": None if not stopped else
             {"ceiling": stopped[0], "task": stopped[1],
              "tokens_before": stopped[2], "row_reserve": stopped[3]},
@@ -529,6 +549,13 @@ def main(argv: list[str]) -> int:
         return 1
     if blocked:
         print(f"\nSTOPPED BEFORE THE NEXT ROW: {blocked}")
+        return 1
+    if total["unresolved"]:
+        # Reached when the unaccounted arm-run is in the LAST row, or when a resume skipped
+        # every row: no pre-launch check followed it, so nothing set `blocked`. The ledger is
+        # the authority on whether this sweep is accounted for, and it is not.
+        print("\nTHE SWEEP IS NOT ACCOUNTED FOR: it ran to its last row, but the arm-run(s) "
+              "above have no usable usage record. This is NOT a completed calibration.")
         return 1
     return 0
 

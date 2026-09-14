@@ -62,9 +62,9 @@ FIXTURE_BASE = str(RUN / "base")
 #
 # These used to be a dict of literals here, which meant a held-out task could not be run
 # without editing the harness -- and an instrument edited mid-experiment is a different
-# instrument. They are data now, in `prompts-a1.json`, reconstructing d1-d4 byte-for-byte so
-# the development runs stay comparable. It also keeps the held-out prompts authorable as data
-# by someone who need not open the runner at all.
+# instrument. They are data now, in `prompts-a1.json`. d2, d3 and d4 reconstruct A1's recorded
+# prompts byte-for-byte; d1 does NOT -- see the erratum in freeze-calib-a2.md §7. It also keeps
+# the held-out prompts authorable as data by someone who need not open the runner at all.
 PROMPT_REGISTRATION = CFG.bench_path("prompts")
 _reg = task_set.registration(PROMPT_REGISTRATION)
 _spec = task_set.require(_reg, TASK, ("development", "heldout"), "run_arms_isolated.py")

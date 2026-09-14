@@ -31,9 +31,14 @@ def assemble(reg: dict, spec: dict) -> str:
     """The prompt one arm is given, from the registration: body + tail + environment + consult.
 
     Here rather than in the runner because the resume check has to reconstruct it to compare
-    against, and a second copy of these four lines is a second thing to keep in step.
-    `environment` is OPTIONAL and absent from prompts-a1.json, so every A1 prompt still
-    reconstructs byte-for-byte; when present it is appended identically for all three arms.
+    against, and a second copy of these four lines is a second thing to keep in step. This
+    preserves the inline assembly it replaces, byte for byte.
+
+    That is NOT the same claim as reconstructing a historical run's recorded prompt, and the
+    two were conflated: `environment` is optional and absent from prompts-a1.json, so adding
+    it changed no A1 prompt -- but d1's registered body does not match what A1 actually ran
+    (see the d1 erratum in freeze-calib-a2.md §7). For exact replay of a historical run, the
+    prompt recorded in that run's own records.json is authoritative, not this.
     """
     return (spec["body"] + reg["tails"][spec["tail"]]
             + reg.get("environment", "") + reg["consult"])

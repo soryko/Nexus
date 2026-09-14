@@ -162,6 +162,73 @@ def test_an_allowance_does_not_make_consumption_certain():
           RC.consumed(d2)["consumption_certain"] is True)
 
 
+def test_an_allowance_survives_preserving_its_interrupted_attempt():
+    """`preserve_partial` renames `attempt1` to `attempt1.partial-<timestamp>`, and the
+    allowance validator read that whole suffix as part of the attempt NUMBER -- so a correctly
+    filed allowance was refused the moment its attempt was preserved. Preservation runs before
+    accounting in the driver, so this is the ordinary path, not a corner: a valid reconciliation
+    could not unblock an interrupted sweep."""
+    d = _tmp()
+    a = _arm(d)
+    (a / "launched.json").write_text("{}")
+    _allowance(a, 1_400_000)
+    before = RC.consumed(d)
+    check("before preservation: charged once", before["tokens_allowance"] == 1_400_000,
+          json.dumps(before))
+    moved = RC.preserve_partial(a.parents[1])
+    check("attempt was preserved", moved is not None and ".partial-" in moved.name, str(moved))
+    after = RC.consumed(d)
+    check("after preservation: still charged once", after["tokens_allowance"] == 1_400_000,
+          json.dumps(after))
+    check("after preservation: still one arm-run", after["arm_runs"] == 1, json.dumps(after))
+    check("after preservation: nothing outstanding", after["unresolved"] == 0, json.dumps(after))
+    check("after preservation: nothing refused", after["allowance_rejected"] == [],
+          json.dumps(after))
+
+
+def test_preservation_does_not_weaken_the_allowance_identity_check():
+    """The suffix is tolerated; the identity inside it is not. Refusing after a rename was the
+    defect, but accepting anything after a rename would be a worse one."""
+    for label, over in (("wrong arm", dict(arm="nexus")), ("wrong task", dict(task="k9")),
+                        ("wrong attempt", dict(attempt=7))):
+        d = _tmp()
+        a = _arm(d)
+        (a / "launched.json").write_text("{}")
+        _allowance(a, 1_400_000, **over)
+        RC.preserve_partial(a.parents[1])
+        c = RC.consumed(d)
+        check(f"{label} still refused after preservation", c["unresolved"] == 1, json.dumps(c))
+        check(f"{label} charges nothing", c["tokens_allowance"] == 0, json.dumps(c))
+
+
+def test_recovered_usage_supersedes_an_allowance_after_preservation():
+    """The preserved path is still an arm-run, so a measurement recovered there still wins."""
+    d = _tmp()
+    a = _arm(d)
+    _allowance(a, 1_400_000)
+    (a / "record.json").write_text(json.dumps({"record": {"usage": {"input_tokens": 2_000_000}}}))
+    RC.preserve_partial(a.parents[1])
+    c = RC.consumed(d)
+    check("measurement wins after preservation",
+          c["tokens_budgeted"] == 2_000_000 and c["tokens_allowance"] == 0, json.dumps(c))
+    check("one arm-run", c["arm_runs"] == 1, json.dumps(c))
+
+
+def test_a_directory_that_is_not_an_attempt_refuses():
+    """Validating the format is what makes tolerating the suffix safe."""
+    d = _tmp()
+    a = d / "c30" / "run-k1" / "attemptZZ" / "arms" / "baseline"
+    a.mkdir(parents=True)
+    (a / "launched.json").write_text("{}")
+    (a / "resolution.json").write_text(json.dumps(
+        {"kind": "conservative_allowance", "task": "k1", "attempt": 1, "arm": "baseline",
+         "tokens_allowance": 10, "basis": "b"}))
+    c = RC.consumed(d)
+    check("not an attempt directory -> refused", c["unresolved"] == 1, json.dumps(c))
+    check("and says so", any("attempt directory" in w for w in c["allowance_rejected"]),
+          json.dumps(c["allowance_rejected"]))
+
+
 def test_a_refused_allowance_leaves_the_arm_run_outstanding():
     """Even with no other evidence in the directory. A refused allowance is still somebody's
     statement that an arm-run happened there; dropping it made the accounting look complete."""
@@ -528,26 +595,39 @@ def _stub_configs(tmp: Path, ceilings=(30, 45, 60)) -> dict:
 
 def _stub_driver(tmp: Path, cap: int, tokens_per_arm: int, seed_reserve=None,
                  runner_rc: int = 0, launches: list | None = None,
-                 no_usage_on: str | None = None):
+                 no_usage_at: tuple | None = None, ceilings: tuple = (30, 45)):
     """Run the real driver with a stubbed runner. No model, no sandbox, no network.
 
     The published revision crashed HERE, on the line after the last row, with
     `NameError: name 'spent' is not defined` -- the token-accounting change had removed the
     function the summary block still called. --dry-run returns before that line, so every
     rehearsal passed while the only path that writes a summary was broken.
+
+    `no_usage_at` is an exact `(ceiling, task, arm)` triple, because WHERE the unaccounted
+    arm-run sits is the whole question. An earlier version of this stub injected by task NAME
+    while running ceilings 30 and 45, so injecting at "k4" -- meant to be the final row -- hit
+    c30/k4, whose blockage the next ceiling's first pre-launch check caught. It reported a pass
+    for a terminal path it never reached.
     """
     import run_calibration as R
     real_run, real_fix, real_cap = R.subprocess.run, R.build_fixture_for, R.CAP_TOKENS
     real_seed, real_cfg = R.INITIAL_ROW_RESERVE, R.config_for
-    cfgs = _stub_configs(tmp)
+    cfgs = _stub_configs(tmp, ceilings=ceilings)
     R.config_for = lambda c: cfgs[c]
+    # Identities are built BEFORE the stub is installed. `R.subprocess` is the shared module
+    # object, so stubbing `R.subprocess.run` also stubs the `git` calls `identity.rev()` makes
+    # -- which silently emptied the product and harness revisions of every row this stub wrote,
+    # and would have made any resume test here meaningless.
+    digest = R.sched.load(R.SCHEDULE).schedule_digest
+    idents = {(c, t): ident.expected(a1_config.load(cfgs[c]), t, digest, c)
+              for c in ceilings for t in TASKS}
 
     def fake_run(cmd, **kw):
         root, task, attempt = Path(cmd[2]), cmd[3], cmd[4]
+        ceiling = int(root.name[1:])
         if launches is not None:
             launches.append(f"{root.name}/{task}")
         at = root / f"run-{task}" / f"attempt{attempt}"
-        cfg = json.loads(cfgs[int(root.name[1:])].read_text())
         if runner_rc != 0:
             (at / "arms" / "baseline").mkdir(parents=True, exist_ok=True)
             (at / "arms" / "baseline" / "launched.json").write_text('{"arm":"baseline"}')
@@ -563,12 +643,12 @@ def _stub_driver(tmp: Path, cap: int, tokens_per_arm: int, seed_reserve=None,
         for arm in ("baseline", "nexus", "notes"):
             (at / "arms" / arm).mkdir(parents=True, exist_ok=True)
             (at / "arms" / arm / "trace.jsonl").write_text('{"type":"result","usage":{}}\n')
-            recs.append({"arm": arm, "usage": dict(blank) if no_usage_on == task
+            recs.append({"arm": arm,
+                         "usage": dict(blank) if no_usage_at == (ceiling, task, arm)
                          else {"input_tokens": tokens_per_arm}})
         (at / "records.json").write_text(json.dumps({
-            "max_turns": cfg["max_turns"], "schedule_digest": R.sched.load(R.SCHEDULE).schedule_digest,
-            "corpus_digest_registered": cfg.get("corpus_digest"),
-            "identity": {"config_version": cfg["config_version"]}, "records": recs}))
+            "task": task, "attempt": int(attempt), "schedule_digest": digest,
+            "identity": idents[(ceiling, task)], "records": recs}))
 
         class D:
             returncode = 0
@@ -581,7 +661,8 @@ def _stub_driver(tmp: Path, cap: int, tokens_per_arm: int, seed_reserve=None,
     if seed_reserve is not None:
         R.INITIAL_ROW_RESERVE = seed_reserve
     try:
-        rc = R.main(["run_calibration.py", str(tmp), "--ceilings", "30,45"])
+        rc = R.main(["run_calibration.py", str(tmp), "--ceilings",
+                     ",".join(str(c) for c in ceilings)])
     finally:
         R.subprocess.run, R.build_fixture_for, R.CAP_TOKENS = real_run, real_fix, real_cap
         R.INITIAL_ROW_RESERVE, R.config_for = real_seed, real_cfg
@@ -639,22 +720,21 @@ def test_driver_survives_the_runners_missing_usage_record():
     """End to end, through the real driver: a row whose usage block is the runner's four nulls.
 
     `consumed` raised TypeError on it and the driver died with no calibration-summary.json --
-    on the one path where the accounting is the thing that matters. Injected at a MIDDLE row
-    and at the FINAL row, because the summary is written after the loop and only the middle
-    case also exercises the next row's pre-launch check.
+    on the one path where the accounting is the thing that matters. Injected at an EXACT
+    (ceiling, task, arm), because where the unaccounted arm-run sits decides which code path
+    notices it.
     """
-    for label, task, want_launches in (("middle row", "k1", 1), ("final row", "k4", 4)):
+    for label, at in (("first row", (30, "k1", "baseline")),
+                      ("last row of the first ceiling", (30, "k4", "baseline"))):
         tmp = _tmp()
         launches: list = []
         rc, summary = _stub_driver(tmp, cap=10_000_000, tokens_per_arm=1000,
-                                   launches=launches, no_usage_on=task)
+                                   launches=launches, no_usage_at=at, ceilings=(30, 45))
         check(f"{label}: driver exits nonzero", rc != 0, str(rc))
         check(f"{label}: summary still written", summary is not None)
-        check(f"{label}: nothing launched after the blockage",
-              len(launches) == want_launches, str(launches))
         if summary:
-            check(f"{label}: the arm-runs are unresolved",
-                  len(summary["unresolved_arm_runs"]) == 3,
+            check(f"{label}: the arm-run is unresolved",
+                  len(summary["unresolved_arm_runs"]) == 1,
                   str(summary["unresolved_arm_runs"]))
             check(f"{label}: consumption is not certain",
                   summary["consumption_certain"] is False, json.dumps(summary)[:200])
@@ -663,6 +743,57 @@ def test_driver_survives_the_runners_missing_usage_record():
             check(f"{label}: reason names the accounting",
                   summary["stopping_reason"] == "unresolved_accounting",
                   summary["stopping_reason"])
+
+
+def test_the_sweeps_very_last_arm_run_cannot_report_completion():
+    """The final arm of the final row of the final ceiling -- and then a resume over it.
+
+    `stopping_reason` and the exit code used to be decided by `blocked`, which only the NEXT
+    row's pre-launch check can set. After the last row there is no next row, and on a resume
+    where every row is skipped there is no check at all, so an unaccounted sweep reported
+    `completed` and exited 0 in exactly the two cases where nothing would look again.
+
+    The predecessor of this test injected by task name over ceilings 30 and 45, so its
+    "final row" was c30/k4 and the next ceiling's first check caught it. It passed without
+    ever reaching the path it was named for.
+    """
+    tmp = _tmp()
+    launches: list = []
+    last = (60, "k4", "notes")
+    rc, summary = _stub_driver(tmp, cap=10_000_000, tokens_per_arm=1000, launches=launches,
+                               no_usage_at=last, ceilings=(30, 45, 60))
+    check("every row ran", len(launches) == 12, str(len(launches)))
+    check("final arm: driver exits nonzero", rc != 0, str(rc))
+    check("final arm: summary written", summary is not None)
+    if summary:
+        check("final arm: not reported as completed",
+              summary["stopping_reason"] == "unresolved_accounting",
+              summary["stopping_reason"])
+        check("final arm: the arm-run is unresolved",
+              len(summary["unresolved_arm_runs"]) == 1, str(summary["unresolved_arm_runs"]))
+        check("final arm: consumption not certain", summary["consumption_certain"] is False)
+
+    # Resume the same directory. Every row has a records.json whose identity matches, so every
+    # row is skipped and no pre-launch check runs at all.
+    resumed: list = []
+    rc2, summary2 = _stub_driver(tmp, cap=10_000_000, tokens_per_arm=1000, launches=resumed,
+                                 ceilings=(30, 45, 60))
+    check("resume launched nothing", resumed == [], str(resumed))
+    check("resume: driver exits nonzero", rc2 != 0, str(rc2))
+    check("resume: not reported as completed",
+          summary2 and summary2["stopping_reason"] == "unresolved_accounting",
+          str(summary2 and summary2["stopping_reason"]))
+
+
+def test_a_fully_accounted_sweep_still_completes():
+    """The control for the two above: nothing outstanding, so `completed` and exit 0 stand."""
+    tmp = _tmp()
+    rc, summary = _stub_driver(tmp, cap=10_000_000, tokens_per_arm=1000, ceilings=(30, 45, 60))
+    check("control: exits 0", rc == 0, str(rc))
+    check("control: completed", summary["stopping_reason"] == "completed",
+          summary["stopping_reason"])
+    check("control: 36 arm-runs", summary["arm_runs"] == 36, str(summary["arm_runs"]))
+    check("control: consumption certain", summary["consumption_certain"] is True)
 
 
 def test_cross_arm_probe_needs_a_working_sibling():

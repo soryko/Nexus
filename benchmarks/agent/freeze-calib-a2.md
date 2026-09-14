@@ -97,7 +97,8 @@ the memory arm free retrieval turns would measure a different system from the on
 
 Arms are A1's: `baseline`, `nexus`, `notes`, with identical prompts, tool inventories and
 retrieval policy. **This calibration changes no *task* prompt and no retrieval policy** — the
-task bodies, the tails and the consultation instruction are the A1 text, byte-for-byte. It does
+task bodies, the tails and the consultation instruction are the A1 text as registered in
+`prompts-a1.json` (with one known transcription discrepancy at d1 — see the erratum in §7). It does
 add one shared `environment` block, appended identically to all three arms, describing how to
 run the checkout; that is a change to the instrument, which is why the configuration is
 versioned at v2 and why v1 rows are not pooled with v2 (§7, §8). A bounded consultation
@@ -286,7 +287,32 @@ that property, which is why the first version passed while the channel was open.
 **The prompt gained an `environment` block**, appended identically to all three arms, stating
 that the checkout is a `src/` layout, how to run it and its tests, that there is no network, and
 that scratch files belong in the checkout. It names no task and no fix. `prompts-a1.json` has no
-such key and every A1 prompt still reconstructs byte-for-byte — verified.
+such key, so **adding `environment` changed no A1 prompt** — that much is verified, by
+assembling with and without it.
+
+**Erratum — that check did not establish what it was cited for.** It compares the assembly
+against itself, not against what A1 was given, and the two were conflated. The shared assembler
+(`task_set.assemble`) preserves the previous inline assembly behaviour; this does not establish
+byte-identical reconstruction of every historical A1 prompt. **A formatting discrepancy has been
+identified for d1.**
+
+Measured here on 2026-09-14 by assembling `prompts-a1.json` and comparing against the prompt
+recorded in each run's own `records.json`:
+
+| task | registered assembly | recorded in A1 | verdict |
+| --- | --- | --- | --- |
+| d1 | 873 B | 874 B (`run-dev-a1-attempt{2,3,4}`) | **differs**: one paragraph break collapsed to a single space, between the reproduction sentence and "Fix the behaviour in `src/`" |
+| d2 | 878 B | 878 B | byte-identical |
+| d3 | 795 B | 795 B | byte-identical |
+| d4 | 903 B | 903 B (`run-dev-d4`, `run-dev-d4-isolated`) | byte-identical |
+
+(d1 attempt 1 recorded a different, shorter prompt again — 603 B — from before the text
+settled; MANIFEST.md already marks that attempt superseded, and it is not the comparison above.)
+
+Neither artifact is edited: **the prompt recorded with the historical run is authoritative for
+exact replay**, and `prompts-a1.json` stays as registered. A1 is closed and negative, and no A1
+conclusion turns on this byte; what it invalidates is the universal claim above, not a result.
+This measurement has not been independently reconfirmed.
 
 **This is a change to the instrument**, which is why the configuration is versioned and why v1
 is not pooled with v2.

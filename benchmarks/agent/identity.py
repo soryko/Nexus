@@ -56,8 +56,10 @@ def config_digest(cfg) -> str:
 def prompt_text(cfg, task: str, harness: str = "run_arms_isolated.py") -> str:
     """The prompt one arm is given: body + tail + environment + consult, assembled once.
 
-    `environment` is optional and absent from prompts-a1.json, so every A1 prompt still
-    reconstructs byte-for-byte.
+    `environment` is optional and absent from prompts-a1.json, so adding it changed no A1
+    prompt. That does not make this a reconstruction of what a historical run was given --
+    d1's registered body differs from A1's recorded prompt (freeze-calib-a2.md §7). This is
+    the prompt THIS configuration produces, which is what a row's identity is over.
     """
     reg = task_set.registration(cfg.bench_path("prompts"))
     spec = task_set.require(reg, task, EVAL_SETS, harness)
