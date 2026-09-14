@@ -1,0 +1,38 @@
+[
+ {
+  "run": "run-d4",
+  "task": "d4",
+  "arm": "baseline",
+  "functional_correctness": true,
+  "requirement_compliance": "5/5",
+  "failed_requirements": [],
+  "termination_reason": "completed",
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass",
+  "tool_calls": 18
+ },
+ {
+  "run": "run-d4",
+  "task": "d4",
+  "arm": "nexus",
+  "functional_correctness": true,
+  "requirement_compliance": "6/6",
+  "failed_requirements": [],
+  "termination_reason": "completed",
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass",
+  "tool_calls": 20
+ },
+ {
+  "run": "run-d4",
+  "task": "d4",
+  "arm": "notes",
+  "functional_correctness": true,
+  "requirement_compliance": "6/6",
+  "failed_requirements": [],
+  "termination_reason": "completed",
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass",
+  "tool_calls": 18
+ }
+]

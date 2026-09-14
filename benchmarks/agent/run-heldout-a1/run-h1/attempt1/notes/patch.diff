@@ -1,0 +1,26 @@
+diff --git a/_repro.py b/_repro.py
+new file mode 100644
+index 0000000..99c1cbf
+--- /dev/null
++++ b/_repro.py
+@@ -0,0 +1,20 @@
++import click
++from click.testing import CliRunner
++
++def make(order):
++    def cli(xyz):
++        click.echo(xyz)
++    a = click.option("--with-xyz", "xyz", flag_value=True, default=True)
++    b = click.option("--without-xyz", "xyz", flag_value=False)
++    if order == 0:
++        cli = a(b(cli))
++    else:
++        cli = b(a(cli))
++    return click.command()(cli)
++
++r = CliRunner()
++for name, order in [("order0", 0), ("order1", 1)]:
++    cli = make(order)
++    for args in ([], ["--with-xyz"], ["--without-xyz"], ["--with-xyz","--without-xyz"], ["--without-xyz","--with-xyz"]):
++        res = r.invoke(cli, args, standalone_mode=False, catch_exceptions=False)
++        print(name, args, "->", res.output.strip())

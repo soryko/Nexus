@@ -1,0 +1,41 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index 48670ba..bdbe2e7 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -85,6 +85,7 @@ filterwarnings = [
+ ]
+ markers = [
+     "stress: high-iteration stress tests for race conditions (deselect with '-m \"not stress\"')",
++    "integration: end-to-end tests that exercise multiple components together",
+ ]
+ addopts = "-m 'not stress'"
+ 
+diff --git a/tests/test_integration.py b/tests/test_integration.py
+new file mode 100644
+index 0000000..f1c545d
+--- /dev/null
++++ b/tests/test_integration.py
+@@ -0,0 +1,23 @@
++from __future__ import annotations
++
++import pytest
++
++import click
++
++
++@pytest.mark.integration
++def test_integration_group_subcommand(runner):
++    """An end-to-end invocation of a group and its subcommand."""
++
++    @click.group()
++    def cli():
++        pass
++
++    @cli.command()
++    @click.option("--name", default="World")
++    def greet(name):
++        click.echo(f"Hello {name}!")
++
++    result = runner.invoke(cli, ["greet", "--name", "Click"])
++    assert result.exit_code == 0
++    assert result.output == "Hello Click!\n"
