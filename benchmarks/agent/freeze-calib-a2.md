@@ -150,9 +150,25 @@ ceiling (seeded at 2 500 000 until one has).
 
 **Overshoot is possible and is stated rather than implied.** An arm-run cannot be interrupted
 part-way, and tokens per turn are not bounded by `--max-turns`, so the total can pass the cap by
-at most one row. That amount is recorded in `calibration-summary.json` as `overshoot`. One
-further gap is disclosed: a row killed in flight leaves no envelope, and its consumption is
-therefore unrecorded and uncounted — this happened once, to a k4 baseline arm-run under v1.
+at most one row. That amount is recorded in `calibration-summary.json` as `overshoot`. A row killed in flight leaves
+no envelope at all, and the runner buffers its whole trace until the subprocess returns, so the
+interruption window produces no usage record of any kind.
+
+**That window is now instrumented and resolved rather than absorbed.** Each arm writes a
+`launched.json` marker immediately before the model is invoked, so an arm that started and was
+never accounted for is `unresolved` — and an unresolved arm-run **blocks the sweep** rather than
+shrinking the total. Where consumption cannot be recovered, it is resolved by a written
+`resolution.json` recording a conservative allowance, its basis, and the fact that it is not a
+measurement. Allowances are carried in `tokens_allowance`, never in `tokens_known`; the budget
+is enforced on the sum, so an assumption can never make the sweep look cheaper than it is.
+
+The one instance: **k4/baseline under v1**, stopped in flight on 2026-09-14. Recovery was
+attempted and failed — the arm directory holds only its profile and checkout, and the forwarder
+keeps no per-request accounting. Allowance **1 400 000 tokens**, an upper bound chosen above the
+largest *completed* v1 arm-run (k2/nexus, 1 371 306); the killed run had executed for well under
+a minute against a 600 s ceiling, so its true consumption is far below that. Erring high is
+deliberate — an allowance that flattered the budget would let the sweep spend more than it was
+authorised to. **No terminal usage record was fabricated.**
 
 Runs execute in ceiling order 30 → 45 → 60 so that a cap hit costs the most expensive cell.
 
@@ -248,7 +264,7 @@ is not pooled with v2.
 | arm-runs | 9 (ceiling 30, k1–k3) + 1 killed in flight | pending |
 | here-documents | fail in every arm-run | work (gated) |
 | interpreter invocation | not stated to the arm | stated identically to all arms |
-| tokens consumed | 6 425 690 | — |
+| tokens charged | 6 425 690 measured + 1 400 000 allowance = 7 825 690 | — |
 
 v1's rows are kept, not deleted: they are the evidence that the defect was real and pervasive,
 and they carry real consumption that the budget must count. They are excluded from any ceiling

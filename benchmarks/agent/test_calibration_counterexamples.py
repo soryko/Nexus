@@ -110,36 +110,88 @@ class _Plan:
     schedule_digest = "abc123"
 
 
-def test_incompatible_configuration_is_refused_on_resume():
-    d = _tmp()
-    rec = d / "records.json"
-    cfg = {"config_version": "calib-v2", "max_turns": 45, "corpus_digest": "deadbeef"}
-    rec.write_text(json.dumps({
-        "max_turns": 30, "schedule_digest": "abc123", "corpus_digest_registered": "deadbeef",
-        "identity": {"config_version": "calib-v1"}}))
-    why = RC.incompatible(rec, cfg, _Plan())
-    check("config mismatch refused", why and "config_version" in why, str(why))
-    check("ceiling mismatch refused", why and "max_turns" in why, str(why))
+def _cfg():
+    return {"config_version": "calib-v2", "max_turns": 30, "corpus_digest": "d"}
+
+
+def _good_record(tmp: Path) -> Path:
+    """A record whose identity matches what this configuration would produce."""
+    want = RC.expected_identity(_cfg(), _Plan(), 30)
+    rec = tmp / "records.json"
+    rec.write_text(json.dumps({"identity": dict(want, prompt_digest="pd")}))
+    return rec
+
+
+def test_matching_identity_resumes():
+    check("matching identity resumes",
+          RC.incompatible(_good_record(_tmp()), _cfg(), _Plan(), 30) is None)
+
+
+def test_every_identity_field_is_compared():
+    """It used to compare four fields and accept everything else -- including a different
+    PRODUCT revision, which is the comparison the function exists to make."""
+    for field in RC.IDENTITY_FIELDS:
+        t = _tmp()
+        rec = _good_record(t)
+        data = json.loads(rec.read_text())
+        data["identity"][field] = "CHANGED-VALUE"
+        rec.write_text(json.dumps(data))
+        why = RC.incompatible(rec, _cfg(), _Plan(), 30)
+        check(f"{field} mismatch refused", why is not None and field in why, str(why))
+
+
+def test_absent_identity_field_refuses():
+    for field in RC.IDENTITY_FIELDS + ("prompt_digest",):
+        t = _tmp()
+        rec = _good_record(t)
+        data = json.loads(rec.read_text())
+        data["identity"].pop(field, None)
+        rec.write_text(json.dumps(data))
+        why = RC.incompatible(rec, _cfg(), _Plan(), 30)
+        check(f"{field} absent refused", why is not None and field in why, str(why))
 
 
 def test_records_without_identity_are_refused():
-    d = _tmp()
-    rec = d / "records.json"
-    cfg = {"config_version": "calib-v2", "max_turns": 30, "corpus_digest": "d"}
-    rec.write_text(json.dumps({"max_turns": 30, "schedule_digest": "abc123",
-                               "corpus_digest_registered": "d"}))
-    why = RC.incompatible(rec, cfg, _Plan())
+    t = _tmp()
+    rec = t / "records.json"
+    rec.write_text(json.dumps({"max_turns": 30}))
+    why = RC.incompatible(rec, _cfg(), _Plan(), 30)
     check("no identity block refused", why and "identity" in why, str(why))
 
 
-def test_matching_configuration_resumes():
+# --------------------------------------------------------------------------- launch evidence
+def test_launched_arm_without_accounting_is_unresolved():
+    """The runner buffers the whole trace until the subprocess returns. An interruption inside
+    that window leaves a launch marker and nothing else -- the window that lost k4."""
     d = _tmp()
-    rec = d / "records.json"
-    cfg = {"config_version": "calib-v2", "max_turns": 30, "corpus_digest": "d"}
-    rec.write_text(json.dumps({
-        "max_turns": 30, "schedule_digest": "abc123", "corpus_digest_registered": "d",
-        "identity": {"config_version": "calib-v2"}}))
-    check("matching identity resumes", RC.incompatible(rec, cfg, _Plan()) is None)
+    arm = d / "c30" / "run-k1" / "attempt1" / "arms" / "baseline"
+    arm.mkdir(parents=True)
+    (arm / "launched.json").write_text(json.dumps({"arm": "baseline"}))
+    c = RC.consumed(d)
+    check("launched-but-unaccounted is unresolved", c["unresolved"] == 1, json.dumps(c))
+    check("launched-but-unaccounted counts as a run", c["arm_runs"] == 1, json.dumps(c))
+
+
+def test_launch_evidence_is_preserved_on_restart():
+    d = _tmp()
+    at = d / "c30" / "run-k1" / "attempt1"
+    (at / "arms" / "baseline").mkdir(parents=True)
+    (at / "arms" / "baseline" / "launched.json").write_text("{}")
+    moved = RC.preserve_partial(at)
+    check("launch evidence moved aside", moved is not None and moved.exists(), str(moved))
+    check("marker survives", moved and (moved / "arms" / "baseline" / "launched.json").exists())
+
+
+def test_prepared_row_is_distinguished_from_a_launched_arm():
+    """A row prepared but never started consumed nothing; it must not be reported unresolved."""
+    d = _tmp()
+    at = d / "c30" / "run-k1" / "attempt1"
+    at.mkdir(parents=True)
+    (at / "launch.json").write_text(json.dumps({"run_id": "x"}))
+    c = RC.consumed(d)
+    check("prepared row is not consumption", c["unresolved"] == 0 and c["arm_runs"] == 0,
+          json.dumps(c))
+    check("prepared row is still preserved", RC.preserve_partial(at) is not None)
 
 
 # --------------------------------------------------------------------------- gate predicates
@@ -185,7 +237,22 @@ def test_not_tested_is_not_passed():
 
 
 # --------------------------------------------------------------------------- driver paths
-def _stub_driver(tmp: Path, cap: int, tokens_per_arm: int, seed_reserve=None):
+def _stub_configs(tmp: Path, ceilings=(30, 45, 60)) -> dict:
+    """Temporary, self-contained configs. The real calib-config-*.json carry per-host absolute
+    paths and do not exist in CI, so these tests must not read them."""
+    out = {}
+    d = tmp / "_configs"
+    d.mkdir(parents=True, exist_ok=True)
+    for c in ceilings:
+        f = d / f"calib-config-{c}.json"
+        f.write_text(json.dumps({"config_version": "calib-v2", "max_turns": c,
+                                 "corpus_digest": "testdigest", "prompts": "test-prompts.json"}))
+        out[c] = f
+    return out
+
+
+def _stub_driver(tmp: Path, cap: int, tokens_per_arm: int, seed_reserve=None,
+                 runner_rc: int = 0, launches: list | None = None):
     """Run the real driver with a stubbed runner. No model, no sandbox, no network.
 
     The published revision crashed HERE, on the line after the last row, with
@@ -195,12 +262,23 @@ def _stub_driver(tmp: Path, cap: int, tokens_per_arm: int, seed_reserve=None):
     """
     import run_calibration as R
     real_run, real_fix, real_cap = R.subprocess.run, R.build_fixture_for, R.CAP_TOKENS
-    real_seed = R.INITIAL_ROW_RESERVE
+    real_seed, real_cfg = R.INITIAL_ROW_RESERVE, R.config_for
+    cfgs = _stub_configs(tmp)
+    R.config_for = lambda c: cfgs[c]
 
     def fake_run(cmd, **kw):
         root, task, attempt = Path(cmd[2]), cmd[3], cmd[4]
+        if launches is not None:
+            launches.append(f"{root.name}/{task}")
         at = root / f"run-{task}" / f"attempt{attempt}"
-        cfg = json.loads((R.BENCH / f"calib-config-{root.name[1:]}.json").read_text())
+        cfg = json.loads(cfgs[int(root.name[1:])].read_text())
+        if runner_rc != 0:
+            (at / "arms" / "baseline").mkdir(parents=True, exist_ok=True)
+            (at / "arms" / "baseline" / "launched.json").write_text('{"arm":"baseline"}')
+
+            class F:
+                returncode = runner_rc
+            return F()
         recs = []
         for arm in ("baseline", "nexus", "notes"):
             (at / "arms" / arm).mkdir(parents=True, exist_ok=True)
@@ -225,7 +303,7 @@ def _stub_driver(tmp: Path, cap: int, tokens_per_arm: int, seed_reserve=None):
         rc = R.main(["run_calibration.py", str(tmp), "--ceilings", "30,45"])
     finally:
         R.subprocess.run, R.build_fixture_for, R.CAP_TOKENS = real_run, real_fix, real_cap
-        R.INITIAL_ROW_RESERVE = real_seed
+        R.INITIAL_ROW_RESERVE, R.config_for = real_seed, real_cfg
     summary = tmp / "calibration-summary.json"
     return rc, (json.loads(summary.read_text()) if summary.exists() else None)
 
@@ -257,6 +335,81 @@ def test_driver_stops_on_budget_and_writes_a_summary():
         check("summary names where it stopped", summary["stopped_at"] is not None,
               str(summary.get("stopped_at")))
         check("grid is partial", summary["arm_runs"] < 24, str(summary["arm_runs"]))
+
+
+def test_failed_row_stops_the_whole_sweep():
+    """A failing runner used to break only the inner loop, so one broken runner launched every
+    ceiling in turn and the driver still exited 0."""
+    tmp = _tmp()
+    launches: list = []
+    rc, summary = _stub_driver(tmp, cap=10_000_000, tokens_per_arm=1000,
+                               runner_rc=1, launches=launches)
+    check("exactly one launch", len(launches) == 1, str(launches))
+    check("driver exits nonzero", rc != 0, str(rc))
+    check("summary still written", summary is not None)
+    if summary:
+        check("summary says gate_or_error",
+              summary["stopping_reason"] == "gate_or_error", summary["stopping_reason"])
+        check("failed launch is unresolved", summary["unresolved_arm_runs"] != [],
+              str(summary["unresolved_arm_runs"]))
+
+
+def test_cross_arm_probe_needs_a_working_sibling():
+    """`sentinel not in stdout` is also true when the sibling sandbox never ran at all."""
+    import isolation
+    real = isolation.subprocess.run
+
+    def fake(sibling_rc):
+        n = {"i": 0}
+
+        def _run(cmd, **kw):
+            n["i"] += 1
+
+            class First:
+                returncode, stdout, stderr = 0, "heredoc-ok\n", ""
+
+            class Sibling:
+                returncode = sibling_rc
+                stdout = "CONTROL-FOR-ARM-B\n" if sibling_rc == 0 else ""
+                stderr = "" if sibling_rc == 0 else "sandbox-exec: profile missing"
+            return First() if n["i"] == 1 else Sibling()
+        return _run
+
+    for label, rc_, want_blocked in (("broken sibling", 1, None), ("working sibling", 0, True)):
+        t = _tmp()
+        (t / "tmp").mkdir()
+        (t / "sib").mkdir()
+        (t / "sib" / "p.sb").write_text("(version 1)")
+        isolation.subprocess.run = fake(rc_)
+        try:
+            r = isolation.heredoc_probe(Path("pA"), t, {"TMPPREFIX": str(t / "tmp" / "zsh")},
+                                        t / "sib" / "p.sb", t / "sib")
+        finally:
+            isolation.subprocess.run = real
+        check(f"{label}: cross_arm_read_blocked", r["cross_arm_read_blocked"] is want_blocked,
+              json.dumps({k: v for k, v in r.items() if "tail" not in k}))
+
+
+def test_missing_sibling_profile_is_not_a_pass():
+    """Deterministic: the first heredoc call is stubbed so this never shells out to
+    sandbox-exec, which does not exist off macOS."""
+    import isolation
+    real = isolation.subprocess.run
+
+    def _run(cmd, **kw):
+        class OK:
+            returncode, stdout, stderr = 0, "heredoc-ok\n", ""
+        return OK()
+    isolation.subprocess.run = _run
+    try:
+        t = _tmp()
+        (t / "tmp").mkdir()
+        r = isolation.heredoc_probe(Path("/nope/pA"), t, {"TMPPREFIX": str(t / "tmp" / "zsh")},
+                                    Path("/nope/pB"), Path("/nope/cwd"))
+    finally:
+        isolation.subprocess.run = real
+    check("missing sibling -> not tested", r["cross_arm_read_blocked"] is None,
+          json.dumps({k: v for k, v in r.items() if "tail" not in k}))
 
 
 def main() -> int:

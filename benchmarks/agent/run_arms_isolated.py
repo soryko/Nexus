@@ -215,12 +215,22 @@ def boundary_paths(arm: str, cwd: Path) -> tuple[list[Path], list[Path]]:
     return allow, deny
 
 
-def invoke(arm: str, cwd: Path) -> dict:
+def write_arm_profile(arm: str, cwd: Path) -> Path:
+    """This arm's mcp config and sandbox profile. Separated from `invoke` so that EVERY arm's
+    profile exists before the FIRST arm is gated: the cross-arm probe runs a sibling sandbox,
+    and a sibling whose profile has not been written yet cannot be distinguished from a
+    sibling that is correctly denying access."""
     cfg = OUT / "arms" / arm / "mcp.json"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
     cfg.write_text(json.dumps(mcp_config(arm)))
     allow, deny = boundary_paths(arm, cwd)
-    profile = isolation.write_profile(OUT / "arms" / arm / "sandbox.sb", cwd, deny, allow,
-                                      FORWARDER_PORT)
+    return isolation.write_profile(OUT / "arms" / arm / "sandbox.sb", cwd, deny, allow,
+                                   FORWARDER_PORT)
+
+
+def invoke(arm: str, cwd: Path) -> dict:
+    cfg = OUT / "arms" / arm / "mcp.json"
+    profile = write_arm_profile(arm, cwd)
     cmd = ["sandbox-exec", "-f", str(profile),
            "claude", "--bare", "-p", PROMPT, "--model", "deepseek-flash",
            "--mcp-config", str(cfg), "--strict-mcp-config",
@@ -249,7 +259,9 @@ def invoke(arm: str, cwd: Path) -> dict:
     # Refusing costs one row; not refusing cost 45 arm-runs.
     if ENV_GATE:
         import verify_arm_environment as VENV
-        others = [OUT / "arms" / a for a in ARMS if a != arm]
+        others = [OUT / "arms" / a for a in ARMS
+                  if a != arm and (OUT / "arms" / a / "sandbox.sb").exists()
+                  and (OUT / "arms" / a / "repo").exists()]
         gate = VENV.run(OUT / "arms" / arm, env, other_arm=others[0] if others else None)
         (OUT / "arms" / arm / "envcheck.json").write_text(json.dumps(gate, indent=1))
         if not gate["all_passed"]:
@@ -260,6 +272,18 @@ def invoke(arm: str, cwd: Path) -> dict:
 
     started = datetime.now(timezone.utc)
     t0 = time.monotonic()
+    # Written BEFORE the model is invoked, and never removed. `capture_output=True` buffers
+    # the whole trace until the subprocess returns, so an interruption inside that window
+    # leaves no trace, no record and no evidence the arm ever ran -- which is exactly how k4's
+    # consumption was lost. This marker is what makes "launched" distinguishable from
+    # "prepared but never started", and an arm that is launched and never accounted for stays
+    # UNRESOLVED rather than disappearing.
+    (OUT / "arms" / arm / "launched.json").write_text(json.dumps({
+        "arm": arm, "task": TASK, "attempt": ATTEMPT,
+        "launched_utc": started.isoformat(),
+        "max_turns": MAX_TURNS, "wall_clock_s_limit": WALL_CLOCK_S,
+        "identity": run_identity(),
+    }, indent=1))
     verdict = None
     try:
         done = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True,
@@ -454,9 +478,18 @@ def main() -> int:
         print("  UNGATED: no corpus_digest is registered in the configuration, so the master "
               "is taken as given\n")
 
+    # Every arm's checkout and profile, written before the FIRST arm is gated. The cross-arm
+    # probe runs a sibling sandbox; preparing arms lazily meant the first arm's probe pointed
+    # at a profile that did not exist yet, which the probe could not tell apart from a sibling
+    # that was correctly refusing.
+    prepared = {a: prepare(a) for a in order}
+    for a in order:
+        write_arm_profile(a, prepared[a])
+    print(f"prepared {len(prepared)} arm checkouts and profiles: {', '.join(order)}", flush=True)
+
     records = []
     for arm in order:
-        cwd = prepare(arm)
+        cwd = prepared[arm]
         store = provision_store(arm)
         store_before = store_digest(store) if store else None
         if store and store_before != before:

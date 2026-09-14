@@ -229,40 +229,66 @@ def paired(profile: Path, argv: list[str], cwd: Path) -> dict:
 
 
 def heredoc_probe(profile: Path, cwd: Path, env: dict,
-                  other_profile: Path | None = None, other_cwd: Path | None = None) -> dict:
+                  other_profile: Path | None = None, other_cwd: Path | None = None,
+                  other_prefix: str | None = None) -> dict:
     """A here-document must work for this arm, and its body must be unreadable to another.
 
-    The second half is the one that matters and the one a directory listing does not test.
-    The first repair attempt granted `^/private/tmp/zsh` to every arm: /private/tmp stayed
-    unlistable, which looked like isolation, while arm A could write
-    /private/tmp/zshSENTINEL and arm B could read it BY NAME. Measured, and it worked. So the
-    control is a sentinel written through one profile and read through the other, not a
-    listing.
+    Two failed attempts are worth recording, because both LOOKED like isolation:
+
+    1. The first repair granted `^/private/tmp/zsh` to every arm and argued /private/tmp was
+       still unlistable. A filename prefix names a pattern, not a process: arm A wrote
+       /private/tmp/zshSENTINEL and arm B read it BY NAME. A listing does not test the
+       property that matters.
+    2. The first version of THIS probe concluded `blocked` from `sentinel not in stdout`,
+       which is also true when the second sandbox never ran at all -- a missing profile, a
+       missing directory or a broken binary all produce empty stdout and read as isolation.
+
+    So the denial is only trusted after the second sandbox has been shown to work: it must
+    read its OWN positive-control file through its OWN profile first. If that fails, the
+    cross-arm result is `None` -- unknown, never "blocked".
     """
     works = subprocess.run(["sandbox-exec", "-f", str(profile), "/bin/zsh", "-c",
                             "cat <<EOF\nheredoc-ok\nEOF"],
                            cwd=str(cwd), capture_output=True, text=True, env=env, timeout=60)
-    out = {"heredoc_works": works.returncode == 0 and "heredoc-ok" in works.stdout,
-           "heredoc_tail": (works.stderr or works.stdout).strip().splitlines()[-1:]}
-
     prefix = env.get("TMPPREFIX")
-    out["tmpprefix_set"] = bool(prefix)
-    if not (other_profile and prefix):
-        out["cross_arm_read_blocked"] = None      # not tested; never reported as passing
+    out = {"heredoc_works": works.returncode == 0 and "heredoc-ok" in works.stdout,
+           "heredoc_tail": (works.stderr or works.stdout).strip().splitlines()[-1:],
+           "tmpprefix_set": bool(prefix),
+           "cross_arm_read_blocked": None,
+           "other_sandbox_executes": None}
+    if not (other_profile and other_cwd and prefix):
+        out["cross_arm_note"] = "not tested: no sibling profile, cwd or TMPPREFIX supplied"
+        return out
+    if not (Path(other_profile).exists() and Path(other_cwd).exists()):
+        out["cross_arm_note"] = f"not tested: {other_profile} or {other_cwd} does not exist"
         return out
 
-    sentinel = Path(prefix + "_sentinel")
-    sentinel.parent.mkdir(parents=True, exist_ok=True)
-    sentinel.write_text("SENTINEL-FROM-THIS-ARM")
+    mine = Path(prefix + "_sentinel")
+    theirs = Path(other_prefix + "_control") if other_prefix else Path(other_cwd) / "_control"
+    mine.parent.mkdir(parents=True, exist_ok=True)
+    theirs.parent.mkdir(parents=True, exist_ok=True)
+    mine.write_text("SENTINEL-FROM-ARM-A")
+    theirs.write_text("CONTROL-FOR-ARM-B")
     try:
-        other = subprocess.run(["sandbox-exec", "-f", str(other_profile), "/bin/zsh", "-c",
-                                f"cat {sentinel}"],
-                               cwd=str(other_cwd or cwd), capture_output=True, text=True,
-                               env=env, timeout=60)
-        out["cross_arm_read_blocked"] = "SENTINEL-FROM-THIS-ARM" not in other.stdout
-        out["cross_arm_tail"] = (other.stderr or other.stdout).strip().splitlines()[-1:]
+        # POSITIVE CONTROL: the sibling sandbox must be able to run and read its own file.
+        pos = subprocess.run(["sandbox-exec", "-f", str(other_profile), "/bin/zsh", "-c",
+                              f"cat {theirs}"], cwd=str(other_cwd),
+                             capture_output=True, text=True, env=env, timeout=60)
+        out["other_sandbox_executes"] = "CONTROL-FOR-ARM-B" in pos.stdout
+        out["other_control_tail"] = (pos.stderr or pos.stdout).strip().splitlines()[-1:]
+        if not out["other_sandbox_executes"]:
+            out["cross_arm_note"] = ("not tested: the sibling sandbox could not read its own "
+                                     "control file, so a denial there proves nothing")
+            return out
+        # NEGATIVE: and it must NOT be able to read this arm's sentinel.
+        neg = subprocess.run(["sandbox-exec", "-f", str(other_profile), "/bin/zsh", "-c",
+                              f"cat {mine}"], cwd=str(other_cwd),
+                             capture_output=True, text=True, env=env, timeout=60)
+        out["cross_arm_read_blocked"] = "SENTINEL-FROM-ARM-A" not in neg.stdout
+        out["cross_arm_tail"] = (neg.stderr or neg.stdout).strip().splitlines()[-1:]
     finally:
-        sentinel.unlink(missing_ok=True)
+        mine.unlink(missing_ok=True)
+        theirs.unlink(missing_ok=True)
     return out
 
 

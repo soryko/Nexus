@@ -1,0 +1,51 @@
+calibration: schedule 0a352b82ced14f10 seed 20260914
+ceilings [30, 45]  |  4 rows each  |  24 arm-runs  |  cap 10,000,000 tokens
+
+=== ceiling 30  k1 attempt 1  (0 of 10,000,000 tokens charged, reserving 2,500,000 for this row)  2026-09-14T11:46:38+00:00
+    exit 0  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpz3c0c4ba/c30/run-k1/attempt1.log
+
+=== ceiling 30  k2 attempt 1  (3,000 of 10,000,000 tokens charged, reserving 3,000 for this row)  2026-09-14T11:46:38+00:00
+    exit 0  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpz3c0c4ba/c30/run-k2/attempt1.log
+
+=== ceiling 30  k3 attempt 1  (6,000 of 10,000,000 tokens charged, reserving 3,000 for this row)  2026-09-14T11:46:38+00:00
+    exit 0  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpz3c0c4ba/c30/run-k3/attempt1.log
+
+=== ceiling 30  k4 attempt 1  (9,000 of 10,000,000 tokens charged, reserving 3,000 for this row)  2026-09-14T11:46:38+00:00
+    exit 0  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpz3c0c4ba/c30/run-k4/attempt1.log
+
+=== ceiling 45  k1 attempt 1  (12,000 of 10,000,000 tokens charged, reserving 2,500,000 for this row)  2026-09-14T11:46:38+00:00
+    exit 0  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpz3c0c4ba/c45/run-k1/attempt1.log
+
+=== ceiling 45  k2 attempt 1  (15,000 of 10,000,000 tokens charged, reserving 3,000 for this row)  2026-09-14T11:46:38+00:00
+    exit 0  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpz3c0c4ba/c45/run-k2/attempt1.log
+
+=== ceiling 45  k3 attempt 1  (18,000 of 10,000,000 tokens charged, reserving 3,000 for this row)  2026-09-14T11:46:38+00:00
+    exit 0  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpz3c0c4ba/c45/run-k3/attempt1.log
+
+=== ceiling 45  k4 attempt 1  (21,000 of 10,000,000 tokens charged, reserving 3,000 for this row)  2026-09-14T11:46:38+00:00
+    exit 0  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpz3c0c4ba/c45/run-k4/attempt1.log
+
+charged 24,000 of 10,000,000 tokens over 24 arm-runs (24,000 measured + 0 allowance)
+calibration: schedule 0a352b82ced14f10 seed 20260914
+ceilings [30, 45]  |  4 rows each  |  24 arm-runs  |  cap 7,000 tokens
+
+=== ceiling 30  k1 attempt 1  (0 of 7,000 tokens charged, reserving 3,000 for this row)  2026-09-14T11:46:38+00:00
+    exit 0  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpqmb9126j/c30/run-k1/attempt1.log
+
+=== ceiling 30  k2 attempt 1  (3,000 of 7,000 tokens charged, reserving 3,000 for this row)  2026-09-14T11:46:38+00:00
+    exit 0  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpqmb9126j/c30/run-k2/attempt1.log
+
+charged 6,000 of 7,000 tokens over 6 arm-runs (6,000 measured + 0 allowance)
+STOPPED AT BUDGET before ceiling 30 k3. The grid is PARTIAL: §5 forbids selecting a ceiling from unequal coverage.
+calibration: schedule 0a352b82ced14f10 seed 20260914
+ceilings [30, 45]  |  4 rows each  |  24 arm-runs  |  cap 10,000,000 tokens
+
+=== ceiling 30  k1 attempt 1  (0 of 10,000,000 tokens charged, reserving 2,500,000 for this row)  2026-09-14T11:46:38+00:00
+    exit 1  log /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmp6helmj7s/c30/run-k1/attempt1.log
+    row did not complete; stopping rather than spending the next one
+
+charged 0 of 10,000,000 tokens over 1 arm-runs (0 measured + 0 allowance)
+UNRESOLVED: 1 arm-run(s) have no usable usage record. Total consumption is a LOWER BOUND and overshoot cannot be computed.
+    /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmp6helmj7s/c30/run-k1/attempt1/arms/baseline
+A ROW DID NOT COMPLETE. The sweep stopped; no further ceiling was started.
+22/22 counterexample groups pass

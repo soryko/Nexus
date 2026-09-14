@@ -60,6 +60,13 @@ TASKS = BENCH / "tasks-calib-a2.json"
 CLONE = "/Users/soko/Cerebros/nexus-a1-fixtures/click"
 
 
+def config_for(ceiling: int) -> Path:
+    """Where this ceiling's configuration lives. Indirected so the deterministic tests can
+    point at self-contained temporary configs instead of this host's `calib-config-*.json`,
+    which do not exist in CI and carry per-host absolute paths."""
+    return BENCH / f"calib-config-{ceiling}.json"
+
+
 def consumed(scratch: Path) -> dict:
     """Every token this calibration is KNOWN to have consumed, plus what it cannot account for.
 
@@ -82,8 +89,22 @@ def consumed(scratch: Path) -> dict:
                 + u.get("cache_creation_input_tokens", 0) + u.get("output_tokens", 0))
 
     tokens, usd, runs = 0, 0.0, 0
+    allowance, allowed_for = 0, []
     unresolved: list[str] = []
     seen: set[Path] = set()
+
+    # A consumption that cannot be recovered may be RESOLVED by a written allowance, never by
+    # inventing a usage record. `resolution.json` says what was assumed and on what basis; its
+    # tokens are carried in `tokens_allowance`, kept apart from `tokens_known` so that no
+    # figure mixes a measurement with an assumption.
+    for res in sorted(scratch.glob("*/run-*/attempt*/arms/*/resolution.json")):
+        data = json.loads(res.read_text())
+        if data.get("kind") != "conservative_allowance":
+            continue
+        seen.add(res.parent)
+        runs += 1
+        allowance += int(data["tokens_allowance"])
+        allowed_for.append(str(res.parent))
 
     for f in sorted(scratch.glob("*/run-*/attempt*/arms/*/record.json")):
         data = json.loads(f.read_text())
@@ -111,6 +132,18 @@ def consumed(scratch: Path) -> dict:
                 tokens += t
                 usd += (r.get("result") or {}).get("total_cost_usd") or 0.0
 
+    # An arm with a launch marker but no terminal accounting CONSUMED AN UNKNOWN AMOUNT. The
+    # runner buffers the whole trace until the subprocess returns, so an interruption inside
+    # that window leaves the marker and nothing else -- the window that lost k4.
+    for mk in sorted(scratch.glob("*/run-*/attempt*/arms/*/launched.json")):
+        if mk.parent in seen:
+            continue
+        if (mk.parent / "trace.jsonl").exists():
+            continue                      # handled below, where the envelope is read
+        seen.add(mk.parent)
+        runs += 1
+        unresolved.append(str(mk.parent))
+
     for tr in sorted(scratch.glob("*/run-*/attempt*/arms/*/trace.jsonl")):
         if tr.parent in seen:
             continue
@@ -127,7 +160,11 @@ def consumed(scratch: Path) -> dict:
             tokens += t
             usd += (env or {}).get("total_cost_usd") or 0.0
 
-    return {"tokens_known": tokens, "usd_unprovenanced": round(usd, 4), "arm_runs": runs,
+    return {"tokens_known": tokens,
+            "tokens_allowance": allowance,
+            "tokens_budgeted": tokens + allowance,
+            "allowance_arm_runs": allowed_for,
+            "usd_unprovenanced": round(usd, 4), "arm_runs": runs,
             "unresolved_arm_runs": unresolved, "unresolved": len(unresolved)}
 
 
@@ -166,24 +203,71 @@ def build_fixture_for(task: str, ceiling_root: Path, python: str) -> None:
         raise SystemExit(f"fixture for {task} was not admitted; not spending on it\n{done.stdout}")
 
 
-def incompatible(records: Path, cfg_json: dict, plan) -> str | None:
+def expected_identity(cfg_json: dict, plan, ceiling: int) -> dict:
+    """What a row produced by THIS configuration must record.
+
+    Built from the same sources the runner records from, so the comparison is against a
+    constructed expectation rather than against whichever four fields someone remembered to
+    list. `run_identity` in run_arms_isolated is the producer; this is the consumer, and the
+    two are kept in step by `IDENTITY_FIELDS`.
+    """
+    import hashlib
+    import subprocess as sp
+
+    def rev(path: str) -> str | None:
+        try:
+            out = sp.run(["git", "-C", str(BENCH.parent.parent), "log", "-1", "--format=%H",
+                          "--", path], capture_output=True, text=True, timeout=30)
+            return (out.stdout.strip() or None) if out.returncode == 0 else None
+        except Exception:
+            return None
+
+    return {
+        "config_version": cfg_json.get("config_version"),
+        "product_revision": rev("src/nexus_memory"),
+        "harness_revision": rev("benchmarks/agent"),
+        "config_digest": hashlib.sha256(
+            json.dumps(cfg_json, sort_keys=True).encode()).hexdigest()[:16],
+        "max_turns_applied": cfg_json.get("max_turns"),
+        "corpus_digest_registered": cfg_json.get("corpus_digest"),
+        "schedule_digest": plan.schedule_digest,
+    }
+
+
+# Every field that decides whether two rows may be pooled. A row missing any of them is
+# refused: a field that is absent has not been shown to match.
+IDENTITY_FIELDS = ("config_version", "product_revision", "harness_revision",
+                   "config_digest", "max_turns_applied", "corpus_digest_registered",
+                   "schedule_digest")
+
+
+def incompatible(records: Path, cfg_json: dict, plan, ceiling: int | None = None) -> str | None:
     """-> a reason this existing row may not be pooled with the current configuration.
 
-    `CONFIG_VERSION` used to appear only at its own definition: the resume path skipped any
-    existing records.json without ever asking what produced it, so a v1 row and a v2 row in
-    one tree were indistinguishable to the driver that was about to average them.
+    It used to compare four fields and accept everything else. A row recording a different
+    PRODUCT revision, a different harness revision, a different configuration digest and a
+    different prompt digest was accepted for resume, which is the comparison this function
+    exists to prevent.
     """
     data = json.loads(records.read_text())
     ident = data.get("identity") or {}
-    checks = [
-        ("config_version", ident.get("config_version"), cfg_json.get("config_version")),
-        ("max_turns", data.get("max_turns"), cfg_json.get("max_turns")),
-        ("schedule_digest", data.get("schedule_digest"), plan.schedule_digest),
-        ("corpus_digest", data.get("corpus_digest_registered"), cfg_json.get("corpus_digest")),
-    ]
-    bad = [f"{k}: recorded {a!r} != requested {b!r}" for k, a, b in checks if a != b]
     if not ident:
-        bad.append("no identity block: predates configuration recording")
+        return "no identity block: predates configuration recording"
+
+    want = expected_identity(cfg_json, plan, ceiling if ceiling is not None
+                             else cfg_json.get("max_turns"))
+    bad = []
+    for field in IDENTITY_FIELDS:
+        got = ident.get(field)
+        exp = want.get(field)
+        if got is None:
+            bad.append(f"{field}: absent from the record")
+        elif exp is not None and got != exp:
+            bad.append(f"{field}: recorded {got!r} != expected {exp!r}")
+    # The prompt digest has no independent expectation here -- the prompt is assembled by the
+    # runner -- but it must be RECORDED, so a later reader can compare two rows directly.
+    if not ident.get("prompt_digest"):
+        bad.append("prompt_digest: absent from the record")
     return "; ".join(bad) or None
 
 
@@ -196,7 +280,14 @@ def preserve_partial(attempt_dir: Path) -> Path | None:
     """
     if not attempt_dir.exists() or (attempt_dir / "records.json").exists():
         return None
-    if not any(attempt_dir.glob("arms/*/trace.jsonl")):
+    # Launch evidence counts, not just traces. An attempt interrupted before its first trace
+    # was written used to be left in place and then overwritten by its own rerun, destroying
+    # the only record that an arm had been started at all.
+    evidence = (any(attempt_dir.glob("arms/*/trace.jsonl"))
+                or any(attempt_dir.glob("arms/*/launched.json"))
+                or any(attempt_dir.glob("arms/*/record.json"))
+                or (attempt_dir / "launch.json").exists())
+    if not evidence:
         return None
     dest = attempt_dir.with_name(
         attempt_dir.name + ".partial-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
@@ -228,7 +319,7 @@ def main(argv: list[str]) -> int:
     stopped, errored = None, False
     for ceiling in ceilings:
         root = scratch / f"c{ceiling}"
-        config = BENCH / f"calib-config-{ceiling}.json"
+        config = config_for(ceiling)
         if not config.exists():
             raise SystemExit(f"no config for ceiling {ceiling}: {config}")
         # The filename does not establish the ceiling. Check what the config actually says,
@@ -246,7 +337,7 @@ def main(argv: list[str]) -> int:
             attempt_dir = root / f"run-{task}" / f"attempt{attempt}"
             out = attempt_dir / "records.json"
             if out.exists():
-                why = incompatible(out, cfg_json, plan)
+                why = incompatible(out, cfg_json, plan, ceiling)
                 if why:
                     raise SystemExit(
                         f"{out} was produced under a different configuration ({why}). "
@@ -271,8 +362,8 @@ def main(argv: list[str]) -> int:
                     f"continuing:\n    " + "\n    ".join(before["unresolved_arm_runs"]))
             reserve = row_reserve(scratch, ceiling)
             # PRE-launch: do not START a row without room for one of its size.
-            if before["tokens_known"] + reserve > CAP_TOKENS:
-                stopped = (ceiling, task, before["tokens_known"], reserve)
+            if before["tokens_budgeted"] + reserve > CAP_TOKENS:
+                stopped = (ceiling, task, before["tokens_budgeted"], reserve)
                 break
 
             # Durable record of the invocation BEFORE it starts, so a row that dies without
@@ -290,7 +381,7 @@ def main(argv: list[str]) -> int:
             }, indent=1) + "\n")
 
             print(f"\n=== ceiling {ceiling}  {task} attempt {attempt}  "
-                  f"({before['tokens_known']:,} of {CAP_TOKENS:,} tokens known, "
+                  f"({before['tokens_budgeted']:,} of {CAP_TOKENS:,} tokens charged, "
                   f"reserving {reserve:,} for this row)  "
                   f"{datetime.now(timezone.utc).isoformat(timespec='seconds')}")
 
@@ -321,15 +412,21 @@ def main(argv: list[str]) -> int:
                 print(f"    row did not complete; stopping rather than spending the next one")
                 break
 
-        if stopped:
+        # A failed row stops the SWEEP, not just this ceiling. The inner `break` left the
+        # outer loop free to start the next ceiling, so one broken runner launched three
+        # ceilings in a row and the driver still exited 0.
+        if stopped or errored:
             break
 
     total = consumed(scratch)
-    over = max(0, total["tokens_known"] - CAP_TOKENS)
+    over = max(0, total["tokens_budgeted"] - CAP_TOKENS)
     summary = {
         "cap_tokens": CAP_TOKENS,
         "config_version": CONFIG_VERSION,
         "tokens_known": total["tokens_known"],
+        "tokens_allowance": total["tokens_allowance"],
+        "tokens_budgeted": total["tokens_budgeted"],
+        "allowance_arm_runs": total["allowance_arm_runs"],
         "arm_runs": total["arm_runs"],
         "unresolved_arm_runs": total["unresolved_arm_runs"],
         "usd_unprovenanced": total["usd_unprovenanced"],
@@ -347,8 +444,11 @@ def main(argv: list[str]) -> int:
         "written_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
     (scratch / "calibration-summary.json").write_text(json.dumps(summary, indent=1) + "\n")
-    print(f"\nknown consumption {total['tokens_known']:,} of {CAP_TOKENS:,} tokens over "
-          f"{total['arm_runs']} arm-runs")
+    # The summary is written on every path, including failure -- and failure exits nonzero, so
+    # a wrapper cannot mistake a broken sweep for a finished one.
+    print(f"\ncharged {total['tokens_budgeted']:,} of {CAP_TOKENS:,} tokens over "
+          f"{total['arm_runs']} arm-runs "
+          f"({total['tokens_known']:,} measured + {total['tokens_allowance']:,} allowance)")
     if total["unresolved"]:
         print(f"UNRESOLVED: {total['unresolved']} arm-run(s) have no usable usage record. "
               f"Total consumption is a LOWER BOUND and overshoot cannot be computed.")
@@ -360,6 +460,9 @@ def main(argv: list[str]) -> int:
     if stopped:
         print(f"STOPPED AT BUDGET before ceiling {stopped[0]} {stopped[1]}. The grid is "
               f"PARTIAL: §5 forbids selecting a ceiling from unequal coverage.")
+    if errored:
+        print("A ROW DID NOT COMPLETE. The sweep stopped; no further ceiling was started.")
+        return 1
     return 0
 
 
