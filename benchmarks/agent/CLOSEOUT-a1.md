@@ -6,7 +6,10 @@ and records the two things about it that are weaker than they should be.
 ## The result
 
 **The nexus arm did not beat baseline on any task; it lost on one.** Memory, as measured in
-A1, did not help, and it cost 1.43× baseline's input tokens to not help. The full statement
+A1, did not help, and it consumed **1.43× baseline's `input_tokens` and 1.57× its
+`cache_read_input_tokens`** (1.56× combined) to not help. **No dollar figure is quoted**:
+`runner-a1.md` §3 found `"costBasis":"unknown"` on this model and concluded the CLI's cost
+field has no established provenance, so A1 omits it. The full statement
 and its limits are in [`results-heldout-a1.md`](results-heldout-a1.md); where the runs spent
 their effort is in [`diagnostics-heldout-a1.md`](diagnostics-heldout-a1.md).
 
@@ -61,6 +64,12 @@ Three checks, each run rather than asserted:
 Suite at closeout: **334 passed, 2 skipped**; mutation matrix **36 passed**.
 
 ## Gaps, recorded rather than smoothed over
+
+**0. Operational friction was understated, and the diagnostics that described it were wrong in
+four ways.** Both are corrected in place rather than in a footnote: see the friction table in
+[`results-heldout-a1.md`](results-heldout-a1.md) and the detector corrections recorded there.
+The functional verdicts under `a1-functional-2` are **unchanged** — none of this re-scores a
+run, and the negative result stands exactly as registered.
 
 **1. The product revision was not recorded by the harness.** `records.json` captures the
 scorer versions, the config, the corpus and schedule digests and the store digests either

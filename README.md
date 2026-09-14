@@ -15,7 +15,9 @@ An agent stores a fact once and reads it back in a later session, on a different
 > ran on 2026-09-12 and is closed ([closeout](benchmarks/agent/CLOSEOUT-a1.md),
 > [result](benchmarks/agent/results-heldout-a1.md)): over four tasks, three arms and 36
 > arm-runs, **the memory arm did not beat the no-memory baseline on any task and lost on one**,
-> while spending 1.43x the baseline's input tokens. A rendered-notes arm tied on all four, so
+> while consuming 1.43x the baseline's `input_tokens` and 1.57x its `cache_read_input_tokens`
+> (1.56x combined). No dollar figure is quoted: the CLI's cost field has no established
+> provenance on this model. A rendered-notes arm tied on all four, so
 > the run supports "having the information helps" no better than it supports "Nexus's retrieval
 > helps". Two of the four tasks were solved by nobody and 29 of 36 arm-runs hit the turn
 > ceiling, so the comparison is heavily qualified — but it is not qualified in Nexus's favour,
@@ -243,9 +245,9 @@ Retrieval work done since B1 is measured but **not shipped**: the [development c
 [`CLOSEOUT-a1.md`](benchmarks/agent/CLOSEOUT-a1.md). Persistent memory did not improve task
 correctness on the held-out set and cost more to use; where the runs actually spent their
 effort is measured in [`diagnostics-heldout-a1.md`](benchmarks/agent/diagnostics-heldout-a1.md),
-which finds that on the two unsolved tasks **no arm modified a tracked source file even once**
-across 18 arm-runs, and that retrieval is front-loaded (22 calls before the first source
-mutation, 1 after) and never repeated. Every published table rebuilds from 2.9 MB of committed
+which finds that on the two unsolved tasks **no source change was recorded at all** across 18
+arm-runs, and that retrieval is front-loaded (22 calls before the first source mutation and 1
+after, in the four nexus runs that reached one; the other eight spent 63 more and reached none). Every published table rebuilds from 2.9 MB of committed
 records with no model invoked.
 
 A1's four tasks are now **exposed** and can serve only labelled diagnostics and regression

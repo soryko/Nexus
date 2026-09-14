@@ -81,8 +81,11 @@ def main(argv: list[str]) -> int:
     print("  'With four tasks this interval does not support an inferential claim and none")
     print("   will be made from it.'")
     print("\nWith one non-zero task contrast among four, the resampling distribution is")
-    print("degenerate: the interval describes the arithmetic of four numbers, not a")
-    print("population. It is reported because §5 required it, and read no further.")
+    print("DISCRETE, not degenerate: resampling four values of which one is non-zero admits")
+    print("exactly five possible means (0, -1/6, -1/3, -1/2, -2/3), and the interval has")
+    print("real width. What it does not have is a population behind it -- it describes the")
+    print("arithmetic of four numbers. It is reported because section 5 required it, and")
+    print("read no further.")
 
     if "--json" in argv:
         Path(argv[argv.index("--json") + 1]).write_text(json.dumps(out, indent=1) + "\n")

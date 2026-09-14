@@ -17,6 +17,11 @@ Three accounting rules it does not bend:
     write target, and that target is checked against the task's own base tree, so a shell
     edit to tracked source counts as a mutation and a scratch file does not.
 
+  * **Issue order is not execution order.** `first_src_mutation` and the before/after split
+    are positions in the order the model ISSUED calls. With parallel tool use a call issued
+    earlier can complete later, so these describe the order of asking, not of happening, and
+    no claim here depends on one call having finished before another began.
+
   * **Unavailable telemetry is `unknown`, never 0.** A Bash command that writes somewhere
     this parser cannot resolve is counted in `unknown_writes` and says so; it is not silently
     dropped into the "no mutation" bucket.
@@ -44,34 +49,44 @@ NOTES_NAME = "NOTES-FROM-EARLIER-WORK"
 # Tools that mutate a named file directly. `file_path` is the input key for all of them.
 DIRECT_MUTATORS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 
-# Redirect noise that is not a write to a file: fd duplication (`2>&1`, `&>`) and the null
-# sink. Stripped before anything else looks at the command, because `2>&1` on a read-only
-# `pytest ... | tail` otherwise reads as an unplaceable write. It fired on 115 of these 36
-# runs' Bash calls, every one of them read-only.
-NONWRITE_REDIRECT = re.compile(r"\d*>&\d+|&>>?\s*\S+|\d*>>?\s*/dev/\S+")
+# Redirect noise that is not a write to a file: file-descriptor duplication (`2>&1`) and the
+# null sink. `&>` and `&>>` are NOT here -- they redirect both streams INTO A FILE and are
+# real writes. An earlier version stripped them with the fd-dup pattern, which made
+# `printf changed &> src/click/core.py` classify as no write at all.
+NONWRITE_REDIRECT = re.compile(r"\d+>&\d+|>&\d+|\d*>>?\s*/dev/\S+|&>>?\s*/dev/\S+")
 
-# A Bash call is examined for a write target only if one of these appears. The list stays
-# broad among real write verbs -- a false candidate costs one `unknown`, a missed one costs a
-# wrong "never mutated" verdict, and those two errors are not equally bad. `python -c` is NOT
-# here: it is a write only when it opens something for writing, which is checked separately.
+# A Bash call is examined for a write target only if one of these appears. Broad among real
+# write verbs: a false candidate costs one `unknown`, a missed one costs a wrong "never
+# mutated" verdict, and those two errors are not equally bad.
 WRITE_HINTS = re.compile(
     r"(?:^|[\s;&|(])(?:sed\s+-i|tee\b|patch\b|git\s+apply|cp\b|mv\b|dd\b|truncate\b|"
-    r"install\b|perl\s+-i)|>>?\s*\S|<<\s*['\"]?EOF",
+    r"install\b|perl\s+-i)|&>>?\s*\S|(?<![0-9<>&])>>?\s*\S|<<\s*['\"]?\w",
     re.MULTILINE,
 )
 
 # Redirects and the common in-place editors, each yielding a candidate path.
 TARGET_PATTERNS = (
-    re.compile(r">>?\s*([^\s;&|>]+)"),                     # cat > f / echo >> f
-    re.compile(r"\bsed\s+-i(?:\s+\S+)?\s+(?:-e\s+\S+\s+)*([^\s;&|]+)"),
+    re.compile(r"&>>?\s*([^\s;&|>]+)"),                    # printf x &> f   (both streams)
+    re.compile(r"(?<![0-9<>&])>>?\s*([^\s;&|>]+)"),         # cat > f / echo >> f
     re.compile(r"\btee\s+(?:-a\s+)?([^\s;&|]+)"),
-    re.compile(r"\bperl\s+-i\S*\s+(?:-\S+\s+)*([^\s;&|]+)"),
     re.compile(r"\bcp\s+(?:-\S+\s+)*\S+\s+([^\s;&|]+)"),
     re.compile(r"\bmv\s+(?:-\S+\s+)*\S+\s+([^\s;&|]+)"),
 )
 
-PY_WRITE = re.compile(r"python[0-9.]*\s+-c")
-PY_OPEN_W = re.compile(r"open\([^)]*['\"][wa]")
+# `sed -i` and `perl -i` take an optional in-place suffix argument (mandatory on BSD sed, where
+# `sed -i '' s/a/b/ f` is the idiom). An earlier pattern captured the SCRIPT as the target and
+# reported `s/a/b/` as the file. These take the LAST argument instead, which is the file.
+INPLACE_EDIT = re.compile(
+    r"""\b(?:sed|perl)\s+-i\S*(?:\s+(?:''|""|-e|-n|-E|\S+))*?\s+([^\s;&|]+)\s*$""",
+    re.MULTILINE)
+
+# An interpreter asked to write. The path is usually a quoted literal; when it cannot be
+# extracted the call becomes `unknown`, never "no write".
+INTERP = re.compile(r"\b(?:python[0-9.]*|perl|ruby|node)\b")
+INTERP_WRITES = re.compile(
+    r"open\([^)]*['\"][wa]|\.write_text\(|\.write_bytes\(|\.writelines\(|\.write\(|"
+    r"shutil\.(?:copy|move|copyfile|copy2)\(|os\.replace\(|os\.rename\(|Path\([^)]*\)\s*\.\s*write")
+QUOTED_PATH = re.compile(r"['\"]([A-Za-z0-9_./\-]+\.[A-Za-z0-9_]+)['\"]")
 
 TEST_RUN = re.compile(r"\b(?:pytest|tox|unittest|nox)\b")
 
@@ -121,14 +136,20 @@ def _bash_targets(cmd: str) -> tuple[list[str], int, int]:
     `unresolved` is reserved for a write this parser genuinely cannot place. A redirect to
     /dev/null is not a write; a redirect to an absolute path outside the checkout is a write
     we CAN place, just not in the tree. Conflating either with "unknown" would make the
-    unknown column meaningless, and an unknown that cries wolf is worse than no column.
+    unknown column meaningless.
+
+    This is deliberately NOT a shell parser and cannot become one. Command substitution,
+    `eval`, a path built from variables, a script that writes from inside a loop -- none of
+    these are resolvable here, and each must land in `unresolved` rather than be assumed
+    inert.
     """
     cmd = NONWRITE_REDIRECT.sub(" ", cmd)
-    if not WRITE_HINTS.search(cmd) and not (PY_WRITE.search(cmd) and PY_OPEN_W.search(cmd)):
+    interp_write = bool(INTERP.search(cmd) and INTERP_WRITES.search(cmd))
+    if not WRITE_HINTS.search(cmd) and not interp_write:
         return [], 0, 0
     found, outside, unresolved = [], 0, 0
     saw_candidate = False
-    for pat in TARGET_PATTERNS:
+    for pat in (*TARGET_PATTERNS, INPLACE_EDIT):
         for m in pat.finditer(cmd):
             n = _norm(m.group(1))
             if n == "":
@@ -139,9 +160,16 @@ def _bash_targets(cmd: str) -> tuple[list[str], int, int]:
                 outside += 1
             else:
                 found.append(n)
-    # A python -c that opens something for writing, target unknown to a regex.
-    if PY_WRITE.search(cmd) and PY_OPEN_W.search(cmd):
-        unresolved += 1
+    if interp_write:
+        # The interpreter is writing. Take quoted literal paths when they are there, and
+        # record an unresolved write when they are not -- never silence.
+        hits = [_norm(q) for q in QUOTED_PATH.findall(cmd)]
+        hits = [h for h in hits if h]
+        if hits:
+            found.extend(hits)
+            saw_candidate = True
+        else:
+            unresolved += 1
     if not saw_candidate and not unresolved:
         unresolved += 1                   # hint matched, nothing extractable at all
     return found, outside, unresolved
@@ -156,8 +184,7 @@ def load_calls(run: Path, arm: str, record: dict, source: str) -> tuple[list[dic
     2.8 MB for all twelve rows against 64 MB of traces.
 
     The records path is what makes the closeout reproducible from artifacts small enough to
-    live in the repository: the published tables rebuild from it with no model invoked and no
-    external fixture directory. `--check-sources` runs both and diffs them.
+    live in the repository. `--check-sources` runs both and diffs them.
     """
     if source == "records":
         return (list(record["tool_calls"]), record.get("result") or {},
@@ -174,8 +201,9 @@ def classify(run: Path, arm: str, tracked: set[str], record: dict,
     calls, env, health = load_calls(run, arm, record, source)
 
     first_src_mutation = None      # issue-order index of the first one
-    src_mutations, new_file_writes = 0, 0
-    outside_writes, unknown_writes = 0, 0
+    src_mutations, test_mutations, other_tracked_mutations = 0, 0, 0
+    new_file_writes = 0
+    outside_writes, unknown_writes, errored_write_attempts = 0, 0, 0
     retrieval, notes_reads, tool_errors, test_runs = [], 0, 0, 0
     got_ids: list[str] = []
 
@@ -210,15 +238,30 @@ def classify(run: Path, arm: str, tracked: set[str], record: dict,
         elif name == "Read" and NOTES_NAME in str(inp.get("file_path", "")):
             notes_reads += 1
 
+        # A call that ERRORED is not a call that wrote nothing. A shell command can create a
+        # file and then fail -- the h1 records contain exactly that: a script is written, then
+        # its import fails and the call is marked an error. Its writes are counted as
+        # UNKNOWN, never as absent.
         if err:
-            continue                       # a failed call mutated nothing
+            unknown_writes += len(targets) + outside + unresolved
+            if targets or outside or unresolved:
+                errored_write_attempts += 1
+            continue
         for n in targets:
-            if n in tracked:
+            if n not in tracked:
+                new_file_writes += 1
+                continue
+            # "tracked" is every path in the base tree, which includes tests and docs.
+            # Only `src/` is the implementation; conflating them would report an agent that
+            # edited a test as having edited source.
+            if n.startswith("src/"):
                 src_mutations += 1
                 if first_src_mutation is None:
                     first_src_mutation = c["index"]
+            elif n.startswith("tests/"):
+                test_mutations += 1
             else:
-                new_file_writes += 1
+                other_tracked_mutations += 1
         outside_writes += outside
         unknown_writes += unresolved
 
@@ -229,7 +272,10 @@ def classify(run: Path, arm: str, tracked: set[str], record: dict,
     return {
         "first_src_mutation": first_src_mutation,
         "src_mutations": src_mutations,
+        "test_mutations": test_mutations,
+        "other_tracked_mutations": other_tracked_mutations,
         "new_file_writes": new_file_writes,
+        "errored_write_attempts": errored_write_attempts,
         "outside_repo_writes": outside_writes,
         "unknown_writes": unknown_writes,
         "retrieval_calls": len(retrieval),
