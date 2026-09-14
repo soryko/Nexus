@@ -64,9 +64,12 @@ def consumed(scratch: Path) -> dict:
     A file that cannot be read raises rather than counting as zero: a budget enforced on a
     silently-partial sum is not a budget.
     """
+    # The glob matches ANY top-level directory, not `c<ceiling>` only. Quarantining the v1
+    # rows by renaming their directory once made this sum silently drop 6 425 690 consumed
+    # tokens -- a budget that stops counting when a directory is renamed is not a budget.
     tokens, usd, runs, from_trace = 0, 0.0, 0, 0
     counted: set[Path] = set()
-    for rec in sorted(scratch.glob("c*/run-*/attempt*/records.json")):
+    for rec in sorted(scratch.glob("*/run-*/attempt*/records.json")):
         data = json.loads(rec.read_text())
         for r in data["records"]:
             u = r.get("usage") or {}
@@ -76,7 +79,7 @@ def consumed(scratch: Path) -> dict:
             runs += 1
             counted.add(rec.parent / "arms" / r["arm"] / "trace.jsonl")
     # Arm-runs whose row never completed: their tokens were still spent.
-    for tr in sorted(scratch.glob("c*/run-*/attempt*/arms/*/trace.jsonl")):
+    for tr in sorted(scratch.glob("*/run-*/attempt*/arms/*/trace.jsonl")):
         if tr in counted:
             continue
         env = None
