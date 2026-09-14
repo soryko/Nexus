@@ -65,9 +65,11 @@ and "irrelevant" count memories delivered in those buckets, per the declared mix
 | nexus − notes | 4 | −0.167 | −0.500 | 0.000 |
 
 **No inferential claim is made from this interval and no difference is called established on
-it**, exactly as §5 requires. With one non-zero task contrast among four, the resampling
-distribution is degenerate: the interval describes the arithmetic of four numbers, not a
-population. The primary reporting remains the per-task table and the sign count above.
+it**, exactly as §5 requires. With one non-zero task contrast among four the resampling
+distribution is **discrete, not degenerate** — resampling four values of which one is non-zero
+admits exactly five possible means (0, −1/6, −1/3, −1/2, −2/3) and the interval has real width
+(0.500). What it lacks is a population behind it: it describes the arithmetic of four numbers.
+The primary reporting remains the per-task table and the sign count above.
 
 **Reporting deviation, disclosed.** The first release of this document computed no interval,
 on the reasoning that §5 forbade one. §5 forbade an *inferential claim from* the interval; it
@@ -93,7 +95,16 @@ That last count has since been checked against shell activity rather than truste
 can edit through `sed -i`, a heredoc or `patch` without a direct-mutator call, and six of the
 36 arm-runs did write files through Bash alone. Every Bash write target was resolved against
 the task's base tree. **All six wrote scratch or reproduction files; none reached tracked
-source.** The count stands, and now means what it appeared to mean.
+source.** The count stands.
+
+Two corrections to how that check was first reported. The detector originally missed `&>`
+redirects, interpreter writes through `pathlib`, and the BSD `sed -i` idiom, and it skipped
+every errored call on the assumption that a failed command writes nothing — which the h1
+records falsify, since a script is written there and the *next* step fails. It also counted
+every path in the base tree as "source": of 38 mutations first reported, **16 are under `src/`
+and 22 are under `tests/`** — agents added their own tests beside the fix, which is not source
+editing. Counterexamples for each defect are in
+[`test_diagnose_counterexamples.py`](test_diagnose_counterexamples.py).
 
 **Whether that turn cost caused the h2 failures is not established.** The two failing attempts
 spent 11 and 4 memory calls; the passing one spent 8. There is no dose-response across n = 3 on
@@ -110,12 +121,24 @@ it front-loads retrieval, and that this run cannot separate those two facts.
 | notes | 12/12 | 0 | 8 |
 
 Exclusions are balanced at zero: **no environment exclusion was recorded for any arm**, so
-the §5.3 imbalance threat does not apply on the evidence recorded. This establishes the
-absence of *recorded* exclusions, not the absence of every environment defect or of a
-differential tool problem that never produced one. Tool-error counts (baseline 38, nexus 39,
-notes 24) and a single permission denial in 36 arm-runs are reported in the diagnostics and
-likewise separate no arm. Truncation is not balanced — the notes arm finished
-within the ceiling more often — and it is reported as a fact, not a verdict.
+the §5.3 imbalance threat does not apply on the evidence recorded. That establishes the absence
+of *recorded* exclusions and nothing more.
+
+**Operational friction was in fact substantial, and an earlier version of this document
+understated it.** "One permission denial" counts one envelope field; it does not count sandbox
+denials, which appear in tool *output*. Re-reading the saved records for them:
+
+| defect | scope | effect |
+| --- | --- | --- |
+| shell heredocs fail: `can't create temp file for here document: operation not permitted` | reproduced in **every** arm-run | agents fall back to `printf` chains, at a cost in turns |
+| `import click` fails without `PYTHONPATH=src` | the checkout is src-layout and uninstalled; no arm was told the invocation | repeated failed reproductions, venv and `pip` attempts against a denied network |
+| `/tmp` is writable but not readable | several arms wrote a repro script to `/tmp` and could not read it back | wasted turns |
+
+The heredoc failure was traced to the sandbox profile: the shell writes its heredoc temp file
+under `/private/tmp`, which the profile admits only as a bare directory entry. It is a property
+of the harness, not of any arm, and it applied equally to all three — but "no arm was
+meaningfully obstructed" was not supportable and is withdrawn. Truncation is not balanced —
+the notes arm finished within the ceiling more often — and is reported as a fact, not a verdict.
 
 ## Attempt-level spread (never a test of the comparison)
 
@@ -142,8 +165,12 @@ ratio is computable.
    registered conditions — but it does not **discriminate between arms**: each contributes a
    tie to every contrast. The discriminating comparison rests on h2 and h4.
    The diagnostics add what the zeros were made of: across all 18 arm-runs on h1 and h3, **no
-   arm modified a tracked source file even once**. These are not failed patches; they are runs
-   that never produced a patch. See [`diagnostics-heldout-a1.md`](diagnostics-heldout-a1.md).
+   final source diff was recorded**, and no recorded command named a path under `src/` in a
+   write context. These are not failed patches; they are runs that produced no source change.
+   The stronger claim — that no arm ever touched source — is **not** established: 27 writes
+   across those 18 arm-runs could not be placed by the parser and are counted `unknown`, and a
+   file could in principle have been changed and restored within a run. See
+   [`diagnostics-heldout-a1.md`](diagnostics-heldout-a1.md).
 2. **Truncation is pervasive, and its effect is not established.** 29 of 36 arm-runs ended at
    `max_turns`. The registered 30-turn ceiling was calibrated on development tasks of 1–7
    hunks; the held-out set runs to 5 hunks and 6 functions. What can be said is that
@@ -183,12 +210,35 @@ ratio is computable.
 - **A memory arm that retrieves is not thereby a better arm.** On the evidence here it
   retrieved fluently — 11 of 13 memories delivered on h1, correctly including both stale ones —
   and converted none of it into a better outcome on any task.
-- **It cost more to do so.** Over all 12 arm-runs each, including failures, `nexus` spent
-  **1.43×** baseline's input tokens and **1.20×** its output tokens. Cost is reported across
-  all attempts rather than over successes only, because averaging an arm's cost over just its
-  wins flatters whichever arm fails more often. Measured in
-  [`diagnostics-heldout-a1.md`](diagnostics-heldout-a1.md).
-- **Retrieval is front-loaded and never repeated.** 22 retrieval calls fell before the first
-  source mutation and 1 after it, across the four `nexus` arm-runs that reached one; no memory
-  body was fetched twice in any arm-run. Both are descriptions of the observed workflow, not
-  explanations of any failure.
+- **It consumed more to do so.** Over all 12 arm-runs each, including failures:
+
+  | recorded field | baseline | nexus | nexus / baseline |
+  | --- | ---: | ---: | ---: |
+  | `input_tokens` | 251 839 | 361 051 | **1.43×** |
+  | `cache_read_input_tokens` | 5 224 704 | 8 202 624 | **1.57×** |
+  | `cache_creation_input_tokens` | 0 | 0 | — |
+  | input + cache-read | 5 476 543 | 8 563 675 | **1.56×** |
+  | `output_tokens` | 136 651 | 164 255 | **1.20×** |
+
+  An earlier version of this document reported only the **1.43×**. That figure is arithmetically
+  right and materially incomplete: cache-read volume is roughly twenty times the uncached input,
+  and omitting it understates what the memory arm consumed. Both fields are reported here and
+  any combined figure is labelled as combined.
+
+  **None of these is a dollar ratio.** `runner-a1.md` §3 found `"costBasis":"unknown"` on this
+  model and concluded the dollar figure has no established provenance, so A1 quotes no cost.
+  Token counts come from the provider and remain valid accounting; converting them to money
+  would need verified rates this project does not have.
+
+  Reported across all attempts rather than over successes only, because averaging an arm's
+  consumption over just its wins flatters whichever arm fails more often.
+- **Retrieval is front-loaded, and no body was fetched twice.** Of 12 `nexus` arm-runs, **four**
+  reached a recorded source mutation; in those four, 22 retrieval calls fell before the first
+  mutation and 1 after it. The **other eight reached no mutation and spent a further 63
+  retrieval calls**, so the 22/1 split describes four runs and not the arm. No memory body was
+  fetched twice in any arm-run.
+
+  **Zero repeats does not dispose of batching.** Batching would combine several *different*
+  body fetches into fewer agent–tool round trips, and this run says nothing about that
+  mechanism either way. What the evidence rules out is only the narrower case for batching that
+  rests on re-reading. Both figures describe the observed workflow and explain no failure.
