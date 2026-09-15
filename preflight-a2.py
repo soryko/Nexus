@@ -32,7 +32,7 @@ import a1_config, identity as I, run_calibration as RC
 # a row records and what decides whether two rows may be pooled. HEAD is reported, not
 # asserted, and the HEAD this script approves is the checkout to run from and to leave alone.
 FROZEN = {"product": "2cd531f9d7c274a065533e58ba3fde8582f8c269",
-          "harness": "19b843e437f2b1bf68080ae4e38f373f1c3d7715",
+          "harness": "9e5e1e040094b7d44e5712d3028afa5af3f45776",
           "config": {30: "69df5d49a39142c4", 45: "396c0d2d48a22eed", 60: "b64cc9c137544b7a"},
           "prompt": {"k1": "6bbe10c01d7e520d", "k2": "d47e3eaa44a8d22c",
                      "k3": "905bf3bd43df8756", "k4": "6fd3cb4335a4c1dd"},
@@ -65,6 +65,20 @@ for t, want in FROZEN["prompt"].items():
 import shutil
 ck("no virtualenv active", os.environ.get("VIRTUAL_ENV") or "none", "none")
 ck("python3 resolves to", shutil.which("python3") or "(not found)", "/opt/homebrew/bin/python3")
+
+# The forwarder is the only egress an arm has, and the runbook's step 0 is to start it and
+# leave it up. Nothing checked it: on 2026-09-14 it was down, every arm got
+# `API Error: Connection refused`, and the sweep wrote 36 excluded arm-runs over two hours and
+# called itself completed. The per-arm gate now refuses on this too, from INSIDE the sandbox,
+# which is the authoritative check; this one just fails in a second rather than in a minute.
+import socket
+def _forwarder(port=8899):
+    try:
+        socket.create_connection(("127.0.0.1", port), 3).close()
+        return "listening"
+    except OSError as exc:
+        return f"not listening ({exc.__class__.__name__})"
+ck("model forwarder on :8899", _forwarder(), "listening")
 
 led = RC.consumed(Path("/Users/soko/Cerebros/nexus-a1-fixtures/calib-run"))
 ck("ledger charged", str(led["tokens_budgeted"]), str(FROZEN["charged"]))

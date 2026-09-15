@@ -50,7 +50,7 @@ python3 preflight-a2.py && echo "safe to launch"
 | | |
 | --- | --- |
 | `product_revision` | `2cd531f9d7c274a065533e58ba3fde8582f8c269` |
-| `harness_revision` | `19b843e437f2b1bf68080ae4e38f373f1c3d7715` |
+| `harness_revision` | `9e5e1e040094b7d44e5712d3028afa5af3f45776` |
 | `config_version` | `calib-v2` |
 | `schedule_digest` | `0a352b82ced14f10e85d50d17989ac38e02d4d9582c032ed743a75554a6a5d97` |
 | `corpus_digest` (all three ceilings) | `9ae2a9f268dd894d` |
@@ -74,13 +74,13 @@ identifiable anyway: a configuration that hashes to one of these is the one that
 
 ## Verification evidence
 
-`benchmarks/agent/PRELAUNCH-VERIFICATION.md` stamps **`401deb69f61642216ab6a3d59985b8d51196b2df`**,
+`benchmarks/agent/PRELAUNCH-VERIFICATION.md` stamps **`d39f884e1b62332919db3ad7d2f62dd189b24dcf`**,
 the revision it tested, and all five checks pass there. `harness_revision` is one commit ahead
 of that because committing the report is itself a commit under `benchmarks/agent`. A report
 cannot contain its own future hash, so what settles it is the intervening diff:
 
 ```bash
-git diff --name-only 401deb6 19b843e | grep -vE 'PRELAUNCH-VERIFICATION.md|verification-logs/'
+git diff --name-only d39f884 9e5e1e0 | grep -vE 'PRELAUNCH-VERIFICATION.md|verification-logs/'
 ```
 
 That is empty — **no executable code, configuration or prompt differs between the verified
@@ -137,6 +137,28 @@ resolution of `python3`, and refuses.
 ```bash
 deactivate 2>/dev/null; python3 preflight-a2.py    # must print PREFLIGHT OK
 ```
+
+## Start the forwarder first, and leave it up
+
+`RUNBOOK-a1.md` §0: every arm reaches the model through `model_forwarder.py` and through
+nothing else, because the sandbox denies all other egress.
+
+```bash
+python3 benchmarks/agent/model_forwarder.py &
+```
+
+**Nothing used to check this.** On 2026-09-14 it was not running. Every one of 36 arm-runs
+returned `API Error: Connection refused`, terminated `env_fail`, and recorded an honest zero
+usage block — and because `env_fail` is a per-arm classification rather than a runner failure,
+every runner exited 0, nothing was unresolved, the token accounting was correct at zero, and
+the driver wrote `"stopping_reason": "completed"` and exited 0 after two hours of measuring
+nothing.
+
+Two guards now exist. The arm environment gate checks the forwarder is reachable **from inside
+the boundary** — the paired positive half of `egress denied`, a TCP connect only, since an HTTP
+request there would be a model call. And the driver refuses to call a row complete when not one
+of its arm-runs is scored, so an instrument that is down costs one row rather than twelve;
+`scored_arm_runs` and `excluded_arm_runs` sit beside the token counts in every summary.
 
 ## The invocation
 
