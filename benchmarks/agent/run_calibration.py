@@ -258,6 +258,38 @@ def consumed(scratch: Path) -> dict:
             "consumption_certain": not unresolved and not allowances}
 
 
+def row_verdicts(records: Path) -> tuple[int, int]:
+    """-> (scored, total) arm-runs in a row that completed.
+
+    `terminal_status` already classifies every arm-run, and protocol-a1 §10 EXCLUDES
+    `env_fail` and `unknown` from scored sets: a harness, auth or transport fault is not a
+    result. The driver never read that verdict. So a row in which no arm reached the model at
+    all was a completed row -- it had a records.json, its usage blocks were honest zeros, and
+    nothing was unresolved. On 2026-09-14 the forwarder was not running, every one of 36
+    arm-runs returned `API Error: Connection refused`, and the sweep reported
+    `"stopping_reason": "completed"` and exited 0 having measured nothing.
+    """
+    recs = json.loads(records.read_text()).get("records", [])
+    return sum(1 for r in recs if (r.get("terminal") or {}).get("scored")), len(recs)
+
+
+def grid_verdicts(scratch: Path) -> dict:
+    """What the grid has actually MEASURED, as against what it has written files about."""
+    scored = excluded = 0
+    barren: list[str] = []
+    for rec in sorted(scratch.glob("*/run-*/attempt*/records.json")):
+        try:
+            s, t = row_verdicts(rec)
+        except (ValueError, KeyError):
+            continue
+        scored += s
+        excluded += t - s
+        if t and not s:
+            barren.append(str(rec.parent))
+    return {"scored_arm_runs": scored, "excluded_arm_runs": excluded,
+            "rows_with_no_scored_arm_run": barren}
+
+
 def row_reserve(scratch: Path, ceiling: int) -> int:
     """The largest row observed at this ceiling, or the seed if none has run yet.
 
@@ -365,7 +397,7 @@ def main(argv: list[str]) -> int:
                       f"order {'->'.join(row['order'])}")
         return 0
 
-    stopped, errored, blocked = None, False, None
+    stopped, errored, blocked, instrument = None, False, None, None
     for ceiling in ceilings:
         root = scratch / f"c{ceiling}"
         config = config_for(ceiling)
@@ -396,7 +428,16 @@ def main(argv: list[str]) -> int:
                         f"{out} was produced under a different configuration ({why}). "
                         f"Refusing to resume: rows from different configurations are not "
                         f"pooled. Move it aside or run into a fresh scratch directory.")
-                print(f"  [skip] ceiling {ceiling} {task}: records.json exists, identity matches")
+                scored, total = row_verdicts(out)
+                if total and not scored:
+                    raise SystemExit(
+                        f"{out} records {total} arm-run(s) and NOT ONE of them is scored -- "
+                        f"every one is an excluded terminal (a harness, auth or transport "
+                        f"fault). That is not a completed row and resuming over it would "
+                        f"treat an instrument failure as a result. Move it aside, then run "
+                        f"again.")
+                print(f"  [skip] ceiling {ceiling} {task}: records.json exists, identity "
+                      f"matches, {scored}/{total} arm-runs scored")
                 continue
 
             # A row whose records.json is absent but whose arm directories exist was
@@ -474,14 +515,26 @@ def main(argv: list[str]) -> int:
                 errored = True
                 print(f"    row did not complete; stopping rather than spending the next one")
                 break
+            # A row can exit 0 having measured nothing: `env_fail` is a per-arm terminal
+            # classification, not a runner failure. If no arm in the row is scored, the
+            # instrument is down -- continuing writes eleven more rows of the same and calls
+            # the result `completed`.
+            scored, total = row_verdicts(out) if out.exists() else (0, 0)
+            print(f"    {scored}/{total} arm-runs scored")
+            if total and not scored:
+                instrument = (ceiling, task, total)
+                print(f"    NOT ONE arm-run in this row is scored: every terminal is "
+                      f"excluded (harness, auth or transport). Stopping.")
+                break
 
         # A failed row stops the SWEEP, not just this ceiling. The inner `break` left the
         # outer loop free to start the next ceiling, so one broken runner launched three
         # ceilings in a row and the driver still exited 0.
-        if stopped or errored or blocked:
+        if stopped or errored or blocked or instrument:
             break
 
     total = consumed(scratch)
+    verdicts = grid_verdicts(scratch)
     # What the budget is CHARGED is always known: it is measurement plus assumption, and both
     # are recorded. What was CONSUMED is known only when nothing is outstanding and nothing
     # was assumed -- an allowance clears the blocker, it does not establish a fact.
@@ -496,6 +549,9 @@ def main(argv: list[str]) -> int:
         "allowance_superseded_arm_runs": total["allowance_superseded_arm_runs"],
         "allowance_rejected": total["allowance_rejected"],
         "arm_runs": total["arm_runs"],
+        # Files written is not the same quantity as measurements taken. A grid can be full of
+        # complete, parseable, honestly-zero rows and contain no measurement at all.
+        **verdicts,
         "unresolved_arm_runs": total["unresolved_arm_runs"],
         "usd_unprovenanced": total["usd_unprovenanced"],
         "row_reserve_used": {str(c): row_reserve(scratch, c) for c in ceilings},
@@ -506,6 +562,8 @@ def main(argv: list[str]) -> int:
         # would ever look again.
         "stopping_reason": ("gate_or_error" if errored else
                             "unresolved_accounting" if total["unresolved"] else
+                            "instrument_fault" if instrument or
+                            verdicts["rows_with_no_scored_arm_run"] else
                             "budget" if stopped else "completed"),
         "stopped_at": None if not stopped else
             {"ceiling": stopped[0], "task": stopped[1],
@@ -528,6 +586,8 @@ def main(argv: list[str]) -> int:
     print(f"\ncharged {total['tokens_budgeted']:,} of {CAP_TOKENS:,} tokens over "
           f"{total['arm_runs']} arm-runs "
           f"({total['tokens_known']:,} measured + {total['tokens_allowance']:,} allowance)")
+    print(f"{verdicts['scored_arm_runs']} arm-run(s) scored, "
+          f"{verdicts['excluded_arm_runs']} excluded (harness, auth or transport faults)")
     if total["allowance_arm_runs"]:
         print(f"{len(total['allowance_arm_runs'])} arm-run(s) are carried by a written "
               f"allowance, not a measurement. The charge is exact; consumption is not.")
@@ -549,6 +609,15 @@ def main(argv: list[str]) -> int:
         return 1
     if blocked:
         print(f"\nSTOPPED BEFORE THE NEXT ROW: {blocked}")
+        return 1
+    if instrument or verdicts["rows_with_no_scored_arm_run"]:
+        where = (f"ceiling {instrument[0]} {instrument[1]}" if instrument
+                 else "; ".join(verdicts["rows_with_no_scored_arm_run"]))
+        print(f"\nNOTHING WAS MEASURED in at least one row ({where}). Every arm-run there is "
+              f"an EXCLUDED terminal -- a harness, auth or transport fault, not a result. "
+              f"{verdicts['scored_arm_runs']} arm-run(s) scored, "
+              f"{verdicts['excluded_arm_runs']} excluded across the grid. This is NOT a "
+              f"completed calibration.")
         return 1
     if total["unresolved"]:
         # Reached when the unaccounted arm-run is in the LAST row, or when a resume skipped

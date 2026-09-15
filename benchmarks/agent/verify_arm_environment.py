@@ -76,6 +76,32 @@ def check_tests(profile: Path, repo: Path, env: dict, target: str) -> dict:
                       f":: {out.splitlines()[-1] if out else ''}"}
 
 
+def check_forwarder(profile: Path, repo: Path, env: dict) -> dict:
+    """The one egress the boundary PERMITS must work -- the positive half of `egress denied`.
+
+    `check_egress` proves the boundary holds. Nothing proved the single route through it was
+    open, and on 2026-09-14 it was not: the forwarder had not been started, every arm got
+    `API Error: Connection refused`, and 36 arm-runs across three ceilings recorded honest
+    zeros and an excluded terminal after nine and a half minutes each.
+
+    A TCP connect and nothing more. An HTTP request here would be a model call, and a gate
+    that spends is not a gate.
+    """
+    url = env.get("ANTHROPIC_BASE_URL", "")
+    m = re.match(r"https?://([^:/]+):(\d+)", url)
+    if not m:
+        return {"check": "model forwarder reachable", "passed": False,
+                "detail": f"ANTHROPIC_BASE_URL={url!r} names no host and port"}
+    host, port = m.group(1), m.group(2)
+    probe = ("python3 -c \"import socket; "
+             f"s=socket.create_connection(('{host}',{port}),5); s.close(); "
+             "print('FORWARDER-OK')\"")
+    d = _sh(profile, repo, env, probe, timeout=30)
+    out = (d.stdout + d.stderr).strip()
+    return {"check": "model forwarder reachable", "passed": "FORWARDER-OK" in d.stdout,
+            "detail": f"{host}:{port} :: {out.splitlines()[-1] if out else '(no output)'}"}
+
+
 def check_heredoc(profile: Path, repo: Path, env: dict) -> dict:
     d = _sh(profile, repo, env, "cat <<EOF\nHEREDOC-OK\nEOF", timeout=60)
     return {"check": "here-document works",
@@ -128,6 +154,10 @@ def run(arm: Path, env: dict, test_target: str = "tests/test_context.py",
         check_heredoc(profile, repo, env),
         check_scratch(profile, repo, env),
         check_egress(profile, repo),
+        # Paired with the line above: the boundary must hold, AND the one route through it
+        # must be open. Proving only the first is how a sweep spends two hours reaching
+        # nothing.
+        check_forwarder(profile, repo, env),
     ]
     if other_arm is not None:
         checks.append(check_heredoc_private(profile, repo, env,

@@ -595,13 +595,17 @@ def _stub_configs(tmp: Path, ceilings=(30, 45, 60)) -> dict:
 
 def _stub_driver(tmp: Path, cap: int, tokens_per_arm: int, seed_reserve=None,
                  runner_rc: int = 0, launches: list | None = None,
-                 no_usage_at: tuple | None = None, ceilings: tuple = (30, 45)):
+                 no_usage_at: tuple | None = None, ceilings: tuple = (30, 45),
+                 unscored_at: tuple | None = None):
     """Run the real driver with a stubbed runner. No model, no sandbox, no network.
 
     The published revision crashed HERE, on the line after the last row, with
     `NameError: name 'spent' is not defined` -- the token-accounting change had removed the
     function the summary block still called. --dry-run returns before that line, so every
     rehearsal passed while the only path that writes a summary was broken.
+
+    `unscored_at` is an exact `(ceiling, task)` pair whose every arm gets an EXCLUDED
+    terminal -- what the runner writes when an arm never reached the model.
 
     `no_usage_at` is an exact `(ceiling, task, arm)` triple, because WHERE the unaccounted
     arm-run sits is the whole question. An earlier version of this stub injected by task NAME
@@ -643,9 +647,14 @@ def _stub_driver(tmp: Path, cap: int, tokens_per_arm: int, seed_reserve=None,
         for arm in ("baseline", "nexus", "notes"):
             (at / "arms" / arm).mkdir(parents=True, exist_ok=True)
             (at / "arms" / arm / "trace.jsonl").write_text('{"type":"result","usage":{}}\n')
+            # A terminal verdict, as the runner writes one. `scored: False` is an excluded
+            # terminal -- a harness, auth or transport fault, which is not a result.
+            excluded = unscored_at == (ceiling, task)
             recs.append({"arm": arm,
                          "usage": dict(blank) if no_usage_at == (ceiling, task, arm)
-                         else {"input_tokens": tokens_per_arm}})
+                         else {"input_tokens": 0 if excluded else tokens_per_arm},
+                         "terminal": {"terminal": "env_fail" if excluded else "ok",
+                                      "scored": not excluded}})
         (at / "records.json").write_text(json.dumps({
             "task": task, "attempt": int(attempt), "schedule_digest": digest,
             "identity": idents[(ceiling, task)], "records": recs}))
@@ -783,6 +792,74 @@ def test_the_sweeps_very_last_arm_run_cannot_report_completion():
     check("resume: not reported as completed",
           summary2 and summary2["stopping_reason"] == "unresolved_accounting",
           str(summary2 and summary2["stopping_reason"]))
+
+
+def test_a_row_that_measured_nothing_stops_the_sweep():
+    """The 2026-09-14 void sweep. The forwarder was not running, every arm returned
+    `API Error: Connection refused`, and all 36 arm-runs recorded an excluded terminal with an
+    honest zero usage block. Nothing was unresolved, no runner exited nonzero, and the driver
+    wrote `"stopping_reason": "completed"` and exited 0 having measured nothing at all -- after
+    nine and a half minutes per row for two hours.
+
+    `env_fail` is a per-arm classification, not a runner failure, so only the verdict says so.
+    """
+    tmp = _tmp()
+    launches: list = []
+    rc, summary = _stub_driver(tmp, cap=10_000_000, tokens_per_arm=1000, launches=launches,
+                               unscored_at=(30, "k1"), ceilings=(30, 45, 60))
+    check("stops at the first barren row", len(launches) == 1, str(launches))
+    check("driver exits nonzero", rc != 0, str(rc))
+    check("summary written", summary is not None)
+    if summary:
+        check("reason names the instrument",
+              summary["stopping_reason"] == "instrument_fault", summary["stopping_reason"])
+        check("nothing scored", summary["scored_arm_runs"] == 0, str(summary["scored_arm_runs"]))
+        check("three excluded", summary["excluded_arm_runs"] == 3,
+              str(summary["excluded_arm_runs"]))
+        check("names the barren row",
+              len(summary["rows_with_no_scored_arm_run"]) == 1,
+              str(summary["rows_with_no_scored_arm_run"]))
+
+
+def test_a_barren_row_later_in_the_grid_also_stops_it():
+    """Including at the very last row, where no pre-launch check follows."""
+    tmp = _tmp()
+    launches: list = []
+    rc, summary = _stub_driver(tmp, cap=10_000_000, tokens_per_arm=1000, launches=launches,
+                               unscored_at=(60, "k4"), ceilings=(30, 45, 60))
+    check("ran the whole grid", len(launches) == 12, str(len(launches)))
+    check("final barren row: exits nonzero", rc != 0, str(rc))
+    check("final barren row: instrument_fault",
+          summary and summary["stopping_reason"] == "instrument_fault",
+          str(summary and summary["stopping_reason"]))
+    check("the scored rows are still counted",
+          summary and summary["scored_arm_runs"] == 33, str(summary and summary["scored_arm_runs"]))
+
+
+def test_resume_refuses_a_row_that_measured_nothing():
+    """Resuming over a barren row would treat an instrument failure as a completed row, and
+    the identity matches, so nothing else would refuse it."""
+    tmp = _tmp()
+    _stub_driver(tmp, cap=10_000_000, tokens_per_arm=1000,
+                 unscored_at=(30, "k1"), ceilings=(30, 45, 60))
+    import run_calibration as R
+    try:
+        rc, summary = _stub_driver(tmp, cap=10_000_000, tokens_per_arm=1000,
+                                   ceilings=(30, 45, 60))
+        check("resume over a barren row refuses", False, f"resumed instead: rc={rc}")
+    except SystemExit as e:
+        check("resume over a barren row refuses",
+              "not one of them is scored" in str(e).lower(), str(e)[:200])
+
+
+def test_one_scored_arm_is_enough_to_continue():
+    """Protocol-a1 §10 excludes env_fail from scored SETS; it does not make a row worthless.
+    The rule here is about a row that measured NOTHING, not about any exclusion at all."""
+    tmp = _tmp()
+    rc, summary = _stub_driver(tmp, cap=10_000_000, tokens_per_arm=1000, ceilings=(30,))
+    check("ordinary sweep still completes", rc == 0, str(rc))
+    check("all arms scored", summary["scored_arm_runs"] == 12, str(summary["scored_arm_runs"]))
+    check("none excluded", summary["excluded_arm_runs"] == 0, str(summary["excluded_arm_runs"]))
 
 
 def test_a_fully_accounted_sweep_still_completes():
