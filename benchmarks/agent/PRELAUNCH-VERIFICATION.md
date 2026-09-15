@@ -5,9 +5,9 @@ check fails. Full untruncated output for every check is in `verification-logs/`;
 are excerpts, and the logs are the record.
 
 ```
-revision           d39f884e1b62332919db3ad7d2f62dd189b24dcf
+revision           f7354665e4e5af297a6cf002ea1ffc1c82a16355
 branch             docs/a2-calibration
-date (UTC)         2026-09-15T06:57:34Z
+date (UTC)         2026-09-15T07:00:25Z
 config version     calib-v2
 schedule digest    0a352b82ced14f10
 checks failed      0
@@ -39,10 +39,10 @@ checks failed      0
 charged 35,000 of 10,000,000 tokens over 36 arm-runs (35,000 measured + 0 allowance)
 36 arm-run(s) scored, 0 excluded (harness, auth or transport faults)
 UNRESOLVED: 1 arm-run(s) have no usable usage record. Total consumption is a LOWER BOUND and overshoot cannot be computed.
-    /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpkkrte_td/c60/run-k4/attempt1/arms/notes
+    /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmp7kdwu_s9/c60/run-k4/attempt1/arms/notes
 
 THE SWEEP IS NOT ACCOUNTED FOR: it ran to its last row, but the arm-run(s) above have no usable usage record. This is NOT a completed calibration.
-47/47 counterexample groups pass
+48/48 counterexample groups pass
 ```
 
 ## Write-detector counterexamples
@@ -70,7 +70,7 @@ ALL CHECKS PASS
   tmpprefix_set: True
   heredoc_tail: ['heredoc-ok']
   other_control_tail: ['CONTROL-FOR-ARM-B']
-  cross_arm_tail: ['cat: /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpj158yvuc/armA/tmp/zsh_sentinel: Operation not permitted']
+  cross_arm_tail: ['cat: /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmp3_f85l6n/armA/tmp/zsh_sentinel: Operation not permitted']
 
 isolation demonstrated: heredocs work, the sibling sandbox runs, and it cannot read this arm's heredoc scratch
 ```
@@ -85,5 +85,5 @@ isolation demonstrated: heredocs work, the sibling sandbox runs, and it cannot r
 =========================== short test summary info ============================
 SKIPPED [1] ../../tests/core/test_b2a_mutations.py:138: development run: set NEXUS_MUTATION_MATRIX=1
 SKIPPED [1] ../../tests/core/test_b2b_mutations.py:410: development run: set NEXUS_MUTATION_MATRIX=1
-334 passed, 2 skipped in 28.38s
+334 passed, 2 skipped in 29.92s
 ```
