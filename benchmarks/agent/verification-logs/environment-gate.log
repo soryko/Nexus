@@ -3,5 +3,6 @@
   [PASS] here-document works                        ['HEREDOC-OK']
   [PASS] scratch file round-trips in the checkout   ['SCRATCH-OK']
   [PASS] egress denied (paired control)             blocked_inside=True works_outside=True
+  [PASS] model forwarder reachable                  127.0.0.1:8899 :: FORWARDER-OK
 
 ALL CHECKS PASS

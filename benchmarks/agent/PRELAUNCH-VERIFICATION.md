@@ -5,9 +5,9 @@ check fails. Full untruncated output for every check is in `verification-logs/`;
 are excerpts, and the logs are the record.
 
 ```
-revision           401deb69f61642216ab6a3d59985b8d51196b2df
+revision           d39f884e1b62332919db3ad7d2f62dd189b24dcf
 branch             docs/a2-calibration
-date (UTC)         2026-09-14T19:03:00Z
+date (UTC)         2026-09-15T06:57:34Z
 config version     calib-v2
 schedule digest    0a352b82ced14f10
 checks failed      0
@@ -23,26 +23,26 @@ checks failed      0
 
 ## Accounting and driver counterexamples
 ```
-ceilings [30, 45, 60]  |  4 rows each  |  36 arm-runs  |  cap 10,000,000 tokens
-  [skip] ceiling 30 k1: records.json exists, identity matches
-  [skip] ceiling 30 k2: records.json exists, identity matches
-  [skip] ceiling 30 k3: records.json exists, identity matches
-  [skip] ceiling 30 k4: records.json exists, identity matches
-  [skip] ceiling 45 k1: records.json exists, identity matches
-  [skip] ceiling 45 k2: records.json exists, identity matches
-  [skip] ceiling 45 k3: records.json exists, identity matches
-  [skip] ceiling 45 k4: records.json exists, identity matches
-  [skip] ceiling 60 k1: records.json exists, identity matches
-  [skip] ceiling 60 k2: records.json exists, identity matches
-  [skip] ceiling 60 k3: records.json exists, identity matches
-  [skip] ceiling 60 k4: records.json exists, identity matches
+  [skip] ceiling 30 k1: records.json exists, identity matches, 3/3 arm-runs scored
+  [skip] ceiling 30 k2: records.json exists, identity matches, 3/3 arm-runs scored
+  [skip] ceiling 30 k3: records.json exists, identity matches, 3/3 arm-runs scored
+  [skip] ceiling 30 k4: records.json exists, identity matches, 3/3 arm-runs scored
+  [skip] ceiling 45 k1: records.json exists, identity matches, 3/3 arm-runs scored
+  [skip] ceiling 45 k2: records.json exists, identity matches, 3/3 arm-runs scored
+  [skip] ceiling 45 k3: records.json exists, identity matches, 3/3 arm-runs scored
+  [skip] ceiling 45 k4: records.json exists, identity matches, 3/3 arm-runs scored
+  [skip] ceiling 60 k1: records.json exists, identity matches, 3/3 arm-runs scored
+  [skip] ceiling 60 k2: records.json exists, identity matches, 3/3 arm-runs scored
+  [skip] ceiling 60 k3: records.json exists, identity matches, 3/3 arm-runs scored
+  [skip] ceiling 60 k4: records.json exists, identity matches, 3/3 arm-runs scored
 
 charged 35,000 of 10,000,000 tokens over 36 arm-runs (35,000 measured + 0 allowance)
+36 arm-run(s) scored, 0 excluded (harness, auth or transport faults)
 UNRESOLVED: 1 arm-run(s) have no usable usage record. Total consumption is a LOWER BOUND and overshoot cannot be computed.
-    /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpx5jqnzhn/c60/run-k4/attempt1/arms/notes
+    /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpkkrte_td/c60/run-k4/attempt1/arms/notes
 
 THE SWEEP IS NOT ACCOUNTED FOR: it ran to its last row, but the arm-run(s) above have no usable usage record. This is NOT a completed calibration.
-43/43 counterexample groups pass
+47/47 counterexample groups pass
 ```
 
 ## Write-detector counterexamples
@@ -57,6 +57,7 @@ THE SWEEP IS NOT ACCOUNTED FOR: it ran to its last row, but the arm-run(s) above
   [PASS] here-document works                        ['HEREDOC-OK']
   [PASS] scratch file round-trips in the checkout   ['SCRATCH-OK']
   [PASS] egress denied (paired control)             blocked_inside=True works_outside=True
+  [PASS] model forwarder reachable                  127.0.0.1:8899 :: FORWARDER-OK
 
 ALL CHECKS PASS
 ```
@@ -69,7 +70,7 @@ ALL CHECKS PASS
   tmpprefix_set: True
   heredoc_tail: ['heredoc-ok']
   other_control_tail: ['CONTROL-FOR-ARM-B']
-  cross_arm_tail: ['cat: /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpa60c0m8o/armA/tmp/zsh_sentinel: Operation not permitted']
+  cross_arm_tail: ['cat: /var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/tmpj158yvuc/armA/tmp/zsh_sentinel: Operation not permitted']
 
 isolation demonstrated: heredocs work, the sibling sandbox runs, and it cannot read this arm's heredoc scratch
 ```
@@ -84,5 +85,5 @@ isolation demonstrated: heredocs work, the sibling sandbox runs, and it cannot r
 =========================== short test summary info ============================
 SKIPPED [1] ../../tests/core/test_b2a_mutations.py:138: development run: set NEXUS_MUTATION_MATRIX=1
 SKIPPED [1] ../../tests/core/test_b2b_mutations.py:410: development run: set NEXUS_MUTATION_MATRIX=1
-334 passed, 2 skipped in 28.33s
+334 passed, 2 skipped in 28.38s
 ```
