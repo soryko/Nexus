@@ -32,7 +32,7 @@ import a1_config, identity as I, run_calibration as RC
 # a row records and what decides whether two rows may be pooled. HEAD is reported, not
 # asserted, and the HEAD this script approves is the checkout to run from and to leave alone.
 FROZEN = {"product": "2cd531f9d7c274a065533e58ba3fde8582f8c269",
-          "harness": "9e5e1e040094b7d44e5712d3028afa5af3f45776",
+          "harness": "cbbaad64b4287fb90481fa79338dd6ac3cdac3be",
           "config": {30: "69df5d49a39142c4", 45: "396c0d2d48a22eed", 60: "b64cc9c137544b7a"},
           "prompt": {"k1": "6bbe10c01d7e520d", "k2": "d47e3eaa44a8d22c",
                      "k3": "905bf3bd43df8756", "k4": "6fd3cb4335a4c1dd"},

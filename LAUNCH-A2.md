@@ -50,7 +50,7 @@ python3 preflight-a2.py && echo "safe to launch"
 | | |
 | --- | --- |
 | `product_revision` | `2cd531f9d7c274a065533e58ba3fde8582f8c269` |
-| `harness_revision` | `9e5e1e040094b7d44e5712d3028afa5af3f45776` |
+| `harness_revision` | `cbbaad64b4287fb90481fa79338dd6ac3cdac3be` |
 | `config_version` | `calib-v2` |
 | `schedule_digest` | `0a352b82ced14f10e85d50d17989ac38e02d4d9582c032ed743a75554a6a5d97` |
 | `corpus_digest` (all three ceilings) | `9ae2a9f268dd894d` |
@@ -74,13 +74,13 @@ identifiable anyway: a configuration that hashes to one of these is the one that
 
 ## Verification evidence
 
-`benchmarks/agent/PRELAUNCH-VERIFICATION.md` stamps **`d39f884e1b62332919db3ad7d2f62dd189b24dcf`**,
+`benchmarks/agent/PRELAUNCH-VERIFICATION.md` stamps **`f7354665e4e5af297a6cf002ea1ffc1c82a16355`**,
 the revision it tested, and all five checks pass there. `harness_revision` is one commit ahead
 of that because committing the report is itself a commit under `benchmarks/agent`. A report
 cannot contain its own future hash, so what settles it is the intervening diff:
 
 ```bash
-git diff --name-only d39f884 9e5e1e0 | grep -vE 'PRELAUNCH-VERIFICATION.md|verification-logs/'
+git diff --name-only f735466 cbbaad6 | grep -vE 'PRELAUNCH-VERIFICATION.md|verification-logs/'
 ```
 
 That is empty — **no executable code, configuration or prompt differs between the verified
