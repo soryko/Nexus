@@ -838,18 +838,40 @@ def test_a_barren_row_later_in_the_grid_also_stops_it():
 
 def test_resume_refuses_a_row_that_measured_nothing():
     """Resuming over a barren row would treat an instrument failure as a completed row, and
-    the identity matches, so nothing else would refuse it."""
+    its identity matches, so nothing else would refuse it. It refuses THROUGH the summary --
+    a durable record and a nonzero exit, not a raise past the line that writes one."""
     tmp = _tmp()
     _stub_driver(tmp, cap=10_000_000, tokens_per_arm=1000,
                  unscored_at=(30, "k1"), ceilings=(30, 45, 60))
-    import run_calibration as R
-    try:
-        rc, summary = _stub_driver(tmp, cap=10_000_000, tokens_per_arm=1000,
-                                   ceilings=(30, 45, 60))
-        check("resume over a barren row refuses", False, f"resumed instead: rc={rc}")
-    except SystemExit as e:
-        check("resume over a barren row refuses",
-              "not one of them is scored" in str(e).lower(), str(e)[:200])
+    resumed: list = []
+    rc, summary = _stub_driver(tmp, cap=10_000_000, tokens_per_arm=1000,
+                               launches=resumed, ceilings=(30, 45, 60))
+    check("resume launches nothing", resumed == [], str(resumed))
+    check("resume exits nonzero", rc != 0, str(rc))
+    check("resume writes a summary", summary is not None)
+    check("resume names the instrument",
+          summary and summary["stopping_reason"] == "instrument_fault",
+          str(summary and summary["stopping_reason"]))
+
+
+def test_a_quarantined_barren_row_does_not_poison_later_sweeps():
+    """The void rows stay in the scratch on purpose -- the token accounting must keep counting
+    them -- so a historical barren row must not make every later summary say the instrument is
+    down. The stopping reason is about THIS sweep; the grid-wide counts stay in the summary as
+    information."""
+    tmp = _tmp()
+    _stub_driver(tmp, cap=10_000_000, tokens_per_arm=1000,
+                 unscored_at=(30, "k1"), ceilings=(30,))
+    # quarantine it the way an operator would: rename the ceiling directory
+    (tmp / "c30").rename(tmp / "v2-void-forwarder-down-c30")
+    rc, summary = _stub_driver(tmp, cap=10_000_000, tokens_per_arm=1000, ceilings=(30,))
+    check("a fresh grid completes", rc == 0, str(rc))
+    check("and says so", summary["stopping_reason"] == "completed",
+          summary["stopping_reason"])
+    check("the quarantined row is still reported",
+          summary["excluded_arm_runs"] == 3, str(summary["excluded_arm_runs"]))
+    check("and the new rows are scored", summary["scored_arm_runs"] == 12,
+          str(summary["scored_arm_runs"]))
 
 
 def test_one_scored_arm_is_enough_to_continue():

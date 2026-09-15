@@ -430,12 +430,14 @@ def main(argv: list[str]) -> int:
                         f"pooled. Move it aside or run into a fresh scratch directory.")
                 scored, total = row_verdicts(out)
                 if total and not scored:
-                    raise SystemExit(
-                        f"{out} records {total} arm-run(s) and NOT ONE of them is scored -- "
-                        f"every one is an excluded terminal (a harness, auth or transport "
-                        f"fault). That is not a completed row and resuming over it would "
-                        f"treat an instrument failure as a result. Move it aside, then run "
-                        f"again.")
+                    # Stop through the summary, not out of main(): the same lesson as the
+                    # unresolved path. Resuming over this row would treat an instrument
+                    # failure as a result, and its identity matches, so nothing else refuses.
+                    instrument = (ceiling, task, total)
+                    print(f"  [REFUSED] ceiling {ceiling} {task}: records.json exists and NOT "
+                          f"ONE of its {total} arm-runs is scored. Move it aside; it is not a "
+                          f"completed row.")
+                    break
                 print(f"  [skip] ceiling {ceiling} {task}: records.json exists, identity "
                       f"matches, {scored}/{total} arm-runs scored")
                 continue
@@ -562,8 +564,7 @@ def main(argv: list[str]) -> int:
         # would ever look again.
         "stopping_reason": ("gate_or_error" if errored else
                             "unresolved_accounting" if total["unresolved"] else
-                            "instrument_fault" if instrument or
-                            verdicts["rows_with_no_scored_arm_run"] else
+                            "instrument_fault" if instrument else
                             "budget" if stopped else "completed"),
         "stopped_at": None if not stopped else
             {"ceiling": stopped[0], "task": stopped[1],
@@ -610,9 +611,12 @@ def main(argv: list[str]) -> int:
     if blocked:
         print(f"\nSTOPPED BEFORE THE NEXT ROW: {blocked}")
         return 1
-    if instrument or verdicts["rows_with_no_scored_arm_run"]:
-        where = (f"ceiling {instrument[0]} {instrument[1]}" if instrument
-                 else "; ".join(verdicts["rows_with_no_scored_arm_run"]))
+    if instrument:
+        # Driven by THIS sweep's own refusal, not by the scratch-wide scan. Quarantined rows
+        # from a void run stay in the scratch on purpose -- the accounting must keep counting
+        # them -- and a historical barren row must not make every later summary say the
+        # instrument is down.
+        where = f"ceiling {instrument[0]} {instrument[1]}"
         print(f"\nNOTHING WAS MEASURED in at least one row ({where}). Every arm-run there is "
               f"an EXCLUDED terminal -- a harness, auth or transport fault, not a result. "
               f"{verdicts['scored_arm_runs']} arm-run(s) scored, "
