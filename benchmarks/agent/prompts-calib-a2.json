@@ -1,0 +1,49 @@
+{
+ "_comment": [
+  "Prompts for the A2 CALIBRATION tasks k1-k4 (freeze-calib-a2.md).",
+  "",
+  "`consult`, `tails` and `capture_instruction` are copied BYTE-FOR-BYTE from prompts-a1.json.",
+  "The calibration moves the turn ceiling and nothing else; a prompt that drifted between A1",
+  "and this measurement would confound the ceiling with the instruction.",
+  "",
+  "Each body describes only what the checkout DOES, observed from the failing acceptance",
+  "checks, and never how to fix it. Every task declares set=development: these are development",
+  "tasks and run_arms_isolated accepts them; none is held-out evidence.",
+  "",
+  "`environment` (added 2026-09-14, calibration config v2) states how to run the checkout. It is",
+  "appended IDENTICALLY to all three arms and names no task and no fix. It exists because A1 and",
+  "the v1 calibration rows measured agents spending turns rediscovering that the checkout is a",
+  "src/ layout -- with the network denied, the venv and pip attempts they reached for could not",
+  "have worked. That is harness friction, uniform across arms, and it confounds a turn-ceiling",
+  "measurement. Runs made before this block existed are config v1 and are NOT pooled with v2."
+ ],
+ "consult": "\n\nBefore your first source edit, consult any available prior-work memory: Nexus memory tools or `NOTES-FROM-EARLIER-WORK.md`. If neither is available, proceed using the repository. Treat prior notes as potentially outdated and verify relevant claims against current code.",
+ "tails": {
+  "default": " Fix the behaviour in `src/`, and extend the existing test suite to cover it. Do not change behaviour unrelated to this bug. When you are done, reply DONE.",
+  "d4": " Do not change behaviour unrelated to this. When you are done, reply DONE."
+ },
+ "capture_instruction": "\n\nYou are the first session to work in this repository, and a later session will work in it after you. Record what that later session would want to know, using the memory tools you have (`record`, and `revise` to correct something you already recorded).\n\n**Before your first source edit, record at least one thing you have learned about this codebase.** Then keep recording as you go, rather than all at the end. Recording is not an afterthought to this task: a session that fixes the behaviour and records nothing has not done what it was asked.\n\nRecord four kinds of thing, and apply the test beside each one before recording it:\n- `decision` \u2014 a choice already made in this codebase, and its reason. Could a reader reach this by reading the code as it stands?\n- `constraint` \u2014 an invariant or convention the code holds to. Is it stated or evident in the code, the docs or the tests as they stand?\n- `procedure` \u2014 how something is done in this repository. Did you actually do it this way?\n- `failure` \u2014 something that went wrong and what it turned out to be. Did you observe it, rather than anticipate it?\nUse `observation` only for something that fits none of those four.\n\nDo not record:\n1. Anything you can state only because you did this task \u2014 the change you made, where you made it, or a description of the defect specific enough to substitute for finding it.\n2. Anything about the tests that judge this work: no test name, no assertion, no expected output.\n3. Anything that is true only after your change. A convention your own fix introduces is not prior knowledge, however true it is once you are done.\n4. The task statement, or anything that reads as an instruction for a later task.\n\nThe test that separates a recordable constraint from a leak is whether it names the convention or the violation. \"Values of this kind are normalised before they are compared\" is a convention, discoverable in the code as it stands, and is recordable. \"This particular path forgets to normalise them\" is the defect you were asked to find, and is not.",
+ "tasks": {
+  "k1": {
+   "set": "development",
+   "tail": "default",
+   "body": "In this Click checkout, callbacks registered with `ctx.call_on_close()` are not all run when an eager option ends the invocation with `ctx.exit()`.\n\nReproduction: declare two eager options whose callbacks each call `ctx.call_on_close(...)` to register a cleanup, and where the second option's callback also calls `ctx.exit()`. Invoking the command with both options, in the order `--option-with-callback --force-exit`, should run both registered cleanups; only one runs. Invoking them in the order `--force-exit --option-with-callback` should run only the exiting option's cleanup, which is the behaviour the eagerness ordering implies.\n\nThe same defect leaks real state. An option whose callback raises a global logger's level and registers a `call_on_close` to reset it leaves the logger raised after the command exits, because the reset never runs."
+  },
+  "k2": {
+   "set": "development",
+   "tail": "default",
+   "body": "In this Click checkout, an option declared `is_flag=True` together with an explicit `type=` produces the wrong value when the flag is passed on the command line.\n\nReproduction: `@click.option(\"--foo\", is_flag=True, type=bool)` echoes `False` when invoked with `--foo`, where `True` is expected. With `type=bool, default=True`, invoking with `--foo` echoes `True` where `False` is expected. `type=click.BOOL` behaves the same way as `type=bool` in both cases, and `type=str` with `--foo` passed echoes an empty line where `True` is expected.\n\nOmitting the flag behaves correctly in every one of those cases; only passing it is wrong."
+  },
+  "k3": {
+   "set": "development",
+   "tail": "default",
+   "body": "In this Click checkout, when several flag options share one parameter name and more than one supplies a default, the wrong default is chosen.\n\nReproduction: a command with `@click.option(\"--red\", \"color\", flag_value=\"red\")` and `@click.option(\"--green\", \"color\", flag_value=\"green\", default=True)` should echo `green` when invoked with no arguments. A command with those two options declared in the other order, `--red` carrying `default=True` and `--green` carrying none, should echo `red` when invoked with no arguments.\n\nPassing a flag explicitly selects that flag's value correctly in both commands; only the no-argument case is wrong."
+  },
+  "k4": {
+   "set": "development",
+   "tail": "default",
+   "body": "In this Click checkout, the eagerness of the help option generated from `help_option_names` is not respected, because the option is generated more than once.\n\nReproduction: a command declared `context_settings={\"help_option_names\": (\"--my-help\",)}` with two options whose callbacks echo and then call `ctx.exit()` \u2014 `-a` declared without `is_eager`, and `-b` declared `is_eager=True`. Invoking with `--my-help` should print the help text and exit without running either callback. Invoking with `-a` should run only `-a`'s callback. Invoking with `-a -b` should run only `-b`'s callback, because `-b` is eager and `-a` is not."
+  }
+ },
+ "environment": "\n\nHow to run this checkout: it is a `src/` layout and is NOT installed, so plain `python3 -c \"import click\"` will fail. Use `PYTHONPATH=src python3 ...`, and run tests with `PYTHONPATH=src python3 -m pytest <paths> -q`. There is no network: `pip`, `uv` and any download will fail, and nothing needs to be installed. Write any scratch or reproduction file inside the checkout rather than in /tmp."
+}

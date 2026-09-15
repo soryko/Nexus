@@ -71,6 +71,16 @@ jobs:
           uv run pytest -q tests/core/test_b2a_mutations.py tests/core/test_b2b_mutations.py \
             --junitxml=artifacts/junit/mutations.xml
 
+      # The benchmark harness is not covered by the product suite: its defects are in the
+      # driver, the accounting and the gate, none of which `tests/` imports. These two suites
+      # are deterministic -- they stub every subprocess and never invoke `sandbox-exec`, so
+      # they run on Linux. The macOS sandbox and isolation probes are host verification and
+      # are captured separately by `make-verification.sh`.
+      - name: Benchmark harness counterexamples
+        run: |
+          uv run python benchmarks/agent/test_calibration_counterexamples.py
+          uv run python benchmarks/agent/test_diagnose_counterexamples.py
+
       - name: Collect failure evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

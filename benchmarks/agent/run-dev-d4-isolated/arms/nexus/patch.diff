@@ -1,0 +1,40 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index 48670ba..a47ea36 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -85,6 +85,7 @@ filterwarnings = [
+ ]
+ markers = [
+     "stress: high-iteration stress tests for race conditions (deselect with '-m \"not stress\"')",
++    "integration: tests that exercise multiple components together end to end",
+ ]
+ addopts = "-m 'not stress'"
+ 
+diff --git a/tests/test_integration.py b/tests/test_integration.py
+new file mode 100644
+index 0000000..0686b23
+--- /dev/null
++++ b/tests/test_integration.py
+@@ -0,0 +1,22 @@
++"""End-to-end tests that exercise multiple components together."""
++
++from __future__ import annotations
++
++import pytest
++
++from click.testing import CliRunner
++
++
++@pytest.mark.integration
++def test_runner_invokes_command_with_options(runner: CliRunner) -> None:
++    """A command's options and output work end to end through ``CliRunner``."""
++    import click
++
++    @click.command()
++    @click.option("--name", required=True)
++    def greet(name: str) -> None:
++        click.echo(f"hello {name}")
++
++    result = runner.invoke(greet, ["--name", "world"])
++    assert result.exit_code == 0
++    assert result.output == "hello world\n"

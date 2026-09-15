@@ -1,0 +1,77 @@
+{
+ "what_this_is": "integrated smoke test; not an arm-run, no figure may be taken from it",
+ "utc": "2026-09-12T10:23:59.136409+00:00",
+ "task_fixture": "d1",
+ "arm": "nexus",
+ "runner_version": [
+  "2.1.258 (Claude Code)"
+ ],
+ "prompt": "Do exactly these three things in this repository checkout, then stop.\n\n1. Use the Nexus memory search tool to look up what earlier work recorded about environment-variable resolution. Quote one sentence from what it returns, verbatim.\n2. Read `src/click/decorators.py` and report its first line, verbatim.\n3. Create a file `SMOKE.txt` at the repository root whose only content is the single line `smoke`.\n\nDo not change anything else, do not run the test suite, and do not attempt to fix any bug. When all three are done, reply DONE followed by the quoted sentence and the quoted first line.",
+ "max_turns": 12,
+ "wall_clock_limit_s": 300,
+ "wall_clock_s": 8.4,
+ "terminal": {
+  "terminal": "completed",
+  "meaning": "ran to completion",
+  "scored": true,
+  "truncated": false,
+  "evidence": {
+   "forced_verdict": null,
+   "envelope_present": true,
+   "terminal_reason": "completed",
+   "is_error": false,
+   "subtype": "success"
+  }
+ },
+ "surfaces": {
+  "model_response": true,
+  "repository_read": true,
+  "repository_edit": true,
+  "nexus_retrieval": true,
+  "nexus_search_returned_hits": true
+ },
+ "all_surfaces_exercised": true,
+ "tool_calls": [
+  "mcp__nexus__search",
+  "Read",
+  "mcp__nexus__get",
+  "Bash"
+ ],
+ "final_reply": "DONE\n\nQuoted sentence from the Nexus memory (`6d15d84f\u2026`, kind `constraint`):\n> Environment-variable resolution treats an empty string as absent, not as a value.\n\nQuoted first line of `src/click/decorators.py`:\n> import inspect\n\nAll three tasks are complete: the search returned three matching memories on environment-variable resolution, the file's first line was read, and `SMOKE.txt` was created at the repository root containing exactly `smoke` (6 bytes, one line). Nothing else was changed and no tests were run.",
+ "usage": {
+  "input_tokens": 5209,
+  "output_tokens": 623,
+  "cache_read_input_tokens": 9472,
+  "cache_creation_input_tokens": 0
+ },
+ "forwarder_refusals_during_run": "f.handle()\n    ~~~~~~~~~~~^^\n  File \"/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/http/server.py\", line 502, in handle\n    self.handle_one_request()\n    ~~~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/http/server.py\", line 468, in handle_one_request\n    self.raw_requestline = self.rfile.readline(65537)\n                           ~~~~~~~~~~~~~~~~~~~^^^^^^^\n  File \"/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/socket.py\", line 729, in readinto\n    return self._sock.recv_into(b)\n           ~~~~~~~~~~~~~~~~~~~~^^^\nConnectionResetError: [Errno 54] Connection reset by peer\n----------------------------------------",
+ "boundary": {
+  "negative_controls": {
+   "network_egress_blocked": true,
+   "dns_and_https_blocked": true,
+   "held_checks_unreadable": true,
+   "bench_dir_unreadable": true,
+   "future_path_denied": true
+  },
+  "positive_controls": {
+   "own_checkout_readable": true,
+   "interpreter_runs": true,
+   "git_runs": true,
+   "runner_starts": true,
+   "runner_scratch_usable": true
+  },
+  "deny_ordering_holds": true,
+  "memory_reachable_inside": {
+   "reached": true,
+   "visible": 13,
+   "wal_sidecars_live_during_probe": [
+    "nexus-dev.db-shm",
+    "nexus-dev.db-wal"
+   ]
+  }
+ },
+ "trace_health": {
+  "orphan_results": 0,
+  "unresolved_calls": 0
+ }
+}
