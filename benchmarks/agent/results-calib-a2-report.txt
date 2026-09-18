@@ -1,0 +1,85 @@
+================================================================================================
+A2 BUDGET CALIBRATION -- report from the saved records (no model invoked)
+================================================================================================
+scratch       /Users/soko/Cerebros/nexus-a1-fixtures/calib-run
+launch record /Users/soko/Cerebros/nexus-memory/LAUNCH-A2.md
+identity      harness cbbaad64b428  product 2cd531f9d7c2  calib-v2
+
+COVERAGE AND TERMINALS (analysis scope: identity matches the launch record)
+  ceiling cells    scored  truncated             correct     tokens accounted
+  30      12/12    12      12/12 (100%)          5/12               8,869,425
+           terminals: {'max_turns': 12}
+  45      12/12    12      9/12 (75%)            9/12              16,496,640
+           terminals: {'completed': 3, 'max_turns': 9}
+  60      3/12     3       1/3 (33%)             2/3                3,369,089
+           terminals: {'completed': 2, 'timeout': 1}   missing: k2/baseline, k2/nexus, k2/notes, k3/baseline, k3/nexus, k3/notes, k4/baseline, k4/nexus, k4/notes   arm-runs with no usage: 1
+
+SELECTION RULE (freeze-calib-a2 §5, applied unchanged)
+  ceiling 30: FAILS_TRUNCATION   truncation 100.0%   correctness 41.7%
+           truncation 100.0% over 12 arm-runs exceeds the registered 20%
+  ceiling 45: FAILS_TRUNCATION   truncation 75.0%   correctness 75.0%
+           truncation 75.0% over 12 arm-runs exceeds the registered 20%
+  ceiling 60: INELIGIBLE
+           coverage 3/12 arm-runs, 3 scored; missing k2/baseline, k2/nexus, k2/notes, k3/baseline, k3/nexus, k3/notes, k4/baseline, k4/nexus, k4/notes
+
+  ELIGIBLE: [30, 45]
+  SELECTED: NO CEILING
+  no eligible ceiling met the registered truncation threshold; §5: no ceiling is selected and A2 does not proceed to a held-out registration
+
+RESOURCE LEDGER (accounting scope: every invocation, quarantined rows included)
+  tokens_known (measured)              35,160,844
+  tokens_allowance (assumed)            1,400,000
+  tokens_budgeted (charge)             36,560,844
+  cap                                  36,000,000
+  budget_overshoot_tokens                 560,844
+  arm-runs with any evidence                   73
+  unresolved arm-runs                           1
+      /Users/soko/Cerebros/nexus-a1-fixtures/calib-run/c60/run-k1/attempt1/arms/baseline
+  consumption_certain                       False
+      overshoot of CONSUMPTION is not computable while an allowance is carried or
+      an arm-run is unresolved. The charge above is exact; consumption is not.
+
+EXCLUDED FROM ANALYSIS (still counted in the ledger above)
+  v1-c30-unrepaired-sandbox/run-k1/attempt1  (3 arm-runs)
+      records no identity at all
+  v1-c30-unrepaired-sandbox/run-k2/attempt1  (3 arm-runs)
+      records no identity at all
+  v1-c30-unrepaired-sandbox/run-k3/attempt1  (3 arm-runs)
+      records no identity at all
+  v2-void-forwarder-down-c30/run-k1/attempt1  (3 arm-runs)
+      harness_revision='19b843e437f2b1bf68080ae4e38f373f1c3d7715' != 'cbbaad64b4287fb90481fa79338dd6ac3cdac3be'
+      no arm-run in the row was scored (row measured nothing)
+  v2-void-forwarder-down-c30/run-k2/attempt1  (3 arm-runs)
+      harness_revision='19b843e437f2b1bf68080ae4e38f373f1c3d7715' != 'cbbaad64b4287fb90481fa79338dd6ac3cdac3be'
+      no arm-run in the row was scored (row measured nothing)
+  v2-void-forwarder-down-c30/run-k3/attempt1  (3 arm-runs)
+      harness_revision='19b843e437f2b1bf68080ae4e38f373f1c3d7715' != 'cbbaad64b4287fb90481fa79338dd6ac3cdac3be'
+      no arm-run in the row was scored (row measured nothing)
+  v2-void-forwarder-down-c30/run-k4/attempt1  (3 arm-runs)
+      harness_revision='19b843e437f2b1bf68080ae4e38f373f1c3d7715' != 'cbbaad64b4287fb90481fa79338dd6ac3cdac3be'
+      no arm-run in the row was scored (row measured nothing)
+  v2-void-forwarder-down-c45/run-k1/attempt1  (3 arm-runs)
+      harness_revision='19b843e437f2b1bf68080ae4e38f373f1c3d7715' != 'cbbaad64b4287fb90481fa79338dd6ac3cdac3be'
+      no arm-run in the row was scored (row measured nothing)
+  v2-void-forwarder-down-c45/run-k2/attempt1  (3 arm-runs)
+      harness_revision='19b843e437f2b1bf68080ae4e38f373f1c3d7715' != 'cbbaad64b4287fb90481fa79338dd6ac3cdac3be'
+      no arm-run in the row was scored (row measured nothing)
+  v2-void-forwarder-down-c45/run-k3/attempt1  (3 arm-runs)
+      harness_revision='19b843e437f2b1bf68080ae4e38f373f1c3d7715' != 'cbbaad64b4287fb90481fa79338dd6ac3cdac3be'
+      no arm-run in the row was scored (row measured nothing)
+  v2-void-forwarder-down-c45/run-k4/attempt1  (3 arm-runs)
+      harness_revision='19b843e437f2b1bf68080ae4e38f373f1c3d7715' != 'cbbaad64b4287fb90481fa79338dd6ac3cdac3be'
+      no arm-run in the row was scored (row measured nothing)
+  v2-void-forwarder-down-c60/run-k1/attempt1  (3 arm-runs)
+      harness_revision='19b843e437f2b1bf68080ae4e38f373f1c3d7715' != 'cbbaad64b4287fb90481fa79338dd6ac3cdac3be'
+      no arm-run in the row was scored (row measured nothing)
+  v2-void-forwarder-down-c60/run-k2/attempt1  (3 arm-runs)
+      harness_revision='19b843e437f2b1bf68080ae4e38f373f1c3d7715' != 'cbbaad64b4287fb90481fa79338dd6ac3cdac3be'
+      no arm-run in the row was scored (row measured nothing)
+  v2-void-forwarder-down-c60/run-k3/attempt1  (3 arm-runs)
+      harness_revision='19b843e437f2b1bf68080ae4e38f373f1c3d7715' != 'cbbaad64b4287fb90481fa79338dd6ac3cdac3be'
+      no arm-run in the row was scored (row measured nothing)
+  v2-void-forwarder-down-c60/run-k4/attempt1  (3 arm-runs)
+      harness_revision='19b843e437f2b1bf68080ae4e38f373f1c3d7715' != 'cbbaad64b4287fb90481fa79338dd6ac3cdac3be'
+      no arm-run in the row was scored (row measured nothing)
+================================================================================================
