@@ -72,14 +72,18 @@ jobs:
             --junitxml=artifacts/junit/mutations.xml
 
       # The benchmark harness is not covered by the product suite: its defects are in the
-      # driver, the accounting and the gate, none of which `tests/` imports. These two suites
-      # are deterministic -- they stub every subprocess and never invoke `sandbox-exec`, so
-      # they run on Linux. The macOS sandbox and isolation probes are host verification and
-      # are captured separately by `make-verification.sh`.
+      # driver, the accounting, the gate and the selection rule, none of which `tests/`
+      # imports. These suites are deterministic -- they stub every subprocess and never
+      # invoke `sandbox-exec`, so they run on Linux. The macOS sandbox and isolation probes
+      # are host verification and are captured separately by `make-verification.sh`.
+      #
+      # `test_report_calibration.py` covers freeze-calib-a2 §5. A rule applied only by hand
+      # is how two COMPLETE ceilings came to be read as two QUALIFYING ceilings.
       - name: Benchmark harness counterexamples
         run: |
           uv run python benchmarks/agent/test_calibration_counterexamples.py
           uv run python benchmarks/agent/test_diagnose_counterexamples.py
+          uv run python benchmarks/agent/test_report_calibration.py
 
       - name: Collect failure evidence
         if: always()
