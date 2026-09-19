@@ -510,11 +510,17 @@ def requirement_compliance(record: dict, calls: list[dict]) -> dict:
     count of edits.
     """
     patch = record.get("patch")
+    provenance = record.get("patch_provenance", "absent")
     if patch is None:
+        # ABSENT, not empty. An empty patch is a measurement -- the arm-run changed nothing --
+        # and falls through below to `source_diff: no`. A missing one measures nothing.
+        why = {"absent": "no patch.diff beside this arm-run's record",
+               "inconsistent_missing_sidecar":
+                   "the record claims a non-empty patch but no patch.diff is present"
+               }.get(provenance, f"patch unavailable ({provenance})")
         return {"source_diff": UNKNOWN, "test_addition": UNKNOWN, "test_executed": UNKNOWN,
                 "test_result": UNKNOWN, "relevance": "unreviewed",
-                "why_unknown": "no patch recorded for this arm-run",
-                "evidence": {}}
+                "why_unknown": why, "evidence": {"patch_provenance": provenance}}
     files = patch_files(patch)
     adds = test_additions(patch)
     src = any(f.startswith("src/") or "/src/" in f for f in files)
@@ -535,7 +541,8 @@ def requirement_compliance(record: dict, calls: list[dict]) -> dict:
         # readable number; a reviewer fills this in and the report shows it empty until then.
         "relevance": "unreviewed",
         "why_execution_unsettled": run["why"] if run["verdict"] == UNKNOWN else None,
-        "evidence": {"patch_files": files, "test_nodes": adds["nodes"],
+        "evidence": {"patch_provenance": provenance,
+                     "patch_files": files, "test_nodes": adds["nodes"],
                      "test_files": adds["files"], "nested_skipped": adds["nested"],
                      "execution": run["calls"],
                      # Listed for the manual review, NOT counted as execution.
@@ -543,10 +550,124 @@ def requirement_compliance(record: dict, calls: list[dict]) -> dict:
     }
 
 
+# ----------------------------------------------------------------- the runner's own format
+
+# Everything below this line exists because the reporter was written against a record shape
+# that no runner produces. It read `record["functional"]`, `record["num_turns"]` and
+# `record["patch"]`; `run_arms_isolated` writes `record["scored"]["passed"]`,
+# `record["result"]["num_turns"]`, and the patch as a SIDECAR FILE beside the record. Against
+# real rows the report would have counted every genuine functional pass as no pass at all and
+# left every patch observation unknown -- an integration defect that no amount of testing
+# against invented fixtures could surface, because the fixtures agreed with the reader.
+#
+# The fix is an adapter AT THE BOUNDARY, in one place, so the analysis above it never learns
+# two shapes. `replay_v2.py` is the control: the 27 saved v2 arm-runs must come back as 16
+# functional passes, 11 of them terminated at `max_turns`.
+
+FUNCTIONAL_SCORER = "a1-functional-2"
+NOT_SCORED = "not_scored"
+
+
+def read_patch(arm_dir: Path, rec: dict) -> tuple[str | None, str]:
+    """-> (patch text, provenance).
+
+    A MISSING patch and an EMPTY patch are different measurements and must not collapse:
+
+      absent        no `patch.diff` beside the record. Nothing is known about what the
+                    arm-run changed; every patch observation is `unknown`.
+      empty         `patch.diff` exists and is empty. The arm-run changed NOTHING, which is a
+                    measurement -- `source_diff: no` is a finding, not a gap.
+      inconsistent  the record claims `patch_bytes > 0` and the sidecar is absent or empty.
+                    Reported rather than silently preferring one of the two.
+    """
+    f = arm_dir / "patch.diff"
+    claimed = rec.get("patch_bytes")
+    if not f.exists():
+        if claimed:
+            return None, "inconsistent_missing_sidecar"
+        return None, "absent"
+    text = f.read_text()
+    if claimed is not None and bool(claimed) != bool(text):
+        return text, "inconsistent_bytes"
+    return text, ("empty" if not text else "sidecar")
+
+
+def functional_of(rec: dict) -> tuple[str, str | None]:
+    """-> ('pass'|'fail'|'unknown', why it is unknown).
+
+    `scored.passed` is the functional verdict; a missing `scored` block is UNKNOWN and never
+    a failure. A scorer that TIMED OUT did not measure the arm-run, so its `passed: false` is
+    an instrument condition and is not reported as a functional failure.
+    """
+    s = rec.get("scored")
+    if not isinstance(s, dict):
+        return UNKNOWN, "no functional score recorded for this arm-run"
+    if s.get("timed_out"):
+        return UNKNOWN, "the functional scorer timed out; the arm-run is unmeasured"
+    passed = s.get("passed")
+    if passed is None:
+        return UNKNOWN, "the functional score records no verdict"
+    return ("pass" if passed else "fail"), None
+
+
+def read_compliance(scratch: Path) -> dict:
+    """-> {(task, arm): row} from a compliance artifact, or {} when none has been produced.
+
+    `run_arms_isolated` does NOT score requirement compliance: `a1-scorer-4` is a separate
+    offline pass writing its own file. An empty mapping therefore means NOT SCORED, which the
+    report must say -- printing a ratio, or an unknown count, for a scorer that never ran
+    would imply a measurement that does not exist.
+    """
+    for name in ("compliance-a2r.json", "compliance.json"):
+        f = scratch / name
+        if not f.exists():
+            continue
+        try:
+            rows = json.loads(f.read_text())
+        except (ValueError, OSError):
+            continue
+        if isinstance(rows, list):
+            return {(r.get("task"), r.get("arm")): r for r in rows if isinstance(r, dict)}
+    return {}
+
+
+def normalise(rec: dict, arm_dir: Path, compliance: dict, task: str, arm: str) -> dict:
+    """The runner's saved arm-run, in the one shape everything above this line reads."""
+    functional, why = functional_of(rec)
+    patch, provenance = read_patch(arm_dir, rec)
+    terminal = rec.get("terminal") or {}
+    result = rec.get("result") or {}
+    crow = compliance.get((task, arm))
+    return {
+        "functional": functional,
+        "functional_unknown_because": why,
+        "functional_scorer": (rec.get("scored") or {}).get("scorer_version"),
+        "num_turns": result.get("num_turns"),
+        "wall_clock_s": rec.get("wall_clock_s"),
+        "terminal": terminal.get("terminal", UNKNOWN),
+        "scored": terminal.get("scored"),
+        "truncated": terminal.get("truncated"),
+        "usage": rec.get("usage"),
+        "tool_calls": rec.get("tool_calls") or [],
+        "patch": patch,
+        "patch_provenance": provenance,
+        "patch_bytes": rec.get("patch_bytes"),
+        "patch_touches_src": rec.get("patch_touches_src"),
+        "runtime_identity": rec.get("runtime_identity") or {},
+        "gate_checks": rec.get("gate_checks") or [],
+        # NOT `unknown`: a scorer that never ran has not failed to decide anything.
+        "scorer_a1_4": (crow.get("requirement_compliance") if crow else NOT_SCORED),
+        "scorer_a1_4_unknown": (crow.get("unknown_count") if crow else None),
+        "scorer_a1_4_source": ("compliance artifact" if crow else
+                               "a1-scorer-4 has not been run over this sweep"),
+    }
+
+
 # ----------------------------------------------------------------- reading a sweep
 
 def read_cells(scratch: Path) -> list[dict]:
-    """Every arm-run A2-R wrote, at whatever ceiling it wrote it."""
+    """Every arm-run A2-R wrote, normalised at the boundary. See `normalise` above."""
+    compliance = read_compliance(scratch)
     cells = []
     for records in sorted(scratch.glob("*/run-*/attempt*/records.json")):
         data = json.loads(records.read_text())
@@ -554,29 +675,21 @@ def read_cells(scratch: Path) -> list[dict]:
         ceiling = int(re.sub(r'\D', '', records.parents[2].name) or 0)
         for rec in data.get("records", []):
             arm = rec.get("arm") or "?"
-            arm_dir = records.parent / "arms" / arm
-            calls = rec.get("tool_calls")
-            if calls is None:
-                trace = arm_dir / "trace.json"
-                calls = (json.loads(trace.read_text()).get("tool_calls", [])
-                         if trace.exists() else [])
-            terminal = rec.get("terminal") or {}
+            n = normalise(rec, records.parent / "arms" / arm, compliance, task, arm)
             cells.append({
                 "ceiling": ceiling, "task": task, "arm": arm,
-                "functional": rec.get("functional"),
-                "scorer_a1_4": rec.get("compliance", UNKNOWN),
-                # Never the ratio alone. 4/4 with two unsettled checks and 4/4 with none are
-                # different measurements, and `tally` reports the difference.
-                "scorer_a1_4_unknown": rec.get("unknown_count",
-                                               len(rec.get("unknown") or []) or None),
-                "terminal": terminal.get("terminal", UNKNOWN),
-                "scored": terminal.get("scored"),
-                "truncated": terminal.get("truncated"),
-                "num_turns": rec.get("num_turns"),
-                "wall_clock_s": rec.get("wall_clock_s"),
-                "tokens": _tokens(rec.get("usage")),
-                "repair": repair_check(rec, calls),
-                "requirement": requirement_compliance(rec, calls),
+                "functional": n["functional"],
+                "functional_unknown_because": n["functional_unknown_because"],
+                "scorer_a1_4": n["scorer_a1_4"],
+                "scorer_a1_4_unknown": n["scorer_a1_4_unknown"],
+                "scorer_a1_4_source": n["scorer_a1_4_source"],
+                "terminal": n["terminal"], "scored": n["scored"],
+                "truncated": n["truncated"],
+                "num_turns": n["num_turns"], "wall_clock_s": n["wall_clock_s"],
+                "tokens": _tokens(n["usage"]),
+                "patch_provenance": n["patch_provenance"],
+                "repair": repair_check(n, n["tool_calls"]),
+                "requirement": requirement_compliance(n, n["tool_calls"]),
             })
     return cells
 
@@ -647,8 +760,13 @@ def render(rep: dict) -> str:
     # --- 1 functional correctness --------------------------------------------------------
     out.append(_bar("1. Functional correctness (a1-functional-2)"))
     passed = [c for c in cells if c["functional"] == "pass"]
+    unmeasured = [c for c in cells if c["functional"] == UNKNOWN]
     out.append(f"{len(passed)} of {len(cells)} arm-runs pass. Per cell, no pooling across "
                f"tasks:")
+    if unmeasured:
+        out.append(f"{len(unmeasured)} arm-run(s) are UNMEASURED, not failed:")
+        for c in unmeasured:
+            out.append(f"    {c['task']}/{c['arm']}: {c['functional_unknown_because']}")
     out.append("")
     out.append(f"  {'task':5} {'arm':9} {'functional':11} {'terminal':10} {'turns':>6} "
                f"{'wall_s':>7}")
@@ -674,12 +792,29 @@ def render(rep: dict) -> str:
                    f"{r['test_addition']:9} {r['test_executed']:9} {r['test_result']:8} "
                    f"{r['relevance']:10} {scorer:12}")
     out.append("")
-    out.append("`a1-scorer-4` is the REGISTERED compliance scorer, reported under its own name")
-    out.append("and never merged with the four observations beside it. Its ratio is over the")
-    out.append("SETTLED checks only -- `tally()` excludes unknowns from both halves -- so it is")
-    out.append("shown with the unknown count beside it: `4/4 +2?` is four passes among four")
-    out.append("settled checks with two unsettled, not four of six. The ratio alone hides its")
-    out.append("own denominator, which is why the count is never dropped.")
+    sources = sorted({c["scorer_a1_4_source"] for c in cells})
+    if all(c["scorer_a1_4"] == NOT_SCORED for c in cells):
+        out.append("`a1-scorer-4` HAS NOT BEEN RUN over this sweep. `run_arms_isolated` does")
+        out.append("not score requirement compliance -- it is a separate offline pass -- so the")
+        out.append("column reads `not_scored`. That is not `unknown`: a scorer that never ran")
+        out.append("has not failed to decide anything, and printing a ratio or an unknown count")
+        out.append("here would imply a measurement that does not exist.")
+    else:
+        out.append("`a1-scorer-4` is the REGISTERED compliance scorer, reported under its own")
+        out.append("name and never merged with the four observations beside it. Its ratio is")
+        out.append("over the SETTLED checks only -- `tally()` excludes unknowns from both")
+        out.append("halves -- so it is shown with the unknown count beside it where the")
+        out.append("artifact carries one: `4/4 +2?` is four passes among four settled checks")
+        out.append("with two unsettled, not four of six. Where the artifact carries no unknown")
+        out.append("count, none is shown -- `+0?` would be a claim it does not make.")
+        out.append(f"    provenance: {'; '.join(sources)}")
+    odd = [c for c in cells if c["patch_provenance"].startswith("inconsistent")]
+    if odd:
+        out.append("")
+        out.append("PATCH EVIDENCE INCONSISTENT for:")
+        for c in odd:
+            out.append(f"    {c['task']}/{c['arm']}: {c['patch_provenance']} "
+                       f"(record claims patch_bytes)")
     unreviewed = [f"{c['task']}/{c['arm']}" for c in cells
                   if c["requirement"]["test_addition"] == "yes"]
     if unreviewed:

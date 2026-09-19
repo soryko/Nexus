@@ -167,6 +167,35 @@ provenance.
 Families **2 and 4** are new and are implemented in [`assess_a2r.py`](assess_a2r.py), with
 counterexamples in [`test_a2r.py`](test_a2r.py) — **written before the run, not after**.
 
+### Reading the runner's own format
+
+`run_arms_isolated.py` writes `record["scored"]["passed"]`, `record["result"]["num_turns"]`,
+and the patch as a **sidecar file** at `arms/<arm>/patch.diff`. It does **not** write a
+requirement-compliance field: `a1-scorer-4` is a separate offline pass. An earlier revision of
+this reporter read `record["functional"]`, `record["num_turns"]` and `record["patch"]`, none of
+which any runner produces — so against real rows it would have reported **every genuine
+functional pass as no pass at all** and left every patch observation unknown.
+
+Every test agreed with it, because every fixture was invented by the same hand as the reader.
+Two things now prevent that:
+
+* **one adapter at the boundary** (`normalise`), so nothing above it knows two shapes, with an
+  integration test built from the runner's real schema *and* directory layout, including a
+  genuine functional **failure** as a negative control;
+* **[`replay_v2.py`](replay_v2.py)** — the reporter run over the **27 accepted v2 arm-runs**,
+  which must recover **16 functional passes, 11 of them terminated at `max_turns`**, the
+  figures `report_calibration.py` and `diagnose_workflow.py` computed independently from the
+  same records. It costs nothing and is the one check that cannot agree by construction.
+
+A **missing** patch and an **empty** patch are different: an empty `patch.diff` measures that
+the arm-run changed nothing (`source_diff: no`); an absent one measures nothing (`unknown`). A
+record claiming `patch_bytes` with no sidecar is reported as inconsistent rather than resolved
+in favour of either. A missing or **timed-out** functional scorer is `unknown`, never `fail`.
+
+Compliance reads `not_scored` until `a1-scorer-4` has actually been run over the sweep. That is
+not `unknown`: a scorer that never ran has not failed to decide anything, and printing a ratio
+or an unknown count for it would imply a measurement that does not exist.
+
 ## 6. Accounting, and the stopping decision
 
 **A2-R is accounted separately from the closed calibration.** Its own launch identity
@@ -254,6 +283,9 @@ kind.
 - [x] `5.4` — the non-vacuous repair check — implemented and tested, **before** the run
 - [x] separate accounting verified under a stub runner: normal completion, threshold refusal,
       unresolved-consumption refusal, and refusal to share the calibration's directory
+- [x] the reporter reads the **runner's** record format, with an integration test on its real
+      schema and layout, and `replay_v2.py` recovering 16 passes / 11 passing-truncated from
+      the 27 accepted v2 arm-runs
 - [ ] **founder approves** [`LAUNCH-A2R.md`](../../LAUNCH-A2R.md)
 - [ ] new host-local `a2r-config-45.json` at `config_version: calib-v3` — a **new file** under
       a name of its own, never an edit to a `calib-config-*.json`, whose digests

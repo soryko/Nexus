@@ -428,6 +428,185 @@ def test_relevance_is_never_machine_decided():
     check("relevance unreviewed", c["relevance"] == "unreviewed", json.dumps(c))
 
 
+# ------------------------------------------------- the runner's real schema and layout
+def _runner_arm(arm, passed, num_turns, terminal="completed", patch=None,
+                calls=None, scorer_timed_out=False, patch_bytes=None):
+    """One arm-run shaped EXACTLY as `run_arms_isolated.py` writes it.
+
+    Not as the reporter wished it were written. The published reporter read
+    `record["functional"]`, `record["num_turns"]` and `record["patch"]`; the runner writes
+    `record["scored"]["passed"]`, `record["result"]["num_turns"]`, and the patch as a sidecar
+    file. Every earlier fixture here was invented by the same hand as the reader, so they
+    agreed, and the report would have counted every genuine pass as no pass at all.
+    """
+    rec = {
+        "arm": arm,
+        "started_utc": "2026-09-19T00:00:00+00:00",
+        "wall_clock_s": 410.2,
+        "forced_verdict": None,
+        "result": {"num_turns": num_turns, "subtype": "success", "is_error": False,
+                   "terminal_reason": terminal,
+                   "usage": {"input_tokens": 1000, "output_tokens": 100}},
+        "scored": None if passed is None else {
+            "exit": 0 if passed else 1,
+            "summary": "27 passed in 0.03s" if passed else "2 failed, 25 passed in 0.04s",
+            "failing_instances": 0 if passed else 2, "failing_functions": 0 if passed else 1,
+            "scorer_version": "a1-functional-2",
+            "passed": bool(passed), "timed_out": scorer_timed_out},
+        "terminal": {"terminal": terminal, "meaning": "…",
+                     "scored": True, "truncated": terminal in ("max_turns", "timeout")},
+        "usage": {"input_tokens": 1000, "output_tokens": 100,
+                  "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0},
+        "tool_calls": calls or [],
+        "patch_bytes": (len(patch) if patch is not None else 0)
+        if patch_bytes is None else patch_bytes,
+        "patch_touches_src": bool(patch and "src/click/" in patch),
+    }
+    return rec
+
+
+def _runner_layout(tmp: Path, ceiling=45, task="k1", arms=None) -> Path:
+    """`<scratch>/c<n>/run-<task>/attempt1/{records.json,arms/<arm>/patch.diff}`."""
+    at = tmp / f"c{ceiling}" / f"run-{task}" / "attempt1"
+    at.mkdir(parents=True, exist_ok=True)
+    recs = []
+    for arm, rec, patch in arms:
+        (at / "arms" / arm).mkdir(parents=True, exist_ok=True)
+        if patch is not None:
+            (at / "arms" / arm / "patch.diff").write_text(patch)
+        recs.append(rec)
+    (at / "records.json").write_text(json.dumps(
+        {"task": task, "attempt": 1, "seed": 20260914, "records": recs}))
+    return tmp
+
+
+SRC_AND_TEST = ("diff --git a/src/click/core.py b/src/click/core.py\n"
+                "--- a/src/click/core.py\n+++ b/src/click/core.py\n"
+                "@@ -1,3 +1,4 @@\n+    self._done = True\n"
+                "diff --git a/tests/test_options.py b/tests/test_options.py\n"
+                "--- a/tests/test_options.py\n+++ b/tests/test_options.py\n"
+                "@@ -10,3 +10,4 @@ def test_existing():\n"
+                "+def test_eager_flag_is_processed_once(runner):\n+    assert 1\n")
+
+
+def test_the_reporter_reads_the_runners_actual_record_format():
+    """THE integration case. A pass, a fail and an unmeasured arm-run, written the way the
+    runner writes them, read the way the reporter reads them."""
+    tmp = _tmp()
+    node = "tests/test_options.py::test_eager_flag_is_processed_once"
+    _runner_layout(tmp, arms=[
+        ("baseline", _runner_arm("baseline", True, 5, "completed", SRC_AND_TEST,
+                                 [bash(1, f'PYTHONPATH=src "$A2_PYTHON" -m pytest -q {node}',
+                                       "1 passed in 0.1s")]), SRC_AND_TEST),
+        # NEGATIVE CONTROL: a genuine functional FAILURE must read as `fail`. A reader that
+        # cannot find the verdict returns falsy for both, and then every arm-run looks alike.
+        ("nexus", _runner_arm("nexus", False, 45, "max_turns", SRC_AND_TEST), SRC_AND_TEST),
+        # no `scored` block at all: UNMEASURED, and never a failure.
+        ("notes", _runner_arm("notes", None, 12, "completed", ""), ""),
+    ])
+    cells = {c["arm"]: c for c in A.read_cells(tmp)}
+    check("three arm-runs read", len(cells) == 3, str(sorted(cells)))
+
+    b = cells.get("baseline", {})
+    check("a pass is read from scored.passed", b.get("functional") == "pass", str(b.get("functional")))
+    check("turns are read from result.num_turns", b.get("num_turns") == 5, str(b.get("num_turns")))
+    check("the patch sidecar is loaded", b.get("patch_provenance") == "sidecar",
+          str(b.get("patch_provenance")))
+    check("source diff observed from the sidecar",
+          b.get("requirement", {}).get("source_diff") == "yes", json.dumps(b.get("requirement")))
+    check("test addition observed from the sidecar",
+          b.get("requirement", {}).get("test_addition") == "yes", json.dumps(b.get("requirement")))
+    check("the named run settles execution",
+          b.get("requirement", {}).get("test_executed") == "yes", json.dumps(b.get("requirement")))
+
+    n = cells.get("nexus", {})
+    check("a FAIL is read as fail, not as unknown and not as pass",
+          n.get("functional") == "fail", str(n.get("functional")))
+    check("its turns are read too", n.get("num_turns") == 45, str(n.get("num_turns")))
+
+    t = cells.get("notes", {})
+    check("a missing score is UNMEASURED, not failed", t.get("functional") == "unknown",
+          str(t.get("functional")))
+    check("and says why", bool(t.get("functional_unknown_because")),
+          str(t.get("functional_unknown_because")))
+
+    check("compliance is NOT_SCORED, not unknown",
+          all(c["scorer_a1_4"] == A.NOT_SCORED for c in cells.values()),
+          str([c["scorer_a1_4"] for c in cells.values()]))
+    check("and no unknown count is invented",
+          all(c["scorer_a1_4_unknown"] is None for c in cells.values()),
+          str([c["scorer_a1_4_unknown"] for c in cells.values()]))
+    check("the functional count is 1, not 0",
+          sum(1 for c in cells.values() if c["functional"] == "pass") == 1,
+          str([c["functional"] for c in cells.values()]))
+
+
+def test_an_empty_patch_is_a_measurement_and_a_missing_one_is_not():
+    """`patch.diff` present and empty means the arm-run changed NOTHING -- a finding. No
+    `patch.diff` at all means nothing is known. Collapsing them turns 'it did not touch src'
+    into 'we cannot say', or worse, the reverse."""
+    tmp = _tmp()
+    _runner_layout(tmp, arms=[
+        ("baseline", _runner_arm("baseline", False, 30, "completed", ""), ""),
+        ("nexus", _runner_arm("nexus", False, 30, "completed", None), None),
+    ])
+    cells = {c["arm"]: c for c in A.read_cells(tmp)}
+    e = cells["baseline"]
+    check("an empty patch is provenance 'empty'", e["patch_provenance"] == "empty",
+          e["patch_provenance"])
+    check("an empty patch MEASURES no source diff",
+          e["requirement"]["source_diff"] == "no", json.dumps(e["requirement"]))
+    m = cells["nexus"]
+    check("a missing patch is provenance 'absent'", m["patch_provenance"] == "absent",
+          m["patch_provenance"])
+    check("a missing patch leaves source diff UNKNOWN",
+          m["requirement"]["source_diff"] == "unknown", json.dumps(m["requirement"]))
+    check("and says why", "patch.diff" in (m["requirement"].get("why_unknown") or ""),
+          str(m["requirement"].get("why_unknown")))
+
+
+def test_a_record_claiming_a_patch_with_no_sidecar_is_flagged():
+    """The two sources disagree. Neither is silently preferred."""
+    tmp = _tmp()
+    _runner_layout(tmp, arms=[
+        ("baseline", _runner_arm("baseline", True, 5, "completed", None, patch_bytes=4231),
+         None)])
+    c = A.read_cells(tmp)[0]
+    check("inconsistency is named", c["patch_provenance"] == "inconsistent_missing_sidecar",
+          c["patch_provenance"])
+    check("and the observation is withheld",
+          c["requirement"]["source_diff"] == "unknown", json.dumps(c["requirement"]))
+
+
+def test_a_scorer_that_timed_out_did_not_measure_a_failure():
+    tmp = _tmp()
+    _runner_layout(tmp, arms=[
+        ("baseline", _runner_arm("baseline", False, 5, "completed", "",
+                                 scorer_timed_out=True), "")])
+    c = A.read_cells(tmp)[0]
+    check("a timed-out scorer is unmeasured, not a fail", c["functional"] == "unknown",
+          str(c["functional"]))
+    check("and says so", "timed out" in (c["functional_unknown_because"] or ""),
+          str(c["functional_unknown_because"]))
+
+
+def test_a_compliance_artifact_is_read_when_one_exists():
+    """Negative control on `not_scored`: a column that always says not_scored is not a
+    reading."""
+    tmp = _tmp()
+    _runner_layout(tmp, arms=[
+        ("baseline", _runner_arm("baseline", True, 5, "completed", ""), "")])
+    (tmp / "compliance-a2r.json").write_text(json.dumps(
+        [{"task": "k1", "arm": "baseline", "requirement_compliance": "4/4",
+          "unknown_count": 2}]))
+    c = A.read_cells(tmp)[0]
+    check("the artifact's ratio is read", c["scorer_a1_4"] == "4/4", str(c["scorer_a1_4"]))
+    check("its unknown count is read", c["scorer_a1_4_unknown"] == 2,
+          str(c["scorer_a1_4_unknown"]))
+    check("provenance names the artifact", "artifact" in c["scorer_a1_4_source"],
+          c["scorer_a1_4_source"])
+
+
 # ------------------------------------------------------------------ separate accounting
 def _stub_configs(tmp: Path, ceiling: int) -> dict:
     d = tmp / "_configs"
