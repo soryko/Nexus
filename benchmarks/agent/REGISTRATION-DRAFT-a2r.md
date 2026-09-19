@@ -93,8 +93,22 @@ the evidence is missing:
 | --- | --- |
 | *(a)* | a final source diff under `src/` |
 | *(b)* | a **substantive** addition to, or extension of, the existing suite — a new `def test_*`, or added lines that are not blank and not comments inside a test the hunk header names |
-| *(c)* | **execution** of that test — matched on its node id or its file; a whole-suite run counts and is flagged as such |
-| *(d)* | its **result** |
+| *(c)* | **execution of that test** — an invocation that **names its node id**, issued after the test file was last written, whose result shows that test ran |
+| *(d)* | **its own result**, from that invocation — never a suite aggregate |
+
+**Four things that are not execution**, each of which the first version of this reporter
+credited:
+
+* **mentioning** pytest — `echo pytest` contains the word and runs nothing;
+* **attempting** pytest — an invocation answering `No module named pytest` executed no test,
+  and counting it credits the repair with the very event it exists to make possible;
+* executing a **file** — `pytest tests/test_other.py` runs tests, none of them this one;
+* an **aggregate** result — a suite's `1 passed` is not the added test's result.
+
+A suite run, a file-level run, a run issued before the test file was last written, a
+deselection and a collection failure all leave execution **`unknown`**, with the candidate
+commands listed as evidence. Twelve patches is few enough that reading that evidence beats
+extending the parser.
 
 **Nothing is inferred from edit counts.** An edit count is a count of edits: v2 contained
 arm-runs that edited `tests/` repeatedly and never ran one.
@@ -104,10 +118,15 @@ a diff. Twelve patches is a readable number, so the reporter emits the node ids 
 executing commands as evidence and a reviewer fills the field in.
 
 `a1-scorer-4` is the **registered** compliance scorer, reported beside these under its own name
-and never merged with them. Read its ratio as an **upper bound**: its own counterexample suite
-currently shows a run scoring 4/4 with two checks `unknown`, so an unmeasurable check lands in
-the numerator. That defect is **not repaired here** — A1 and the closed calibration were scored
-with it — and it is a further reason to keep the four observations independent of it.
+and never merged with them. Its ratio is over the **settled** checks only — `tally()` excludes
+`unknown` from both numerator and denominator — so it is always displayed with the unknown
+count beside it: `4/4 +2?` is four passes among four settled checks with two unsettled, not
+four of six.
+
+*(An earlier revision of this document claimed `tally()` counted unknowns in the numerator.
+**That was wrong** and is withdrawn: the implementation settles on `PASS`/`FAIL` only. The
+failure in `test_compliance_counterexamples.py` that prompted the claim is a missing host
+fixture, not a scorer defect — see §9.)*
 
 ### 3. Termination
 `completed` / `max_turns` / `timeout` / `env_fail`, per cell, with `num_turns`, tool-call count
@@ -240,4 +259,15 @@ kind.
       a name of its own, never an edit to a `calib-config-*.json`, whose digests
       `preflight-a2.py` checks against the closed sweep's launch record; its `config_digest`
       stamped into [`LAUNCH-A2R.md`](../../LAUNCH-A2R.md)
-- [ ] `preflight-a2.py` green, forwarder up, gate passing on a prepared arm
+- [ ] `preflight-a2r.py` green, forwarder up, gate passing on a prepared arm
+
+**A note on `test_compliance_counterexamples.py`.** It fails on this host, and the cause is
+**not** a defect in `score_compliance`. Its assertion hardcodes a denominator of five — *"six
+checks, five settled"* — and the run produces **two** unknowns rather than one. The second is
+`E1_regression_discriminates`, whose recorded `instrument_error` reads
+`FileNotFoundError … /scratchpad/a4run/base/d1`: the pristine fixture path in
+`run-dev-a1-attempt4/fixtures.json` points into a previous session's scratchpad, which no
+longer exists. That is why the suite is not in CI. The instrument-error machinery reported it
+exactly as designed; the assertion is left as it is, because loosening it would hide a missing
+fixture. A host-independent test of `tally()` with several unknowns is in
+[`test_a2r.py`](test_a2r.py).

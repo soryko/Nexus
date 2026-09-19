@@ -50,6 +50,7 @@ def record(patch=None, calls=None, **kw):
     return r
 
 
+NODE = "tests/test_options.py::test_eager_flag_is_processed_once"
 PYTEST_PASS = "============ 3 passed in 0.42s ============"
 PYTEST_FAIL = "======= 2 failed, 23 deselected in 0.51s ======="
 NO_PYTEST = "/usr/bin/python3: No module named pytest"
@@ -115,9 +116,12 @@ def test_looking_an_interpreter_up_is_not_running_one():
           e["pinned_invocations"] == 0, json.dumps(e["evidence"]))
     check("echo $A2_PYTHON -> not recorded as a successful run",
           e["pinned_ran"] == 0 and e["state"] == "no_relevant_invocation", e["state"])
-    check("echo $A2_PYTHON -> counted as a lookup",
-          A.classify_command('echo "$A2_PYTHON"')["lookup"] == 1,
+    check("echo $A2_PYTHON -> counted as a MENTION, not an invocation",
+          A.classify_command('echo "$A2_PYTHON"')["mention"] == 1,
           json.dumps(A.classify_command('echo "$A2_PYTHON"')))
+    check("which -a python3 -> counted as a lookup",
+          A.classify_command("which -a python3")["lookup"] == 1,
+          json.dumps(A.classify_command("which -a python3")))
 
 
 def test_choosing_another_interpreter_is_a_different_fact_from_a_broken_one():
@@ -269,15 +273,152 @@ def test_running_the_added_test_is_observed_with_its_result():
     check("named run -> result passed", c["test_result"] == "passed", json.dumps(c))
 
 
-def test_a_whole_suite_run_is_flagged_rather_than_silently_counted():
-    """A full-suite run does execute the addition, but it does not name it. The distinction
-    belongs to the reader."""
-    calls = [bash(1, 'PYTHONPATH=src "$A2_PYTHON" -m pytest -q', PYTEST_PASS)]
+def test_a_whole_suite_run_does_not_establish_the_added_tests_execution():
+    """A suite run executes many tests; nothing in its output says THIS one was among them.
+    The first version of this reporter credited it, flagged `whole_suite: true`, and took the
+    suite's aggregate `1 passed` as the added test's own result."""
+    calls = [bash(1, 'PYTHONPATH=src "$A2_PYTHON" -m pytest -q', "603 passed in 41s")]
     c = A.requirement_compliance(record(patch=NEW_TEST, calls=calls), calls)
-    check("suite run -> executed yes", c["test_executed"] == "yes", json.dumps(c))
-    check("suite run -> flagged as whole-suite",
-          c["evidence"]["execution"][0]["whole_suite"] is True,
-          json.dumps(c["evidence"]["execution"]))
+    check("suite run -> executed unknown", c["test_executed"] == "unknown", json.dumps(c))
+    check("suite run -> no aggregate result borrowed",
+          c["test_result"] == "unknown", json.dumps(c))
+    check("suite run -> listed as a candidate for the manual review",
+          len(c["evidence"]["execution_candidates"]) == 1,
+          json.dumps(c["evidence"]["execution_candidates"]))
+
+
+def test_mentioning_the_variable_is_not_invoking_the_interpreter():
+    """`test -n "$A2_PYTHON" && echo ready` names the pin and runs nothing. A classifier keyed
+    to the SUBSTRING reports the pinned interpreter as having run successfully -- a positive
+    claim about an event that did not happen, which is worse than the absence it replaced."""
+    for cmd in ('test -n "$A2_PYTHON" && echo ready', 'echo "$A2_PYTHON"',
+                '[ -x "$A2_PYTHON" ]', 'ls -l "$A2_PYTHON"',
+                'echo "using $A2_PYTHON" >> notes.md'):
+        r = A.repair_check(record(), [bash(1, cmd, "ready")])
+        check(f"mention is not an invocation: {cmd}",
+              r["pinned_invocations"] == 0 and r["pinned_ran"] == 0, json.dumps(r["evidence"]))
+        check(f"mention is not a relevant invocation: {cmd}",
+              r["state"] == "no_relevant_invocation", r["state"])
+        check(f"mention is counted as a mention: {cmd}",
+              A.classify_command(cmd)["mention"] >= 1, json.dumps(A.classify_command(cmd)))
+
+
+def test_the_variable_in_command_position_is_an_invocation():
+    """Negative control on the test above: a classifier that refuses everything is not a
+    classifier."""
+    for cmd in ('"$A2_PYTHON" --version', 'PYTHONPATH=src "$A2_PYTHON" -m pytest -q',
+                '${A2_PYTHON} repro.py'):
+        r = A.repair_check(record(), [bash(1, cmd, "3 passed")])
+        check(f"command position is an invocation: {cmd}",
+              r["pinned_invocations"] == 1, json.dumps(A.classify_command(cmd)))
+
+
+def test_attempting_pytest_is_not_executing_tests():
+    """`No module named pytest` is an ATTEMPT. Counting it as the added test running credits
+    the repair with exactly the event it exists to make possible."""
+    calls = [bash(1, f'"$A2_PYTHON" -m pytest -q {NODE}', "No module named pytest")]
+    c = A.requirement_compliance(record(patch=NEW_TEST, calls=calls), calls)
+    check("failed attempt -> executed unknown", c["test_executed"] == "unknown", json.dumps(c))
+    check("failed attempt -> result unknown", c["test_result"] == "unknown")
+
+
+def test_executing_another_file_is_not_executing_the_added_test():
+    calls = [bash(1, '"$A2_PYTHON" -m pytest -q tests/test_other.py', "1 passed")]
+    c = A.requirement_compliance(record(patch=NEW_TEST, calls=calls), calls)
+    check("another file -> executed unknown", c["test_executed"] == "unknown", json.dumps(c))
+    check("another file -> result unknown", c["test_result"] == "unknown", json.dumps(c))
+
+
+def test_the_word_pytest_in_an_echo_is_not_an_invocation():
+    calls = [bash(1, "echo pytest", "pytest")]
+    c = A.requirement_compliance(record(patch=NEW_TEST, calls=calls), calls)
+    check("echo pytest -> no invocation at all", c["test_executed"] == "no", json.dumps(c))
+
+
+def test_deselection_and_collection_failure_are_not_execution():
+    """The cases that matter are the MIXED ones. A result with no counts at all is unsettled
+    whatever the rule, so a test using only those would pass with the guard removed and prove
+    nothing. Each result below carries a passing count AND a reason the named test was not the
+    thing that passed -- which is the shape pytest actually emits when one file fails to
+    collect, or when a node id no longer exists after a revert."""
+    for result in ("0 passed, 23 deselected in 0.3s",
+                   "ERROR collecting tests/test_options.py\n1 passed in 0.4s",
+                   "ERROR: not found: tests/test_options.py::test_gone\n"
+                   "1 passed, no tests ran in 0.02s",
+                   "/v/bin/python3: No module named pytest\n1 passed"):
+        calls = [bash(1, f'"$A2_PYTHON" -m pytest -q {NODE}', result)]
+        c = A.requirement_compliance(record(patch=NEW_TEST, calls=calls), calls)
+        check(f"not execution: {result[:30]!r}", c["test_executed"] == "unknown", json.dumps(c))
+        check(f"no result borrowed: {result[:30]!r}", c["test_result"] == "unknown")
+
+    # Negative control: the same shape WITHOUT the disqualifying signal must settle, or the
+    # four cases above are passing because nothing ever settles.
+    calls = [bash(1, f'"$A2_PYTHON" -m pytest -q {NODE}', "1 passed in 0.4s")]
+    c = A.requirement_compliance(record(patch=NEW_TEST, calls=calls), calls)
+    check("the same count WITHOUT a disqualifier settles", c["test_executed"] == "yes",
+          json.dumps(c))
+
+
+def test_a_run_issued_before_the_last_test_edit_cannot_establish_execution():
+    """Issue order is not execution order, so this direction is used only to WITHHOLD a claim:
+    a run issued before the test file was last written cannot have run the final added test."""
+    calls = [bash(1, f'"$A2_PYTHON" -m pytest -q {NODE}', "1 passed"),
+             {"index": 2, "name": "Edit", "input": {"file_path": "tests/test_options.py"},
+              "result": "ok"}]
+    c = A.requirement_compliance(record(patch=NEW_TEST, calls=calls), calls)
+    check("run before the last edit -> unknown", c["test_executed"] == "unknown", json.dumps(c))
+    after = [{"index": 1, "name": "Edit", "input": {"file_path": "tests/test_options.py"},
+              "result": "ok"},
+             bash(2, f'"$A2_PYTHON" -m pytest -q {NODE}', "1 passed")]
+    c2 = A.requirement_compliance(record(patch=NEW_TEST, calls=after), after)
+    check("run after the last edit -> yes", c2["test_executed"] == "yes", json.dumps(c2))
+
+
+def test_the_added_tests_own_result_comes_from_an_invocation_that_named_it():
+    for result, want in (("1 passed in 0.1s", "passed"), ("1 failed in 0.1s", "failed")):
+        calls = [bash(1, f'"$A2_PYTHON" -m pytest -q {NODE}', result)]
+        c = A.requirement_compliance(record(patch=NEW_TEST, calls=calls), calls)
+        check(f"named run result {result[:12]} -> {want}",
+              c["test_executed"] == "yes" and c["test_result"] == want, json.dumps(c))
+    # A pytest ERROR is a setup or teardown failure: the test body did not run, so neither
+    # "executed" nor a result is established. The count is kept as evidence for the reviewer.
+    calls = [bash(1, f'"$A2_PYTHON" -m pytest -q {NODE}', "1 error in 0.1s")]
+    c = A.requirement_compliance(record(patch=NEW_TEST, calls=calls), calls)
+    check("a pytest ERROR is not an execution", c["test_executed"] == "unknown", json.dumps(c))
+    check("a pytest ERROR is kept as evidence",
+          c["evidence"]["execution_candidates"][0]["counts"] == {"error": 1},
+          json.dumps(c["evidence"]["execution_candidates"]))
+
+
+# ------------------------------------------------------------------ the registered scorer
+# `tally()` lives in `score_compliance.py`, whose own suite needs a host-local pristine
+# checkout and is therefore NOT in CI. A2-R reports `a1-scorer-4`'s output beside its own
+# observations, so the shape of that output is A2-R's concern -- and these cases are
+# host-independent, so they run where the rest of that suite cannot.
+def test_tally_excludes_unknowns_from_BOTH_halves_of_the_ratio():
+    """A misreading this session made and published: `4/4` with two unknowns was called an
+    inflated numerator. It is not. `tally` settles on PASS and FAIL only, so `4/4` means four
+    passes among four SETTLED checks, with the unknowns carried separately."""
+    from score_compliance import tally, verdict, PASS, FAIL, UNKNOWN, NA
+    t = tally({"A": verdict(PASS, "p"), "B": verdict(PASS, "p"), "C": verdict(PASS, "p"),
+               "D": verdict(PASS, "p"), "E": verdict(UNKNOWN, "u"), "F": verdict(UNKNOWN, "u")})
+    check("four passes among four settled", t["compliance"] == "4/4", t["compliance"])
+    check("both unknowns carried separately", t["unknown_count"] == 2, str(t))
+    check("unknowns are not in the numerator", t["passed"] == ["A", "B", "C", "D"], str(t))
+
+    # More unknowns must move the DENOMINATOR down, never the numerator up.
+    t3 = tally({"A": verdict(PASS, "p"), "B": verdict(FAIL, "f"),
+                "C": verdict(UNKNOWN, "u"), "D": verdict(UNKNOWN, "u"),
+                "E": verdict(UNKNOWN, "u"), "F": verdict(NA, "n")})
+    check("three unknowns -> one pass of two settled", t3["compliance"] == "1/2",
+          t3["compliance"])
+    check("three unknowns counted", t3["unknown_count"] == 3, str(t3))
+    check("not-applicable is its own state", t3["not_applicable_count"] == 1, str(t3))
+
+    # Every check unsettled: a ratio of nothing, and not a silent 0/0 pass.
+    t0 = tally({"A": verdict(UNKNOWN, "u"), "B": verdict(UNKNOWN, "u")})
+    check("nothing settled -> 0/0", t0["compliance"] == "0/0", t0["compliance"])
+    check("nothing settled -> both unknown", t0["unknown_count"] == 2, str(t0))
 
 
 def test_relevance_is_never_machine_decided():

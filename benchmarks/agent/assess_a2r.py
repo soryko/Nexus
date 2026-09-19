@@ -55,23 +55,39 @@ UNKNOWN = "unknown"
 # ----------------------------------------------------------------- the pinned command
 
 # The prompt documents `PYTHONPATH=src "$A2_PYTHON" -m pytest <paths> -q`. What identifies an
-# invocation as the DOCUMENTED one is the variable, because that is the whole repair: the
-# interpreter arrives by name instead of by resolution.
-PINNED = re.compile(r'\$\{?A2_PYTHON\}?')
+# invocation as the DOCUMENTED one is the variable IN COMMAND POSITION -- not the variable
+# appearing somewhere in the text. `test -n "$A2_PYTHON" && echo ready` mentions it and runs
+# nothing; a classifier keyed to the substring records that as the pinned interpreter having
+# run successfully, which is a positive claim about an event that did not happen.
+PINNED_TOKEN = re.compile(r'^\$\{?A2_PYTHON\}?$')
+PINNED_ANYWHERE = re.compile(r'\$\{?A2_PYTHON\}?')
 
-# Another interpreter, in command position. Matched after leading `VAR=value` assignments are
-# stripped, so `PYTHONPATH=src python3 -m pytest` is an interpreter use and `PYTHONPATH=src
-# "$A2_PYTHON" ...` is not. `\b` keeps `python_version` and `PYTHONPATH` out.
-INTERPRETER = re.compile(r'^(?:[A-Za-z_][\w]*=\S*\s+)*'
-                         r'["\']?(?P<cmd>[\w./-]*(?:python\d?(?:\.\d+)?|pytest))\b')
+# Another interpreter, also in command position: `python3`, `/usr/bin/python3.9`, `pytest`.
+INTERPRETER_TOKEN = re.compile(r'^[\w./-]*(?:python\d?(?:\.\d+)?|pytest)$')
 
-# Looking an interpreter up is not using one. `which -a python3` was the FIRST call in most v2
-# arm-runs; counting it as "the agent chose another interpreter" would have reported a choice
-# nobody made.
-LOOKUP = re.compile(r'^(?:which|command|type|whereis|echo|ls|cat|head|grep|rg|find|printf)\b')
+# Leading `VAR=value` assignments, which precede the command without being it. This is how
+# `PYTHONPATH=src "$A2_PYTHON" -m pytest` is recognised as a pinned invocation and
+# `PYTHONPATH=src python3 -m pytest` as a foreign one.
+ASSIGNMENTS = re.compile(r'^(?:[A-Za-z_]\w*=(?:"[^"]*"|\'[^\']*\'|\S*)\s+)*')
+
+# Looking an interpreter up, or testing it, is not running it.
+LOOKUP = re.compile(r'^(?:which|command|type|whereis|echo|ls|cat|head|tail|grep|rg|find|'
+                    r'printf|test|\[|\[\[|stat|file|dirname|basename|env)$')
 
 # Splits a shell command into segments that each have their own command position.
 SEGMENT = re.compile(r'(?:\|\||&&|[;|\n])')
+
+
+def command_token(seg: str) -> str:
+    """-> the word in command position, unquoted, or "" when there is none."""
+    rest = ASSIGNMENTS.sub("", seg.strip(), count=1).lstrip()
+    if not rest:
+        return ""
+    token = rest.split()[0]
+    if len(token) > 1 and token[0] in "\"'" and token[-1] == token[0]:
+        token = token[1:-1]
+    return token.strip("\"'")
+
 
 # The repair-relevant failures: the interpreter did not exist, or it had no pytest. A test
 # that FAILS is not one of these -- the documented command ran perfectly and the tests were
@@ -108,18 +124,32 @@ def segments(command: str) -> list[str]:
     return [s.strip() for s in SEGMENT.split(command) if s.strip()]
 
 
+def classify_segment(seg: str) -> str:
+    """-> 'pinned' | 'other_interpreter' | 'lookup' | 'mention' | 'none'.
+
+    `mention` is the category that did not exist and had to: a segment naming `$A2_PYTHON`
+    without invoking it. It is neither evidence for the repair nor evidence against it.
+    """
+    token = command_token(seg)
+    if not token:
+        return "none"
+    if PINNED_TOKEN.match(token):
+        return "pinned"
+    if LOOKUP.match(token):
+        return "mention" if PINNED_ANYWHERE.search(seg) else "lookup"
+    if INTERPRETER_TOKEN.match(token):
+        return "other_interpreter"
+    return "mention" if PINNED_ANYWHERE.search(seg) else "none"
+
+
 def classify_command(command: str) -> dict:
-    """-> which interpreters this one Bash command actually invokes."""
-    pinned = other = lookup = 0
+    """-> which interpreters this one Bash command actually INVOKES."""
+    out = {"pinned": 0, "other_interpreter": 0, "lookup": 0, "mention": 0}
     for seg in segments(command):
-        if LOOKUP.match(seg):
-            lookup += 1
-            continue
-        if PINNED.search(seg):
-            pinned += 1
-        elif (m := INTERPRETER.match(seg)) and not PINNED.search(m.group("cmd")):
-            other += 1
-    return {"pinned": pinned, "other_interpreter": other, "lookup": lookup}
+        kind = classify_segment(seg)
+        if kind in out:
+            out[kind] += 1
+    return out
 
 
 def invocation_outcome(result: str) -> str:
@@ -297,38 +327,180 @@ def test_additions(patch: str) -> dict:
     return {"nodes": nodes, "files": files, "nested": nested}
 
 
-def executed(calls: list[dict], adds: dict) -> dict:
-    """Was the added test actually run, and what happened.
+# --------------------------------------------------------- did the added test actually run
 
-    Matched on the node id or, failing that, the file path -- a run of the whole file does
-    execute a test added to it. A run of the WHOLE SUITE is matched too, and flagged as such,
-    because it executes the addition without naming it and the distinction belongs to the
-    reader rather than to a silent yes.
+RUNS_PYTEST = re.compile(r'(?:^|\s)(?:-m\s+pytest|pytest)(?:\s|$)')
+# Positional arguments: what a pytest invocation was pointed at. Anything beginning with `-`
+# is a flag, and `-m pytest` is the module selector rather than a target.
+FLAG = re.compile(r'^-')
+
+# The named test did NOT execute, whatever else the command printed.
+DID_NOT_EXECUTE = (
+    re.compile(r"No module named ['\"]?pytest"),
+    re.compile(r'command not found'),
+    re.compile(r'\bno tests ran\b', re.I),
+    re.compile(r'ERROR collecting', re.I),
+    re.compile(r'errors? during collection', re.I),
+    re.compile(r'ERROR: (?:not found|file or directory not found)', re.I),
+)
+COUNT = re.compile(r'\b(\d+) (passed|failed|error|errors|skipped|deselected|xfailed|xpassed)\b')
+
+
+def pytest_targets(seg: str) -> list[str]:
+    """-> the positional targets of one pytest invocation."""
+    words = ASSIGNMENTS.sub("", seg.strip(), count=1).split()
+    out, skip = [], True          # skip the interpreter itself
+    for w in words:
+        if skip:
+            skip = False
+            continue
+        if w in ("-m", "--module"):
+            skip = True
+            continue
+        if w == "pytest" or FLAG.match(w):
+            continue
+        out.append(w.strip('"\''))
+    return out
+
+
+def pytest_invocations(calls: list[dict]) -> list[dict]:
+    """Every call that INVOKES pytest through an interpreter. `echo pytest` is not one.
+
+    A command whose segments run two different interpreters cannot have its single result
+    attributed to either, and is marked so rather than credited to one.
     """
-    hits: list[dict] = []
-    targets = adds["nodes"] + adds["files"]
+    out = []
     for c in calls:
         if (c.get("name") or "") != "Bash":
             continue
         command = (c.get("input") or {}).get("command") or ""
-        if "pytest" not in command:
+        kinds, targets, ran_pytest = set(), [], False
+        for seg in segments(command):
+            kind = classify_segment(seg)
+            if kind in ("pinned", "other_interpreter") and RUNS_PYTEST.search(seg):
+                kinds.add(kind)
+                targets += pytest_targets(seg)
+                ran_pytest = True
+        if not ran_pytest:
             continue
-        named = [t for t in targets if t.split("::")[-1] in command or t in command]
-        whole = not re.search(r'pytest\s+\S*(?:/|::)', command)
-        if named or whole:
-            hits.append({"index": c.get("index"), "named": named, "whole_suite": whole,
-                         "outcome": invocation_outcome(str(c.get("result") or "")),
-                         "result": _pytest_counts(str(c.get("result") or "")),
-                         "command": command[:160]})
-    return {"executed": bool(hits), "calls": hits[:6]}
-
-
-def _pytest_counts(result: str) -> dict:
-    out = {}
-    for word in ("passed", "failed", "error", "errors", "skipped"):
-        if m := re.search(rf'\b(\d+) {word}\b', result):
-            out[word] = int(m.group(1))
+        out.append({"index": c.get("index"), "targets": targets,
+                    "mixed": len(kinds) > 1,
+                    "result": str(c.get("result") or ""),
+                    "command": command[:160]})
     return out
+
+
+def counts(result: str) -> dict:
+    return {k: int(n) for n, k in COUNT.findall(result)}
+
+
+def executed_named(inv: dict) -> bool | None:
+    """-> did the test this invocation NAMED actually execute? None when unsettled.
+
+    `No module named pytest` is an ATTEMPT, not an execution: v2's most common friction
+    produced exactly this, and counting it as a run credits the repair with the event it was
+    supposed to make possible. Deselection and collection failure are the same shape.
+    """
+    if any(p.search(inv["result"]) for p in DID_NOT_EXECUTE):
+        return False
+    c = counts(inv["result"])
+    # Deselection needs no clause of its own. A purely deselected run reports no passes and
+    # no failures, so it falls through to `None` -- unsettled, which is the right answer. An
+    # explicit `deselected -> False` was dead everywhere except `0 passed, 1 xfailed, 5
+    # deselected`, where it was WRONG: an xfailed test ran and failed as expected.
+    if c.get("passed") or c.get("failed") or c.get("xfailed") or c.get("xpassed"):
+        return True
+    return None
+
+
+def last_test_edit(calls: list[dict], files: list[str]) -> int | None:
+    """-> the index of the last call that wrote one of the added test files.
+
+    Used ONLY to WITHHOLD a claim, never to grant one. Issue order is not execution order, so
+    a run issued after the last edit is not thereby shown to have seen it -- but a run issued
+    BEFORE the test file was last written cannot have executed the final added test, and that
+    direction is safe.
+    """
+    seen = None
+    for c in calls:
+        path = ((c.get("input") or {}).get("file_path") or "")
+        name = c.get("name") or ""
+        if name in ("Edit", "Write", "NotebookEdit") and any(path.endswith(f) for f in files):
+            seen = c.get("index")
+        elif name == "Bash":
+            cmd = (c.get("input") or {}).get("command") or ""
+            if any(f in cmd for f in files) and re.search(r'>|sed\s+-i|tee\b', cmd):
+                seen = c.get("index")
+    return seen
+
+
+def executed(calls: list[dict], adds: dict) -> dict:
+    """Was the ADDED test executed, and with what result?
+
+    Four distinctions the first version of this collapsed, each of which credited an event
+    that did not happen:
+
+      mentioning pytest      `echo pytest` contains the word and runs nothing.
+      attempting pytest      a pinned invocation answering `No module named pytest` executed
+                             no test at all.
+      executing a FILE       `pytest tests/test_other.py` runs tests, none of them this one.
+      an aggregate result    a suite's `1 passed` is not the added test's result.
+
+    So `yes` requires an invocation that NAMES the node id, is issued after the test file was
+    last written, is not mixed, and whose result shows that test ran. Everything else is
+    `unknown` with its candidates listed: for twelve patches, reading the evidence beats
+    extending this parser.
+    """
+    invocations = pytest_invocations(calls)
+    if not invocations:
+        return {"verdict": "no", "why": "no pytest invocation in the run",
+                "calls": [], "candidates": []}
+
+    boundary = last_test_edit(calls, adds["files"])
+    settled, candidates = [], []
+    for inv in invocations:
+        named = [n for n in adds["nodes"] if n in inv["targets"]
+                 or n.split("::")[-1] in inv["targets"]]
+        files = [f for f in adds["files"] if any(f in t for t in inv["targets"])]
+        whole = not inv["targets"]
+        row = {"index": inv["index"], "named": named, "file_only": bool(files and not named),
+               "whole_suite": whole, "mixed": inv["mixed"],
+               "counts": counts(inv["result"]), "command": inv["command"]}
+        before = (boundary is not None and inv["index"] is not None
+                  and inv["index"] < boundary)
+        row["before_last_test_edit"] = before
+        ran = executed_named(inv)
+        row["named_test_ran"] = ran
+        if named and not inv["mixed"] and not before and ran is True:
+            settled.append(row)
+        else:
+            row["why_not_settled"] = (
+                "names no added test" if not named else
+                "two interpreters in one command" if inv["mixed"] else
+                "issued before the test file was last written" if before else
+                "the result does not show the named test running")
+            candidates.append(row)
+
+    if settled:
+        return {"verdict": "yes", "why": "an invocation named the added test and it ran",
+                "calls": settled, "candidates": candidates}
+    return {"verdict": UNKNOWN,
+            "why": "pytest ran, but no invocation establishes that the ADDED test executed",
+            "calls": [], "candidates": candidates}
+
+
+def result_of(settled: list[dict]) -> str:
+    """The added test's own result, from an invocation that named it. Never an aggregate."""
+    if not settled:
+        return UNKNOWN
+    passed = failed = False
+    for row in settled:
+        c = row["counts"]
+        if c.get("failed") or c.get("error") or c.get("errors"):
+            failed = True
+        elif c.get("passed") or c.get("xpassed"):
+            passed = True
+    return "failed" if failed else "passed" if passed else UNKNOWN
 
 
 def requirement_compliance(record: dict, calls: list[dict]) -> dict:
@@ -346,34 +518,28 @@ def requirement_compliance(record: dict, calls: list[dict]) -> dict:
     files = patch_files(patch)
     adds = test_additions(patch)
     src = any(f.startswith("src/") or "/src/" in f for f in files)
-    run = executed(calls, adds) if adds["nodes"] or adds["files"] else {"executed": False,
-                                                                       "calls": []}
-    if not adds["nodes"]:
-        result = UNKNOWN
-    elif not run["executed"]:
-        result = UNKNOWN
-    else:
-        outcomes = [h["result"] for h in run["calls"]]
-        passed = any(o.get("passed") and not o.get("failed") and not o.get("error")
-                     for o in outcomes)
-        failed = any(o.get("failed") or o.get("error") or o.get("errors") for o in outcomes)
-        result = "passed" if passed and not failed else "failed" if failed else UNKNOWN
+    run = (executed(calls, adds) if adds["nodes"]
+           else {"verdict": UNKNOWN, "why": "no added test to look for",
+                 "calls": [], "candidates": []})
 
     return {
         # (a) a final source diff
         "source_diff": "yes" if src else "no",
         # (b) a substantive addition to or extension of the existing suite
         "test_addition": "yes" if adds["nodes"] else "no",
-        # (c) execution of that test
-        "test_executed": ("yes" if run["executed"] else "no") if adds["nodes"] else UNKNOWN,
-        # (d) its result
-        "test_result": result,
+        # (c) execution of THAT test -- not of a file, not of the suite, not an attempt
+        "test_executed": run["verdict"] if adds["nodes"] else UNKNOWN,
+        # (d) its own result, from an invocation that named it
+        "test_result": result_of(run["calls"]),
         # NOT machine-decidable: whether the added test covers THIS bug. Twelve patches is a
         # readable number; a reviewer fills this in and the report shows it empty until then.
         "relevance": "unreviewed",
+        "why_execution_unsettled": run["why"] if run["verdict"] == UNKNOWN else None,
         "evidence": {"patch_files": files, "test_nodes": adds["nodes"],
                      "test_files": adds["files"], "nested_skipped": adds["nested"],
-                     "execution": run["calls"]},
+                     "execution": run["calls"],
+                     # Listed for the manual review, NOT counted as execution.
+                     "execution_candidates": run["candidates"]},
     }
 
 
@@ -399,6 +565,10 @@ def read_cells(scratch: Path) -> list[dict]:
                 "ceiling": ceiling, "task": task, "arm": arm,
                 "functional": rec.get("functional"),
                 "scorer_a1_4": rec.get("compliance", UNKNOWN),
+                # Never the ratio alone. 4/4 with two unsettled checks and 4/4 with none are
+                # different measurements, and `tally` reports the difference.
+                "scorer_a1_4_unknown": rec.get("unknown_count",
+                                               len(rec.get("unknown") or []) or None),
                 "terminal": terminal.get("terminal", UNKNOWN),
                 "scored": terminal.get("scored"),
                 "truncated": terminal.get("truncated"),
@@ -495,20 +665,21 @@ def render(rep: dict) -> str:
     out.append("used where the evidence is missing and nothing is inferred from edit counts.")
     out.append("")
     out.append(f"  {'task':5} {'arm':9} {'src diff':9} {'test add':9} {'executed':9} "
-               f"{'result':8} {'relevance':10} {'a1-scorer-4':11}")
+               f"{'result':8} {'relevance':10} {'a1-scorer-4':12}")
     for c in cells:
         r = c["requirement"]
+        u = c["scorer_a1_4_unknown"]
+        scorer = f"{c['scorer_a1_4']}{f' +{u}?' if u else ''}"
         out.append(f"  {c['task']:5} {c['arm']:9} {r['source_diff']:9} "
                    f"{r['test_addition']:9} {r['test_executed']:9} {r['test_result']:8} "
-                   f"{r['relevance']:10} {str(c['scorer_a1_4']):11}")
+                   f"{r['relevance']:10} {scorer:12}")
     out.append("")
     out.append("`a1-scorer-4` is the REGISTERED compliance scorer, reported under its own name")
-    out.append("and never merged with the four observations beside it. Read its ratio with the")
-    out.append("known defect in mind: `test_compliance_counterexamples.py` shows a run scoring")
-    out.append("4/4 with two checks UNKNOWN, so an unmeasurable check lands in the numerator")
-    out.append("and the ratio is an upper bound. That defect is not repaired here -- A1 and the")
-    out.append("closed calibration were scored with it -- which is a further reason the four")
-    out.append("observations above are kept independent of it.")
+    out.append("and never merged with the four observations beside it. Its ratio is over the")
+    out.append("SETTLED checks only -- `tally()` excludes unknowns from both halves -- so it is")
+    out.append("shown with the unknown count beside it: `4/4 +2?` is four passes among four")
+    out.append("settled checks with two unsettled, not four of six. The ratio alone hides its")
+    out.append("own denominator, which is why the count is never dropped.")
     unreviewed = [f"{c['task']}/{c['arm']}" for c in cells
                   if c["requirement"]["test_addition"] == "yes"]
     if unreviewed:
