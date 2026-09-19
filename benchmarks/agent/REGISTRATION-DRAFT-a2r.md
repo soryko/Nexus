@@ -1,8 +1,11 @@
 # A2-R — assessing the interpreter repair — **DRAFT, NOT REGISTERED**
 
-**Status: a draft for review. Nothing here authorises a paid run.** It becomes a registration
-only when the founder approves it, the open decisions in §7 are closed, and it is frozen with a
-launch record of its own. Until then no cell is executed.
+**Status: the design is frozen and awaiting approval. Nothing here authorises a paid run.** It
+becomes a registration when the founder approves it and it is frozen with the launch record in
+[`LAUNCH-A2R.md`](../../LAUNCH-A2R.md). Until then no cell is executed.
+
+The design decisions in §7 are **closed** as of 2026-09-19 and are not reopened by this
+document. What remains open is approval, and the three host-local preparation steps in §9.
 
 Predecessors: the calibration is **closed with no ceiling selected**
 ([`CLOSEOUT-calib-a2.md`](CLOSEOUT-calib-a2.md)); the workflow diagnostic that motivated this is
@@ -29,7 +32,7 @@ reported.** Where a v2 figure appears it is labelled *historical* and carries no
 
 | | |
 | --- | --- |
-| task set | `k1`–`k4`, `tasks-calib-a2.json`, **unchanged** — including the two nobody solved |
+| task set | `k1`–`k4`, `tasks-calib-a2.json`, **unchanged** |
 | task bodies, tails, `consult`, `capture_instruction` | **byte-identical** to v2, verified by assembly diff |
 | the requirement | *"Fix the behaviour in `src/`, and extend the existing test suite to cover it."* — unchanged |
 | arms | `baseline`, `nexus`, `notes`, identical prompts, tool inventories and retrieval policy |
@@ -38,10 +41,17 @@ reported.** Where a v2 figure appears it is labelled *historical* and carries no
 | corpus | A1's frozen held-out corpus, digest `9ae2a9f268dd894d` |
 | scorers | `a1-functional-2`, `a1-scorer-4` |
 | model settings | unchanged |
-| wall clock | 600 s, unchanged — see §7, it is an open question and not a silent change |
+| wall clock | **600 s, held** — §7 decision 2 |
 
 **The task set is not pruned.** Retaining only the tasks that turn favourable would answer a
 different question.
+
+**A correction to an earlier draft of this document.** It described the task set as *"including
+the two nobody solved"*. That is A1's task set, not this one, and it is **wrong for `k1`–`k4`**:
+[`results-calib-a2-workflow.json`](results-calib-a2-workflow.json) records at least one passing
+arm-run on **every one of the four tasks** — k1 7 of 9, k2 5 of 6, k3 2 of 6, k4 2 of 6. The
+task set is retained because pruning it would change the question, not because any task is
+unsolved.
 
 ## 3. What changed, and only this
 
@@ -52,101 +62,182 @@ changed, so no v3 row can be pooled with a v2 row.
 
 ## 4. Design
 
-**4 tasks × 3 arms × 1 attempt at a single ceiling = 12 arm-runs.**
+**4 tasks × 3 arms × 1 attempt at ceiling 45 = 12 arm-runs.**
 
-One ceiling, because this is not a ceiling experiment. **Ceiling 45** is proposed: it is the
-higher of the two ceilings the calibration completed, so the instrument is the one A2 would
-actually use, and it is the point where truncation had begun to move. *(Open — §7.)*
+**Ceiling 45.** It is a **previously completed operating point** for this development
+measurement — the calibration ran all 12 of its cells there — and that is the whole of the
+justification. It is **not a selected ceiling and not a validated one**: `freeze-calib-a2.md` §5
+selected none, and 45 failed its truncation gate at 75%.
 
-One attempt per cell, as registered in the calibration: A1 measured run-to-run variability at
-nil in 11 of 12 cells. **It follows that no cell here supports a per-task claim, and none will
-be made.**
+**One attempt per cell**, justified by this diagnostic's limited scope and budget and by
+nothing else. An earlier draft justified it by A1 having measured run-to-run variability at nil
+in 11 of 12 cells; **that is A1's observed uniformity under A1's conditions and establishes
+nothing about variability here.** It follows either way that no cell supports a per-task claim,
+and none will be made.
 
 ## 5. What is reported, per (task, arm)
 
-Five families, **reported separately and never collapsed into one score**:
+Five families, **reported separately and never collapsed into one score**.
 
-1. **Functional correctness** — hidden checks, `a1-functional-2`. Pass/fail per cell and the
-   pooled count.
-2. **Requirement compliance** — did the run do what the task asked? Reported as three
-   independent facts, because the scoring has been shown not to see all of them: *(a)* a source
-   diff under `src/`; *(b)* **an addition to the existing test suite** — the tail requires it,
-   and 14 such edits in v2 earned nothing; *(c)* `a1-scorer-4` compliance as registered.
-3. **Termination** — `completed` / `max_turns` / `timeout` / `env_fail`, per cell, with
-   `num_turns`, tool-call count and wall clock beside it. **Reported separately from
-   correctness**: this sweep is the demonstration of why — 11 of v2's 16 passes ended at
-   `max_turns`.
-4. **Environment failures and friction** — `env_fail` counts, permission denials, and the
-   tool-result signals the diagnostic counted (`No module named`, tracebacks, nonzero exits,
-   denials). **The primary check on the repair is that `No module named pytest` is absent**,
-   and `runtime_identity` is recorded for every arm-run.
-5. **Total resource use** — tokens (input + cache-read + cache-creation + output) over **all**
-   arm-runs including failures, plus wall clock. Dollars are not used; `runner-a1.md` §3 found
-   the CLI's cost field has no provenance.
+### 1. Functional correctness
+Hidden checks, `a1-functional-2`. Pass/fail per cell and the pooled count.
 
-`report_calibration.py` and `diagnose_workflow.py` already compute 1, 3, 4 and 5 from saved
-records. **2(b) needs a small addition** and must be written before the run, not after.
-
-## 6. Budget, limits and the stopping decision
+### 2. Requirement compliance — four independent observations
+The tail requires *fixing the behaviour in `src/`* **and** *extending the existing test suite to
+cover it*. **A changed file under `tests/` does not establish the second.** A comment, a
+whitespace change, a rename and an unrelated edit all touch `tests/` and satisfy nothing. So
+four observations are preserved independently, and **`unknown` is a real value** used wherever
+the evidence is missing:
 
 | | |
 | --- | --- |
-| **maximum experiment budget** | **20 000 000 tokens**, enforced as in the calibration: checked **before** a row starts against the largest row yet seen; unresolved consumption blocks rather than counting as zero |
-| ceiling | one grid point (§4) |
+| *(a)* | a final source diff under `src/` |
+| *(b)* | a **substantive** addition to, or extension of, the existing suite — a new `def test_*`, or added lines that are not blank and not comments inside a test the hunk header names |
+| *(c)* | **execution** of that test — matched on its node id or its file; a whole-suite run counts and is flagged as such |
+| *(d)* | its **result** |
+
+**Nothing is inferred from edit counts.** An edit count is a count of edits: v2 contained
+arm-runs that edited `tests/` repeatedly and never ran one.
+
+**Relevance stays `unreviewed`.** Whether an added test covers *this* bug is not decidable from
+a diff. Twelve patches is a readable number, so the reporter emits the node ids and the
+executing commands as evidence and a reviewer fills the field in.
+
+`a1-scorer-4` is the **registered** compliance scorer, reported beside these under its own name
+and never merged with them. Read its ratio as an **upper bound**: its own counterexample suite
+currently shows a run scoring 4/4 with two checks `unknown`, so an unmeasurable check lands in
+the numerator. That defect is **not repaired here** — A1 and the closed calibration were scored
+with it — and it is a further reason to keep the four observations independent of it.
+
+### 3. Termination
+`completed` / `max_turns` / `timeout` / `env_fail`, per cell, with `num_turns`, tool-call count
+and wall clock beside it. **Reported separately from correctness**: 11 of v2's 16 passes ended
+at `max_turns`. **Timeouts are reported separately from turn exhaustion**, not pooled into one
+truncation figure.
+
+### 4. Environment failures — and the repair, checked non-vacuously
+**The absence of `No module named pytest` does not establish the repair.** It is vacuous in a
+run that never attempted pytest, and v2 contained exactly such a run: `30/k2/notes` passed the
+hidden checks having never invoked pytest at all. Five facts are therefore reported
+**separately**:
+
+1. the **gate passed**, and the `runtime_identity` it recorded;
+2. the agent **invoked the documented pinned command**;
+3. that invocation **ran, or could not run**;
+4. the agent **used another interpreter**;
+5. **no relevant invocation was observed** — from which no claim about the repair is available
+   in either direction, and which is not counted as clean.
+
+A **failing test is not a broken interpreter**: the documented command ran and the tests were
+red, which is the ordinary state of an unfinished run. A **missing module that is not pytest**
+is the program's own import problem and is reported separately.
+
+**A gate refusal stops spending whatever refused it**, and its cause is classified before
+anything calls it an interpreter-repair failure: a refusal on the forwarder or on egress is not
+evidence about the interpreter.
+
+Also reported: `env_fail` counts, permission denials, and the tool-result signals the diagnostic
+counted.
+
+### 5. Total resource use
+Tokens (input + cache-read + cache-creation + output) over **all** arm-runs including failures,
+plus wall clock. Dollars are not used; `runner-a1.md` §3 found the CLI's cost field has no
+provenance.
+
+`report_calibration.py` and `diagnose_workflow.py` compute 1, 3 and 5 from saved records.
+Families **2 and 4** are new and are implemented in [`assess_a2r.py`](assess_a2r.py), with
+counterexamples in [`test_a2r.py`](test_a2r.py) — **written before the run, not after**.
+
+## 6. Accounting, and the stopping decision
+
+**A2-R is accounted separately from the closed calibration.** Its own launch identity
+(`LAUNCH-A2R.md`), its own output directory, its own budget scope, its own summary
+(`a2r-summary.json`). This is not tidiness: `consumed()` walks a whole scratch tree, so two
+sweeps sharing one directory share one budget silently. [`run_a2r.py`](run_a2r.py) **refuses** a
+directory that holds another sweep's summary, and refuses to nest inside one.
+
+| | |
+| --- | --- |
+| **soft launch threshold** | **20 000 000 tokens** — a **separately proposed allocation**, not remaining allowance from the closed calibration and **not a guaranteed maximum** |
+| ceiling | 45, one grid point |
 | wall clock | 600 s per arm-run |
 | attempts | 1 per cell; **no retries** — a retried cell is a second measurement of a changed thing |
 
-**Where 20 000 000 comes from, and why it is soft.** v2's ceiling-45 row cost 16 496 640 tokens
-for the same 12 cells. That is an **estimate from a different configuration**, and the estimate
-history on this project is bad: the endgame forecasts for the v2 ceiling-60 row were wrong three
-times, because each assumed cost scales with the ceiling, which holds only while runs truncate.
-If the repair works, runs may stop wasting turns and cost **less**; they may also get further and
-cost **more**. The figure is headroom over a historical measurement, not a prediction.
+**Why it is soft, stated rather than implied.** The check is the calibration's: a row is not
+*started* without room for one the size of the largest yet seen. So is its weakness. **An
+arm-run cannot be interrupted part-way, so the sweep can finish above 20 000 000 by up to one
+row**, and **a largest-observed-row reservation bounds nothing about the next row's
+consumption**. The summary records the figure as `cap_is_soft: true` so nothing downstream reads
+it as a maximum that was enforced.
+
+**Where 20 000 000 comes from.** v2's ceiling-45 row cost 16 496 640 tokens for the same 12
+cells — *historical*, from a different configuration. The estimate history on this project is
+bad: the endgame forecasts for the v2 ceiling-60 row were wrong three times, each assuming cost
+scales with the ceiling, which holds only while runs truncate. The figure is headroom over a
+historical measurement, not a prediction.
+
+**The closed calibration's unresolved consumption stays outstanding and visible.** One arm-run
+(`c60/run-k1/attempt1/arms/baseline`) has no usable usage record; the closed sweep's total is a
+lower bound and its charge exceeded its cap by 560 844 tokens. **A2-R does not resolve it, does
+not cover it with a new allowance, and does not treat it as zero.** A2-R's report prints it
+under its own heading so that A2-R's clean ledger is never read as the project's.
 
 **Stop the sweep when any of these is true**, and report what was measured up to that point:
 
-* the budget check refuses the next row;
-* any arm-run records an unresolved consumption;
-* the environment gate refuses an arm — **that is the repair failing, and it is a result**;
+* the pre-launch check refuses the next row at the threshold;
+* any arm-run records an unresolved consumption — the next row is **not** started;
+* the environment gate refuses an arm — **that is a result**, and its cause is classified (§5.4)
+  before it is called an interpreter failure;
 * a row produces no scored arm-run.
 
-**The decision this sweep feeds.** It answers whether the repaired toolchain runs clean. It does
-**not** decide the next intervention by itself:
+### What this sweep's outcomes mean
 
-* **`No module named pytest` absent and correctness materially unchanged** → friction was real
-  but not load-bearing; the next candidate is workflow shape or task scope, chosen on evidence.
-* **absent and correctness up** → the repair is worth carrying into any A2 registration. Still
-  not a causal claim against v2, for §1's reasons; it would motivate a controlled comparison.
-* **still present, or a new friction replaces it** → the repair is incomplete; return to §1 of
-  the repair document before spending again.
-* **runs still never reach implementation** → the dominant failure mode is untouched by
-  toolchain work, and the next question is the workload or the agent configuration, as
-  `freeze-calib-a2.md` §5 already said.
+The design does not support a causal reading, so none is written in advance:
 
-## 7. Open — the founder decides before this is registered
+> **Successful documented commands demonstrate that the repaired runtime is usable in the
+> observed runs. Functional outcomes describe performance under this configuration. Differences
+> from historical v2 outcomes do not establish the repair's effect on correctness.**
 
-1. **The ceiling.** 45 is proposed (§4). 30 is cheaper and is the point A1 measured; 60 has no
-   complete coverage at all.
-2. **The wall clock.** Three v2 arm-runs at ceiling 45 used 89–96% of 600 s and one at ceiling
-   60 hit it. **Increasing turns alone may leave wall time binding.** Holding it at 600 s keeps
-   the instrument fixed; raising it changes a second variable. Recommendation: **hold at 600 s**
-   and report the distribution, so the question is measured rather than assumed.
-3. **The budget.** 20 000 000 (§6) is headroom over a historical figure, not a forecast.
-4. **Whether to run all three arms.** All three keeps the instrument identical to A2's and
-   exerts the turn pressure the arms actually exert. A baseline-only sweep is a third the cost
-   and a different instrument. **No arm contrast will be reported either way.**
+Two consequences of that sentence, stated because an earlier draft of this document broke both:
+
+* **Carrying the repair forward does not depend on correctness going up.** A working documented
+  command is worth keeping because it works, not because a number moved.
+* **If runs still fail to reach implementation, the finding is that the failure mode
+  PERSISTS.** It is *not* that toolchain work left it unaffected — this design cannot separate
+  those, and 10 of 11 v2 failures never wrote a source file at all.
+
+## 7. Decisions — closed 2026-09-19
+
+| decision | closed as | why |
+| --- | --- | --- |
+| **turn ceiling** | **45** | a previously completed operating point for this development measurement; **not** a selected or validated ceiling |
+| **wall limit** | **600 s** | preserve the existing limit; timeouts reported separately |
+| **arms** | **all three** | check the repaired workflow under each arm's existing demands; **no memory-effect comparison** |
+| **attempts** | **one per task/arm, 12 maximum** | a bounded diagnostic, with no claim of stable success rates |
+| **budget** | **20 000 000 additional tokens, explicitly soft** | a separate proposed allocation, not remaining allowance from the closed calibration, and not a guaranteed maximum |
+
+**These are design decisions. They do not launch or authorise paid execution.**
+
+The design is frozen here. Retrieval policy, completion instructions, task scope and model
+settings stay as §2 records them.
 
 ## 8. What this cannot establish
 
 Whether memory helps. Whether bounded consultation helps. Any per-task result. Any causal
-comparison with v2 or with A1. A turn ceiling — `freeze-calib-a2.md` §5 selected none, and
-nothing here reopens that. A held-out claim of any kind.
+comparison with v2 or with A1. The repair's effect on correctness. A turn ceiling —
+`freeze-calib-a2.md` §5 selected none, and nothing here reopens that. A held-out claim of any
+kind.
 
 ## 9. Before it is registered
 
-- [ ] founder closes §7
-- [ ] `2(b)` — the test-suite-addition check — implemented and tested, **before** the run
-- [ ] new host-local `calib-config-*.json` at `config_version: calib-v3`, created **alongside**
-      the v2 files, never editing them
-- [ ] a launch record of its own, outside the measured tree, freezing the identity
+- [x] the design decisions in §7 — **closed**
+- [x] `5.2` — the four requirement observations — implemented and tested, **before** the run
+- [x] `5.4` — the non-vacuous repair check — implemented and tested, **before** the run
+- [x] separate accounting verified under a stub runner: normal completion, threshold refusal,
+      unresolved-consumption refusal, and refusal to share the calibration's directory
+- [ ] **founder approves** [`LAUNCH-A2R.md`](../../LAUNCH-A2R.md)
+- [ ] new host-local `a2r-config-45.json` at `config_version: calib-v3` — a **new file** under
+      a name of its own, never an edit to a `calib-config-*.json`, whose digests
+      `preflight-a2.py` checks against the closed sweep's launch record; its `config_digest`
+      stamped into [`LAUNCH-A2R.md`](../../LAUNCH-A2R.md)
 - [ ] `preflight-a2.py` green, forwarder up, gate passing on a prepared arm

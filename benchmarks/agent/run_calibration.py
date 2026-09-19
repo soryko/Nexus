@@ -22,6 +22,11 @@ Four things it is responsible for:
 The environment gate is NOT here: it runs inside `run_arms_isolated`, per arm, against the
 profile and environment that arm actually uses.
 
+A separately registered sweep drives this same loop with its own `Scope` -- its own threshold,
+summary name, configuration locator and vocabulary -- rather than a copy of it. See
+`run_a2r.py`. A copied ledger is a second implementation of the one thing whose defects are
+invisible from a summary.
+
 Usage:  run_calibration.py <scratch> [--ceilings 30,45,60] [--dry-run]
 """
 from __future__ import annotations
@@ -31,6 +36,7 @@ import os
 import re
 import subprocess
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -59,6 +65,44 @@ CAP_TOKENS = 36_000_000
 # too little allowance left. Seeded from A1's largest row and replaced by measurement as soon
 # as this grid has produced a row at that ceiling.
 INITIAL_ROW_RESERVE = 2_500_000
+
+
+@dataclass(frozen=True)
+class Scope:
+    """What a sweep is charged against, what its summary is called, and what it is called.
+
+    The calibration is CLOSED. A separately registered sweep must not be charged against its
+    cap, must not overwrite its summary, and must not be described in its vocabulary -- but it
+    must use THIS accounting rather than a copy, because a second implementation of the ledger
+    is a second set of the defects this one already has tests for.
+
+    `cap_tokens=None` means "read the module-level `CAP_TOKENS` when the sweep runs", which is
+    what the calibration does and what lets a test substitute a small cap.
+
+    `soft` changes nothing the driver enforces -- the check is identical, and overshoot by at
+    most one row is possible either way. It changes what the summary CALLS the number, so a
+    reader is not told a threshold bounded something it cannot bound.
+    """
+    name: str = "calibration"
+    cap_tokens: int | None = None
+    # Where this sweep's per-ceiling configuration lives. `None` means the module function,
+    # which names `calib-config-<n>.json`. A second sweep MUST NOT share those filenames: the
+    # v2 files are the closed calibration's frozen identity, `preflight-a2.py` checks their
+    # digests against `LAUNCH-A2.md`, and writing a v3 configuration over one of them would
+    # destroy the provenance of a sweep that has already been published.
+    config_locator: object = None
+    cap_label: str = "cap"
+    soft: bool = False
+    summary_name: str = "calibration-summary.json"
+    partial_note: str = ("The grid is PARTIAL: §5 forbids selecting a ceiling from unequal "
+                         "coverage.")
+
+    def cap(self) -> int:
+        return CAP_TOKENS if self.cap_tokens is None else self.cap_tokens
+
+
+CALIBRATION = Scope()
+
 SCHEDULE = BENCH / "schedule-calib-a2.json"
 TASKS = BENCH / "tasks-calib-a2.json"
 CLONE = "/Users/soko/Cerebros/nexus-a1-fixtures/click"
@@ -377,7 +421,7 @@ def preserve_partial(attempt_dir: Path) -> Path | None:
     return dest
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str], scope: Scope = CALIBRATION) -> int:
     if len(argv) < 2:
         print(__doc__.strip().splitlines()[-1], file=sys.stderr)
         return 2
@@ -387,10 +431,12 @@ def main(argv: list[str]) -> int:
                 if "--ceilings" in argv else list(CEILINGS))
     plan = sched.load(SCHEDULE)
     python = sys.executable
+    cap = scope.cap()
 
-    print(f"calibration: schedule {plan.schedule_digest[:16]} seed {plan.seed}")
+    print(f"{scope.name}: schedule {plan.schedule_digest[:16]} seed {plan.seed}")
     print(f"ceilings {ceilings}  |  {len(plan.rows)} rows each  |  "
-          f"{len(plan.rows) * 3 * len(ceilings)} arm-runs  |  cap {CAP_TOKENS:,} tokens")
+          f"{len(plan.rows) * 3 * len(ceilings)} arm-runs  |  "
+          f"{scope.cap_label} {cap:,} tokens")
     if dry:
         for c in ceilings:
             for row in plan.rows:
@@ -401,7 +447,7 @@ def main(argv: list[str]) -> int:
     stopped, errored, blocked, instrument = None, False, None, None
     for ceiling in ceilings:
         root = scratch / f"c{ceiling}"
-        config = config_for(ceiling)
+        config = (scope.config_locator or config_for)(ceiling)
         if not config.exists():
             raise SystemExit(f"no config for ceiling {ceiling}: {config}")
         # The filename does not establish the ceiling. Check what the config actually says,
@@ -467,7 +513,7 @@ def main(argv: list[str]) -> int:
                 break
             reserve = row_reserve(scratch, ceiling)
             # PRE-launch: do not START a row without room for one of its size.
-            if before["tokens_budgeted"] + reserve > CAP_TOKENS:
+            if before["tokens_budgeted"] + reserve > cap:
                 stopped = (ceiling, task, before["tokens_budgeted"], reserve)
                 break
 
@@ -488,7 +534,7 @@ def main(argv: list[str]) -> int:
             }, indent=1) + "\n")
 
             print(f"\n=== ceiling {ceiling}  {task} attempt {attempt}  "
-                  f"({before['tokens_budgeted']:,} of {CAP_TOKENS:,} tokens charged, "
+                  f"({before['tokens_budgeted']:,} of {cap:,} tokens charged, "
                   f"reserving {reserve:,} for this row)  "
                   f"{datetime.now(timezone.utc).isoformat(timespec='seconds')}")
 
@@ -541,9 +587,13 @@ def main(argv: list[str]) -> int:
     # What the budget is CHARGED is always known: it is measurement plus assumption, and both
     # are recorded. What was CONSUMED is known only when nothing is outstanding and nothing
     # was assumed -- an allowance clears the blocker, it does not establish a fact.
-    over = max(0, total["tokens_budgeted"] - CAP_TOKENS)
+    over = max(0, total["tokens_budgeted"] - cap)
     summary = {
-        "cap_tokens": CAP_TOKENS,
+        "scope": scope.name,
+        "cap_tokens": cap,
+        # A soft threshold is a launch check, not a bound. It is recorded under its own name
+        # so nothing downstream reads `cap_tokens` as a maximum that was enforced.
+        "cap_is_soft": scope.soft,
         "config_version": CONFIG_VERSION,
         "tokens_known": total["tokens_known"],
         "tokens_allowance": total["tokens_allowance"],
@@ -582,10 +632,10 @@ def main(argv: list[str]) -> int:
         "schedule_digest": plan.schedule_digest, "seed": plan.seed,
         "written_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
-    (scratch / "calibration-summary.json").write_text(json.dumps(summary, indent=1) + "\n")
+    (scratch / scope.summary_name).write_text(json.dumps(summary, indent=1) + "\n")
     # The summary is written on every path, including failure -- and failure exits nonzero, so
     # a wrapper cannot mistake a broken sweep for a finished one.
-    print(f"\ncharged {total['tokens_budgeted']:,} of {CAP_TOKENS:,} tokens over "
+    print(f"\ncharged {total['tokens_budgeted']:,} of {cap:,} tokens over "
           f"{total['arm_runs']} arm-runs "
           f"({total['tokens_known']:,} measured + {total['tokens_allowance']:,} allowance)")
     print(f"{verdicts['scored_arm_runs']} arm-run(s) scored, "
@@ -604,8 +654,8 @@ def main(argv: list[str]) -> int:
         print(f"OVERSHOT by {over:,} tokens: a row cannot be interrupted part-way, so "
               f"overshoot by at most one row is possible by design.")
     if stopped:
-        print(f"STOPPED AT BUDGET before ceiling {stopped[0]} {stopped[1]}. The grid is "
-              f"PARTIAL: §5 forbids selecting a ceiling from unequal coverage.")
+        print(f"STOPPED AT BUDGET before ceiling {stopped[0]} {stopped[1]}. "
+              f"{scope.partial_note}")
     if errored:
         print("A ROW DID NOT COMPLETE. The sweep stopped; no further ceiling was started.")
         return 1
@@ -622,14 +672,15 @@ def main(argv: list[str]) -> int:
               f"an EXCLUDED terminal -- a harness, auth or transport fault, not a result. "
               f"{verdicts['scored_arm_runs']} arm-run(s) scored, "
               f"{verdicts['excluded_arm_runs']} excluded across the grid. This is NOT a "
-              f"completed calibration.")
+              f"completed {scope.name}.")
         return 1
     if total["unresolved"]:
         # Reached when the unaccounted arm-run is in the LAST row, or when a resume skipped
         # every row: no pre-launch check followed it, so nothing set `blocked`. The ledger is
         # the authority on whether this sweep is accounted for, and it is not.
-        print("\nTHE SWEEP IS NOT ACCOUNTED FOR: it ran to its last row, but the arm-run(s) "
-              "above have no usable usage record. This is NOT a completed calibration.")
+        print(f"\nTHE SWEEP IS NOT ACCOUNTED FOR: it ran to its last row, but the "
+              f"arm-run(s) above have no usable usage record. This is NOT a completed "
+              f"{scope.name}.")
         return 1
     return 0
 

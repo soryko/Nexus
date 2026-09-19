@@ -85,6 +85,10 @@ jobs:
       # `test_interpreter_pinning.py` covers the interpreter repair. It stubs the shell rather
       # than running it, so the decision logic is exercised where the fixtures do not exist --
       # and the defect it closes was a gate that probed one shell startup and passed.
+      # `test_a2r.py` covers A2-R's assessment and its SEPARATE accounting. Two of its cases
+      # are the ones a summary count cannot show: an absent `No module named pytest` in a run
+      # that never invoked pytest is not a pass, and a comment added under `tests/` is not an
+      # extension of the test suite.
       - name: Benchmark harness counterexamples
         run: |
           uv run python benchmarks/agent/test_calibration_counterexamples.py
@@ -92,6 +96,7 @@ jobs:
           uv run python benchmarks/agent/test_report_calibration.py
           uv run python benchmarks/agent/test_diagnose_workflow.py
           uv run python benchmarks/agent/test_interpreter_pinning.py
+          uv run python benchmarks/agent/test_a2r.py
 
       - name: Collect failure evidence
         if: always()
