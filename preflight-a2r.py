@@ -33,7 +33,7 @@ CEILING = 45
 
 FROZEN = {
     "product": "2cd531f9d7c274a065533e58ba3fde8582f8c269",
-    "harness": "c055c8983ae2d7618d212d738cf3d50f285cd991",
+    "harness": "136866f79ec689cdac3e1b45e61853e712dc9fa8",
     "config_version": "calib-v3",
     "config_digest": "22eb0a3766cdde73",
     "max_turns": 45,

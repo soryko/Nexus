@@ -42,7 +42,7 @@ sweep.**
 | | |
 | --- | --- |
 | `product_revision` | `2cd531f9d7c274a065533e58ba3fde8582f8c269` |
-| `harness_revision` | `c055c8983ae2d7618d212d738cf3d50f285cd991` |
+| `harness_revision` | `136866f79ec689cdac3e1b45e61853e712dc9fa8` |
 | `config_version` | `calib-v3` |
 | `schedule_digest` | `0a352b82ced14f10e85d50d17989ac38e02d4d9582c032ed743a75554a6a5d97` |
 | `corpus_digest` | `9ae2a9f268dd894d` — A1's frozen held-out corpus, unchanged |
@@ -152,7 +152,9 @@ Model-free, on this revision:
 | execution is not credited to a non-event | `test_a2r.py` — `echo pytest`, a `No module named pytest` attempt, a run of another file, a whole-suite run, and a run issued before the last test edit all leave execution `unknown` |
 | a mention is not an invocation | `test_a2r.py` — `test -n "$A2_PYTHON" && echo ready` is a mention; only the variable in command position is an invocation |
 | every mutation is detected | 24 seeded mutations across `assess_a2r.py`, `run_a2r.py`, `run_calibration.py` and `score_compliance.py`, all killed |
-| the preflight's own checks can fail | the pinned-interpreter check controlled against an interpreter without pytest, and against a pin that does not exist |
+| the preflight's own checks can fail | the pinned-interpreter check controlled against an interpreter without pytest, and against a pin that does not exist; the harness-revision check controlled by restamping it |
+| the reporter reads the RUNNER's format | `test_a2r.py` — an integration test on `run_arms_isolated`'s real schema and directory layout (`scored.passed`, `result.num_turns`, the `patch.diff` sidecar), with a genuine functional failure as a negative control |
+| replayed over records it did not invent | [`replay_v2.py`](benchmarks/agent/replay_v2.py) — the reporter over the **27 accepted v2 arm-runs** recovers **16 functional passes, 11 terminated at `max_turns`**, matching `report_calibration.py` and `diagnose_workflow.py` on the same records. Host-local (the scratch is outside the repository), so it is not in CI; it costs no tokens. v2 carries no `runtime_identity`, so all 27 come back with **no repair evidence**, which is correct. |
 
 ## Approval
 
