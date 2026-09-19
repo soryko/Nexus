@@ -348,3 +348,56 @@ def test_a_reproduced_redirect_would_say_so_instead():
     assert not any("was NOT" in n for n in c["not_established"])
     # ... and the path-class limit survives either way
     assert any("every equivalent destination" in n for n in c["not_established"])
+
+
+# ---------------------------------------------------------------------------------------
+# A3's PROMPT precondition: two policies, one appended paragraph, nothing else.
+# ---------------------------------------------------------------------------------------
+
+import a3_prompts as AP                                                    # noqa: E402
+
+
+def test_the_A_prompts_are_byte_identical_to_calib_v3():
+    """§2. An A arm-run must be given exactly what a v3 / A2-R nexus arm-run was given, or
+    the two policies differ in more than the paragraph the design varies."""
+    d = AP.assembly_diff()
+    assert d["holds"], d["failures"]
+    assert all(r["A_matches_calib_v3"] for r in d["per_task"].values())
+
+
+def test_the_A_digests_match_what_the_A2R_preflight_froze():
+    """An independent check on the sentence above: `preflight-a2r.py` froze these four
+    digests for calib-v3 before A3 existed, and nothing here was copied from it."""
+    assert AP.digests()["A"] == {"k1": "5f4f1e210aa7f7ea", "k2": "0aa687b3be6b6a26",
+                                 "k3": "b99a1fd5366f507f", "k4": "97ee8c80330b164a"}
+
+
+def test_B_is_A_plus_the_bound_and_nothing_else():
+    d = AP.assembly_diff()
+    assert all(r["B_is_A_plus_bound"] for r in d["per_task"].values())
+    assert d["delta_is_constant"], "the bound is not the only thing that differs"
+    assert all(r["delta_bytes"] == d["bound_bytes"] for r in d["per_task"].values())
+
+
+def test_the_two_policies_have_different_prompt_digests():
+    """If they did not, A3 would be one policy run sixteen times."""
+    dg = AP.digests()
+    assert all(dg["A"][t] != dg["B"][t] for t in AP.TASKS)
+    assert len(set(dg["A"].values()) | set(dg["B"].values())) == 8
+
+
+def test_the_assembly_diff_can_fail():
+    """The control. A check that holds whatever the registration says is not a check."""
+    reg = AP.registration()
+    reg["consult"] = reg["consult"] + "\n\nan unregistered extra sentence."
+    d = AP.assembly_diff(reg)
+    assert not d["holds"]
+    assert any("not byte-identical to calib-v3" in f for f in d["failures"])
+
+
+def test_an_empty_bound_is_refused_as_one_policy():
+    reg = AP.registration()
+    reg["consult_bound"] = ""
+    d = AP.assembly_diff(reg)
+    assert not d["holds"]
+    assert any("assemble to the same bytes" in f for f in d["failures"])
