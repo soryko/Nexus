@@ -129,6 +129,7 @@ jobs:
           uv run pytest -q benchmarks/agent/test_dev_m1.py \
             benchmarks/agent/test_a3_decision.py \
             benchmarks/agent/test_a3_pipeline.py \
+            benchmarks/agent/test_provenance.py \
             --junitxml=artifacts/junit/bench.xml
 
       - name: Collect failure evidence

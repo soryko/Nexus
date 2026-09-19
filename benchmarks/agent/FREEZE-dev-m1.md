@@ -16,7 +16,8 @@ here was tuned to a result, because no result exists.
 | measurement, corrected | `results-dev-m1-r2.json`, sha256 `10ec29e7999bfdb679f43b1f3626fbfcbf2d2feb8ba431ec0ada191829c65269`, beside it. Labels, ranks and condition digests are **identical**; only the leakage half changes, from "none" to `unresolved`. The verifier exits 3 on it. |
 | tasks | `prompts-calib-a2.json` `04d3051ceed1504e…`, `tasks-calib-a2.json` `00941f5dbc6e5ba4…` — **unchanged**; prompt digests stay as `LAUNCH-A2R.md` records them |
 | fixtures | the A2-R sweep's own `base/` trees, at each task's registered `pre_fix` commit |
-| counterexamples | `test_dev_m1.py`, 26 checks — 16 on the labels, 10 on the leakage scans themselves |
+| provenance review | [`PROVENANCE-dev-m1.md`](PROVENANCE-dev-m1.md) / `provenance-dev-m1.json`, sha256 `8a2eca820be5d8a6711a2b3bc249b54ccb646a652479c65e80c6433890284d59` — **all 24 memories**, frozen beside the corpus |
+| counterexamples | `test_dev_m1.py`, 27 checks — 17 on the labels, 10 on the leakage scans themselves; `test_provenance.py`, 13 on the review |
 
 ---
 
@@ -158,10 +159,34 @@ review, not scanning, is what bears on that, and it is recorded in §2.
   introduces, which the scan must catch — so "clean" and "never looked" cannot be confused
   again.
 
-  **What fix leakage rests on here is therefore provenance, not scanning:** the 13 captured
-  memories were written before k1–k4 existed, and the 6 derived ones were written against a
-  checkout with each source file recorded. That is weaker than a measurement and is stated as
-  weaker.
+  **What fix leakage rests on here is therefore provenance, not scanning**, and the
+  provenance is now reviewed per memory rather than asserted per class:
+  [`PROVENANCE-dev-m1.md`](PROVENANCE-dev-m1.md) records, for **all 24 memories** — every
+  one an arm can receive under `distracting`, not only the on-subject ones — the source it
+  came from, what its author had seen, what its probe supports as against what its prose
+  asserts, which register it is written in (describes existing behaviour / diagnostic
+  guidance / conveys the repair), and whether it is suitable here. The result is
+  **reviewed provenance with limited automated leakage checks.** It is weaker than a
+  measurement and is labelled as weaker.
+
+  **One memory is flagged: `m02`.** It states both halves of k4's defect — that
+  `get_help_option` CONSTRUCTS an option on each call, and that `iter_params_for_processing`
+  compares the parameter OBJECTS — and k4's fix carries an in-code rationale reading *"avoid
+  creating it multiple times. Not doing this will break the callback odering by
+  iter_params_for_processing(), which relies on object comparison"*. The same two clauses,
+  minus the remedy. It was written by an author who had seen k4. It is diagnosis rather than
+  repair and stays in the corpus, but **a k4 result under either policy may not be read as
+  evidence that retrieval located the mechanism unaided.**
+
+  **And `m02` is exactly what the scans cannot see.** A third scan was added for this review
+  — fix *locality*, over identifiers the memory presents as code that also appear on a
+  changed line of the fix. Unlike the added-identifier scan it fires: `close` on `m01` for
+  k1, `flag_value`/`is_flag`/`default` across the k2 memories, `UNSET` on `h02` for k3. It
+  reports **nothing for `m02`**, on k4 or anywhere, because every identifier in it predates
+  the fix and the words it shares with k4's changed lines are English prose from an added
+  docstring. So on this task set the scans flag memories the reading clears and clear the
+  memory the reading flags. That is the general claim about semantic leakage in its concrete
+  form.
 
 ## 4. Conditions: one corpus, four subsets per task
 
@@ -261,7 +286,11 @@ Unchanged and still required for any run of this set:
   a version mismatch. Neither is evidence that memories go stale chronologically in use.
 - **Fix leakage is unresolved by scanning.** No fix on this task set introduces an identifier
   absent from its pre-fix tree, so the token scan cannot detect anything here, and identifier
-  scans could not establish semantic leakage in any case. What it rests on is provenance (§3).
+  scans could not establish semantic leakage in any case. What it rests on is a per-memory
+  provenance review (§3), which is reading and not measurement.
+- **`m02` supplies k4's diagnosis.** The review flags it: it states the mechanism of k4's
+  defect in the same clauses as the fix's own rationale comment, stopping short of the
+  remedy. Nothing measured on k4 shows that retrieval found that mechanism unaided.
 - **Only one of the four conditions is in A3.** `distracting` is the one that run uses. The
   other three are frozen and reserved; nothing measured under one condition is evidence about
   the others.
@@ -270,6 +299,7 @@ Unchanged and still required for any run of this set:
 
 ```bash
 python3 benchmarks/agent/build_dev_m1.py
+.venv/bin/python benchmarks/agent/review_provenance.py   # needs the clone; needs pyexpat
 <venv>/bin/python benchmarks/agent/verify_dev_m1.py \
     /Users/soko/Cerebros/nexus-a1-fixtures/a2r-run \
     --out benchmarks/agent/results-dev-m1-r2.json

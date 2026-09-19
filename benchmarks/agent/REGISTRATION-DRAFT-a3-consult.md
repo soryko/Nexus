@@ -374,6 +374,24 @@ authorisation.** It must be re-run on the prepared arms at launch.
   [`FREEZE-dev-m1.md`](FREEZE-dev-m1.md) §3. What fix leakage rests on here is **provenance
   review**, which is weaker than a measurement and is labelled as weaker. Identifier scans
   could not establish semantic leakage in any case.
+
+  That review is now done per memory and frozen:
+  [`PROVENANCE-dev-m1.md`](PROVENANCE-dev-m1.md) covers **all 24 memories** — every one an
+  arm can receive under `distracting`, not only the on-subject ones — recording each one's
+  source, what its author had seen, what its probe supports against what its prose asserts,
+  its register, and its suitability. The standing of the whole corpus is therefore
+  **reviewed provenance with limited automated leakage checks**, and A3 may not be launched
+  on a stronger reading of it.
+
+  **It flags `m02`, and that flag carries into this design.** `m02` states both halves of
+  k4's defect in the same two clauses as k4's own fix comment, minus the remedy, and was
+  written by an author who had seen k4. It stays in the corpus — it is diagnosis, not
+  repair, and removing it after the fact would be tuning the corpus to a review. But **no
+  k4 result in this sweep, under either policy, may be read as evidence that retrieval
+  located that mechanism unaided**, and the launch record carries the same sentence. A third
+  scan added for the review — fix *locality* — reports nothing for `m02` while firing on
+  seven other memories, which is the concrete demonstration that scanning does not
+  substitute for reading here.
 - **The upstream copy.** `/opt/homebrew` is a system read root; A2-R measured one arm-run
   spending 10 of 47 calls reading a released Click from it. It is a channel to a fixed version
   of the library under test. **This design does not close it** — closing it would change the
