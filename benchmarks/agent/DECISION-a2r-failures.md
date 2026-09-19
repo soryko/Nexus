@@ -39,9 +39,12 @@ Per run:
 | k3/notes | pass | 51 | 32 | 18 | 1 | 6 | 6 | 0 | 159.6 |
 | k4/nexus | pass | 51 | 36 | 14 | 2 | 5 | 5 | 1 | 314.4 |
 
-**No failure wrote to `src/` even once.** That is A1's shape and v2's shape again, on a third
-task set, under the repaired sandbox — and this time it is *not* a diagnosis failure in at
-least one of the three.
+**No failure wrote to `src/` even once.** That is A1's shape and v2's shape again, under the
+repaired sandbox — and this time it is *not* a diagnosis failure in at least one of the three.
+
+**Correction: this is not a third task set.** A2-R reuses **k1–k4**, the same four tasks v2
+ran. A1's h1–h4 are the only other set, so the shape has been seen on **two** task sets, once
+repeated. The earlier wording implied a third independent replication and there is none.
 
 ---
 
@@ -66,6 +69,12 @@ It had the fix, in a file called `exp_both.py`, four calls before the ceiling, a
 transcribed it into `src/click/core.py`. **Classification: implementation prototyped outside
 the deliverable and never applied.** Not unresolved diagnosis; not reverted; not obstructed
 at the moment of failure — though ~120 s and three calls were lost to obstruction earlier.
+
+**Preserved precisely.** The prototype demonstrated the three behaviours the task names, in a
+scratch file, at call 46. It was **not** applied to the deliverable and was **never shown to
+pass the hidden checks in that form** — the checks were never run against it. "It had the fix"
+means it had a program exhibiting the three named behaviours, not a verified fix to
+`src/click/core.py`.
 
 ### k4/notes — spent its budget comparing against an upstream copy
 
@@ -174,8 +183,17 @@ of the calls still to come, and the remainder goes to repeated verification and 
 investigation. A stop-when-done instruction acts here, and only here.
 
 The failures are a **commitment** problem, and k4/baseline shows it is not always a knowledge
-problem: one of the three had a validated fix in hand and never wrote it to `src/`. That is
-not addressed by a stopping rule, by more turns, or by better retrieval.
+problem: one of the three had a validated fix in hand and never wrote it to `src/`.
+
+**What that does and does not show.** It shows the prototype existed and was not transcribed.
+It does **not** show that more turns, better retrieval or a stopping instruction could not
+have changed the outcome — none of those was varied, and the run ended at the ceiling with
+four calls left after the prototype worked. A ceiling reached is consistent with "more turns
+would not have helped" and with "more turns were exactly what was missing", and this pass
+distinguishes neither. The categorical claim that it is "not addressed by a stopping rule, by
+more turns, or by better retrieval" is withdrawn; what remains is that an ordering instruction
+is the *smallest* intervention aimed at the observed gap, not the only one that could close
+it.
 
 **The next testable mechanism, from this evidence: an explicit implement-then-verify ordering
 instruction — write the change into `src/` as soon as a reproduction confirms the mechanism,

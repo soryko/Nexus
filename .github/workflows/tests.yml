@@ -98,6 +98,24 @@ jobs:
           uv run python benchmarks/agent/test_interpreter_pinning.py
           uv run python benchmarks/agent/test_a2r.py
 
+      # `testpaths = ["tests"]`, so these two pytest files under `benchmarks/agent` are NOT
+      # collected by the Suite step above and have to be named. They were written and then
+      # would never have run here -- the same shape as the fix-leakage scan that reported
+      # "none" on four tasks while gathering no evidence.
+      #
+      # `test_dev_m1.py` covers the dev-m1 labels AND the leakage scans themselves: a missing
+      # clone, a failed diff, missing checks and a deliberately contaminated memory the scan
+      # must catch. `test_a3_decision.py` exercises A3's decision table against synthetic
+      # outcomes -- a loss on one task not offset by a gain on another, an equivalent memory
+      # satisfying a fact, stale advice read and rejected, and unresolved accounting that is
+      # indeterminate rather than excluded. Both are deterministic: they build their own git
+      # fixtures in a tmpdir and never invoke `sandbox-exec`, so they run on Linux.
+      - name: Benchmark harness pytest suites
+        run: |
+          uv run pytest -q benchmarks/agent/test_dev_m1.py \
+            benchmarks/agent/test_a3_decision.py \
+            --junitxml=artifacts/junit/bench.xml
+
       - name: Collect failure evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
