@@ -1,0 +1,92 @@
+{
+ "schedule_version": 1,
+ "seed": 20260914,
+ "tasks": [
+  "k1",
+  "k2",
+  "k3",
+  "k4"
+ ],
+ "attempts": 1,
+ "arms": [
+  "baseline",
+  "nexus",
+  "notes"
+ ],
+ "frozen_utc": "2026-09-14T09:43:43.427338+00:00",
+ "schedule_digest": "0a352b82ced14f10e85d50d17989ac38e02d4d9582c032ed743a75554a6a5d97",
+ "counterbalance": {
+  "pairs": 4,
+  "distinct_orders": 3,
+  "orders_used": [
+   "baseline->nexus->notes",
+   "baseline->notes->nexus",
+   "nexus->baseline->notes"
+  ],
+  "times_each_arm_ran_first": {
+   "baseline": 3,
+   "nexus": 1,
+   "notes": 0
+  },
+  "position_counts": {
+   "baseline": [
+    3,
+    1,
+    0
+   ],
+   "nexus": [
+    1,
+    2,
+    1
+   ],
+   "notes": [
+    0,
+    1,
+    3
+   ]
+  },
+  "every_arm_appears_once_per_pair": true
+ },
+ "rows": [
+  {
+   "index": 0,
+   "task": "k1",
+   "attempt": 1,
+   "order": [
+    "baseline",
+    "notes",
+    "nexus"
+   ]
+  },
+  {
+   "index": 1,
+   "task": "k2",
+   "attempt": 1,
+   "order": [
+    "baseline",
+    "nexus",
+    "notes"
+   ]
+  },
+  {
+   "index": 2,
+   "task": "k3",
+   "attempt": 1,
+   "order": [
+    "nexus",
+    "baseline",
+    "notes"
+   ]
+  },
+  {
+   "index": 3,
+   "task": "k4",
+   "attempt": 1,
+   "order": [
+    "baseline",
+    "nexus",
+    "notes"
+   ]
+  }
+ ]
+}

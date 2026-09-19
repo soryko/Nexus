@@ -71,6 +71,33 @@ jobs:
           uv run pytest -q tests/core/test_b2a_mutations.py tests/core/test_b2b_mutations.py \
             --junitxml=artifacts/junit/mutations.xml
 
+      # The benchmark harness is not covered by the product suite: its defects are in the
+      # driver, the accounting, the gate and the selection rule, none of which `tests/`
+      # imports. These suites are deterministic -- they stub every subprocess and never
+      # invoke `sandbox-exec`, so they run on Linux. The macOS sandbox and isolation probes
+      # are host verification and are captured separately by `make-verification.sh`.
+      #
+      # `test_report_calibration.py` covers freeze-calib-a2 §5. A rule applied only by hand
+      # is how two COMPLETE ceilings came to be read as two QUALIFYING ceilings.
+      # `test_diagnose_workflow.py` covers the workflow diagnostic's classifier: its report
+      # concludes that 10 of 11 failing arm-runs never wrote to `src/`, which a detector
+      # silently missing a write would invert.
+      # `test_interpreter_pinning.py` covers the interpreter repair. It stubs the shell rather
+      # than running it, so the decision logic is exercised where the fixtures do not exist --
+      # and the defect it closes was a gate that probed one shell startup and passed.
+      # `test_a2r.py` covers A2-R's assessment and its SEPARATE accounting. Two of its cases
+      # are the ones a summary count cannot show: an absent `No module named pytest` in a run
+      # that never invoked pytest is not a pass, and a comment added under `tests/` is not an
+      # extension of the test suite.
+      - name: Benchmark harness counterexamples
+        run: |
+          uv run python benchmarks/agent/test_calibration_counterexamples.py
+          uv run python benchmarks/agent/test_diagnose_counterexamples.py
+          uv run python benchmarks/agent/test_report_calibration.py
+          uv run python benchmarks/agent/test_diagnose_workflow.py
+          uv run python benchmarks/agent/test_interpreter_pinning.py
+          uv run python benchmarks/agent/test_a2r.py
+
       - name: Collect failure evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

@@ -1,0 +1,1054 @@
+{
+ "corpus": "/Users/soko/Cerebros/nexus-memory/benchmarks/agent/corpus-dev-m1.json",
+ "corpus_version": "dev-m1",
+ "scratch": "/Users/soko/Cerebros/nexus-a1-fixtures/a2r-run",
+ "truth_at_checkout": {
+  "h01": {
+   "k1": "unknown",
+   "k2": "unknown",
+   "k3": "true",
+   "k4": "unknown"
+  },
+  "h02": {
+   "k1": "false",
+   "k2": "false",
+   "k3": "true",
+   "k4": "false"
+  },
+  "h03": {
+   "k1": "unknown",
+   "k2": "unknown",
+   "k3": "unknown",
+   "k4": "unknown"
+  },
+  "h04": {
+   "k1": "unknown",
+   "k2": "unknown",
+   "k3": "unknown",
+   "k4": "unknown"
+  },
+  "h05": {
+   "k1": "true",
+   "k2": "true",
+   "k3": "true",
+   "k4": "true"
+  },
+  "h06": {
+   "k1": "true",
+   "k2": "true",
+   "k3": "true",
+   "k4": "true"
+  },
+  "h07": {
+   "k1": "true",
+   "k2": "true",
+   "k3": "true",
+   "k4": "true"
+  },
+  "h08": {
+   "k1": "true",
+   "k2": "true",
+   "k3": "true",
+   "k4": "true"
+  },
+  "h09": {
+   "k1": "false",
+   "k2": "false",
+   "k3": "true",
+   "k4": "false"
+  },
+  "h10": {
+   "k1": "unknown",
+   "k2": "unknown",
+   "k3": "unknown",
+   "k4": "unknown"
+  },
+  "h11": {
+   "k1": "true",
+   "k2": "true",
+   "k3": "true",
+   "k4": "true"
+  },
+  "h12": {
+   "k1": "unknown",
+   "k2": "unknown",
+   "k3": "unknown",
+   "k4": "unknown"
+  },
+  "h13": {
+   "k1": "true",
+   "k2": "true",
+   "k3": "true",
+   "k4": "true"
+  },
+  "m01": {
+   "k1": "true",
+   "k2": "true",
+   "k3": "true",
+   "k4": "true"
+  },
+  "m02": {
+   "k1": "true",
+   "k2": "true",
+   "k3": "true",
+   "k4": "true"
+  },
+  "m03": {
+   "k1": "true",
+   "k2": "true",
+   "k3": "false",
+   "k4": "true"
+  },
+  "m04": {
+   "k1": "true",
+   "k2": "true",
+   "k3": "true",
+   "k4": "true"
+  },
+  "m05": {
+   "k1": "false",
+   "k2": "false",
+   "k3": "false",
+   "k4": "false"
+  },
+  "m06": {
+   "k1": "false",
+   "k2": "false",
+   "k3": "false",
+   "k4": "false"
+  },
+  "x01": {
+   "k1": "true",
+   "k2": "true",
+   "k3": "true",
+   "k4": "true"
+  },
+  "x02": {
+   "k1": "true",
+   "k2": "true",
+   "k3": "true",
+   "k4": "true"
+  },
+  "x03": {
+   "k1": "true",
+   "k2": "true",
+   "k3": "true",
+   "k4": "true"
+  },
+  "x04": {
+   "k1": "true",
+   "k2": "true",
+   "k3": "true",
+   "k4": "true"
+  },
+  "x05": {
+   "k1": "true",
+   "k2": "true",
+   "k3": "true",
+   "k4": "true"
+  }
+ },
+ "labels": {
+  "k1": {
+   "categories": [
+    "useful",
+    "stale"
+   ],
+   "on_subject": [
+    "m01",
+    "m05"
+   ],
+   "useful": [
+    "m01"
+   ],
+   "stale": [
+    "m05"
+   ],
+   "unsettled": [],
+   "support": [
+    "h03",
+    "h04",
+    "h06",
+    "h10",
+    "h12",
+    "m04",
+    "x01",
+    "x02",
+    "x03",
+    "x04",
+    "x05"
+   ],
+   "useful_ranks": {
+    "m01": 2
+   },
+   "stale_ranks": {
+    "m05": 1
+   },
+   "distracting": true
+  },
+  "k2": {
+   "categories": [
+    "useful",
+    "stale"
+   ],
+   "on_subject": [
+    "h01",
+    "h02",
+    "h05",
+    "h07",
+    "h13",
+    "m03"
+   ],
+   "useful": [
+    "h05",
+    "h07",
+    "h13",
+    "m03"
+   ],
+   "stale": [
+    "h02"
+   ],
+   "unsettled": [
+    "h01"
+   ],
+   "support": [
+    "h03",
+    "h04",
+    "h06",
+    "h10",
+    "h12",
+    "m04",
+    "x01",
+    "x02",
+    "x03",
+    "x04",
+    "x05"
+   ],
+   "useful_ranks": {
+    "h05": 7,
+    "h07": 12,
+    "h13": 2,
+    "m03": 8
+   },
+   "stale_ranks": {
+    "h02": 1
+   },
+   "distracting": true
+  },
+  "k3": {
+   "categories": [
+    "useful",
+    "stale"
+   ],
+   "on_subject": [
+    "h01",
+    "h02",
+    "h05",
+    "h07",
+    "h08",
+    "h09",
+    "h11",
+    "m03"
+   ],
+   "useful": [
+    "h01",
+    "h02",
+    "h05",
+    "h07",
+    "h08",
+    "h09",
+    "h11"
+   ],
+   "stale": [
+    "m03"
+   ],
+   "unsettled": [],
+   "support": [
+    "h03",
+    "h04",
+    "h06",
+    "h10",
+    "h12",
+    "m04",
+    "x01",
+    "x02",
+    "x03",
+    "x04",
+    "x05"
+   ],
+   "useful_ranks": {
+    "h01": 4,
+    "h02": 1,
+    "h05": 2,
+    "h07": 15,
+    "h08": 5,
+    "h09": 6,
+    "h11": 3
+   },
+   "stale_ranks": {
+    "m03": 13
+   },
+   "distracting": false
+  },
+  "k4": {
+   "categories": [
+    "useful",
+    "stale"
+   ],
+   "on_subject": [
+    "m02",
+    "m06"
+   ],
+   "useful": [
+    "m02"
+   ],
+   "stale": [
+    "m06"
+   ],
+   "unsettled": [],
+   "support": [
+    "h03",
+    "h04",
+    "h06",
+    "h10",
+    "h12",
+    "m04",
+    "x01",
+    "x02",
+    "x03",
+    "x04",
+    "x05"
+   ],
+   "useful_ranks": {
+    "m02": 1
+   },
+   "stale_ranks": {
+    "m06": 2
+   },
+   "distracting": true
+  }
+ },
+ "fix_leakage": {},
+ "hidden_check_leakage": {},
+ "reachability": {
+  "store": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/2ef8c725-a91c-4800-825e-48a91f621190/scratchpad/m1/dev-m1-all.db",
+  "seeded": 24,
+  "per_task": {
+   "k1": {
+    "query": "call_on_close cleanup callback eager option ctx.exit context close",
+    "returned": 16,
+    "ranking": [
+     {
+      "rank": 1,
+      "id": "m05"
+     },
+     {
+      "rank": 2,
+      "id": "m01"
+     },
+     {
+      "rank": 3,
+      "id": "m02"
+     },
+     {
+      "rank": 4,
+      "id": "x05"
+     },
+     {
+      "rank": 5,
+      "id": "h04"
+     },
+     {
+      "rank": 6,
+      "id": "h08"
+     },
+     {
+      "rank": 7,
+      "id": "m06"
+     },
+     {
+      "rank": 8,
+      "id": "x03"
+     },
+     {
+      "rank": 9,
+      "id": "h11"
+     },
+     {
+      "rank": 10,
+      "id": "h07"
+     },
+     {
+      "rank": 11,
+      "id": "h01"
+     },
+     {
+      "rank": 12,
+      "id": "h13"
+     },
+     {
+      "rank": 13,
+      "id": "h02"
+     },
+     {
+      "rank": 14,
+      "id": "h09"
+     },
+     {
+      "rank": 15,
+      "id": "h05"
+     },
+     {
+      "rank": 16,
+      "id": "m03"
+     }
+    ]
+   },
+   "k2": {
+    "query": "is_flag option explicit type flag_value wrong value",
+    "returned": 15,
+    "ranking": [
+     {
+      "rank": 1,
+      "id": "h02"
+     },
+     {
+      "rank": 2,
+      "id": "h13"
+     },
+     {
+      "rank": 3,
+      "id": "h09"
+     },
+     {
+      "rank": 4,
+      "id": "h01"
+     },
+     {
+      "rank": 5,
+      "id": "x02"
+     },
+     {
+      "rank": 6,
+      "id": "x04"
+     },
+     {
+      "rank": 7,
+      "id": "h05"
+     },
+     {
+      "rank": 8,
+      "id": "m03"
+     },
+     {
+      "rank": 9,
+      "id": "h04"
+     },
+     {
+      "rank": 10,
+      "id": "h11"
+     },
+     {
+      "rank": 11,
+      "id": "m06"
+     },
+     {
+      "rank": 12,
+      "id": "h07"
+     },
+     {
+      "rank": 13,
+      "id": "m02"
+     },
+     {
+      "rank": 14,
+      "id": "h08"
+     },
+     {
+      "rank": 15,
+      "id": "h12"
+     }
+    ]
+   },
+   "k3": {
+    "query": "two flag options same parameter name default selection",
+    "returned": 16,
+    "ranking": [
+     {
+      "rank": 1,
+      "id": "h02"
+     },
+     {
+      "rank": 2,
+      "id": "h05"
+     },
+     {
+      "rank": 3,
+      "id": "h11"
+     },
+     {
+      "rank": 4,
+      "id": "h01"
+     },
+     {
+      "rank": 5,
+      "id": "h08"
+     },
+     {
+      "rank": 6,
+      "id": "h09"
+     },
+     {
+      "rank": 7,
+      "id": "h04"
+     },
+     {
+      "rank": 8,
+      "id": "x05"
+     },
+     {
+      "rank": 9,
+      "id": "m06"
+     },
+     {
+      "rank": 10,
+      "id": "x03"
+     },
+     {
+      "rank": 11,
+      "id": "m02"
+     },
+     {
+      "rank": 12,
+      "id": "h03"
+     },
+     {
+      "rank": 13,
+      "id": "m03"
+     },
+     {
+      "rank": 14,
+      "id": "h13"
+     },
+     {
+      "rank": 15,
+      "id": "h07"
+     },
+     {
+      "rank": 16,
+      "id": "h10"
+     }
+    ]
+   },
+   "k4": {
+    "query": "help option generated help_option_names eager ordering",
+    "returned": 11,
+    "ranking": [
+     {
+      "rank": 1,
+      "id": "m02"
+     },
+     {
+      "rank": 2,
+      "id": "m06"
+     },
+     {
+      "rank": 3,
+      "id": "x02"
+     },
+     {
+      "rank": 4,
+      "id": "h07"
+     },
+     {
+      "rank": 5,
+      "id": "h01"
+     },
+     {
+      "rank": 6,
+      "id": "h13"
+     },
+     {
+      "rank": 7,
+      "id": "h02"
+     },
+     {
+      "rank": 8,
+      "id": "h09"
+     },
+     {
+      "rank": 9,
+      "id": "h04"
+     },
+     {
+      "rank": 10,
+      "id": "h05"
+     },
+     {
+      "rank": 11,
+      "id": "m03"
+     }
+    ]
+   }
+  }
+ },
+ "conditions": {
+  "k1/useful": {
+   "memories": [
+    "h03",
+    "h04",
+    "h06",
+    "h10",
+    "h12",
+    "m01",
+    "m04"
+   ],
+   "n": 7,
+   "digest": "cd0321037880d862",
+   "returned": 2,
+   "useful_ranks": {
+    "m01": 1
+   },
+   "stale_ranks": {},
+   "top4": [
+    "m01",
+    "h04"
+   ]
+  },
+  "k1/unnecessary": {
+   "memories": [
+    "h03",
+    "h04",
+    "h06",
+    "h10",
+    "h12",
+    "m04"
+   ],
+   "n": 6,
+   "digest": "933f66cd16b1d78d",
+   "returned": 1,
+   "useful_ranks": {},
+   "stale_ranks": {},
+   "top4": [
+    "h04"
+   ]
+  },
+  "k1/stale": {
+   "memories": [
+    "h03",
+    "h04",
+    "h06",
+    "h10",
+    "h12",
+    "m04",
+    "m05"
+   ],
+   "n": 7,
+   "digest": "0d1d6640c911a762",
+   "returned": 2,
+   "useful_ranks": {},
+   "stale_ranks": {
+    "m05": 1
+   },
+   "top4": [
+    "m05",
+    "h04"
+   ]
+  },
+  "k1/distracting": {
+   "memories": [
+    "h01",
+    "h02",
+    "h03",
+    "h04",
+    "h05",
+    "h06",
+    "h07",
+    "h08",
+    "h09",
+    "h10",
+    "h11",
+    "h12",
+    "h13",
+    "m01",
+    "m02",
+    "m03",
+    "m04",
+    "m05",
+    "m06",
+    "x01",
+    "x02",
+    "x03",
+    "x04",
+    "x05"
+   ],
+   "n": 24,
+   "digest": "004762cab5248613",
+   "returned": 16,
+   "useful_ranks": {
+    "m01": 2
+   },
+   "stale_ranks": {
+    "m05": 1
+   },
+   "top4": [
+    "m05",
+    "m01",
+    "m02",
+    "x05"
+   ]
+  },
+  "k2/useful": {
+   "memories": [
+    "h03",
+    "h04",
+    "h05",
+    "h06",
+    "h07",
+    "h10",
+    "h12",
+    "h13",
+    "m03",
+    "m04"
+   ],
+   "n": 10,
+   "digest": "97a2377854037cf2",
+   "returned": 6,
+   "useful_ranks": {
+    "h05": 2,
+    "h07": 5,
+    "h13": 1,
+    "m03": 3
+   },
+   "stale_ranks": {},
+   "top4": [
+    "h13",
+    "h05",
+    "m03",
+    "h04"
+   ]
+  },
+  "k2/unnecessary": {
+   "memories": [
+    "h03",
+    "h04",
+    "h06",
+    "h10",
+    "h12",
+    "m04"
+   ],
+   "n": 6,
+   "digest": "933f66cd16b1d78d",
+   "returned": 2,
+   "useful_ranks": {},
+   "stale_ranks": {},
+   "top4": [
+    "h04",
+    "h12"
+   ]
+  },
+  "k2/stale": {
+   "memories": [
+    "h02",
+    "h03",
+    "h04",
+    "h06",
+    "h10",
+    "h12",
+    "m04"
+   ],
+   "n": 7,
+   "digest": "7a03f97c0ecb9d6b",
+   "returned": 3,
+   "useful_ranks": {},
+   "stale_ranks": {
+    "h02": 1
+   },
+   "top4": [
+    "h02",
+    "h04",
+    "h12"
+   ]
+  },
+  "k2/distracting": {
+   "memories": [
+    "h01",
+    "h02",
+    "h03",
+    "h04",
+    "h05",
+    "h06",
+    "h07",
+    "h08",
+    "h09",
+    "h10",
+    "h11",
+    "h12",
+    "h13",
+    "m01",
+    "m02",
+    "m03",
+    "m04",
+    "m05",
+    "m06",
+    "x01",
+    "x02",
+    "x03",
+    "x04",
+    "x05"
+   ],
+   "n": 24,
+   "digest": "004762cab5248613",
+   "returned": 15,
+   "useful_ranks": {
+    "h05": 7,
+    "h07": 12,
+    "h13": 2,
+    "m03": 8
+   },
+   "stale_ranks": {
+    "h02": 1
+   },
+   "top4": [
+    "h02",
+    "h13",
+    "h09",
+    "h01"
+   ]
+  },
+  "k3/useful": {
+   "memories": [
+    "h01",
+    "h02",
+    "h03",
+    "h04",
+    "h05",
+    "h06",
+    "h07",
+    "h08",
+    "h09",
+    "h10",
+    "h11",
+    "h12",
+    "m04"
+   ],
+   "n": 13,
+   "digest": "d3471162711b5710",
+   "returned": 10,
+   "useful_ranks": {
+    "h01": 4,
+    "h02": 3,
+    "h05": 5,
+    "h07": 9,
+    "h08": 2,
+    "h09": 6,
+    "h11": 1
+   },
+   "stale_ranks": {},
+   "top4": [
+    "h11",
+    "h08",
+    "h02",
+    "h01"
+   ]
+  },
+  "k3/unnecessary": {
+   "memories": [
+    "h03",
+    "h04",
+    "h06",
+    "h10",
+    "h12",
+    "m04"
+   ],
+   "n": 6,
+   "digest": "933f66cd16b1d78d",
+   "returned": 3,
+   "useful_ranks": {},
+   "stale_ranks": {},
+   "top4": [
+    "h04",
+    "h03",
+    "h10"
+   ]
+  },
+  "k3/stale": {
+   "memories": [
+    "h03",
+    "h04",
+    "h06",
+    "h10",
+    "h12",
+    "m03",
+    "m04"
+   ],
+   "n": 7,
+   "digest": "d1c5b637d4e0b3fd",
+   "returned": 4,
+   "useful_ranks": {},
+   "stale_ranks": {
+    "m03": 2
+   },
+   "top4": [
+    "h04",
+    "m03",
+    "h03",
+    "h10"
+   ]
+  },
+  "k3/distracting": {
+   "memories": [
+    "h01",
+    "h02",
+    "h03",
+    "h04",
+    "h05",
+    "h06",
+    "h07",
+    "h08",
+    "h09",
+    "h10",
+    "h11",
+    "h12",
+    "h13",
+    "m01",
+    "m02",
+    "m03",
+    "m04",
+    "m05",
+    "m06",
+    "x01",
+    "x02",
+    "x03",
+    "x04",
+    "x05"
+   ],
+   "n": 24,
+   "digest": "004762cab5248613",
+   "returned": 16,
+   "useful_ranks": {
+    "h01": 4,
+    "h02": 1,
+    "h05": 2,
+    "h07": 15,
+    "h08": 5,
+    "h09": 6,
+    "h11": 3
+   },
+   "stale_ranks": {
+    "m03": 13
+   },
+   "top4": [
+    "h02",
+    "h05",
+    "h11",
+    "h01"
+   ]
+  },
+  "k4/useful": {
+   "memories": [
+    "h03",
+    "h04",
+    "h06",
+    "h10",
+    "h12",
+    "m02",
+    "m04"
+   ],
+   "n": 7,
+   "digest": "5c5a212855c47cfb",
+   "returned": 2,
+   "useful_ranks": {
+    "m02": 1
+   },
+   "stale_ranks": {},
+   "top4": [
+    "m02",
+    "h04"
+   ]
+  },
+  "k4/unnecessary": {
+   "memories": [
+    "h03",
+    "h04",
+    "h06",
+    "h10",
+    "h12",
+    "m04"
+   ],
+   "n": 6,
+   "digest": "933f66cd16b1d78d",
+   "returned": 1,
+   "useful_ranks": {},
+   "stale_ranks": {},
+   "top4": [
+    "h04"
+   ]
+  },
+  "k4/stale": {
+   "memories": [
+    "h03",
+    "h04",
+    "h06",
+    "h10",
+    "h12",
+    "m04",
+    "m06"
+   ],
+   "n": 7,
+   "digest": "fe69d08e25aba9aa",
+   "returned": 2,
+   "useful_ranks": {},
+   "stale_ranks": {
+    "m06": 1
+   },
+   "top4": [
+    "m06",
+    "h04"
+   ]
+  },
+  "k4/distracting": {
+   "memories": [
+    "h01",
+    "h02",
+    "h03",
+    "h04",
+    "h05",
+    "h06",
+    "h07",
+    "h08",
+    "h09",
+    "h10",
+    "h11",
+    "h12",
+    "h13",
+    "m01",
+    "m02",
+    "m03",
+    "m04",
+    "m05",
+    "m06",
+    "x01",
+    "x02",
+    "x03",
+    "x04",
+    "x05"
+   ],
+   "n": 24,
+   "digest": "004762cab5248613",
+   "returned": 11,
+   "useful_ranks": {
+    "m02": 1
+   },
+   "stale_ranks": {
+    "m06": 2
+   },
+   "top4": [
+    "m02",
+    "m06",
+    "x02",
+    "h07"
+   ]
+  }
+ }
+}

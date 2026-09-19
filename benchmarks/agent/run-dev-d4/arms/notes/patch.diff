@@ -1,0 +1,38 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index 48670ba..490a30c 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -85,6 +85,7 @@ filterwarnings = [
+ ]
+ markers = [
+     "stress: high-iteration stress tests for race conditions (deselect with '-m \"not stress\"')",
++    "integration: tests that exercise integrated behavior (deselect with '-m \"not integration\"')",
+ ]
+ addopts = "-m 'not stress'"
+ 
+diff --git a/tests/test_integration.py b/tests/test_integration.py
+new file mode 100644
+index 0000000..50a3203
+--- /dev/null
++++ b/tests/test_integration.py
+@@ -0,0 +1,20 @@
++from __future__ import annotations
++
++import pytest
++
++import click
++
++
++@pytest.mark.integration
++def test_group_invokes_subcommand(runner):
++    @click.group()
++    def cli():
++        pass
++
++    @cli.command()
++    def hello():
++        click.echo("hello")
++
++    result = runner.invoke(cli, ["hello"])
++    assert result.exit_code == 0
++    assert result.output == "hello\n"

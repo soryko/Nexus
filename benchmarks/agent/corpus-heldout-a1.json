@@ -1,0 +1,211 @@
+{
+ "corpus_version": "heldout-a1",
+ "status": "frozen",
+ "frozen_utc": "2026-09-12T13:02:33.012664+00:00",
+ "policy": "capture-policy-a1.md",
+ "registration": "freeze-heldout-a1.md section 2",
+ "repository": "pallets/click",
+ "capture_tasks": [
+  "c1",
+  "c2"
+ ],
+ "provenance": {
+  "captured_by": "run_capture.py, a prior-session agent run under capture-policy-a1 section 3, which saw neither the held-out tasks nor that they exist",
+  "capture_records": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/capture-run-3/capture/capture-records.json",
+  "capture_records_sha256": "f4fd1089251968563a7b463494f3db9767ac8191e8ba0f1e06f3e34a85f9ec27",
+  "capture_store": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/capture-run-3/capture/store/nexus.db",
+  "store_digest": "9ae2a9f268dd894d",
+  "capture_tools": "Read,Edit,Write,Bash,Glob,Grep,mcp__nexus__search,mcp__nexus__get,mcp__nexus__history,mcp__nexus__status,mcp__nexus__record,mcp__nexus__revise",
+  "per_task": [
+   {
+    "task": "c1",
+    "terminal": {
+     "terminal": "completed",
+     "meaning": "ran to completion",
+     "scored": true,
+     "truncated": false,
+     "evidence": {
+      "forced_verdict": null,
+      "envelope_present": true,
+      "terminal_reason": "completed",
+      "is_error": false,
+      "subtype": "success"
+     }
+    },
+    "checks": "537 passed in 0.54s",
+    "memory_calls": {
+     "status": 1,
+     "record": 7
+    },
+    "failed_memory_calls": 0
+   },
+   {
+    "task": "c2",
+    "terminal": {
+     "terminal": "completed",
+     "meaning": "ran to completion",
+     "scored": true,
+     "truncated": false,
+     "evidence": {
+      "forced_verdict": null,
+      "envelope_present": true,
+      "terminal_reason": "completed",
+      "is_error": false,
+      "subtype": "success"
+     }
+    },
+    "checks": "2 failed, 582 passed in 0.36s",
+    "memory_calls": {
+     "record": 6
+    },
+    "failed_memory_calls": 0
+   }
+  ]
+ },
+ "exposure": "Captured blind. No author of this corpus had read the held-out tasks, and the session that wrote it was not told they exist. This is what the development corpus could not claim (capture-policy-a1 section 5).",
+ "delivered_metadata_note": "Tags are DELIVERED -- they appear in search hits, in get responses and in the rendered notes. Evaluator vocabulary must never sit in them. The mix lives in the declaration beside this file, never in a memory.",
+ "superseded_note": "A memory with `superseded` was revised during capture. Arm 2 holds `history` and can retrieve those revisions, so they are rendered for arm 3 as well; the two arms must differ in access mechanism and nothing else (capture-policy-a1 section 4).",
+ "memories": [
+  {
+   "id": "h01",
+   "memory_id": "69d96f6a-4a1b-4c71-8776-980b2c9ae317",
+   "kind": "constraint",
+   "tags": [
+    "flags",
+    "options",
+    "parsing"
+   ],
+   "content": "Click has two distinct notions of \"used without a value\" for options. `Option.is_flag` means the option never consumes a following token. Separately, `Option._flag_needs_value` means the option does take a value but is allowed to be supplied without one: the parser (`_get_value_from_state` in src/click/parser.py) then stores the `FLAG_NEEDS_VALUE` sentinel instead of raising, and `Option.consume_value` resolves that sentinel to `flag_value` (or starts a prompt when a prompt is configured). The sentinel and its documented meaning live in src/click/_utils.py."
+  },
+  {
+   "id": "h02",
+   "memory_id": "72e74193-1089-4fa3-8569-4f6477f9c31f",
+   "kind": "decision",
+   "tags": [
+    "flags",
+    "is_flag",
+    "options"
+   ],
+   "content": "In `Option.__init__`, flag/value-ness is auto-detected when `is_flag` is left as `None`: a set `flag_value` makes the option a flag, while an explicit `is_flag=False` keeps it a value-taking option (documented in tests as a \"non-flag with flag_value\"). The two declarations are deliberately independent, so `flag_value` can serve non-flag options as the value used when the option is passed without one. When `is_flag` is explicitly `False`, the code also derives `_flag_needs_value` from whether `default` is `UNSET`."
+  },
+  {
+   "id": "h03",
+   "memory_id": "d4d9627a-20d4-44fc-8fe6-2d584ec5cc24",
+   "kind": "failure",
+   "tags": [
+    "sandbox",
+    "tests",
+    "tooling"
+   ],
+   "content": "`uv run ...` does not work in this sandbox: it exits with \"Failed to discover managed Python installations ... failed to read directory ~/.local/share/uv/python: Operation not permitted (os error 1)\". Running against the checkout with the system interpreter instead works, e.g. `PYTHONPATH=src python3 -m pytest tests/test_options.py`."
+  },
+  {
+   "id": "h04",
+   "memory_id": "0f7a86dd-6127-4185-a52d-95e5d70653ed",
+   "kind": "procedure",
+   "tags": [
+    "conventions",
+    "options",
+    "tests"
+   ],
+   "content": "Option behaviour in this repo is exercised with parametrized cases over `(option declaration / CLI args, expected value)` driven through `click.testing.CliRunner`, commonly invoking with `standalone_mode=False, catch_exceptions=False` so the callback's return value is asserted directly. The optional-value and flag_value/default groups in tests/test_options.py follow this shape."
+  },
+  {
+   "id": "h05",
+   "memory_id": "7ffea59b-7e95-4868-a48a-ad3a4353e5b9",
+   "kind": "constraint",
+   "tags": [
+    "defaults",
+    "flags",
+    "options"
+   ],
+   "content": "A parameter's `default` and its `flag_value` answer different questions and are kept independent: the default is the value when the option is absent from the command line, while `flag_value` is the value when the option is present but supplied with no argument. tests/test_options.py documents this explicitly across the flag_value/default and optional-value groups."
+  },
+  {
+   "id": "h06",
+   "memory_id": "5d520c47-c578-4f1b-a7f6-6342c164c874",
+   "kind": "failure",
+   "tags": [
+    "pytest",
+    "tests",
+    "tooling"
+   ],
+   "content": "pyproject.toml sets pytest `filterwarnings = [\"error\"]`. With a pytest new enough to emit `PytestRemovedIn10Warning` for parametrize iterators, collection of tests/test_basic.py aborts as an error before any test runs. Running with `-W \"ignore::pytest.PytestRemovedIn10Warning\"` lets the suite run."
+  },
+  {
+   "id": "h07",
+   "memory_id": "a151d3c1-8c56-4109-b3cd-312c5d4d89e4",
+   "kind": "decision",
+   "tags": [
+    "options",
+    "parsing"
+   ],
+   "content": "The parser only treats a following token as a value for a value-taking option when the option is not flagged `_flag_needs_value`, or when the token does not look like the start of another option (prefix character and length > 1). This is what lets an optional-value option be followed by another option instead of swallowing it; the check lives in `_get_value_from_state` in src/click/parser.py."
+  },
+  {
+   "id": "h08",
+   "memory_id": "d9392ff7-c7da-4c3a-994d-8c609f2fdc41",
+   "kind": "constraint",
+   "tags": [
+    "callable",
+    "core",
+    "defaults"
+   ],
+   "content": "A parameter's default can be a callable factory. When a default is resolved with the \"call\" switch enabled — Parameter.get_default(ctx, call=True) and Context.lookup_default(name, call=True) — any callable value is invoked and its return value is used instead; with call=False the callable object is returned unchanged. consume_value relies on this to turn a callable default (and a callable entry in a context's default_map) into a concrete value. So \"callable\" is a meaningful property of defaults, whereas a value that merely happens to be callable in some other role is not meant to be invoked by this path."
+  },
+  {
+   "id": "h09",
+   "memory_id": "833f2840-e0bc-4d8b-b281-1d0e47361edc",
+   "kind": "decision",
+   "tags": [
+    "core",
+    "defaults",
+    "flags"
+   ],
+   "content": "Option.__init__ reconciles an explicit default=True with an explicit flag_value: it discards the True and stores the flag_value as the option's own default. The in-code comment justifies this (citing issue 3024 / PR 3030) by noting that, given the condition, a flag cannot have default True and a different flag_value. As a result, when such an option is not supplied on the command line, default resolution yields the flag_value. Option.get_default is inherited from Parameter; the flag_value is stored directly in self.default rather than through any special wrapper."
+  },
+  {
+   "id": "h10",
+   "memory_id": "8c354573-e68d-4f02-8a38-8935b8ffc61a",
+   "kind": "failure",
+   "tags": [
+    "environment",
+    "pytest",
+    "testing"
+   ],
+   "content": "Running the test suite via `uv run` fails in this sandbox: uv cannot read its managed Python directory (`/Users/soko/.local/share/uv/python`, \"Operation not permitted\") and aborts with \"Failed to discover managed Python installations\". What worked instead was running pytest from the Homebrew Python with the source tree on the path, e.g. `PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/ ...`. Under the installed pytest major version, collection errors out on `PytestRemovedIn10Warning` for existing parametrizations that pass a non-Collection iterable; suppressing that warning category (`-W ignore::pytest.PytestRemovedIn10Warning`) lets the suite run. Separately, one test that resolves a default directory path fails in this sandbox because `/tmp` is not readable here, which is environmental and independent of source edits."
+  },
+  {
+   "id": "h11",
+   "memory_id": "7ae7099b-48a6-4e6d-9bed-e9b63180f3db",
+   "kind": "constraint",
+   "tags": [
+    "core",
+    "default_map",
+    "defaults"
+   ],
+   "content": "Value resolution for a parameter follows a fixed precedence, described in the Parameter.consume_value docstring: a value supplied on the command line wins, then an environment variable, then an entry in the context's default_map, then the parameter's own default. get_default inspects the default_map first and only falls back to the parameter's own default when the map does not contain the name; an explicit None entry in the map still counts as present and therefore takes precedence. A callable found through the default_map is invoked when resolved with call enabled, just like a callable parameter default."
+  },
+  {
+   "id": "h12",
+   "memory_id": "c2a4bd0d-53e8-417d-a15d-c6b04e28cbd0",
+   "kind": "procedure",
+   "tags": [
+    "clirunner",
+    "testing"
+   ],
+   "content": "Behavior in this repository is exercised through click.testing.CliRunner: the test suite supplies a `runner` fixture, a CLI is invoked with runner.invoke(cli, args), and assertions are made against the resulting .output/.return_value (with standalone_mode=False to capture return values). Command-line behavior can also be checked ad hoc by putting `src` on PYTHONPATH and constructing CliRunner directly. I used both approaches in this session: an ad-hoc CliRunner script to confirm behavior, and the pytest suite to check for regressions."
+  },
+  {
+   "id": "h13",
+   "memory_id": "ee455fb1-3547-438f-8336-8a0d9852bb04",
+   "kind": "decision",
+   "tags": [
+    "core",
+    "flags",
+    "type-detection"
+   ],
+   "content": "A flag option carries its activated value in Option.flag_value. When the option is activated, that value is substituted more or less directly: consume_value replaces a value-less flag with the flag_value, and value_from_envvar returns the flag_value when an envvar string equals it. When flag_value is set and no explicit type is given, the option's type is inferred from it (types.convert_type), and a boolean flag_value selects BoolParamType. So a flag_value is treated as a value throughout; it is also what Option.to_info_dict reports as the flag value."
+  }
+ ]
+}

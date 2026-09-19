@@ -1,0 +1,173 @@
+{
+ "schedule_version": 1,
+ "seed": 20260912,
+ "tasks": [
+  "h1",
+  "h2",
+  "h3",
+  "h4"
+ ],
+ "attempts": 3,
+ "arms": [
+  "baseline",
+  "nexus",
+  "notes"
+ ],
+ "frozen_utc": "2026-09-12T10:54:46.902031+00:00",
+ "schedule_digest": "1a960a7465fa36a0bb54c2d81c3663bd6b92c5157020c92fe71178c75af30282",
+ "counterbalance": {
+  "pairs": 12,
+  "distinct_orders": 4,
+  "orders_used": [
+   "baseline->notes->nexus",
+   "nexus->baseline->notes",
+   "nexus->notes->baseline",
+   "notes->nexus->baseline"
+  ],
+  "times_each_arm_ran_first": {
+   "baseline": 3,
+   "nexus": 6,
+   "notes": 3
+  },
+  "position_counts": {
+   "baseline": [
+    3,
+    4,
+    5
+   ],
+   "nexus": [
+    6,
+    3,
+    3
+   ],
+   "notes": [
+    3,
+    5,
+    4
+   ]
+  },
+  "every_arm_appears_once_per_pair": true
+ },
+ "rows": [
+  {
+   "index": 0,
+   "task": "h1",
+   "attempt": 1,
+   "order": [
+    "notes",
+    "nexus",
+    "baseline"
+   ]
+  },
+  {
+   "index": 1,
+   "task": "h1",
+   "attempt": 2,
+   "order": [
+    "nexus",
+    "notes",
+    "baseline"
+   ]
+  },
+  {
+   "index": 2,
+   "task": "h1",
+   "attempt": 3,
+   "order": [
+    "notes",
+    "nexus",
+    "baseline"
+   ]
+  },
+  {
+   "index": 3,
+   "task": "h2",
+   "attempt": 1,
+   "order": [
+    "nexus",
+    "notes",
+    "baseline"
+   ]
+  },
+  {
+   "index": 4,
+   "task": "h2",
+   "attempt": 2,
+   "order": [
+    "nexus",
+    "baseline",
+    "notes"
+   ]
+  },
+  {
+   "index": 5,
+   "task": "h2",
+   "attempt": 3,
+   "order": [
+    "baseline",
+    "notes",
+    "nexus"
+   ]
+  },
+  {
+   "index": 6,
+   "task": "h3",
+   "attempt": 1,
+   "order": [
+    "nexus",
+    "baseline",
+    "notes"
+   ]
+  },
+  {
+   "index": 7,
+   "task": "h3",
+   "attempt": 2,
+   "order": [
+    "nexus",
+    "baseline",
+    "notes"
+   ]
+  },
+  {
+   "index": 8,
+   "task": "h3",
+   "attempt": 3,
+   "order": [
+    "baseline",
+    "notes",
+    "nexus"
+   ]
+  },
+  {
+   "index": 9,
+   "task": "h4",
+   "attempt": 1,
+   "order": [
+    "notes",
+    "nexus",
+    "baseline"
+   ]
+  },
+  {
+   "index": 10,
+   "task": "h4",
+   "attempt": 2,
+   "order": [
+    "nexus",
+    "baseline",
+    "notes"
+   ]
+  },
+  {
+   "index": 11,
+   "task": "h4",
+   "attempt": 3,
+   "order": [
+    "baseline",
+    "notes",
+    "nexus"
+   ]
+  }
+ ]
+}
