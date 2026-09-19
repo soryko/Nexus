@@ -1,8 +1,8 @@
 # A2-R — the execution identity, for approval
 
-**Nothing here has been executed.** This record is presented for the founder's approval. It
-becomes the frozen identity of the A2-R development sweep when it is approved and the two
-stamped-at-freeze rows below are filled in by `preflight-a2.py`.
+**Nothing here has been executed.** This record is presented for the founder's approval. Every
+identifier below is **stamped**, and [`preflight-a2r.py`](preflight-a2r.py) asserts every one
+of them.
 
 The design it executes is [`benchmarks/agent/REGISTRATION-DRAFT-a2r.md`](benchmarks/agent/REGISTRATION-DRAFT-a2r.md),
 whose §7 decisions are closed. **A2-R is not the calibration.** The calibration is closed with
@@ -15,12 +15,24 @@ the last touching `benchmarks/agent`, so a record kept in either would move the 
 records every time it was written. Nothing here is read by the harness; it is what a later
 reader compares an artifact against.
 
-## The checkout
+## The checkout, which is not the harness revision
 
-The execution checkout is **the HEAD that `preflight-a2.py` approved**, which it prints. The
-three ways a checkout can drift while `harness_revision` stays put — a committed change, an
+Two different identifiers, and a launch needs both.
+
+**`harness_revision` is the measured identity** — the last commit touching `benchmarks/agent`.
+It is what a row records and what decides whether two rows may be pooled, so it is **frozen
+below as a literal**. There is no self-hash obstacle: this record and `preflight-a2r.py` sit at
+the repository **root**, and a root-level commit does not touch `benchmarks/agent`, so
+committing them leaves the revision they name exactly where it is.
+
+**HEAD is the execution checkout** — reported by the preflight, never pinned, because every
+commit to a root-level note moves it while changing nothing a row records. Run from the HEAD
+the preflight prints, and leave it alone.
+
+The four ways a checkout can drift while `harness_revision` stays put — a committed change, an
 uncommitted edit to a tracked file, an edited gitignored config, an activated virtualenv — are
-tabulated in [`LAUNCH-A2.md`](LAUNCH-A2.md) and apply here unchanged.
+tabulated in [`LAUNCH-A2.md`](LAUNCH-A2.md) and apply here unchanged. `preflight-a2r.py` checks
+all four.
 
 **Do not edit, commit, rebase or update dependencies in the execution checkout during the
 sweep.**
@@ -30,7 +42,7 @@ sweep.**
 | | |
 | --- | --- |
 | `product_revision` | `2cd531f9d7c274a065533e58ba3fde8582f8c269` |
-| `harness_revision` | **stamped at freeze** — `preflight-a2.py` prints it; it is the commit that freezes this record, which cannot contain its own hash |
+| `harness_revision` | `c055c8983ae2d7618d212d738cf3d50f285cd991` |
 | `config_version` | `calib-v3` |
 | `schedule_digest` | `0a352b82ced14f10e85d50d17989ac38e02d4d9582c032ed743a75554a6a5d97` |
 | `corpus_digest` | `9ae2a9f268dd894d` — A1's frozen held-out corpus, unchanged |
@@ -38,7 +50,12 @@ sweep.**
 
 | ceiling | configuration | `config_digest` | `max_turns` |
 | --- | --- | --- | --- |
-| 45 | `benchmarks/agent/a2r-config-45.json` | **stamped at freeze** — the file does not exist yet | 45 |
+| 45 | `benchmarks/agent/a2r-config-45.json` | `22eb0a3766cdde73` | 45 |
+
+Created on this host from `calib-config-45.json` with **exactly one field changed** —
+`config_version: calib-v2` → `calib-v3`. Everything else, `wall_clock_s: 600` and
+`corpus_digest: 9ae2a9f268dd894d` included, is identical. The v2 file still hashes to
+`396c0d2d48a22eed`.
 
 **A2-R reads `a2r-config-<n>.json`, never `calib-config-<n>.json`.** The three calibration
 files are the closed sweep's frozen identity and `preflight-a2.py` checks their digests against
@@ -82,7 +99,7 @@ intact.
 
 | | |
 | --- | --- |
-| output directory | **its own**, outside any calibration scratch. `run_a2r.py` refuses a directory holding another sweep's summary, and refuses to nest inside one. |
+| output directory | `/Users/soko/Cerebros/nexus-a1-fixtures/a2r-run` — **its own**, a sibling of the calibration's `calib-run`. `run_a2r.py` refuses a directory holding another sweep's summary, and refuses to nest inside one. |
 | summary | `a2r-summary.json` — never `calibration-summary.json` |
 | soft launch threshold | **20 000 000 tokens.** Not a maximum: the sweep can finish above it by up to one row, and a largest-observed-row reservation bounds nothing about the next row. Recorded as `cap_is_soft: true`. |
 | selection rule | **none is applied.** `freeze-calib-a2.md` §5 belongs to the calibration. `assess_a2r.py` refuses to summarise more than one ceiling. |
@@ -91,6 +108,34 @@ intact.
 `c60/run-k1/attempt1/arms/baseline` has no usable usage record; that sweep's total is a lower
 bound and its charge exceeded its cap by 560 844 tokens. A2-R does not resolve it, does not
 cover it with a new allowance, and does not treat it as zero.
+
+## Preflight
+
+**`preflight-a2.py` cannot approve this run and is not used.** It asserts harness revision
+`cbbaad64…`, the three `calib-config-*.json` digests, the v2 prompt digests, a historical
+charge of 7 825 690 tokens, and **zero unresolved arm-runs in the calibration directory**. The
+last cannot be satisfied and must not be: one calibration arm-run is unresolved on purpose and
+no allowance was written for it. Gating A2-R on another sweep's accounting would either block
+this sweep indefinitely or invite an allowance written to unblock it.
+
+[`preflight-a2r.py`](preflight-a2r.py) validates what A2-R actually runs, and shows the
+calibration's charge and its outstanding arm-run as a **note, not a gate**:
+
+```bash
+python3 preflight-a2r.py
+```
+
+It asserts both revisions, a clean tracked tree, the configuration's version, digest,
+`max_turns`, `wall_clock_s`, corpus and prompt file, all four prompt digests, the schedule
+digest, **the three v2 config digests and versions** (which A2-R never reads — which is why
+they need a guard), no active virtualenv, `A2_PYTHON` set / executable / carrying pytest, the
+forwarder, and that the output directory is A2-R's alone with nothing unresolved in it.
+
+The pinned-interpreter check is an **early filter, not the authority**: outside the sandbox
+`/usr/bin/python3` imports pytest 8.4.2 from `~/Library/Python/3.9/…`, a path the arm profile
+does not grant — which is precisely why that interpreter answered `No module named pytest`
+inside every v2 arm-run. The per-arm gate, inside the profile and under both shell startups,
+is what settles it.
 
 ## Verification evidence
 
@@ -104,13 +149,18 @@ Model-free, on this revision:
 | the repair check is non-vacuous | `test_a2r.py` — an absent error with no attempt is `no_relevant_invocation`, not a pass |
 | a comment is not a test | `test_a2r.py` — a `tests/` diff whose only additions are comments adds no test node |
 | separate accounting | `test_a2r.py` — completion, threshold refusal, unresolved-consumption refusal (asserting the **next row is never launched**), and refusal to share a calibration directory |
-| every mutation is detected | 14 seeded mutations across `assess_a2r.py`, `run_a2r.py` and `run_calibration.py`, all killed |
+| execution is not credited to a non-event | `test_a2r.py` — `echo pytest`, a `No module named pytest` attempt, a run of another file, a whole-suite run, and a run issued before the last test edit all leave execution `unknown` |
+| a mention is not an invocation | `test_a2r.py` — `test -n "$A2_PYTHON" && echo ready` is a mention; only the variable in command position is an invocation |
+| every mutation is detected | 24 seeded mutations across `assess_a2r.py`, `run_a2r.py`, `run_calibration.py` and `score_compliance.py`, all killed |
+| the preflight's own checks can fail | the pinned-interpreter check controlled against an interpreter without pytest, and against a pin that does not exist |
 
 ## Approval
 
 - [ ] **The founder approves this record and the design it names.** Until this box is ticked,
       `run_a2r.py` is not to be invoked against a live forwarder.
-- [ ] `benchmarks/agent/a2r-config-45.json` at `calib-v3` created — **a new file, not an edit
+- [x] `benchmarks/agent/a2r-config-45.json` at `calib-v3` created — **a new file, not an edit
       to any `calib-config-*.json`** — and its `config_digest` stamped above
-- [ ] `harness_revision` stamped above from `preflight-a2.py`
-- [ ] `preflight-a2.py` green, forwarder up, gate passing on a prepared arm
+- [x] `harness_revision` stamped above
+- [x] `preflight-a2r.py` green on this host — every identifier asserted, forwarder listening
+- [ ] the per-arm environment gate passing on a prepared arm — it runs at launch, inside the
+      profile, and is the authority on the runtime; it refuses before spending
