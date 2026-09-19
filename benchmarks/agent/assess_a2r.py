@@ -345,6 +345,13 @@ DID_NOT_EXECUTE = (
 )
 COUNT = re.compile(r'\b(\d+) (passed|failed|error|errors|skipped|deselected|xfailed|xpassed)\b')
 
+# The arm-run's own NEGATIVE CONTROL: revert the fix, re-run the new test, show it fails. The
+# failure is the POINT -- it is how a regression test is shown to discriminate -- and it is not
+# the test's result under the patch the arm actually produced. v2 contained these and so does
+# this sweep: `git stash push src/click/core.py && pytest <node> -q` ran in three arm-runs, and
+# reading it as the result reported a passing arm-run's own test as failing.
+SRC_MUTATION = re.compile(r'git\s+(?:checkout|stash|restore|apply|reset|clean)\b[^|;&]*src/')
+
 
 def pytest_targets(seg: str) -> list[str]:
     """-> the positional targets of one pytest invocation."""
@@ -385,6 +392,9 @@ def pytest_invocations(calls: list[dict]) -> list[dict]:
             continue
         out.append({"index": c.get("index"), "targets": targets,
                     "mixed": len(kinds) > 1,
+                    # Reverting the fix in the same command makes this a control, not a
+                    # measurement of the patch.
+                    "reverts_source": bool(SRC_MUTATION.search(command)),
                     "result": str(c.get("result") or ""),
                     "command": command[:160]})
     return out
@@ -413,11 +423,30 @@ def executed_named(inv: dict) -> bool | None:
     return None
 
 
+def shell_writes(cmd: str, path: str) -> bool:
+    """Does this shell command WRITE that file?
+
+    Naming a file is not writing it, and `>` is not a redirect wherever it appears. The first
+    version of this asked only whether the command contained the path and any `>` at all --
+    so `pytest tests/test_context.py -q 2>&1 | tail` was read as a WRITE to
+    `tests/test_context.py`, which put the boundary after the last test run in every arm-run
+    that redirected stderr, and demoted every piece of execution evidence in the sweep.
+
+    A write is the file appearing as the TARGET: after a redirect, after `tee`, or as the
+    operand of `sed -i`, `cp` or `mv`.
+    """
+    f = re.escape(path)
+    return bool(re.search(rf'>>?\s*[\'"]?\S*{f}', cmd)
+                or re.search(rf'\btee\b[^|;&]*{f}', cmd)
+                or re.search(rf'\bsed\b[^|;&]*\s-i\b[^|;&]*{f}', cmd)
+                or re.search(rf'\b(?:cp|mv|install)\b[^|;&]*{f}', cmd))
+
+
 def last_test_edit(calls: list[dict], files: list[str]) -> int | None:
-    """-> the index of the last call that wrote one of the added test files.
+    """-> the index of the last call that WROTE one of the added test files.
 
     Used ONLY to WITHHOLD a claim, never to grant one. Issue order is not execution order, so
-    a run issued after the last edit is not thereby shown to have seen it -- but a run issued
+    a run issued after the last write is not thereby shown to have seen it -- but a run issued
     BEFORE the test file was last written cannot have executed the final added test, and that
     direction is safe.
     """
@@ -429,7 +458,7 @@ def last_test_edit(calls: list[dict], files: list[str]) -> int | None:
             seen = c.get("index")
         elif name == "Bash":
             cmd = (c.get("input") or {}).get("command") or ""
-            if any(f in cmd for f in files) and re.search(r'>|sed\s+-i|tee\b', cmd):
+            if any(shell_writes(cmd, f) for f in files):
                 seen = c.get("index")
     return seen
 
@@ -454,10 +483,10 @@ def executed(calls: list[dict], adds: dict) -> dict:
     invocations = pytest_invocations(calls)
     if not invocations:
         return {"verdict": "no", "why": "no pytest invocation in the run",
-                "calls": [], "candidates": []}
+                "calls": [], "candidates": [], "controls": []}
 
     boundary = last_test_edit(calls, adds["files"])
-    settled, candidates = [], []
+    settled, candidates, controls = [], [], []
     for inv in invocations:
         named = [n for n in adds["nodes"] if n in inv["targets"]
                  or n.split("::")[-1] in inv["targets"]]
@@ -465,6 +494,7 @@ def executed(calls: list[dict], adds: dict) -> dict:
         whole = not inv["targets"]
         row = {"index": inv["index"], "named": named, "file_only": bool(files and not named),
                "whole_suite": whole, "mixed": inv["mixed"],
+               "reverts_source": inv["reverts_source"],
                "counts": counts(inv["result"]), "command": inv["command"]}
         before = (boundary is not None and inv["index"] is not None
                   and inv["index"] < boundary)
@@ -472,7 +502,9 @@ def executed(calls: list[dict], adds: dict) -> dict:
         ran = executed_named(inv)
         row["named_test_ran"] = ran
         if named and not inv["mixed"] and not before and ran is True:
-            settled.append(row)
+            # A control DID execute the test -- but against reverted source, so it settles
+            # neither execution under the final patch nor the test's result.
+            (controls if inv["reverts_source"] else settled).append(row)
         else:
             row["why_not_settled"] = (
                 "names no added test" if not named else
@@ -483,10 +515,12 @@ def executed(calls: list[dict], adds: dict) -> dict:
 
     if settled:
         return {"verdict": "yes", "why": "an invocation named the added test and it ran",
-                "calls": settled, "candidates": candidates}
+                "calls": settled, "candidates": candidates, "controls": controls}
     return {"verdict": UNKNOWN,
-            "why": "pytest ran, but no invocation establishes that the ADDED test executed",
-            "calls": [], "candidates": candidates}
+            "why": ("the only invocation naming the added test reverted the fix first, so it "
+                    "is a control and not a measurement of this patch" if controls else
+                    "pytest ran, but no invocation establishes that the ADDED test executed"),
+            "calls": [], "candidates": candidates, "controls": controls}
 
 
 def result_of(settled: list[dict]) -> str:
@@ -526,7 +560,12 @@ def requirement_compliance(record: dict, calls: list[dict]) -> dict:
     src = any(f.startswith("src/") or "/src/" in f for f in files)
     run = (executed(calls, adds) if adds["nodes"]
            else {"verdict": UNKNOWN, "why": "no added test to look for",
-                 "calls": [], "candidates": []})
+                 "calls": [], "candidates": [], "controls": []})
+    # Did the arm-run demonstrate that its own test discriminates -- revert the fix, watch the
+    # new test fail? That is a FINDING about the test's quality, reported in its own right and
+    # never folded into the test's result.
+    disc = [k for k in run["controls"] if k["counts"].get("failed")
+            or k["counts"].get("error") or k["counts"].get("errors")]
 
     return {
         # (a) a final source diff
@@ -537,6 +576,10 @@ def requirement_compliance(record: dict, calls: list[dict]) -> dict:
         "test_executed": run["verdict"] if adds["nodes"] else UNKNOWN,
         # (d) its own result, from an invocation that named it
         "test_result": result_of(run["calls"]),
+        # The arm-run's own negative control on its own test: reverted the fix and watched
+        # the new test fail. Not part of (d) -- that failure is the point.
+        "discriminating_control": ("yes" if disc else
+                                   "ran, did not discriminate" if run["controls"] else "no"),
         # NOT machine-decidable: whether the added test covers THIS bug. Twelve patches is a
         # readable number; a reviewer fills this in and the report shows it empty until then.
         "relevance": "unreviewed",
@@ -545,6 +588,7 @@ def requirement_compliance(record: dict, calls: list[dict]) -> dict:
                      "patch_files": files, "test_nodes": adds["nodes"],
                      "test_files": adds["files"], "nested_skipped": adds["nested"],
                      "execution": run["calls"],
+                     "negative_controls": run["controls"],
                      # Listed for the manual review, NOT counted as execution.
                      "execution_candidates": run["candidates"]},
     }

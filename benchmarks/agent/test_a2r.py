@@ -374,6 +374,80 @@ def test_a_run_issued_before_the_last_test_edit_cannot_establish_execution():
     check("run after the last edit -> yes", c2["test_executed"] == "yes", json.dumps(c2))
 
 
+def test_redirecting_stderr_is_not_writing_the_test_file():
+    """Found by running the reporter over a REAL sweep, not by reading it.
+
+    The write detector asked only whether a command contained the path and any `>`. Every arm
+    that ran `pytest tests/test_x.py -q 2>&1 | tail` was therefore recorded as having WRITTEN
+    that file, which pushed the boundary past the last test run and demoted every piece of
+    execution evidence in the sweep to `unknown`. Naming a file is not writing it, and `2>&1`
+    is not a redirect to anything."""
+    F = "tests/test_options.py"
+    for cmd in (f'PYTHONPATH=src "$A2_PYTHON" -m pytest {F} -q 2>&1 | tail -15',
+                f'PYTHONPATH=src "$A2_PYTHON" -m pytest {F} -q >/dev/null 2>&1',
+                f'git stash push src/click/core.py >/dev/null 2>&1 && pytest {F} -q',
+                f'grep -n foo {F}'):
+        check(f"not a write: {cmd[:46]}", A.shell_writes(cmd, F) is False, cmd)
+    # Negative control: a detector that says False to everything is not a detector.
+    for cmd in (f"cat > {F} <<'EOF'", f'echo x >> {F}', f"sed -i '' 's/a/b/' {F}",
+                f'cp /tmp/new.py {F}', f'tee {F} < /tmp/x'):
+        check(f"is a write: {cmd[:46]}", A.shell_writes(cmd, F) is True, cmd)
+
+
+def test_the_boundary_is_the_last_WRITE_not_the_last_mention():
+    """End to end through `executed`: a run that names the added test AFTER the last real edit
+    settles, even though later commands mention the file while redirecting stderr."""
+    calls = [
+        {"index": 1, "name": "Edit", "input": {"file_path": "/x/tests/test_options.py"},
+         "result": "ok"},
+        bash(2, f'PYTHONPATH=src "$A2_PYTHON" -m pytest -q {NODE} 2>&1 | tail -5',
+             "1 passed in 0.1s"),
+        bash(3, 'PYTHONPATH=src "$A2_PYTHON" -m pytest tests/test_options.py -q 2>&1 | tail',
+             "133 passed"),
+    ]
+    c = A.requirement_compliance(record(patch=NEW_TEST, calls=calls), calls)
+    check("the named run after the last write settles execution",
+          c["test_executed"] == "yes", json.dumps(c))
+    check("and carries its own result", c["test_result"] == "passed", json.dumps(c))
+
+
+def test_an_arms_own_negative_control_is_not_the_tests_result():
+    """Found in the A2-R sweep itself, not by reading the code.
+
+    Three arm-runs ran `git stash push src/click/core.py && pytest <node> -q` -- reverting
+    their own fix to show the new test fails without it. That failure is the POINT: it is how
+    a regression test is shown to discriminate. Reading it as the test's result reported two
+    arm-runs that passed the hidden checks as having a failing test."""
+    good = bash(2, f'PYTHONPATH=src "$A2_PYTHON" -m pytest -q {NODE}', "6 passed in 0.1s")
+    ctrl = bash(3, f'git stash push src/click/core.py && PYTHONPATH=src "$A2_PYTHON" '
+                   f'-m pytest -q {NODE} 2>&1 | tail', "1 failed, 5 passed in 0.1s")
+    c = A.requirement_compliance(record(patch=NEW_TEST, calls=[good, ctrl]), [good, ctrl])
+    check("the result comes from the run under the patch",
+          c["test_result"] == "passed", json.dumps(c))
+    check("execution still settles", c["test_executed"] == "yes", json.dumps(c))
+    check("the control is reported in its own right",
+          c["discriminating_control"] == "yes", json.dumps(c))
+    check("and kept as evidence, not as execution",
+          len(c["evidence"]["negative_controls"]) == 1
+          and len(c["evidence"]["execution"]) == 1,
+          json.dumps({"ctl": c["evidence"]["negative_controls"],
+                      "exe": c["evidence"]["execution"]})[:300])
+
+    # A control ALONE settles nothing about the patch: the source was reverted.
+    only = A.requirement_compliance(record(patch=NEW_TEST, calls=[ctrl]), [ctrl])
+    check("a control alone leaves execution unknown",
+          only["test_executed"] == "unknown", json.dumps(only))
+    check("and says why", "control" in (only.get("why_execution_unsettled") or ""),
+          str(only.get("why_execution_unsettled")))
+    check("while still reporting that the test discriminates",
+          only["discriminating_control"] == "yes", json.dumps(only))
+
+    # Negative control on the control detector: a plain run is not a control.
+    plain = A.requirement_compliance(record(patch=NEW_TEST, calls=[good]), [good])
+    check("a plain run is not a control", plain["discriminating_control"] == "no",
+          json.dumps(plain))
+
+
 def test_the_added_tests_own_result_comes_from_an_invocation_that_named_it():
     for result, want in (("1 passed in 0.1s", "passed"), ("1 failed in 0.1s", "failed")):
         calls = [bash(1, f'"$A2_PYTHON" -m pytest -q {NODE}', result)]
