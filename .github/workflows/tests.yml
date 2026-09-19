@@ -110,10 +110,25 @@ jobs:
       # satisfying a fact, stale advice read and rejected, and unresolved accounting that is
       # indeterminate rather than excluded. Both are deterministic: they build their own git
       # fixtures in a tmpdir and never invoke `sandbox-exec`, so they run on Linux.
+      #
+      # `test_a3_pipeline.py` is the INTEGRATION rehearsal: schedule -> stubbed execution ->
+      # saved records -> real compliance scoring -> normalisation -> decision. It is here
+      # because the synthetic decision-table checks cannot reach the join between them, and
+      # the join is where the fix-leakage scan's defect lived. It writes 16 arm-runs to a
+      # tmpdir and runs the real regression probe over them, so it is the slow one (~80s);
+      # it stubs every subprocess but pytest and never invokes `sandbox-exec`.
+      #
+      # It needs `pyexpat` in the interpreter running pytest HERE, not merely in the one the
+      # probe shells out to: `regression_discriminates` parses the JUnit report in its own
+      # process. Without it every tree returns `unknown` and every task reports
+      # `required_work: indeterminate` -- which reads like a finding. `rehearse_a3` refuses
+      # rather than running in that state, so a missing pyexpat fails this step loudly
+      # instead of passing it vacuously.
       - name: Benchmark harness pytest suites
         run: |
           uv run pytest -q benchmarks/agent/test_dev_m1.py \
             benchmarks/agent/test_a3_decision.py \
+            benchmarks/agent/test_a3_pipeline.py \
             --junitxml=artifacts/junit/bench.xml
 
       - name: Collect failure evidence
