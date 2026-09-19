@@ -260,11 +260,17 @@ remainder*, labelled as such, and it is deliberately **not** written into any re
 
 **No allowance has been written and the arm-run stays unresolved.** §4 permits resolving it with
 a documented conservative allowance, but that is a spending-authority decision, not a reporting
-one, and nothing in this closeout needs it: *"no ceiling selected; resource accounting remains
-partially unresolved"* is a complete and honest statement of what happened. Should an allowance
-be wanted later, 1 650 675 would be *defensible as a deliberately high assumption* — it sits
-2.28× above the reconstructed subtotal — but **not on the basis the earlier report gave for it**.
-It is not "what the messages sum to"; it is a number that happens to exceed what they support.
+one, and nothing in this closeout needs it: *"no ceiling selected; consumption remains partly
+unresolved"* is a complete and honest statement of what happened.
+
+**1 650 675 is not established as a conservative allowance, and this closeout withdraws the
+suggestion that it might serve as one.** An earlier draft of this section argued it would be
+defensible because it sits 2.28× above the reconstructed subtotal. **That reasoning does not
+hold.** The subtotal it exceeds is *itself incomplete* in two known ways — it contains no output
+tokens at all, and `c45/k3/baseline` demonstrates that a whole request's usage can go unreported
+— so a multiple of an incomplete figure bounds neither missing quantity. Being larger than what
+the trace supports is not the same as being larger than what the arm-run spent. Since no further
+execution depends on resolving this arm, it stays unresolved.
 
 ---
 
@@ -277,6 +283,14 @@ It is not "what the messages sum to"; it is a number that happens to exceed what
 | the ceiling-60 row "cost 3 369 089" | that is the **accounted subtotal** of two arms; the row total is unknown, ≥ 4 092 842 |
 | 1 650 675 tokens recovered from 81 messages | 81 messages, **35 responses**; the deduplicated figure is **723 753**, output unobserved |
 | 560 844 tokens over budget | over budget **as a charge**; consumption overshoot is `null` and not computable |
+
+**And two to this document's own first draft**, both caught at review on 2026-09-19 and both
+corrected in place above:
+
+| first draft | corrected |
+| --- | --- |
+| 1 650 675 would be defensible as a conservative allowance, at 2.28× the reconstruction | **withdrawn** (§7): a multiple of an *incomplete* subtotal bounds neither the missing output nor an unreported request |
+| "k4's arm-runs are the ones that ran to the wall clock" | k4's three at ceiling 45 reached 89–96% and terminated on `max_turns`; the only arm-run **killed** at the wall clock is `k1/baseline` at ceiling 60 (§9) |
 
 The estimate history is worth keeping as a lesson rather than a correction: the endgame
 forecasts for the ceiling-60 row were wrong every time because each assumed cost scales with the
@@ -291,24 +305,74 @@ It establishes nothing about whether memory helps, nothing about bounded consult
 per-task result, and nothing about a ceiling outside {30, 45, 60}. The grid is three points and
 §5 selects within it or selects nothing. It selected nothing.
 
-§5 names the response: **revise the workload or the agent configuration.** Three things in the
-evidence above bear on that decision, and none of them is "run ceiling 60 to completion":
+§5 names the response: **revise the workload or the agent configuration.** The registered
+truncation rule stays exactly as frozen; everything below is about what to *investigate*, not
+about loosening it.
 
-1. **Truncation is not close to the threshold.** Going 100% → 75% across a 50% ceiling increase
-   does not extrapolate to ≤20%. Nothing here suggests ceiling 60 would land under it, and §5
-   forbids raising the grid until something passes in any case.
-2. **The wall clock is becoming the binding constraint before the turn ceiling is.** At ceiling
-   45 three arm-runs used 89–96% of the 600 s limit; at ceiling 60 one hit it exactly and was
-   killed. `timeout` counts as truncated, so raising `--max-turns` further converts `max_turns`
-   truncation into `timeout` truncation rather than into completions. **A ceiling experiment
-   that does not also address the wall clock is measuring the wrong ceiling.**
-3. **k3 and k4 are where the budget goes.** k3 solved 0/3 at ceiling 30 and k4 1/3 at both 30
-   and 45, and k4's arm-runs are the ones that ran to the wall clock. §2 registered that this
-   set spans the hunk axis (1–6) and is nearly flat on the failing-function axis — k4 is the
-   6-hunk task. That is a workload property to decide about, not a budget to buy past.
+### The finding that should drive the next decision
 
-**Nothing here authorises another paid run.** The next step is a decision about the workload or
-the configuration, made from this evidence, and registered before anything is spent.
+**11 of this sweep's 16 hidden-check passes ended at `max_turns`.** Functional success and
+normal termination are substantially different quantities here, and that gap — not the ceiling
+arithmetic — is what to understand before another experiment is designed. A run that solved the
+task and was then cut off is not short of budget in the way a run that never solved it is, and a
+pooled truncation rate cannot tell the two apart. **That difference is the thing to investigate;
+the rule that reports it stays as registered.**
+
+Three further observations bear on the decision, and none of them is "run ceiling 60 to
+completion":
+
+* **Truncation is not close to the threshold.** Going 100% → 75% across a 50% ceiling increase
+  does not extrapolate to ≤ 20%. Nothing here suggests ceiling 60 would land under it, and §5
+  forbids raising the grid until something passes in any case.
+* **Wall time is an observed constraint, but its future effect is not established.** At ceiling
+  45 k4's three arm-runs used 89–96% of the 600 s limit and still terminated on `max_turns`; the
+  one arm-run actually killed at the wall clock is **`k1/baseline` at ceiling 60**. *(An earlier
+  version of this section said k4 produced every wall-clock-bound run. That was wrong: k4's came
+  close and terminated on turns.)* One kill is not a trend, and no claim is made here about what
+  a larger ceiling would do. What can be said is that `timeout` counts as truncated, so
+  **increasing turns alone may leave wall time binding** — a variable to hold fixed or measure
+  deliberately in any further ceiling work, not a demonstrated effect.
+* **k3 and k4 are where the budget goes.** k3 solved 0/3 at ceiling 30; k4 solved 1/3 at both 30
+  and 45. §2 registered that this set spans the hunk axis (1–6) and is nearly flat on the
+  failing-function axis — k4 is the 6-hunk task. That is a workload property to decide about,
+  not a budget to buy past.
+
+### The recommended sequence
+
+Agreed at review on 2026-09-19 and recorded here so the next session starts from it rather than
+from a fresh argument:
+
+1. **One short, model-free diagnostic** over the traces already saved. For the 11
+   passing-but-truncated arm-runs: the final recorded source edit, the test attempts after it,
+   repeated investigations, and any completion message. For the failures: distinguish *no source
+   patch*, *incorrect patch*, *operational obstruction* and *missing evidence*. These are
+   descriptive categories. **Do not infer when a patch first became correct without checking that
+   intermediate state** — a record carries a final patch, not a history of one.
+2. **Choose one workflow change from that evidence.** If passing runs continue exploring after
+   adequate verification, test an explicit solve–verify–stop workflow across all arms. If
+   implementation itself consumes the budget, revise task scope or the agent configuration.
+   **Keep the task set fixed** while evaluating the chosen change; retaining only the tasks that
+   turn favourable would answer a different question.
+3. **Register a small development experiment before spending**: one candidate workflow, its
+   unchanged reference configuration, fixed resource limits, a maximum experiment budget, and a
+   stopping decision. **Correctness and termination reported separately** — this sweep is the
+   demonstration of why. Do not combine it with a retrieval-policy change: the immediate
+   uncertainty is about the agent's overall execution, and two variables at once confound,
+   exactly as §3 already said of ceilings and consultation.
+4. **Return to memory-specific development only after that decision.** Bounded consultation,
+   batching, abstention and evidence selection all remain candidates. None has been shown to
+   address the dominant failure mode this calibration found.
+
+**Nothing here authorises another paid run.** Step 1 spends nothing; steps 2–4 are decisions, and
+the experiment in step 3 is registered before it is funded.
+
+### Where this leaves the project
+
+The durable memory foundation is implemented. A1 found no coding benefit
+([`CLOSEOUT-a1.md`](CLOSEOUT-a1.md)). This calibration did not establish an acceptable operating
+budget. **The next milestone is therefore to establish a workable agent workflow under an
+affordable budget** — not to expand the retrieval architecture, which would add another variable
+before that question is settled.
 
 ---
 
