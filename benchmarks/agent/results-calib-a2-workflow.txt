@@ -5,42 +5,48 @@ Issue order, not execution order. An errored command may still have written. A p
 patch does not date itself. A completion message is not a verification.
 
 ONE ROW PER ARM-RUN
-  ceil task arm      verdict terminal  calls lastSrc after test t.aft repro tEdit retr rerd rwrt err 
-  30   k1   baseline pass    max_turns 33    20      12    6    6     2     2     0    6    1    0   
-  30   k1   nexus    pass    max_turns 35    32      2     1    1     7     0     7    7    6    0   
-  30   k1   notes    fail    max_turns 32    -       -     0    -     7     0     1    9    4    1   
-  30   k2   baseline fail    max_turns 45    -       -     2    -     3     0     0    8    1    2   
-  30   k2   nexus    pass    max_turns 45    35      9     5    2     4     0     13   6    0    1   
-  30   k2   notes    pass    max_turns 33    29      3     0    0     4     1     1    10   0    0   
-  30   k3   baseline fail    max_turns 36    -       -     0    -     1     0     0    10   0    1   
-  30   k3   nexus    fail    max_turns 52    -       -     0    -     4     0     13   17   1    0   
-  30   k3   notes    fail    max_turns 38    -       -     0    -     2     0     1    10   0    0   
-  30   k4   baseline pass    max_turns 34    27      6     1    1     3     2     0    8    0    0   
-  30   k4   nexus    fail    max_turns 42    -       -     3    -     8     0     5    7    0    1   
-  30   k4   notes    fail    max_turns 40    -       -     1    -     4     0     1    9    0    1   
-  45   k1   baseline pass    max_turns 52    38      13    3    3     5     1     0    15   1    0   
-  45   k1   nexus    pass    max_turns 57    41      15    10   4     5     2     5    13   0    1   
-  45   k1   notes    pass    completed 39    33      5     7    2     3     2     1    7    0    0   
-  45   k2   baseline pass    completed 45    25      19    8    8     3     2     0    9    0    0   
-  45   k2   nexus    pass    max_turns 57    36      20    9    9     5     3     14   11   0    1   
-  45   k2   notes    pass    completed 38    35      2     5    1     1     1     1    8    0    1   
-  45   k3   baseline pass    max_turns 55    28      26    8    8     3     2     0    1    0    0   
-  45   k3   nexus    pass    max_turns 55    47      7     5    5     2     0     11   10   0    1   
-  45   k3   notes    fail    max_turns 62    61      0     0    0     1     0     1    10   0    0   
-  45   k4   baseline fail    max_turns 47    -       -     3    -     9     0     0    4    1    2   
-  45   k4   nexus    fail    max_turns 54    -       -     3    -     5     0     6    5    0    1   
-  45   k4   notes    pass    max_turns 49    38      10    5    5     6     1     1    7    1    0   
-  60   k1   baseline fail    timeout   36    -       -     0    -     8     0     0    7    4    2   
-  60   k1   nexus    pass    completed 51    27      23    7    7     5     1     7    1    0    0   
-  60   k1   notes    pass    completed 66    56      9     8    3     4     4     1    12   0    1   
-  lastSrc = index of the last identified source write (ISSUE order); after = calls issued after it.
+  ceil task arm      verdict terminal  calls lastSrc after test t.aft repro tEdit retr rerd rwrt gitm err 
+  30   k1   baseline pass    max_turns 33    20      12    6    6     2     2     0    6    1    1    0   
+  30   k1   nexus    pass    max_turns 35    32      2     1    1     7     0     7    7    6    0    0   
+  30   k1   notes    fail    max_turns 32    -       -     0    -     7     0     1    9    4    0    1   
+  30   k2   baseline fail    max_turns 45    -       -     2    -     3     0     0    8    1    0    2   
+  30   k2   nexus    pass    max_turns 45    35      9     5    2     4     0     13   6    0    0    1   
+  30   k2   notes    pass    max_turns 33    29      3     0    0     4     1     1    10   0    0    0   
+  30   k3   baseline fail    max_turns 36    -       -     0    -     1     0     0    10   0    0    1   
+  30   k3   nexus    fail    max_turns 52    -       -     0    -     4     0     13   17   1    0    0   
+  30   k3   notes    fail    max_turns 38    -       -     0    -     2     0     1    10   0    0    0   
+  30   k4   baseline pass    max_turns 34    27      6     1    1     3     2     0    8    0    0    0   
+  30   k4   nexus    fail    max_turns 42    -       -     3    -     8     0     5    7    0    0    1   
+  30   k4   notes    fail    max_turns 40    -       -     1    -     4     0     1    9    0    0    1   
+  45   k1   baseline pass    max_turns 52    38      13    3    3     5     1     0    15   1    0    0   
+  45   k1   nexus    pass    max_turns 57    41      15    10   4     5     2     5    13   0    1    1   
+  45   k1   notes    pass    completed 39    33      5     7    2     3     2     1    7    0    1    0   
+  45   k2   baseline pass    completed 45    25      19    8    8     3     2     0    9    0    1    0   
+  45   k2   nexus    pass    max_turns 57    36      20    9    9     5     3     14   11   0    1    1   
+  45   k2   notes    pass    completed 38    35      2     5    1     1     1     1    8    0    1    1   
+  45   k3   baseline pass    max_turns 55    28      26    8    8     3     2     0    1    0    1    0   
+  45   k3   nexus    pass    max_turns 55    47      7     5    5     2     0     11   10   0    0    1   
+  45   k3   notes    fail    max_turns 62    61      0     0    0     1     0     1    10   0    0    0   
+  45   k4   baseline fail    max_turns 47    -       -     3    -     9     0     0    4    1    0    2   
+  45   k4   nexus    fail    max_turns 54    -       -     3    -     5     0     6    5    0    0    1   
+  45   k4   notes    pass    max_turns 49    38      10    5    5     6     1     1    7    1    1    0   
+  60   k1   baseline fail    timeout   36    -       -     0    -     8     0     0    7    4    0    2   
+  60   k1   nexus    pass    completed 51    27      23    7    7     5     1     7    1    0    2    0   
+  60   k1   notes    pass    completed 66    56      9     8    3     4     4     1    12   0    2    1   
+  lastSrc = index of the last identified source-EDIT event (ISSUE order); after = calls issued after it.
   test / t.aft = pytest invocations, total and after that write. repro = local scripts run instead.
   tEdit = edits under tests/; retr = retrieval delivered to the arm that has any.
   rerd = re-reads of a file already read; rwrt = rewrites of a scratch file already written;
-  err = tool calls returning a nonzero exit (a write inside one may still have landed).
+  err = tool calls returning a nonzero exit (a write inside one may still have landed);
+  gitm = git operations that CHANGE SOURCE STATE (stash/checkout/restore) -- mutation events, not
+  authored edits, mostly negative controls, and NOT part of the edit timeline above.
 
-(1) AFTER THE LAST SOURCE EDIT -- the 11 passing-but-truncated arm-runs
-  30/k1/baseline: last source write at call 20 of 33 (high (Edit tool call naming a src path))
+(1) AFTER THE LAST IDENTIFIED SOURCE-EDIT EVENT -- the 11 passing-but-truncated arm-runs
+    The final-diff control validates run-level detection of authored edits. It does NOT
+    establish a complete mutation timeline: `git stash push -- src/...` changes source
+    state with no redirect and no `sed -i`, and most of this sweep's occurrences land
+    after the last Edit. When a patch first became correct stays unanswered.
+  30/k1/baseline: last source-edit event at call 20 of 33 (high (Edit tool call naming a src path)); 1 git source mutation(s) after it
       then 12 calls: 6 pytest, 1 repro runs, 2 test-file edits, 0 retrieval, 1 reads, 4 inspections, 1 other
       test @22: no summary [no_module]
       test @24: 2 error
@@ -49,36 +55,36 @@ ONE ROW PER ARM-RUN
       test @30: 2 failed, 23 deselected
       test @31: 605 passed, 22 skipped, 1 xfailed
       last message: "Tests fail before the fix and pass after. Cleaning up scratch files and running the full suite."
-  30/k1/nexus: last source write at call 32 of 35 (high (Edit tool call naming a src path))
+  30/k1/nexus: last source-edit event at call 32 of 35 (high (Edit tool call naming a src path))
       then 2 calls: 1 pytest, 1 repro runs, 0 test-file edits, 0 retrieval, 0 reads, 1 inspections, 0 other
       test @34: no summary [no_module]
       last message: "Behavior now matches. Let me run the existing test suite to check for regressions."
-  30/k2/nexus: last source write at call 35 of 45 (high (Edit tool call naming a src path))
+  30/k2/nexus: last source-edit event at call 35 of 45 (high (Edit tool call naming a src path))
       then 9 calls: 2 pytest, 2 repro runs, 0 test-file edits, 0 retrieval, 2 reads, 0 inspections, 3 other
       test @39: 2 error
       test @40: 719 passed, 22 skipped, 1 xfailed
       last message: "The fix works for all reported cases. Now let me add tests. First let me confirm exact expected values including edge cases:"
-  30/k2/notes: last source write at call 29 of 33 (high (Edit tool call naming a src path))
+  30/k2/notes: last source-edit event at call 29 of 33 (high (Edit tool call naming a src path))
       then 3 calls: 0 pytest, 1 repro runs, 1 test-file edits, 0 retrieval, 1 reads, 0 inspections, 0 other
       last message: "The fix works. Now let me add tests to the existing suite, placing them near the related flag tests."
-  30/k4/baseline: last source write at call 27 of 34 (high (Edit tool call naming a src path))
+  30/k4/baseline: last source-edit event at call 27 of 34 (high (Edit tool call naming a src path))
       then 6 calls: 1 pytest, 1 repro runs, 2 test-file edits, 0 retrieval, 1 reads, 1 inspections, 0 other
       test @32: no summary [no_module]
       last message: "The fix resolves `--my-help`. The `-a` case now depends on callbacks being guarded (as real eager callbacks like `show_help` are). Let me verify with "
-  45/k1/baseline: last source write at call 38 of 52 (high (Edit tool call naming a src path))
+  45/k1/baseline: last source-edit event at call 38 of 52 (high (Edit tool call naming a src path))
       then 13 calls: 3 pytest, 2 repro runs, 1 test-file edits, 0 retrieval, 4 reads, 3 inspections, 1 other
       test @41: no summary [no_module]
       test @43: 2 error
       test @45: 603 passed, 22 skipped, 1 xfailed
       last message: "All 603 tests pass. Now let me add regression tests. Let me review the test file's imports and fixtures."
-  45/k1/nexus: last source write at call 41 of 57 (high (Edit tool call naming a src path))
+  45/k1/nexus: last source-edit event at call 41 of 57 (high (Edit tool call naming a src path)); 1 git source mutation(s) after it
       then 15 calls: 4 pytest, 3 repro runs, 2 test-file edits, 0 retrieval, 3 reads, 0 inspections, 3 other
       test @43: 603 passed, 22 skipped, 1 xfailed
       test @49: 26 passed
       test @50: 3 failed, 23 deselected
       test @56: 606 passed, 22 skipped, 1 xfailed
       last message: "Let me clean up scratch files and add a changelog entry."
-  45/k2/nexus: last source write at call 36 of 57 (high (Edit tool call naming a src path))
+  45/k2/nexus: last source-edit event at call 36 of 57 (high (Edit tool call naming a src path)); 1 git source mutation(s) after it
       then 20 calls: 9 pytest, 1 repro runs, 3 test-file edits, 0 retrieval, 3 reads, 0 inspections, 4 other
       test @38: no summary [no_module]
       test @40: no summary [no_pytest_summary_in_output]
@@ -90,7 +96,7 @@ ONE ROW PER ARM-RUN
       test @49: 726 passed, 22 skipped, 1 xfailed
       test @56: 7 passed, 133 deselected
       last message: "Let me check formatting/lint of my changes against the project's tooling."
-  45/k3/baseline: last source write at call 28 of 55 (high (Edit tool call naming a src path))
+  45/k3/baseline: last source-edit event at call 28 of 55 (high (Edit tool call naming a src path)); 1 git source mutation(s) after it
       then 26 calls: 8 pytest, 2 repro runs, 2 test-file edits, 0 retrieval, 1 reads, 10 inspections, 4 other
       test @30: no summary [no_module]
       test @31: no summary [no_module]
@@ -101,7 +107,7 @@ ONE ROW PER ARM-RUN
       test @46: 1 failed, 5 passed, 88 deselected
       test @47: 1 failed, 1305 passed, 22 skipped, 1 xfailed
       last message: "All edge cases behave correctly. Let me review the final diff and clean up scratch files."
-  45/k3/nexus: last source write at call 47 of 55 (high (Edit tool call naming a src path))
+  45/k3/nexus: last source-edit event at call 47 of 55 (high (Edit tool call naming a src path))
       then 7 calls: 5 pytest, 1 repro runs, 0 test-file edits, 0 retrieval, 0 reads, 0 inspections, 1 other
       test @49: no summary [no_module]
       test @51: 2 error
@@ -109,7 +115,7 @@ ONE ROW PER ARM-RUN
       test @53: 1 failed, 1299 passed, 22 skipped, 1 xfailed
       test @54: 1 failed, 16 passed
       last message: "Only the known environmental `/tmp` failure remains. Let me confirm it's pre-existing by testing against the unmodified source."
-  45/k4/notes: last source write at call 38 of 49 (high (Edit tool call naming a src path))
+  45/k4/notes: last source-edit event at call 38 of 49 (high (Edit tool call naming a src path)); 1 git source mutation(s) after it
       then 10 calls: 5 pytest, 1 repro runs, 1 test-file edits, 0 retrieval, 1 reads, 2 inspections, 1 other
       test @40: no summary [no_module]
       test @42: 234 passed
@@ -153,7 +159,7 @@ ONE ROW PER ARM-RUN
           obstruction observed: {'errored_commands': 2, 'not_found': 1, 'no_module': 1, 'traceback': 2}
           last message: "Now I understand the mechanism. Let me look at the existing eager-processing test and the test fixtures."
 
-CONSISTENCY OF THE SOURCE-WRITE DETECTOR
+CONSISTENCY OF THE SOURCE-EDIT DETECTOR (run level; not a mutation timeline)
   arm-runs described                                  27
   patch touches src but no write call identified      none
   write call identified but patch does not touch src  none

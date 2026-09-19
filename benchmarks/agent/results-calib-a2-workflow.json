@@ -13,17 +13,17 @@
    "patch_status": "passing_source_diff",
    "patch_touches_src": true,
    "patch_bytes": 4231,
-   "src_write_calls": [
+   "src_edit_calls": [
     {
      "index": 20,
      "tool": "Edit",
      "path": "core.py"
     }
    ],
-   "last_src_write_index": 20,
-   "last_src_write_confidence": "high (Edit tool call naming a src path)",
-   "calls_after_last_src_write": 12,
-   "after_last_src_write": {
+   "last_src_edit_index": 20,
+   "last_src_edit_confidence": "high (Edit tool call naming a src path)",
+   "calls_after_last_src_edit": 12,
+   "after_last_src_edit": {
     "test_attempts": 6,
     "repro_runs": 1,
     "test_edits": 2,
@@ -35,7 +35,7 @@
    "test_attempts": [
     {
      "index": 22,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cat > repro2.py <<'EOF' ; import click, sys ; from click.testing import CliRunner ;  ; # normal completion: close runs",
      "observed": {
       "counts": {},
@@ -47,7 +47,7 @@
     },
     {
      "index": 24,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "head -1 /opt/homebrew/bin/pytest; /opt/homebrew/bin/python3 -c \"import pytest; print(pytest.__version__)\"; PYT",
      "observed": {
       "counts": {
@@ -59,7 +59,7 @@
     },
     {
      "index": 25,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/ -q -W \"ignore::pytest.PytestRemovedIn10Warning\" 2>&1",
      "observed": {
       "counts": {
@@ -73,7 +73,7 @@
     },
     {
      "index": 29,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/test_context.py -q -W \"ignore::pytest.PytestRemovedIn",
      "observed": {
       "counts": {
@@ -85,7 +85,7 @@
     },
     {
      "index": 30,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "git stash push -- src/click/core.py && PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/test_context.p",
      "observed": {
       "counts": {
@@ -98,7 +98,7 @@
     },
     {
      "index": 31,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "rm -f repro.py repro2.py && PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/ -q -W \"ignore::pytest.Py",
      "observed": {
       "counts": {
@@ -126,6 +126,8 @@
    },
    "repeated_commands": 0,
    "reference_hunt_commands": 3,
+   "git_src_mutation_calls": 1,
+   "git_src_mutations_after_last_edit": 1,
    "obstruction": {
     "errored_commands": 0,
     "no_module": 2,
@@ -152,17 +154,17 @@
    "patch_status": "passing_source_diff",
    "patch_touches_src": true,
    "patch_bytes": 1915,
-   "src_write_calls": [
+   "src_edit_calls": [
     {
      "index": 32,
      "tool": "Edit",
      "path": "core.py"
     }
    ],
-   "last_src_write_index": 32,
-   "last_src_write_confidence": "high (Edit tool call naming a src path)",
-   "calls_after_last_src_write": 2,
-   "after_last_src_write": {
+   "last_src_edit_index": 32,
+   "last_src_edit_confidence": "high (Edit tool call naming a src path)",
+   "calls_after_last_src_edit": 2,
+   "after_last_src_edit": {
     "test_attempts": 1,
     "repro_runs": 1,
     "test_edits": 0,
@@ -174,7 +176,7 @@
    "test_attempts": [
     {
      "index": 34,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src python3 -m pytest tests/ -q 2>&1 | tail -30",
      "observed": {
       "counts": {},
@@ -199,6 +201,8 @@
    },
    "repeated_commands": 0,
    "reference_hunt_commands": 0,
+   "git_src_mutation_calls": 0,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 0,
     "traceback": 1,
@@ -225,11 +229,11 @@
    "patch_status": "no_source_diff",
    "patch_touches_src": false,
    "patch_bytes": 2324,
-   "src_write_calls": [],
-   "last_src_write_index": null,
-   "last_src_write_confidence": "none identified",
-   "calls_after_last_src_write": 0,
-   "after_last_src_write": null,
+   "src_edit_calls": [],
+   "last_src_edit_index": null,
+   "last_src_edit_confidence": "none identified",
+   "calls_after_last_src_edit": 0,
+   "after_last_src_edit": null,
    "test_attempts": [],
    "test_attempt_count": 0,
    "retrieval_calls": 1,
@@ -246,6 +250,8 @@
    },
    "repeated_commands": 0,
    "reference_hunt_commands": 0,
+   "git_src_mutation_calls": 0,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 1,
     "not_found": 1,
@@ -273,15 +279,15 @@
    "patch_status": "no_source_diff",
    "patch_touches_src": false,
    "patch_bytes": 719,
-   "src_write_calls": [],
-   "last_src_write_index": null,
-   "last_src_write_confidence": "none identified",
-   "calls_after_last_src_write": 0,
-   "after_last_src_write": null,
+   "src_edit_calls": [],
+   "last_src_edit_index": null,
+   "last_src_edit_confidence": "none identified",
+   "calls_after_last_src_edit": 0,
+   "after_last_src_edit": null,
    "test_attempts": [
     {
      "index": 29,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "PYTHONPATH=src python3 -m pytest tests/test_options.py -q 2>&1 | tail -20",
      "observed": {
       "counts": {},
@@ -293,7 +299,7 @@
     },
     {
      "index": 42,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "PYTHONPATH=src /Users/soko/Cerebros/nexus-a1-fixtures/.venv-click/bin/python -m pytest tests/test_options.py -",
      "observed": {
       "counts": {
@@ -319,6 +325,8 @@
    },
    "repeated_commands": 0,
    "reference_hunt_commands": 3,
+   "git_src_mutation_calls": 0,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 2,
     "not_found": 1,
@@ -347,7 +355,7 @@
    "patch_status": "passing_source_diff",
    "patch_touches_src": true,
    "patch_bytes": 4993,
-   "src_write_calls": [
+   "src_edit_calls": [
     {
      "index": 34,
      "tool": "Edit",
@@ -359,10 +367,10 @@
      "path": "core.py"
     }
    ],
-   "last_src_write_index": 35,
-   "last_src_write_confidence": "high (Edit tool call naming a src path)",
-   "calls_after_last_src_write": 9,
-   "after_last_src_write": {
+   "last_src_edit_index": 35,
+   "last_src_edit_confidence": "high (Edit tool call naming a src path)",
+   "calls_after_last_src_edit": 9,
+   "after_last_src_edit": {
     "test_attempts": 2,
     "repro_runs": 2,
     "test_edits": 0,
@@ -374,7 +382,7 @@
    "test_attempts": [
     {
      "index": 31,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "cd \"$(git rev-parse --show-toplevel)\" && PYTHONPATH=src python3 -m pytest tests/test_options.py -q 2>&1 | tail",
      "observed": {
       "counts": {},
@@ -386,7 +394,7 @@
     },
     {
      "index": 32,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "cd \"$(git rev-parse --show-toplevel)\" && which -a python3 python pytest; ls /usr/local/bin | grep -i \"python\\|",
      "observed": {
       "counts": {},
@@ -398,7 +406,7 @@
     },
     {
      "index": 33,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "cd \"$(git rev-parse --show-toplevel)\" && /opt/homebrew/bin/python3 -c \"import sys; print(sys.version)\"; PYTHON",
      "observed": {
       "counts": {
@@ -410,7 +418,7 @@
     },
     {
      "index": 39,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cd \"$(git rev-parse --show-toplevel)\" && PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/ -q 2>&1 | t",
      "observed": {
       "counts": {
@@ -422,7 +430,7 @@
     },
     {
      "index": 40,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cd \"$(git rev-parse --show-toplevel)\" && PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/ -q -o filte",
      "observed": {
       "counts": {
@@ -449,6 +457,8 @@
    "repro_rewrites": {},
    "repeated_commands": 0,
    "reference_hunt_commands": 1,
+   "git_src_mutation_calls": 0,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 1,
     "not_found": 1,
@@ -475,17 +485,17 @@
    "patch_status": "passing_source_diff",
    "patch_touches_src": true,
    "patch_bytes": 4789,
-   "src_write_calls": [
+   "src_edit_calls": [
     {
      "index": 29,
      "tool": "Edit",
      "path": "core.py"
     }
    ],
-   "last_src_write_index": 29,
-   "last_src_write_confidence": "high (Edit tool call naming a src path)",
-   "calls_after_last_src_write": 3,
-   "after_last_src_write": {
+   "last_src_edit_index": 29,
+   "last_src_edit_confidence": "high (Edit tool call naming a src path)",
+   "calls_after_last_src_edit": 3,
+   "after_last_src_edit": {
     "test_attempts": 0,
     "repro_runs": 1,
     "test_edits": 1,
@@ -509,6 +519,8 @@
    "repro_rewrites": {},
    "repeated_commands": 0,
    "reference_hunt_commands": 1,
+   "git_src_mutation_calls": 0,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 0,
     "no_module": 1,
@@ -535,11 +547,11 @@
    "patch_status": "no_source_diff",
    "patch_touches_src": false,
    "patch_bytes": 1247,
-   "src_write_calls": [],
-   "last_src_write_index": null,
-   "last_src_write_confidence": "none identified",
-   "calls_after_last_src_write": 0,
-   "after_last_src_write": null,
+   "src_edit_calls": [],
+   "last_src_edit_index": null,
+   "last_src_edit_confidence": "none identified",
+   "calls_after_last_src_edit": 0,
+   "after_last_src_edit": null,
    "test_attempts": [],
    "test_attempt_count": 0,
    "retrieval_calls": 0,
@@ -553,6 +565,8 @@
    "repro_rewrites": {},
    "repeated_commands": 0,
    "reference_hunt_commands": 8,
+   "git_src_mutation_calls": 0,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 1,
     "no_module": 1,
@@ -579,11 +593,11 @@
    "patch_status": "no_source_diff",
    "patch_touches_src": false,
    "patch_bytes": 1997,
-   "src_write_calls": [],
-   "last_src_write_index": null,
-   "last_src_write_confidence": "none identified",
-   "calls_after_last_src_write": 0,
-   "after_last_src_write": null,
+   "src_edit_calls": [],
+   "last_src_edit_index": null,
+   "last_src_edit_confidence": "none identified",
+   "calls_after_last_src_edit": 0,
+   "after_last_src_edit": null,
    "test_attempts": [],
    "test_attempt_count": 0,
    "retrieval_calls": 13,
@@ -601,6 +615,8 @@
    },
    "repeated_commands": 0,
    "reference_hunt_commands": 1,
+   "git_src_mutation_calls": 0,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 0,
     "denied": 1,
@@ -627,11 +643,11 @@
    "patch_status": "no_source_diff",
    "patch_touches_src": false,
    "patch_bytes": 1540,
-   "src_write_calls": [],
-   "last_src_write_index": null,
-   "last_src_write_confidence": "none identified",
-   "calls_after_last_src_write": 0,
-   "after_last_src_write": null,
+   "src_edit_calls": [],
+   "last_src_edit_index": null,
+   "last_src_edit_confidence": "none identified",
+   "calls_after_last_src_edit": 0,
+   "after_last_src_edit": null,
    "test_attempts": [],
    "test_attempt_count": 0,
    "retrieval_calls": 1,
@@ -646,6 +662,8 @@
    "repro_rewrites": {},
    "repeated_commands": 0,
    "reference_hunt_commands": 1,
+   "git_src_mutation_calls": 0,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 0,
     "no_module": 1,
@@ -668,7 +686,7 @@
    "patch_status": "passing_source_diff",
    "patch_touches_src": true,
    "patch_bytes": 5077,
-   "src_write_calls": [
+   "src_edit_calls": [
     {
      "index": 26,
      "tool": "Edit",
@@ -680,10 +698,10 @@
      "path": "core.py"
     }
    ],
-   "last_src_write_index": 27,
-   "last_src_write_confidence": "high (Edit tool call naming a src path)",
-   "calls_after_last_src_write": 6,
-   "after_last_src_write": {
+   "last_src_edit_index": 27,
+   "last_src_edit_confidence": "high (Edit tool call naming a src path)",
+   "calls_after_last_src_edit": 6,
+   "after_last_src_edit": {
     "test_attempts": 1,
     "repro_runs": 1,
     "test_edits": 2,
@@ -695,7 +713,7 @@
    "test_attempts": [
     {
      "index": 32,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src python3 -m pytest tests/test_options.py -q 2>&1 | tail -15",
      "observed": {
       "counts": {},
@@ -719,6 +737,8 @@
    "repro_rewrites": {},
    "repeated_commands": 0,
    "reference_hunt_commands": 1,
+   "git_src_mutation_calls": 0,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 0,
     "no_module": 1,
@@ -744,15 +764,15 @@
    "patch_status": "no_source_diff",
    "patch_touches_src": false,
    "patch_bytes": 7307,
-   "src_write_calls": [],
-   "last_src_write_index": null,
-   "last_src_write_confidence": "none identified",
-   "calls_after_last_src_write": 0,
-   "after_last_src_write": null,
+   "src_edit_calls": [],
+   "last_src_edit_index": null,
+   "last_src_edit_confidence": "none identified",
+   "calls_after_last_src_edit": 0,
+   "after_last_src_edit": null,
    "test_attempts": [
     {
      "index": 36,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "PYTHONPATH=src python3 -m pytest tests/test_basic.py tests/test_options.py -q -p no:cacheprovider -W \"ignore::",
      "observed": {
       "counts": {},
@@ -764,7 +784,7 @@
     },
     {
      "index": 38,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "/opt/homebrew/bin/python3 --version && PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/test_basic.py ",
      "observed": {
       "counts": {
@@ -776,7 +796,7 @@
     },
     {
      "index": 39,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/test_basic.py tests/test_options.py -q -p no:cachepro",
      "observed": {
       "counts": {
@@ -799,6 +819,8 @@
    "repro_rewrites": {},
    "repeated_commands": 0,
    "reference_hunt_commands": 2,
+   "git_src_mutation_calls": 0,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 1,
     "denied": 2,
@@ -825,15 +847,15 @@
    "patch_status": "no_source_diff",
    "patch_touches_src": false,
    "patch_bytes": 3782,
-   "src_write_calls": [],
-   "last_src_write_index": null,
-   "last_src_write_confidence": "none identified",
-   "calls_after_last_src_write": 0,
-   "after_last_src_write": null,
+   "src_edit_calls": [],
+   "last_src_edit_index": null,
+   "last_src_edit_confidence": "none identified",
+   "calls_after_last_src_edit": 0,
+   "after_last_src_edit": null,
    "test_attempts": [
     {
      "index": 39,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "PYTHONPATH=src python3 -m pytest tests/ -q -W \"ignore::pytest.PytestRemovedIn10Warning\" -p no:cacheprovider 2>",
      "observed": {
       "counts": {},
@@ -856,6 +878,8 @@
    "repro_rewrites": {},
    "repeated_commands": 0,
    "reference_hunt_commands": 2,
+   "git_src_mutation_calls": 0,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 1,
     "no_module": 2,
@@ -883,17 +907,17 @@
    "patch_status": "passing_source_diff",
    "patch_touches_src": true,
    "patch_bytes": 4932,
-   "src_write_calls": [
+   "src_edit_calls": [
     {
      "index": 38,
      "tool": "Edit",
      "path": "core.py"
     }
    ],
-   "last_src_write_index": 38,
-   "last_src_write_confidence": "high (Edit tool call naming a src path)",
-   "calls_after_last_src_write": 13,
-   "after_last_src_write": {
+   "last_src_edit_index": 38,
+   "last_src_edit_confidence": "high (Edit tool call naming a src path)",
+   "calls_after_last_src_edit": 13,
+   "after_last_src_edit": {
     "test_attempts": 3,
     "repro_runs": 2,
     "test_edits": 1,
@@ -905,7 +929,7 @@
    "test_attempts": [
     {
      "index": 41,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src python3 -m pytest tests/ -q 2>&1 | tail -25",
      "observed": {
       "counts": {},
@@ -917,7 +941,7 @@
     },
     {
      "index": 43,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src python3.14 -m pytest tests/ -q 2>&1 | tail -25",
      "observed": {
       "counts": {
@@ -929,7 +953,7 @@
     },
     {
      "index": 45,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src python3.14 -m pytest tests/ -q -W \"ignore::pytest.PytestRemovedIn10Warning\" 2>&1 | tail -25",
      "observed": {
       "counts": {
@@ -957,6 +981,8 @@
    },
    "repeated_commands": 0,
    "reference_hunt_commands": 1,
+   "git_src_mutation_calls": 0,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 0,
     "traceback": 3,
@@ -984,17 +1010,17 @@
    "patch_status": "passing_source_diff",
    "patch_touches_src": true,
    "patch_bytes": 5028,
-   "src_write_calls": [
+   "src_edit_calls": [
     {
      "index": 41,
      "tool": "Edit",
      "path": "core.py"
     }
    ],
-   "last_src_write_index": 41,
-   "last_src_write_confidence": "high (Edit tool call naming a src path)",
-   "calls_after_last_src_write": 15,
-   "after_last_src_write": {
+   "last_src_edit_index": 41,
+   "last_src_edit_confidence": "high (Edit tool call naming a src path)",
+   "calls_after_last_src_edit": 15,
+   "after_last_src_edit": {
     "test_attempts": 4,
     "repro_runs": 3,
     "test_edits": 2,
@@ -1006,7 +1032,7 @@
    "test_attempts": [
     {
      "index": 34,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "cd \"/Users/soko/Cerebros/nexus-a1-fixtures/calib-run/c45/run-k1/attempt1/arms/nexus/repo\" && PYTHONPATH=src py",
      "observed": {
       "counts": {},
@@ -1018,7 +1044,7 @@
     },
     {
      "index": 35,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "cd \"/Users/soko/Cerebros/nexus-a1-fixtures/calib-run/c45/run-k1/attempt1/arms/nexus/repo\" && ls /usr/local/bin",
      "observed": {
       "counts": {},
@@ -1030,7 +1056,7 @@
     },
     {
      "index": 36,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "cd \"/Users/soko/Cerebros/nexus-a1-fixtures/calib-run/c45/run-k1/attempt1/arms/nexus/repo\" && PYTHONPATH=src py",
      "observed": {
       "counts": {
@@ -1042,7 +1068,7 @@
     },
     {
      "index": 37,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "cd \"/Users/soko/Cerebros/nexus-a1-fixtures/calib-run/c45/run-k1/attempt1/arms/nexus/repo\" && grep -n \"filterwa",
      "observed": {
       "counts": {},
@@ -1054,7 +1080,7 @@
     },
     {
      "index": 38,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "cd \"/Users/soko/Cerebros/nexus-a1-fixtures/calib-run/c45/run-k1/attempt1/arms/nexus/repo\" && PYTHONPATH=src py",
      "observed": {
       "counts": {
@@ -1066,7 +1092,7 @@
     },
     {
      "index": 39,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "cd \"/Users/soko/Cerebros/nexus-a1-fixtures/calib-run/c45/run-k1/attempt1/arms/nexus/repo\" && PYTHONPATH=src py",
      "observed": {
       "counts": {
@@ -1080,7 +1106,7 @@
     },
     {
      "index": 43,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cd \"/Users/soko/Cerebros/nexus-a1-fixtures/calib-run/c45/run-k1/attempt1/arms/nexus/repo\" && PYTHONPATH=src py",
      "observed": {
       "counts": {
@@ -1094,7 +1120,7 @@
     },
     {
      "index": 49,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cd \"/Users/soko/Cerebros/nexus-a1-fixtures/calib-run/c45/run-k1/attempt1/arms/nexus/repo\" && PYTHONPATH=src py",
      "observed": {
       "counts": {
@@ -1106,7 +1132,7 @@
     },
     {
      "index": 50,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cd \"/Users/soko/Cerebros/nexus-a1-fixtures/calib-run/c45/run-k1/attempt1/arms/nexus/repo\" && git stash push --",
      "observed": {
       "counts": {
@@ -1119,7 +1145,7 @@
     },
     {
      "index": 56,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cd \"/Users/soko/Cerebros/nexus-a1-fixtures/calib-run/c45/run-k1/attempt1/arms/nexus/repo\" && PYTHONPATH=src py",
      "observed": {
       "counts": {
@@ -1146,6 +1172,8 @@
    "repro_rewrites": {},
    "repeated_commands": 0,
    "reference_hunt_commands": 1,
+   "git_src_mutation_calls": 1,
+   "git_src_mutations_after_last_edit": 1,
    "obstruction": {
     "errored_commands": 1,
     "denied": 1,
@@ -1172,7 +1200,7 @@
    "patch_status": "passing_source_diff",
    "patch_touches_src": true,
    "patch_bytes": 3906,
-   "src_write_calls": [
+   "src_edit_calls": [
     {
      "index": 26,
      "tool": "Edit",
@@ -1184,10 +1212,10 @@
      "path": "cp src/click/core.py /tmp/core_fixed.py && git stash push -- src/click/core.py >"
     }
    ],
-   "last_src_write_index": 33,
-   "last_src_write_confidence": "medium (shell write idiom naming a src path)",
-   "calls_after_last_src_write": 5,
-   "after_last_src_write": {
+   "last_src_edit_index": 33,
+   "last_src_edit_confidence": "medium (shell write idiom naming a src path)",
+   "calls_after_last_src_edit": 5,
+   "after_last_src_edit": {
     "test_attempts": 2,
     "repro_runs": 0,
     "test_edits": 0,
@@ -1199,7 +1227,7 @@
    "test_attempts": [
     {
      "index": 20,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "PYTHONPATH=src python3 -m pytest tests/test_context.py tests/test_basic.py tests/test_options.py -q -W \"ignore",
      "observed": {
       "counts": {},
@@ -1211,7 +1239,7 @@
     },
     {
      "index": 22,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/test_context.py tests/test_basic.py tests/test_opt",
      "observed": {
       "counts": {
@@ -1223,7 +1251,7 @@
     },
     {
      "index": 28,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/ -q -W \"ignore::pytest.PytestRemovedIn10Warning\" 2",
      "observed": {
       "counts": {
@@ -1237,7 +1265,7 @@
     },
     {
      "index": 32,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/test_context.py -q -W \"ignore::pytest.PytestRemove",
      "observed": {
       "counts": {
@@ -1249,7 +1277,7 @@
     },
     {
      "index": 33,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "cp src/click/core.py /tmp/core_fixed.py && git stash push -- src/click/core.py >/dev/null 2>&1 && echo \"revert",
      "observed": {
       "counts": {
@@ -1264,7 +1292,7 @@
     },
     {
      "index": 36,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/ -q -W \"ignore::pytest.PytestRemovedIn10Warning\" 2",
      "observed": {
       "counts": {
@@ -1278,7 +1306,7 @@
     },
     {
      "index": 38,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "git status --short && echo \"=== quick verify ===\" && PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tes",
      "observed": {
       "counts": {
@@ -1303,6 +1331,8 @@
    "repro_rewrites": {},
    "repeated_commands": 0,
    "reference_hunt_commands": 1,
+   "git_src_mutation_calls": 1,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 0,
     "no_module": 2,
@@ -1330,17 +1360,17 @@
    "patch_status": "passing_source_diff",
    "patch_touches_src": true,
    "patch_bytes": 2676,
-   "src_write_calls": [
+   "src_edit_calls": [
     {
      "index": 25,
      "tool": "Edit",
      "path": "core.py"
     }
    ],
-   "last_src_write_index": 25,
-   "last_src_write_confidence": "high (Edit tool call naming a src path)",
-   "calls_after_last_src_write": 19,
-   "after_last_src_write": {
+   "last_src_edit_index": 25,
+   "last_src_edit_confidence": "high (Edit tool call naming a src path)",
+   "calls_after_last_src_edit": 19,
+   "after_last_src_edit": {
     "test_attempts": 8,
     "repro_runs": 1,
     "test_edits": 2,
@@ -1352,7 +1382,7 @@
    "test_attempts": [
     {
      "index": 27,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src python3 -m pytest tests -q 2>&1 | tail -25",
      "observed": {
       "counts": {},
@@ -1364,7 +1394,7 @@
     },
     {
      "index": 29,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "/opt/homebrew/bin/python3 -c \"import sys, pytest; print(sys.version); print(pytest.__version__)\" 2>&1 | head; ",
      "observed": {
       "counts": {},
@@ -1376,7 +1406,7 @@
     },
     {
      "index": 30,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests -q 2>&1 | tail -25",
      "observed": {
       "counts": {
@@ -1388,7 +1418,7 @@
     },
     {
      "index": 32,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests -q -o filterwarnings= 2>&1 | tail -25",
      "observed": {
       "counts": {
@@ -1402,7 +1432,7 @@
     },
     {
      "index": 36,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "awk 'length > 88 {print FILENAME\":\"NR\": \"length\" \"$0}' tests/test_options.py | head; echo \"---run new tests---",
      "observed": {
       "counts": {
@@ -1415,7 +1445,7 @@
     },
     {
      "index": 38,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "awk 'length > 88 {print FILENAME\":\"NR\": \"length}' tests/test_options.py src/click/core.py | head; echo \"---ful",
      "observed": {
       "counts": {
@@ -1429,7 +1459,7 @@
     },
     {
      "index": 39,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cp src/click/core.py /tmp/core_fixed.py 2>/dev/null || cp src/click/core.py .core_fixed.bak; git stash push --",
      "observed": {
       "counts": {
@@ -1442,7 +1472,7 @@
     },
     {
      "index": 40,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "rm -f repro.py repro2.py && sed -n '2613,2622p' src/click/core.py && echo \"---final run---\" && PYTHONPATH=src ",
      "observed": {
       "counts": {
@@ -1469,6 +1499,8 @@
    "repro_rewrites": {},
    "repeated_commands": 0,
    "reference_hunt_commands": 1,
+   "git_src_mutation_calls": 1,
+   "git_src_mutations_after_last_edit": 1,
    "obstruction": {
     "errored_commands": 0,
     "no_module": 3,
@@ -1495,17 +1527,17 @@
    "patch_status": "passing_source_diff",
    "patch_touches_src": true,
    "patch_bytes": 3017,
-   "src_write_calls": [
+   "src_edit_calls": [
     {
      "index": 36,
      "tool": "Edit",
      "path": "core.py"
     }
    ],
-   "last_src_write_index": 36,
-   "last_src_write_confidence": "high (Edit tool call naming a src path)",
-   "calls_after_last_src_write": 20,
-   "after_last_src_write": {
+   "last_src_edit_index": 36,
+   "last_src_edit_confidence": "high (Edit tool call naming a src path)",
+   "calls_after_last_src_edit": 20,
+   "after_last_src_edit": {
     "test_attempts": 9,
     "repro_runs": 1,
     "test_edits": 3,
@@ -1517,7 +1549,7 @@
    "test_attempts": [
     {
      "index": 38,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cd \"$(git rev-parse --show-toplevel)\"; PYTHONPATH=src python3 -m pytest tests/test_options.py -q 2>&1 | tail -",
      "observed": {
       "counts": {},
@@ -1529,7 +1561,7 @@
     },
     {
      "index": 40,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cd \"$(git rev-parse --show-toplevel)\"; /opt/homebrew/bin/python3 --version; /opt/homebrew/bin/python3 -c \"impo",
      "observed": {
       "counts": {},
@@ -1541,7 +1573,7 @@
     },
     {
      "index": 41,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cd \"$(git rev-parse --show-toplevel)\"; PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/test_options.p",
      "observed": {
       "counts": {
@@ -1553,7 +1585,7 @@
     },
     {
      "index": 42,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cd \"$(git rev-parse --show-toplevel)\"; PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests -q 2>&1 | tail",
      "observed": {
       "counts": {
@@ -1565,7 +1597,7 @@
     },
     {
      "index": 43,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cd \"$(git rev-parse --show-toplevel)\"; PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests -q -W \"ignore:",
      "observed": {
       "counts": {
@@ -1579,7 +1611,7 @@
     },
     {
      "index": 47,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cd \"$(git rev-parse --show-toplevel)\"; PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/test_options.p",
      "observed": {
       "counts": {
@@ -1592,7 +1624,7 @@
     },
     {
      "index": 48,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cd \"$(git rev-parse --show-toplevel)\"; git diff src/click/core.py > .fix_test.patch && git checkout -- src/cli",
      "observed": {
       "counts": {
@@ -1605,7 +1637,7 @@
     },
     {
      "index": 49,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cd \"$(git rev-parse --show-toplevel)\"; PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests -q -W \"ignore:",
      "observed": {
       "counts": {
@@ -1619,7 +1651,7 @@
     },
     {
      "index": 56,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cd \"$(git rev-parse --show-toplevel)\"; awk 'length > 88 {print FILENAME\":\"FNR\": \"length}' tests/test_options.p",
      "observed": {
       "counts": {
@@ -1644,6 +1676,8 @@
    "repro_rewrites": {},
    "repeated_commands": 0,
    "reference_hunt_commands": 1,
+   "git_src_mutation_calls": 1,
+   "git_src_mutations_after_last_edit": 1,
    "obstruction": {
     "errored_commands": 1,
     "denied": 1,
@@ -1672,7 +1706,7 @@
    "patch_status": "passing_source_diff",
    "patch_touches_src": true,
    "patch_bytes": 2076,
-   "src_write_calls": [
+   "src_edit_calls": [
     {
      "index": 25,
      "tool": "Edit",
@@ -1684,10 +1718,10 @@
      "path": "cp src/click/core.py /tmp/core_fixed_backup.py 2>/dev/null || cp src/click/core."
     }
    ],
-   "last_src_write_index": 35,
-   "last_src_write_confidence": "medium (shell write idiom naming a src path)",
-   "calls_after_last_src_write": 2,
-   "after_last_src_write": {
+   "last_src_edit_index": 35,
+   "last_src_edit_confidence": "medium (shell write idiom naming a src path)",
+   "calls_after_last_src_edit": 2,
+   "after_last_src_edit": {
     "test_attempts": 1,
     "repro_runs": 0,
     "test_edits": 0,
@@ -1699,7 +1733,7 @@
    "test_attempts": [
     {
      "index": 30,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "PYTHONPATH=src python3 -m pytest tests/test_options.py -q -W \"ignore::pytest.PytestRemovedIn10Warning\" 2>&1 | ",
      "observed": {
       "counts": {},
@@ -1711,7 +1745,7 @@
     },
     {
      "index": 32,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/test_options.py -q -W \"ignore::pytest.PytestRemove",
      "observed": {
       "counts": {
@@ -1723,7 +1757,7 @@
     },
     {
      "index": 33,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/ -q -W \"ignore::pytest.PytestRemovedIn10Warning\" 2",
      "observed": {
       "counts": {
@@ -1737,7 +1771,7 @@
     },
     {
      "index": 35,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "cp src/click/core.py /tmp/core_fixed_backup.py 2>/dev/null || cp src/click/core.py src/click/core.py.fixed; gi",
      "observed": {
       "counts": {
@@ -1749,7 +1783,7 @@
     },
     {
      "index": 37,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/ -q -W \"ignore::pytest.PytestRemovedIn10Warning\" 2",
      "observed": {
       "counts": {
@@ -1775,6 +1809,8 @@
    "repro_rewrites": {},
    "repeated_commands": 0,
    "reference_hunt_commands": 1,
+   "git_src_mutation_calls": 1,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 1,
     "no_module": 1,
@@ -1800,7 +1836,7 @@
    "patch_status": "passing_source_diff",
    "patch_touches_src": true,
    "patch_bytes": 3865,
-   "src_write_calls": [
+   "src_edit_calls": [
     {
      "index": 27,
      "tool": "Edit",
@@ -1812,10 +1848,10 @@
      "path": "core.py"
     }
    ],
-   "last_src_write_index": 28,
-   "last_src_write_confidence": "high (Edit tool call naming a src path)",
-   "calls_after_last_src_write": 26,
-   "after_last_src_write": {
+   "last_src_edit_index": 28,
+   "last_src_edit_confidence": "high (Edit tool call naming a src path)",
+   "calls_after_last_src_edit": 26,
+   "after_last_src_edit": {
     "test_attempts": 8,
     "repro_runs": 2,
     "test_edits": 2,
@@ -1827,7 +1863,7 @@
    "test_attempts": [
     {
      "index": 30,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src python3 -m pytest tests/ -q 2>&1 | tail -25",
      "observed": {
       "counts": {},
@@ -1839,7 +1875,7 @@
     },
     {
      "index": 31,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "which -a python3 python pytest 2>/dev/null; python3 -m pytest --version 2>&1 | head -3; ls .venv 2>/dev/null; ",
      "observed": {
       "counts": {},
@@ -1851,7 +1887,7 @@
     },
     {
      "index": 32,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/ -q 2>&1 | tail -25",
      "observed": {
       "counts": {
@@ -1863,7 +1899,7 @@
     },
     {
      "index": 35,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/ -q -o filterwarnings=ignore 2>&1 | tail -20",
      "observed": {
       "counts": {
@@ -1878,7 +1914,7 @@
     },
     {
      "index": 36,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "git stash && PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest \"tests/test_commands.py::test_other_command",
      "observed": {
       "counts": {
@@ -1891,7 +1927,7 @@
     },
     {
      "index": 45,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/test_basic.py -q -o filterwarnings=ignore -k \"flag",
      "observed": {
       "counts": {
@@ -1904,7 +1940,7 @@
     },
     {
      "index": 46,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "git stash push src/click/core.py && PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/test_basic.py ",
      "observed": {
       "counts": {
@@ -1918,7 +1954,7 @@
     },
     {
      "index": 47,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/ -q -o filterwarnings=ignore 2>&1 | tail -6",
      "observed": {
       "counts": {
@@ -1944,6 +1980,8 @@
    "repro_rewrites": {},
    "repeated_commands": 0,
    "reference_hunt_commands": 0,
+   "git_src_mutation_calls": 1,
+   "git_src_mutations_after_last_edit": 1,
    "obstruction": {
     "errored_commands": 0,
     "no_module": 4,
@@ -1971,7 +2009,7 @@
    "patch_status": "passing_source_diff",
    "patch_touches_src": true,
    "patch_bytes": 3598,
-   "src_write_calls": [
+   "src_edit_calls": [
     {
      "index": 46,
      "tool": "Edit",
@@ -1983,10 +2021,10 @@
      "path": "core.py"
     }
    ],
-   "last_src_write_index": 47,
-   "last_src_write_confidence": "high (Edit tool call naming a src path)",
-   "calls_after_last_src_write": 7,
-   "after_last_src_write": {
+   "last_src_edit_index": 47,
+   "last_src_edit_confidence": "high (Edit tool call naming a src path)",
+   "calls_after_last_src_edit": 7,
+   "after_last_src_edit": {
     "test_attempts": 5,
     "repro_runs": 1,
     "test_edits": 0,
@@ -1998,7 +2036,7 @@
    "test_attempts": [
     {
      "index": 49,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src python3 -m pytest tests/test_options.py tests/test_basic.py -q 2>&1 | tail -25",
      "observed": {
       "counts": {},
@@ -2010,7 +2048,7 @@
     },
     {
      "index": 51,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/test_options.py tests/test_basic.py -q 2>&1 | tail -2",
      "observed": {
       "counts": {
@@ -2022,7 +2060,7 @@
     },
     {
      "index": 52,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/test_options.py tests/test_basic.py -q -W ignore::pyt",
      "observed": {
       "counts": {
@@ -2034,7 +2072,7 @@
     },
     {
      "index": 53,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/ -q -W ignore::pytest.PytestRemovedIn10Warning 2>&1 |",
      "observed": {
       "counts": {
@@ -2049,7 +2087,7 @@
     },
     {
      "index": 54,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "git stash && PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest \"tests/test_commands.py::test_other_command_in",
      "observed": {
       "counts": {
@@ -2073,6 +2111,8 @@
    "repro_rewrites": {},
    "repeated_commands": 0,
    "reference_hunt_commands": 1,
+   "git_src_mutation_calls": 0,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 1,
     "denied": 2,
@@ -2100,7 +2140,7 @@
    "patch_status": "failing_source_diff",
    "patch_touches_src": true,
    "patch_bytes": 4856,
-   "src_write_calls": [
+   "src_edit_calls": [
     {
      "index": 56,
      "tool": "Edit",
@@ -2122,10 +2162,10 @@
      "path": "core.py"
     }
    ],
-   "last_src_write_index": 61,
-   "last_src_write_confidence": "high (Edit tool call naming a src path)",
-   "calls_after_last_src_write": 0,
-   "after_last_src_write": {
+   "last_src_edit_index": 61,
+   "last_src_edit_confidence": "high (Edit tool call naming a src path)",
+   "calls_after_last_src_edit": 0,
+   "after_last_src_edit": {
     "test_attempts": 0,
     "repro_runs": 0,
     "test_edits": 0,
@@ -2148,6 +2188,8 @@
    "repro_rewrites": {},
    "repeated_commands": 0,
    "reference_hunt_commands": 13,
+   "git_src_mutation_calls": 0,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 0,
     "no_module": 1,
@@ -2175,15 +2217,15 @@
    "patch_status": "no_source_diff",
    "patch_touches_src": false,
    "patch_bytes": 7617,
-   "src_write_calls": [],
-   "last_src_write_index": null,
-   "last_src_write_confidence": "none identified",
-   "calls_after_last_src_write": 0,
-   "after_last_src_write": null,
+   "src_edit_calls": [],
+   "last_src_edit_index": null,
+   "last_src_edit_confidence": "none identified",
+   "calls_after_last_src_edit": 0,
+   "after_last_src_edit": null,
    "test_attempts": [
     {
      "index": 23,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "PYTHONPATH=src python3 -m pytest tests/ -q 2>&1 | tail -30",
      "observed": {
       "counts": {},
@@ -2195,7 +2237,7 @@
     },
     {
      "index": 25,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "head -1 /opt/homebrew/bin/pytest && PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/ -q 2>&1 | tail -",
      "observed": {
       "counts": {
@@ -2207,7 +2249,7 @@
     },
     {
      "index": 27,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/ -q -W \"ignore::pytest.PytestRemovedIn10Warning\" 2>&1",
      "observed": {
       "counts": {
@@ -2234,6 +2276,8 @@
    },
    "repeated_commands": 0,
    "reference_hunt_commands": 12,
+   "git_src_mutation_calls": 0,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 2,
     "no_module": 2,
@@ -2261,15 +2305,15 @@
    "patch_status": "no_source_diff",
    "patch_touches_src": false,
    "patch_bytes": 3790,
-   "src_write_calls": [],
-   "last_src_write_index": null,
-   "last_src_write_confidence": "none identified",
-   "calls_after_last_src_write": 0,
-   "after_last_src_write": null,
+   "src_edit_calls": [],
+   "last_src_edit_index": null,
+   "last_src_edit_confidence": "none identified",
+   "calls_after_last_src_edit": 0,
+   "after_last_src_edit": null,
    "test_attempts": [
     {
      "index": 28,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; PYTHONPATH=src python3 -m pytest tests/ -q -x 2>&1 |",
      "observed": {
       "counts": {},
@@ -2281,7 +2325,7 @@
     },
     {
      "index": 30,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest t",
      "observed": {
       "counts": {
@@ -2293,7 +2337,7 @@
     },
     {
      "index": 33,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest t",
      "observed": {
       "counts": {
@@ -2318,6 +2362,8 @@
    "repro_rewrites": {},
    "repeated_commands": 0,
    "reference_hunt_commands": 4,
+   "git_src_mutation_calls": 0,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 1,
     "denied": 3,
@@ -2342,7 +2388,7 @@
    "patch_status": "passing_source_diff",
    "patch_touches_src": true,
    "patch_bytes": 3526,
-   "src_write_calls": [
+   "src_edit_calls": [
     {
      "index": 37,
      "tool": "Edit",
@@ -2354,10 +2400,10 @@
      "path": "core.py"
     }
    ],
-   "last_src_write_index": 38,
-   "last_src_write_confidence": "high (Edit tool call naming a src path)",
-   "calls_after_last_src_write": 10,
-   "after_last_src_write": {
+   "last_src_edit_index": 38,
+   "last_src_edit_confidence": "high (Edit tool call naming a src path)",
+   "calls_after_last_src_edit": 10,
+   "after_last_src_edit": {
     "test_attempts": 5,
     "repro_runs": 1,
     "test_edits": 1,
@@ -2369,7 +2415,7 @@
    "test_attempts": [
     {
      "index": 40,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src python3 -m pytest tests/test_basic.py tests/test_options.py tests/test_context.py tests/test_co",
      "observed": {
       "counts": {},
@@ -2381,7 +2427,7 @@
     },
     {
      "index": 42,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/test_basic.py tests/test_options.py tests/test_con",
      "observed": {
       "counts": {
@@ -2393,7 +2439,7 @@
     },
     {
      "index": 45,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/test_basic.py -q -W \"ignore::pytest.PytestRemovedI",
      "observed": {
       "counts": {
@@ -2406,7 +2452,7 @@
     },
     {
      "index": 46,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "cp src/click/core.py /tmp/core_fixed.py 2>/dev/null; git stash push -- src/click/core.py && PYTHONPATH=src /op",
      "observed": {
       "counts": {
@@ -2420,7 +2466,7 @@
     },
     {
      "index": 47,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "rm -f repro.py repro2.py repro3.py repro4.py repro5.py && PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytes",
      "observed": {
       "counts": {
@@ -2447,6 +2493,8 @@
    },
    "repeated_commands": 0,
    "reference_hunt_commands": 3,
+   "git_src_mutation_calls": 1,
+   "git_src_mutations_after_last_edit": 1,
    "obstruction": {
     "errored_commands": 0,
     "no_module": 2,
@@ -2473,11 +2521,11 @@
    "patch_status": "no_source_diff",
    "patch_touches_src": false,
    "patch_bytes": 3188,
-   "src_write_calls": [],
-   "last_src_write_index": null,
-   "last_src_write_confidence": "none identified",
-   "calls_after_last_src_write": 0,
-   "after_last_src_write": null,
+   "src_edit_calls": [],
+   "last_src_edit_index": null,
+   "last_src_edit_confidence": "none identified",
+   "calls_after_last_src_edit": 0,
+   "after_last_src_edit": null,
    "test_attempts": [],
    "test_attempt_count": 0,
    "retrieval_calls": 0,
@@ -2495,6 +2543,8 @@
    },
    "repeated_commands": 0,
    "reference_hunt_commands": 1,
+   "git_src_mutation_calls": 0,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 2,
     "not_found": 1,
@@ -2524,17 +2574,17 @@
    "patch_status": "passing_source_diff",
    "patch_touches_src": true,
    "patch_bytes": 4211,
-   "src_write_calls": [
+   "src_edit_calls": [
     {
      "index": 27,
      "tool": "Edit",
      "path": "core.py"
     }
    ],
-   "last_src_write_index": 27,
-   "last_src_write_confidence": "high (Edit tool call naming a src path)",
-   "calls_after_last_src_write": 23,
-   "after_last_src_write": {
+   "last_src_edit_index": 27,
+   "last_src_edit_confidence": "high (Edit tool call naming a src path)",
+   "calls_after_last_src_edit": 23,
+   "after_last_src_edit": {
     "test_attempts": 7,
     "repro_runs": 4,
     "test_edits": 1,
@@ -2546,7 +2596,7 @@
    "test_attempts": [
     {
      "index": 30,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src python3 -m pytest tests -q 2>&1 | tail -25",
      "observed": {
       "counts": {},
@@ -2558,7 +2608,7 @@
     },
     {
      "index": 32,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "/opt/homebrew/bin/python3 -c \"import pytest,sys; print(sys.version, pytest.__version__)\" && PYTHONPATH=src /op",
      "observed": {
       "counts": {
@@ -2570,7 +2620,7 @@
     },
     {
      "index": 33,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests -q -W \"ignore::pytest.PytestRemovedIn10Warning\" 2>&1 ",
      "observed": {
       "counts": {
@@ -2584,7 +2634,7 @@
     },
     {
      "index": 38,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/test_context.py -q -W \"ignore::pytest.PytestRemovedIn",
      "observed": {
       "counts": {
@@ -2596,7 +2646,7 @@
     },
     {
      "index": 39,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "git stash push -- src/click/core.py >/dev/null && PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests/tes",
      "observed": {
       "counts": {
@@ -2609,7 +2659,7 @@
     },
     {
      "index": 42,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "rm -f scratch_repro.py scratch_logger.py && PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests -q -W \"ig",
      "observed": {
       "counts": {
@@ -2623,7 +2673,7 @@
     },
     {
      "index": 49,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3 -m pytest tests -q -W \"ignore::pytest.PytestRemovedIn10Warning\" 2>&1 ",
      "observed": {
       "counts": {
@@ -2648,6 +2698,8 @@
    "repro_rewrites": {},
    "repeated_commands": 0,
    "reference_hunt_commands": 0,
+   "git_src_mutation_calls": 2,
+   "git_src_mutations_after_last_edit": 2,
    "obstruction": {
     "errored_commands": 0,
     "denied": 1,
@@ -2675,7 +2727,7 @@
    "patch_status": "passing_source_diff",
    "patch_touches_src": true,
    "patch_bytes": 4573,
-   "src_write_calls": [
+   "src_edit_calls": [
     {
      "index": 44,
      "tool": "Edit",
@@ -2687,10 +2739,10 @@
      "path": "core.py"
     }
    ],
-   "last_src_write_index": 56,
-   "last_src_write_confidence": "high (Edit tool call naming a src path)",
-   "calls_after_last_src_write": 9,
-   "after_last_src_write": {
+   "last_src_edit_index": 56,
+   "last_src_edit_confidence": "high (Edit tool call naming a src path)",
+   "calls_after_last_src_edit": 9,
+   "after_last_src_edit": {
     "test_attempts": 3,
     "repro_runs": 1,
     "test_edits": 0,
@@ -2702,7 +2754,7 @@
    "test_attempts": [
     {
      "index": 42,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/test_context.py -q -W \"ignore::pytest.PytestRemove",
      "observed": {
       "counts": {
@@ -2714,7 +2766,7 @@
     },
     {
      "index": 52,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/test_context.py -q -W \"ignore::pytest.PytestRemove",
      "observed": {
       "counts": {
@@ -2726,7 +2778,7 @@
     },
     {
      "index": 53,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "git stash push -- src/click/core.py && PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/test_contex",
      "observed": {
       "counts": {
@@ -2739,7 +2791,7 @@
     },
     {
      "index": 54,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/ -q -W \"ignore::pytest.PytestRemovedIn10Warning\" 2",
      "observed": {
       "counts": {
@@ -2753,7 +2805,7 @@
     },
     {
      "index": 55,
-     "after_last_src_write": false,
+     "after_last_src_edit": false,
      "command": "git stash push -- src/click/core.py tests/test_context.py && PYTHONPATH=src /opt/homebrew/bin/python3.14 -m py",
      "observed": {
       "counts": {
@@ -2767,7 +2819,7 @@
     },
     {
      "index": 58,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src /opt/homebrew/bin/python3.14 -m pytest tests/ -q -W \"ignore::pytest.PytestRemovedIn10Warning\" 2",
      "observed": {
       "counts": {
@@ -2781,7 +2833,7 @@
     },
     {
      "index": 63,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "rm -rf scratch && PYTHONPATH=src python3 -m pytest tests/test_context.py -q 2>&1 | tail -5; echo \"=== full ===",
      "observed": {
       "counts": {},
@@ -2793,7 +2845,7 @@
     },
     {
      "index": 64,
-     "after_last_src_write": true,
+     "after_last_src_edit": true,
      "command": "PYTHONPATH=src python3 - <<'EOF' ; import click ; from click.testing import CliRunner ; log=[] ; @click.command() ; @cli",
      "observed": {
       "counts": {
@@ -2819,6 +2871,8 @@
    "repro_rewrites": {},
    "repeated_commands": 1,
    "reference_hunt_commands": 1,
+   "git_src_mutation_calls": 2,
+   "git_src_mutations_after_last_edit": 0,
    "obstruction": {
     "errored_commands": 1,
     "no_module": 3,

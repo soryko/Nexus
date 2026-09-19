@@ -8,37 +8,56 @@ Machine-readable table: [`results-calib-a2-workflow.json`](results-calib-a2-work
 (27 rows, 31 fields). Rendered:
 [`results-calib-a2-workflow.txt`](results-calib-a2-workflow.txt).
 
+## The defensible conclusion
+
+> **Successful patches often coexist with unfinished contribution work, while most failed runs
+> produced no recorded source change. Interpreter friction occurs in both groups.**
+
+Everything below is the evidence for that sentence and the limits on reading more into it.
+
 ## Interpretation limits, preserved
 
 * **Issue order is not execution order.** `tool_calls` carries the order the model *issued*
-  calls. "After the last source write" means after it *in issue order* throughout.
+  calls. "After the last identified source-edit event" means after it *in issue order*
+  throughout.
 * **An errored command may still have written files.** Measured here: one compound call wrote
   its repro script *and* failed on `pytest` in the same command. Exit status is reported beside
   a write, never as a veto on it.
 * **A final passing patch does not establish when it became correct.** The records carry a
   final patch, not a history of one. **This question is not answered and nothing below infers
-  it.** Where a run edited source several times, "the last source write" is exactly that and is
-  not a claim about which edit mattered.
+  it.** Where a run edited source several times, "the last identified source-edit event" is
+  exactly that and is not a claim about which edit mattered.
+* **The edit timeline is not a complete mutation timeline.** `git stash push -- src/...`
+  changes source state with no redirect and no `sed -i`. **Twelve such operations occur in this
+  sweep, eight of them after the arm-run's last authored edit**, in 5 of the 11
+  passing-but-truncated runs — mostly as a negative control: revert the fix, re-run the tests,
+  restore it. They are counted and reported separately (`gitm`), never folded into the edit
+  timeline.
 * **A completion message is not a verification.** Messages are quoted, never scored.
 
 **One check on the extractor, because a detector that silently misses writes would invert every
 conclusion:** of 27 arm-runs, every one whose final patch touches `src/` has at least one
 identified source-write call, and every one with no such call has a patch that does not touch
-`src/`. Both discrepancy lists are empty. The `Edit` tool turned out to be effectively the only
-source-write channel — across 767 Bash commands there is **not one** redirect or `sed -i` into
-`src/`.
+`src/`. Both discrepancy lists are empty. Across 767 Bash commands there is **not one** redirect
+or `sed -i` into `src/`, so authored edits went through the `Edit` tool. That validates
+**run-level detection of authored edits** — not a complete account of when the tree changed, for
+the mutation reason above.
 
 ---
 
 ## 1. What followed the last source edit in the 11 passing-but-truncated runs
 
-**They kept working, and what they did next was project-contribution work that the hidden
-checks do not score.**
+**They kept working, and much of what they did next is work the task explicitly asked for.**
+The registered tail is *"Fix the behaviour in `src/`, and **extend the existing test suite to
+cover it.** Do not change behaviour unrelated to this bug. When you are done, reply DONE."* The
+regression-test edits below are therefore **required work**, and verification belongs in the
+task budget. What the numbers show is a gap between what the task asks and what the hidden
+functional checks reward — not agent overshoot.
 
 Across those 11 arm-runs, **123 of 505 tool calls (24%) were issued after the last source
 write** — a median of 10 per run, ranging from 2 to 26 (6%–47% of a run's calls).
 
-| activity after the last source write | total calls | runs with ≥ 1 |
+| activity after the last identified source-edit event | total calls | runs with ≥ 1 |
 | --- | ---: | ---: |
 | `pytest` invocations | 44 | 10/11 |
 | local repro scripts run | 16 | **11/11** |
@@ -63,9 +82,11 @@ The final messages say plainly what the turns were going to:
 > "Let me check formatting/lint of my changes against the project's tooling." — `45/k2/nexus`
 > "All edge cases behave correctly. Let me review the final diff and clean up scratch files." — `45/k3/baseline`
 
-**Retrieval is not where these turns went.** Zero retrieval calls occur after the last source
-write in any of the 11. Whatever consultation cost exists, it is spent early and is not what
-the truncation is made of.
+**No retrieval occurs late.** Zero retrieval calls occur after the last identified source-edit
+event in any of the 11. **That does not establish that retrieval contributed nothing to
+truncation**: consultation spent earlier still consumes budget and leaves less for the work that
+follows, and nothing here measures that. The narrow finding is that the *post-edit* phase is not
+made of retrieval.
 
 **One friction item recurs inside this phase:** 8 of the 11 hit `No module named pytest` on a
 test attempt *after* their last source edit, because bare `python3` resolves to
@@ -127,46 +148,52 @@ large enough that it separates the groups only by degree.
 
 ## 3. Does this support a solve–verify–stop workflow?
 
-**Partly — and the part it does not support is the more important one.**
+**Not yet, and not as the first intervention.**
 
-**For the passing runs, yes, and the evidence is direct.** A quarter of their tool calls are
-issued after the last source edit, and that work is full-suite re-runs, regression tests written
-into `tests/`, changelog entries, lint checks and scratch cleanup. These are the habits of
-contributing to a project, and the hidden checks reward none of them. A workflow that stops
-after verification would return that quarter to the budget.
+**The post-edit phase is real and measured.** A quarter of the passing-truncated runs' tool
+calls are issued after the last identified source-edit event: full-suite re-runs, regression
+tests written into `tests/`, changelog entries, lint checks and scratch cleanup. But **the
+registered tail requires extending the test suite**, so a rule that stopped earlier would be
+cutting work the task asked for, and verification belongs in the task budget. What this section
+can say is that the *scoring* does not see that requirement — not that the work should stop.
 
-**Two things must be said against over-reading that.** First, **the 24% is not a saving that can
-be banked.** When the patch became correct is not answered here, so the calls-after figure does
+**Three things weigh against reading the 24% as a saving.** First, **it cannot be banked.** When the patch became correct is not answered here, so the calls-after figure does
 not say what a stop rule would have reclaimed, and nothing in this diagnostic establishes that
 those runs would have terminated `completed` instead of `max_turns`. Second, a stop rule needs a
 verification signal to stop *on* — and one of the 16 passing runs, `30/k2/notes`, never invoked
 `pytest` at all, verifying with ad-hoc repro scripts and passing the hidden checks that way. A
-rule keyed to "the suite is green" would not have fired there.
+rule keyed to "the suite is green" would not have fired there. Third, **part of that phase is
+required by the task**, as above.
 
-**For the failures, no — solve–verify–stop addresses nothing.** You cannot stop after a solve
-that never happened. **10 of 11 failing arm-runs never wrote a source file**, and a stop rule
-changes none of them. This mirrors what A1 closed on: *on the two tasks nobody solved, no arm
-modified a tracked source file even once across 18 arm-runs.* The same shape has now appeared in
-a second, disjoint task set under a repaired sandbox.
+**And it does not reach the failures.** **10 of 11 failing arm-runs never wrote a source file.**
+You cannot stop after a solve that never happened, so a stop rule does not act on the state
+those runs were in. **This is not the same as showing a workflow change cannot affect
+correctness**: explicit stopping and verification instructions also change how a run *plans*
+earlier on, and whether that would move a run from never-implemented to implemented is
+**unknown** — nothing here measures it. What is measured is the state, not the counterfactual.
+The state mirrors what A1 closed on: *on the two tasks nobody solved, no arm modified a tracked
+source file even once across 18 arm-runs.* The same shape has now appeared in a second,
+disjoint task set under a repaired sandbox.
 
 **So the evidence points at two different interventions, and they are not interchangeable:**
 
-* **To recover budget** — an explicit solve–verify–stop workflow. Well-supported, bounded in
-  effect, and it acts only on runs that already pass.
-* **To raise correctness** — something that moves runs from *never implemented* to *implemented*.
-  This is the dominant failure mode, it is untouched by a stop rule, and the diagnostic does not
-  say what would fix it. The candidates visible in the evidence are the **time spent hunting the
-  host for a reference implementation** and the **bare-`python3` interpreter resolution**, which
-  is per-run friction the environment gate does not currently prevent because the gate tests a
-  command the arms do not then use.
+* **Execution friction** — the **bare-`python3` interpreter resolution**. Observed in both
+  outcome groups, mechanically understood, and fixable without touching the task, the model
+  settings, the retrieval policy or the completion instructions.
+* **Workflow shape** — an explicit solve–verify–stop rule. Its budget effect is visible here;
+  its correctness effect is unknown, and it would trade against a requirement the task states.
+* **Reference hunting** — the host-wide search for another copy of `click`. Present in both
+  groups and differing only by degree, so the evidence for it is weaker than for either above.
 
-**A recommendation on which to test first.** These are separable, and the correctness one is
-worth more: a cheaper run that still does not solve the task is not progress, and §5 already
-refused a ceiling that buys exploration without raising tasks solved. But the correctness
-intervention is not yet specified, and the budget one is. **The honest next step is to pick the
-correctness intervention from the evidence above and register it, with the workflow change
-either held out of that experiment or applied identically to every arm** — not to run both at
-once, which would confound them exactly as §3 warned of ceilings and consultation.
+**Chosen, 2026-09-19: interpreter consistency.** It is the one candidate whose mechanism is
+established rather than inferred, it is friction the harness created and can therefore remove,
+and it holds every registered variable fixed. **Whether it improves correctness remains an
+experimental question** — this diagnostic does not predict that, and the repair is not evidence
+for it. The repair and its gate are in
+[`REPAIR-interpreter-consistency.md`](REPAIR-interpreter-consistency.md); the experiment that
+would assess it is drafted in
+[`REGISTRATION-DRAFT-a2r.md`](REGISTRATION-DRAFT-a2r.md). Solve–verify–stop and any retrieval
+change are deliberately **not** bundled with it.
 
 **Nothing here authorises a paid run.** This report is step 1; the choice of one intervention is
 step 2 and belongs to the next decision, not to this document.

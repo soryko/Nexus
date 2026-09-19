@@ -268,7 +268,18 @@ def invoke(arm: str, cwd: Path) -> dict:
             failed = [c["check"] for c in gate["checks"] if not c["passed"]]
             raise SystemExit(f"[{arm}] environment gate FAILED: {failed}\n"
                              f"  Not spending on this arm. See {OUT}/arms/{arm}/envcheck.json")
-        print(f"[{arm}] environment gate: {len(gate['checks'])} checks pass", flush=True)
+        runtime_identity = gate["runtime_identity"]
+        print(f"[{arm}] environment gate: {len(gate['checks'])} checks pass; runtime "
+              f"{runtime_identity['sys_executable']} python "
+              f"{runtime_identity['python_version']} pytest "
+              f"{runtime_identity['pytest_version']}", flush=True)
+    else:
+        # Not gated is not "the default runtime": it is UNKNOWN, and says so. A row recording
+        # the configured path here while the gate never ran would assert something nobody
+        # checked -- which is the shape of the defect this field exists to close.
+        runtime_identity = {"gated": False, "a2_python": env.get("A2_PYTHON", ""),
+                            "sys_executable": "", "python_version": "", "pytest_version": "",
+                            "startups_probed": []}
 
     started = datetime.now(timezone.utc)
     t0 = time.monotonic()
@@ -297,7 +308,11 @@ def invoke(arm: str, cwd: Path) -> dict:
     (OUT / "arms" / arm / "trace.jsonl").write_text(out)
     (OUT / "arms" / arm / "stderr.txt").write_text(err)
     return {"arm": arm, "started_utc": started.isoformat(), "wall_clock_s": round(wall, 1),
-            "forced_verdict": verdict, "child_env": a1_config.env_record(env)}
+            "forced_verdict": verdict, "child_env": a1_config.env_record(env),
+            # WHICH interpreter this arm-run was measured under, resolved inside the arm's own
+            # boundary rather than read off a configuration path. v2 rows carry no such field,
+            # and that is the point: for them it cannot be recovered.
+            "runtime_identity": runtime_identity}
 
 
 def read_trace(arm: str) -> dict:

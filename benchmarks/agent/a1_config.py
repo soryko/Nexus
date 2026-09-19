@@ -50,7 +50,20 @@ ENV_ALLOWLIST = {
     "TERM":        "absent, some tools assume a dumb terminal and change their output",
 }
 # Set by the harness itself, per arm, and never inherited.
-ENV_HARNESS_SET = ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "TMPPREFIX")
+#
+# `A2_PYTHON` is the pinned interpreter, named explicitly because PATH could not carry it.
+# Measured 2026-09-19 inside a real arm profile: the gate's `/bin/zsh -c` resolves `python3`
+# to /opt/homebrew/bin/python3 (3.14.7, pytest present), while a LOGIN zsh -- which is what
+# the arm's recorded `which -a python3` output matches -- resolves it to /usr/bin/python3
+# (3.9.6, no pytest). `/etc/zprofile` runs `path_helper`, which rebuilds PATH with the system
+# directories first; the operator's `~/.zprofile`, which would put Homebrew back in front, is
+# not readable inside the arm boundary and never runs. So the documented `python3 -m pytest`
+# passed the gate and failed for the agent, in every arm-run of the v2 sweep.
+#
+# PATH cannot be the fix: path_helper PREPENDS, so anything inherited is pushed below
+# /usr/bin. An environment variable is not rewritten by shell startup, so it is the one
+# channel that reaches the agent's shell unchanged.
+ENV_HARNESS_SET = ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "TMPPREFIX", "A2_PYTHON")
 # Read from the operator's environment but NEVER written to an artifact.
 ENV_SECRET = ("DEEPSEEK_API_KEY",)
 
@@ -169,16 +182,24 @@ def load(path: Path | str | None = None) -> Config:
     return Config(**data)
 
 
-def child_env(base_url: str, api_key: str, extra: dict[str, str] | None = None) -> dict:
+def child_env(base_url: str, api_key: str, extra: dict[str, str] | None = None,
+              python: str | None = None) -> dict:
     """The environment one arm is given: the allowlist, plus what the harness sets itself.
 
     An allowlisted name that is unset on the host is simply absent -- it is not invented,
     because a value the harness made up is as much an uncontrolled variable as one it
     inherited.
+
+    `A2_PYTHON` is set HERE rather than by each caller, so the gate and the runner cannot
+    disagree about which interpreter the arm is supposed to use. That disagreement is the
+    defect this repairs: they were computing the interpreter separately, by resolution rather
+    than by name, and resolution differed between them. `python=` is for a caller that must
+    pin a different one explicitly; it defaults to the configuration's own `pytest_python`.
     """
     env = {k: os.environ[k] for k in ENV_ALLOWLIST if k in os.environ}
     env["ANTHROPIC_BASE_URL"] = base_url
     env["ANTHROPIC_API_KEY"] = api_key
+    env["A2_PYTHON"] = python or load().pytest_python
     env.update(extra or {})
     return env
 

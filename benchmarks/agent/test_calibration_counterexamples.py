@@ -371,7 +371,7 @@ def _cfg(tmp: Path | None = None, **over):
     bench = tmp / "_bench"
     _write_prompts(bench)
     data = {"source_clone": str(tmp), "pytest_python": str(tmp), "venv_python": str(tmp),
-            "nexus_server": str(tmp), "config_version": "calib-v2", "max_turns": 30,
+            "nexus_server": str(tmp), "config_version": RC.CONFIG_VERSION, "max_turns": 30,
             "corpus_digest": "0123456789abcdef", "bench": str(bench),
             "prompts": "test-prompts.json"}
     data.update(over)
@@ -586,7 +586,7 @@ def _stub_configs(tmp: Path, ceilings=(30, 45, 60)) -> dict:
         # paths are never opened (no preflight here) but the fields must exist.
         f.write_text(json.dumps({
             "source_clone": str(tmp), "pytest_python": str(tmp), "venv_python": str(tmp),
-            "nexus_server": str(tmp), "config_version": "calib-v2", "max_turns": c,
+            "nexus_server": str(tmp), "config_version": RC.CONFIG_VERSION, "max_turns": c,
             "corpus_digest": "0123456789abcdef", "bench": str(bench),
             "prompts": "test-prompts.json"}))
         out[c] = f

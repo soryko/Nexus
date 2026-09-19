@@ -42,7 +42,8 @@ import identity as ident                                                # noqa: 
 import schedule as sched                                                # noqa: E402
 
 CEILINGS = (30, 45, 60)
-CONFIG_VERSION = "calib-v2"   # v1 ran against the unrepaired sandbox; the two are not pooled
+CONFIG_VERSION = "calib-v3"   # v1: unrepaired sandbox. v2: `python3` meant a different
+                              # interpreter to the agent than to the gate. None are pooled.
 
 # The budget is in TOKENS, not dollars. runner-a1 section 3 found "costBasis":"unknown" on this
 # model and concluded the CLI's dollar field has no established provenance, so A1 quotes no

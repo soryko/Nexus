@@ -54,6 +54,14 @@ RUNS_PYTEST = re.compile(r'(?:python[0-9.]*\s+-m\s+pytest|(?:^|[;&|]\s*|/)pytest
 WRITE_INTO_SRC = re.compile(r'(?:>>?|tee(?:\s+-a)?)\s*["\']?(?:\./)?(src/[\w./-]+)')
 SED_IN_PLACE = re.compile(r'sed\s+(?:-[a-zA-Z]*i[a-zA-Z]*\s|--in-place)')
 CP_INTO_SRC = re.compile(r'\bcp\s+\S+\s+(?:\./)?src/')
+# git operations that CHANGE SOURCE STATE without a redirect or `sed -i`: `git stash push --
+# src/...` reverts the working tree, `git checkout -- src/...` discards. Twelve occur in this
+# sweep, mostly as a negative control -- revert the fix, re-run the tests, restore it -- and
+# all but one land AFTER the arm-run's last `Edit`. They are mutation events, they are not
+# authored edits, and counting them as either would be wrong. They are reported on their own
+# and are the reason the phrase here is "last identified source-EDIT event": the final-diff
+# control validates run-level detection of authored edits, NOT a complete mutation timeline.
+GIT_SRC_MUTATION = re.compile(r'git\s+(?:checkout|stash|restore|apply|reset|clean)\b[^|;&]*src/')
 INVESTIGATE = re.compile(r'^\s*(grep|rg|cat|ls|find|head|tail|sed -n|awk|wc|git log|git show|git diff)\b')
 # Running a local script -- `python3 repro.py`. This is verification too, and two arm-runs did
 # ALL of theirs this way without ever invoking pytest, one of them passing the hidden checks.
@@ -107,7 +115,7 @@ def classify_call(tc: dict, arm: str) -> dict:
     if name == "Edit":
         path = inp.get("file_path") or ""
         detail = path
-        kinds.append("src_write" if "/src/" in path or path.startswith("src/") else "other_edit")
+        kinds.append("src_edit" if "/src/" in path or path.startswith("src/") else "other_edit")
         if "/tests/" in path or path.startswith("tests/"):
             kinds[-1] = "test_edit"
     elif name == "Read":
@@ -130,7 +138,9 @@ def classify_call(tc: dict, arm: str) -> dict:
             kinds.append("repro_run")
         if WRITE_INTO_SRC.search(cmd) or (SED_IN_PLACE.search(cmd) and "src/" in cmd) \
                 or CP_INTO_SRC.search(cmd):
-            kinds.append("src_write")
+            kinds.append("src_edit")
+        if GIT_SRC_MUTATION.search(cmd):
+            kinds.append("git_src_mutation")
         if NOTES_FILE in cmd:
             kinds.append("retrieval" if arm == "notes" else "notes_probe")
         if INVESTIGATE.match(cmd.strip()):
@@ -193,8 +203,8 @@ def describe(rec_path: Path, data: dict, r: dict, ceiling: int) -> dict:
     passed = (r.get("scored") or {}).get("passed")
     touches_src = r.get("patch_touches_src")
 
-    src_writes = [c for c in calls if "src_write" in c["kinds"]]
-    last_src = src_writes[-1]["index"] if src_writes else None
+    src_edits = [c for c in calls if "src_edit" in c["kinds"]]
+    last_src = src_edits[-1]["index"] if src_edits else None
     after = [c for c in calls if last_src is not None and (c["index"] or 0) > last_src]
 
     tests = [c for c in calls if "test_attempt" in c["kinds"]]
@@ -223,9 +233,9 @@ def describe(rec_path: Path, data: dict, r: dict, ceiling: int) -> dict:
         gaps.append("num_turns absent")
     if any(c["result_empty"] for c in calls):
         gaps.append(f"{sum(1 for c in calls if c['result_empty'])} tool call(s) with empty output")
-    if touches_src and not src_writes:
+    if touches_src and not src_edits:
         gaps.append("patch touches src but no source-write call was identified")
-    if src_writes and not touches_src:
+    if src_edits and not touches_src:
         gaps.append("source-write call(s) identified but the final patch does not touch src")
 
     # Failure anatomy. Patch status and obstruction are SEPARATE axes: obstruction can
@@ -259,18 +269,18 @@ def describe(rec_path: Path, data: dict, r: dict, ceiling: int) -> dict:
         "patch_touches_src": touches_src,
         "patch_bytes": r.get("patch_bytes"),
 
-        "src_write_calls": [{"index": c["index"], "tool": c["tool"],
+        "src_edit_calls": [{"index": c["index"], "tool": c["tool"],
                              "path": Path(c["detail"]).name if c["tool"] == "Edit"
-                             else c["detail"][:80]} for c in src_writes],
-        "last_src_write_index": last_src,
-        "last_src_write_confidence": (
+                             else c["detail"][:80]} for c in src_edits],
+        "last_src_edit_index": last_src,
+        "last_src_edit_confidence": (
             "none identified" if last_src is None else
             "high (Edit tool call naming a src path)"
-            if src_writes[-1]["tool"] == "Edit" else
+            if src_edits[-1]["tool"] == "Edit" else
             "medium (shell write idiom naming a src path)"),
 
-        "calls_after_last_src_write": len(after),
-        "after_last_src_write": {
+        "calls_after_last_src_edit": len(after),
+        "after_last_src_edit": {
             "test_attempts": len(tests_after),
             "repro_runs": sum(1 for c in after if "repro_run" in c["kinds"]),
             "test_edits": sum(1 for c in after if "test_edit" in c["kinds"]),
@@ -281,7 +291,7 @@ def describe(rec_path: Path, data: dict, r: dict, ceiling: int) -> dict:
                                                                 "other_edit"}),
         } if last_src is not None else None,
 
-        "test_attempts": [{"index": c["index"], "after_last_src_write":
+        "test_attempts": [{"index": c["index"], "after_last_src_edit":
                            last_src is not None and (c["index"] or 0) > last_src,
                            "command": c["detail"][:110].replace("\n", " ; "),
                            "observed": c["outcome"]} for c in tests],
@@ -296,6 +306,13 @@ def describe(rec_path: Path, data: dict, r: dict, ceiling: int) -> dict:
         "repro_rewrites": repro_rewrites,
         "repeated_commands": repeated_cmds,
         "reference_hunt_commands": hunt,
+        # Source-state mutations that are NOT authored edits. Reported separately, and never
+        # folded into the edit timeline: their presence is why no claim is made here about
+        # when the tree first held a correct patch.
+        "git_src_mutation_calls": sum(1 for c in calls if "git_src_mutation" in c["kinds"]),
+        "git_src_mutations_after_last_edit": sum(
+            1 for c in calls if "git_src_mutation" in c["kinds"]
+            and last_src is not None and (c["index"] or 0) > last_src),
 
         "obstruction": {"errored_commands": errored, **dict(friction),
                         "permission_denials": len(r.get("permission_denials") or [])},
@@ -324,10 +341,10 @@ def build(scratch: Path, launch: Path) -> dict:
         "rows": len(rows),
         "patch_touches_src_without_write_call":
             [f"{r['ceiling']}/{r['task']}/{r['arm']}" for r in rows
-             if r["patch_touches_src"] and not r["src_write_calls"]],
+             if r["patch_touches_src"] and not r["src_edit_calls"]],
         "write_call_without_patch_touching_src":
             [f"{r['ceiling']}/{r['task']}/{r['arm']}" for r in rows
-             if r["src_write_calls"] and not r["patch_touches_src"]],
+             if r["src_edit_calls"] and not r["patch_touches_src"]],
     }
     return {"rows": rows, "consistency": consistency}
 
@@ -345,44 +362,53 @@ def render(rep: dict) -> str:
     w("\nONE ROW PER ARM-RUN")
     w(f"  {'ceil':<5}{'task':<5}{'arm':<9}{'verdict':<8}{'terminal':<10}{'calls':<6}"
       f"{'lastSrc':<8}{'after':<6}{'test':<5}{'t.aft':<6}{'repro':<6}{'tEdit':<6}"
-      f"{'retr':<5}{'rerd':<5}{'rwrt':<5}{'err':<4}")
+      f"{'retr':<5}{'rerd':<5}{'rwrt':<5}{'gitm':<5}{'err':<4}")
     for r in rows:
-        a = r["after_last_src_write"] or {}
-        dash = lambda v: v if r["last_src_write_index"] is not None else "-"     # noqa: E731
+        a = r["after_last_src_edit"] or {}
+        dash = lambda v: v if r["last_src_edit_index"] is not None else "-"     # noqa: E731
         w(f"  {r['ceiling']:<5}{r['task']:<5}{r['arm']:<9}{r['functional']:<8}"
           f"{r['terminal']:<10}{r['tool_calls']:<6}"
-          f"{(r['last_src_write_index'] if r['last_src_write_index'] is not None else '-'):<8}"
-          f"{dash(r['calls_after_last_src_write']):<6}"
+          f"{(r['last_src_edit_index'] if r['last_src_edit_index'] is not None else '-'):<8}"
+          f"{dash(r['calls_after_last_src_edit']):<6}"
           f"{r['test_attempt_count']:<5}{dash(a.get('test_attempts', 0)):<6}"
           f"{r['repro_run_count']:<6}{r['test_edit_calls']:<6}"
           f"{r['retrieval_calls']:<5}{r['re_read_calls']:<5}"
           f"{sum(v - 1 for v in r['repro_rewrites'].values()):<5}"
-          f"{r['obstruction']['errored_commands']:<4}")
-    w("  lastSrc = index of the last identified source write (ISSUE order); after = calls "
-      "issued after it.")
+          f"{r['git_src_mutation_calls']:<5}{r['obstruction']['errored_commands']:<4}")
+    w("  lastSrc = index of the last identified source-EDIT event (ISSUE order); after = "
+      "calls issued after it.")
     w("  test / t.aft = pytest invocations, total and after that write. repro = local scripts "
       "run instead.")
     w("  tEdit = edits under tests/; retr = retrieval delivered to the arm that has any.")
     w("  rerd = re-reads of a file already read; rwrt = rewrites of a scratch file already "
       "written;")
     w("  err = tool calls returning a nonzero exit (a write inside one may still have "
-      "landed).")
+      "landed);")
+    w("  gitm = git operations that CHANGE SOURCE STATE (stash/checkout/restore) -- mutation "
+      "events, not")
+    w("  authored edits, mostly negative controls, and NOT part of the edit timeline above.")
 
     passing_trunc = [r for r in rows if r["functional"] == "pass" and r["truncated"]]
-    w(f"\n(1) AFTER THE LAST SOURCE EDIT -- the {len(passing_trunc)} passing-but-truncated "
-      f"arm-runs")
+    w(f"\n(1) AFTER THE LAST IDENTIFIED SOURCE-EDIT EVENT -- the {len(passing_trunc)} "
+      f"passing-but-truncated arm-runs")
+    w("    The final-diff control validates run-level detection of authored edits. It does NOT")
+    w("    establish a complete mutation timeline: `git stash push -- src/...` changes source")
+    w("    state with no redirect and no `sed -i`, and most of this sweep's occurrences land")
+    w("    after the last Edit. When a patch first became correct stays unanswered.")
     for r in passing_trunc:
-        a = r["after_last_src_write"] or {}
-        w(f"  {r['ceiling']}/{r['task']}/{r['arm']}: last source write at call "
-          f"{r['last_src_write_index']} of {r['tool_calls']} "
-          f"({r['last_src_write_confidence']})")
-        w(f"      then {r['calls_after_last_src_write']} calls: "
+        a = r["after_last_src_edit"] or {}
+        w(f"  {r['ceiling']}/{r['task']}/{r['arm']}: last source-edit event at call "
+          f"{r['last_src_edit_index']} of {r['tool_calls']} "
+          f"({r['last_src_edit_confidence']})"
+          + (f"; {r['git_src_mutations_after_last_edit']} git source mutation(s) after it"
+             if r["git_src_mutations_after_last_edit"] else ""))
+        w(f"      then {r['calls_after_last_src_edit']} calls: "
           f"{a.get('test_attempts', 0)} pytest, {a.get('repro_runs', 0)} repro runs, "
           f"{a.get('test_edits', 0)} test-file edits, {a.get('retrieval', 0)} retrieval, "
           f"{a.get('reads', 0)} reads, {a.get('investigate', 0)} inspections, "
           f"{a.get('other', 0)} other")
         for t in r["test_attempts"]:
-            if not t["after_last_src_write"]:
+            if not t["after_last_src_edit"]:
                 continue
             o = t["observed"]
             desc = ", ".join(f"{v} {k}" for k, v in o["counts"].items()) or "no summary"
@@ -411,7 +437,7 @@ def render(rep: dict) -> str:
             if r["completion_messages"]:
                 w(f"          last message: \"{r['completion_messages'][-1][:130]}\"")
 
-    w("\nCONSISTENCY OF THE SOURCE-WRITE DETECTOR")
+    w("\nCONSISTENCY OF THE SOURCE-EDIT DETECTOR (run level; not a mutation timeline)")
     c = rep["consistency"]
     w(f"  arm-runs described                                  {c['rows']}")
     w(f"  patch touches src but no write call identified      "

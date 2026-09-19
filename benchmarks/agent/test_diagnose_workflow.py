@@ -56,23 +56,23 @@ def test_a_write_into_src_that_exited_nonzero_is_still_a_write():
     """Measured in the real traces: one compound call wrote its repro AND failed on pytest.
     Exit status is reported beside a write, never as a veto on it."""
     r = run([bash(0, "cat > src/click/core.py <<'EOF'\nx\nEOF", "Exit code 1\nboom")])
-    check("nonzero exit still a src write", r["last_src_write_index"] == 0, json.dumps(r["src_write_calls"]))
+    check("nonzero exit still a source-edit event", r["last_src_edit_index"] == 0, json.dumps(r["src_edit_calls"]))
     check("the nonzero exit is still reported", r["obstruction"]["errored_commands"] == 1,
           json.dumps(r["obstruction"]))
 
 
 def test_sed_in_place_and_cp_into_src_are_writes():
     r = run([bash(0, "sed -i '' s/a/b/ src/click/core.py"), bash(1, "cp /tmp/x.py src/click/y.py")])
-    check("two shell writes found", len(r["src_write_calls"]) == 2, json.dumps(r["src_write_calls"]))
-    check("confidence is stated as medium", "medium" in r["last_src_write_confidence"],
-          r["last_src_write_confidence"])
+    check("two shell source-edit events found", len(r["src_edit_calls"]) == 2, json.dumps(r["src_edit_calls"]))
+    check("confidence is stated as medium", "medium" in r["last_src_edit_confidence"],
+          r["last_src_edit_confidence"])
 
 
 def test_edit_tool_write_is_high_confidence():
     r = run([call(0, "Edit", {"file_path": "/x/repo/src/click/core.py",
                               "old_string": "a", "new_string": "b"})])
-    check("high confidence for the Edit tool", "high" in r["last_src_write_confidence"],
-          r["last_src_write_confidence"])
+    check("high confidence for the Edit tool", "high" in r["last_src_edit_confidence"],
+          r["last_src_edit_confidence"])
 
 
 def test_an_edit_under_tests_is_not_a_source_write():
@@ -80,13 +80,27 @@ def test_an_edit_under_tests_is_not_a_source_write():
     source write would erase the very phase the report is about."""
     r = run([call(0, "Edit", {"file_path": "/x/repo/src/click/core.py"}),
              call(1, "Edit", {"file_path": "/x/repo/tests/test_context.py"})])
-    check("last src write is the src edit", r["last_src_write_index"] == 0, json.dumps(r))
+    check("last src write is the src edit", r["last_src_edit_index"] == 0, json.dumps(r))
     check("the tests edit is counted separately", r["test_edit_calls"] == 1, json.dumps(r))
     check("and it lands after the src write",
-          (r["after_last_src_write"] or {}).get("test_edits") == 1, json.dumps(r))
+          (r["after_last_src_edit"] or {}).get("test_edits") == 1, json.dumps(r))
 
 
 # ----------------------------------------------------------------- verification, of two kinds
+def test_a_git_revert_of_src_is_a_mutation_but_not_an_edit():
+    """`git stash push -- src/...` changes source state with no redirect and no `sed -i`.
+    Counting it as an authored edit would move the edit timeline; ignoring it entirely would
+    let the report claim a completeness it does not have. It is reported on its own."""
+    r = run([call(0, "Edit", {"file_path": "/x/repo/src/click/core.py"}),
+             bash(1, "git stash push -- src/click/core.py && python3 -m pytest -q", "2 failed"),
+             bash(2, "git stash pop", "restored")])
+    check("the edit timeline is unmoved", r["last_src_edit_index"] == 0, json.dumps(r))
+    check("the mutation is counted", r["git_src_mutation_calls"] == 1,
+          str(r["git_src_mutation_calls"]))
+    check("and located after the last edit", r["git_src_mutations_after_last_edit"] == 1,
+          str(r["git_src_mutations_after_last_edit"]))
+
+
 def test_running_a_script_is_not_a_pytest_attempt_and_hunting_for_pytest_is_neither():
     r = run([bash(0, "PYTHONPATH=src python3 -m pytest tests/ -q", "3 passed"),
              bash(1, "PYTHONPATH=src python3 repro.py", "ok"),
@@ -165,10 +179,10 @@ def test_calls_after_the_last_write_use_issue_order():
              bash(1, "python3 -m pytest", "3 passed"),
              call(2, "Edit", {"file_path": "/x/src/a.py"}),
              bash(3, "python3 -m pytest", "3 passed")])
-    check("last write is the later index", r["last_src_write_index"] == 2, json.dumps(r))
-    check("only calls after it are counted", r["calls_after_last_src_write"] == 1, json.dumps(r))
+    check("last write is the later index", r["last_src_edit_index"] == 2, json.dumps(r))
+    check("only calls after it are counted", r["calls_after_last_src_edit"] == 1, json.dumps(r))
     check("one of two test attempts is after it",
-          (r["after_last_src_write"] or {})["test_attempts"] == 1, json.dumps(r))
+          (r["after_last_src_edit"] or {})["test_attempts"] == 1, json.dumps(r))
 
 
 def main() -> int:
