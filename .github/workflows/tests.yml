@@ -79,11 +79,15 @@ jobs:
       #
       # `test_report_calibration.py` covers freeze-calib-a2 §5. A rule applied only by hand
       # is how two COMPLETE ceilings came to be read as two QUALIFYING ceilings.
+      # `test_diagnose_workflow.py` covers the workflow diagnostic's classifier: its report
+      # concludes that 10 of 11 failing arm-runs never wrote to `src/`, which a detector
+      # silently missing a write would invert.
       - name: Benchmark harness counterexamples
         run: |
           uv run python benchmarks/agent/test_calibration_counterexamples.py
           uv run python benchmarks/agent/test_diagnose_counterexamples.py
           uv run python benchmarks/agent/test_report_calibration.py
+          uv run python benchmarks/agent/test_diagnose_workflow.py
 
       - name: Collect failure evidence
         if: always()
