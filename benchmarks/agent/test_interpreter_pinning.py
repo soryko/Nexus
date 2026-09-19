@@ -77,17 +77,57 @@ ENV = {"A2_PYTHON": "/pinned/python"}
 
 
 # ------------------------------------------------------------------ the environment channel
+def _temp_config(pytest_python: str) -> Path:
+    """A self-contained configuration, so this file does not need the host's own."""
+    d = Path(tempfile.mkdtemp())
+    for name in ("src_clone", "py", "venv_py", "server"):
+        (d / name).touch()
+    (d / "src_clone").unlink()
+    (d / "src_clone").mkdir()
+    cfg = d / "a1-config.json"
+    cfg.write_text(json.dumps({"source_clone": str(d / "src_clone"),
+                               "pytest_python": pytest_python,
+                               "venv_python": str(d / "venv_py"),
+                               "nexus_server": str(d / "server")}))
+    return cfg
+
+
 def test_the_pinned_interpreter_is_set_in_one_place():
     """The gate and the runner must not each resolve their own. `child_env` sets it, so every
     caller gets the same value and none can forget."""
-    env = a1_config.child_env("http://x", "k")
+    cfg = _temp_config("/pinned/from/config")
+    old = os.environ.get("A1_CONFIG")
+    os.environ["A1_CONFIG"] = str(cfg)
+    try:
+        env = a1_config.child_env("http://x", "k")
+    finally:
+        os.environ.pop("A1_CONFIG", None)
+        if old is not None:
+            os.environ["A1_CONFIG"] = old
     check("A2_PYTHON is in the child environment", bool(env.get("A2_PYTHON")), str(env.keys()))
     check("it is the configuration's pytest interpreter",
-          env["A2_PYTHON"] == a1_config.load().pytest_python, env.get("A2_PYTHON", ""))
+          env.get("A2_PYTHON") == "/pinned/from/config", env.get("A2_PYTHON", ""))
     check("it is declared harness-set, not inherited",
           "A2_PYTHON" in a1_config.ENV_HARNESS_SET, str(a1_config.ENV_HARNESS_SET))
     check("and it is NOT on the inherit allowlist",
           "A2_PYTHON" not in a1_config.ENV_ALLOWLIST, str(sorted(a1_config.ENV_ALLOWLIST)))
+
+
+def test_no_configuration_leaves_it_ABSENT_rather_than_invented():
+    """A host with no `a1-config.json` must not be handed a made-up interpreter, and must not
+    crash building an environment. Absent then fails closed: the gate refuses it, and so does
+    the runner even with the gate switched off."""
+    old = os.environ.get("A1_CONFIG")
+    os.environ["A1_CONFIG"] = str(Path(tempfile.mkdtemp()) / "does-not-exist.json")
+    try:
+        env = a1_config.child_env("http://x", "k")
+    finally:
+        os.environ.pop("A1_CONFIG", None)
+        if old is not None:
+            os.environ["A1_CONFIG"] = old
+    check("absent, not invented", "A2_PYTHON" not in env, str(sorted(env)))
+    check("and the gate refuses that", V.check_pinned_interpreter(PROFILE, REPO, env)["passed"]
+          is False, "gate accepted an unset interpreter")
 
 
 def test_an_explicit_interpreter_overrides_the_configured_one():

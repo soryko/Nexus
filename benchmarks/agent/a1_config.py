@@ -199,7 +199,19 @@ def child_env(base_url: str, api_key: str, extra: dict[str, str] | None = None,
     env = {k: os.environ[k] for k in ENV_ALLOWLIST if k in os.environ}
     env["ANTHROPIC_BASE_URL"] = base_url
     env["ANTHROPIC_API_KEY"] = api_key
-    env["A2_PYTHON"] = python or load().pytest_python
+    # ABSENT, not invented, when there is no configuration to read it from -- the same rule
+    # the allowlist above follows. A host without `a1-config.json` (CI, for one) must not be
+    # handed a made-up interpreter, and must not crash building an environment either. The
+    # gate refuses an arm whose `A2_PYTHON` is unset, and `run_arms_isolated` refuses one even
+    # with the gate switched off, so absent fails closed in both directions.
+    pinned = python
+    if pinned is None:
+        try:
+            pinned = load().pytest_python
+        except SystemExit:
+            pinned = None
+    if pinned:
+        env["A2_PYTHON"] = pinned
     env.update(extra or {})
     return env
 

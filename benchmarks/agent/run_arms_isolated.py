@@ -257,6 +257,14 @@ def invoke(arm: str, cwd: Path) -> dict:
     # documented interpreter invocation and here-documents did not work; none of it reached
     # `permission_denials`, and nothing was checking the thing the arm would actually use.
     # Refusing costs one row; not refusing cost 45 arm-runs.
+    # Checked whether or not the gate runs. `NEXUS_A1_ENV_GATE=0` exists for re-executing A1's
+    # frozen runs, and it must not also be a way to spend against an unpinned interpreter --
+    # which, with the environment block naming `$A2_PYTHON`, would hand every arm an empty
+    # command instead of a test runner.
+    if not env.get("A2_PYTHON"):
+        raise SystemExit(f"[{arm}] A2_PYTHON is not set: the pinned interpreter is unknown, "
+                         f"so the documented commands cannot be run. Not spending on this arm.")
+
     if ENV_GATE:
         import verify_arm_environment as VENV
         others = [OUT / "arms" / a for a in ARMS

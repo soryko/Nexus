@@ -128,9 +128,10 @@ missed and against three ways the repair could be hollow.
 | `A2_PYTHON` pinned to an interpreter without pytest | refused, under both startups |
 | two startups that both succeed but resolve **different** interpreters | refused — working is not the same as agreeing |
 | two startups that both print **nothing** | refused — silence is not agreement |
+| no configuration on the host at all | `A2_PYTHON` **absent, not invented**; the gate refuses, and the runner refuses even with the gate switched off |
 | the repaired command | passes, identically, under both |
 
-**12 counterexample tests** in [`test_interpreter_pinning.py`](test_interpreter_pinning.py),
+**13 counterexample tests** in [`test_interpreter_pinning.py`](test_interpreter_pinning.py),
 host-independent: they stub `sandbox-exec` and `/bin/zsh` rather than running them, so the
 decision logic is exercised on a machine without the fixtures. In CI.
 
