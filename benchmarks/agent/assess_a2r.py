@@ -567,6 +567,14 @@ def requirement_compliance(record: dict, calls: list[dict]) -> dict:
 FUNCTIONAL_SCORER = "a1-functional-2"
 NOT_SCORED = "not_scored"
 
+# The compliance artifact's field names, defined HERE and imported by the writer
+# (`score_a2r_compliance.py`), so the two cannot drift apart. They already had, once, in the
+# other direction: this reporter read three record fields the runner does not write.
+COMPLIANCE_FILES = ("compliance-a2r.json", "compliance.json")
+COMPLIANCE_KEY = ("task", "arm")
+COMPLIANCE_RATIO = "requirement_compliance"
+COMPLIANCE_UNKNOWN = "unknown_count"
+
 
 def read_patch(arm_dir: Path, rec: dict) -> tuple[str | None, str]:
     """-> (patch text, provenance).
@@ -618,7 +626,7 @@ def read_compliance(scratch: Path) -> dict:
     report must say -- printing a ratio, or an unknown count, for a scorer that never ran
     would imply a measurement that does not exist.
     """
-    for name in ("compliance-a2r.json", "compliance.json"):
+    for name in COMPLIANCE_FILES:
         f = scratch / name
         if not f.exists():
             continue
@@ -627,7 +635,8 @@ def read_compliance(scratch: Path) -> dict:
         except (ValueError, OSError):
             continue
         if isinstance(rows, list):
-            return {(r.get("task"), r.get("arm")): r for r in rows if isinstance(r, dict)}
+            return {tuple(r.get(k) for k in COMPLIANCE_KEY): r
+                    for r in rows if isinstance(r, dict)}
     return {}
 
 
@@ -656,10 +665,14 @@ def normalise(rec: dict, arm_dir: Path, compliance: dict, task: str, arm: str) -
         "runtime_identity": rec.get("runtime_identity") or {},
         "gate_checks": rec.get("gate_checks") or [],
         # NOT `unknown`: a scorer that never ran has not failed to decide anything.
-        "scorer_a1_4": (crow.get("requirement_compliance") if crow else NOT_SCORED),
-        "scorer_a1_4_unknown": (crow.get("unknown_count") if crow else None),
-        "scorer_a1_4_source": ("compliance artifact" if crow else
-                               "a1-scorer-4 has not been run over this sweep"),
+        # A row the scorer could not run on carries a null ratio and a reason; that is not a
+        # compliance result, so it reads NOT_SCORED like an absent artifact would.
+        "scorer_a1_4": ((crow.get(COMPLIANCE_RATIO) or NOT_SCORED) if crow else NOT_SCORED),
+        "scorer_a1_4_unknown": (crow.get(COMPLIANCE_UNKNOWN) if crow else None),
+        "scorer_a1_4_source": (
+            "compliance artifact" if crow and crow.get(COMPLIANCE_RATIO)
+            else f"the scorer could not run: {crow.get('why_not')}" if crow
+            else "a1-scorer-4 has not been run over this sweep"),
     }
 
 

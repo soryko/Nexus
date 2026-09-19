@@ -590,6 +590,34 @@ def test_a_scorer_that_timed_out_did_not_measure_a_failure():
           str(c["functional_unknown_because"]))
 
 
+def test_a_row_the_scorer_could_not_run_on_is_not_a_compliance_result():
+    """`score_a2r_compliance` writes a null ratio and a reason when the pristine tree is gone.
+    Reading that as a score would turn a missing instrument into a compliance finding -- the
+    same error as reading a timed-out functional scorer as a failure."""
+    tmp = _tmp()
+    _runner_layout(tmp, arms=[
+        ("baseline", _runner_arm("baseline", True, 5, "completed", ""), "")])
+    (tmp / A.COMPLIANCE_FILES[0]).write_text(json.dumps(
+        [{"task": "k1", "arm": "baseline", A.COMPLIANCE_RATIO: None,
+          A.COMPLIANCE_UNKNOWN: None, "scorer_ran": False,
+          "why_not": "the recorded pristine tree is gone"}]))
+    c = A.read_cells(tmp)[0]
+    check("a null ratio reads as not_scored", c["scorer_a1_4"] == A.NOT_SCORED,
+          str(c["scorer_a1_4"]))
+    check("and the reason travels with it",
+          "pristine tree is gone" in c["scorer_a1_4_source"], c["scorer_a1_4_source"])
+
+
+def test_the_writer_and_the_reader_share_one_set_of_field_names():
+    """The compliance artifact's keys are defined in the reader and imported by the writer, so
+    a rename cannot leave the writer emitting a key nothing looks for. This asserts the import
+    is real rather than two copies that happen to agree today."""
+    import score_a2r_compliance as SC
+    check("ratio field is shared", SC.COMPLIANCE_RATIO is A.COMPLIANCE_RATIO)
+    check("unknown field is shared", SC.COMPLIANCE_UNKNOWN is A.COMPLIANCE_UNKNOWN)
+    check("filename is shared", SC.COMPLIANCE_FILES is A.COMPLIANCE_FILES)
+
+
 def test_a_compliance_artifact_is_read_when_one_exists():
     """Negative control on `not_scored`: a column that always says not_scored is not a
     reading."""
