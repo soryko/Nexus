@@ -293,3 +293,58 @@ def test_all_three_outcomes_are_reachable_from_one_fixture(clean, rejected, part
     always accept, or always indeterminate -- fails here rather than passing quietly."""
     assert {clean["decision"], rejected["decision"], partial["decision"]} == {
         "accept_for_further_development", "reject", "indeterminate"}
+
+
+# ---------------------------------------------------------------------------------------
+# A3's BOUNDARY precondition, and how narrowly its green board may be read.
+#
+# These run against the frozen `boundary-evidence-a3.json` rather than re-probing: the
+# probes need `sandbox-exec` and a prepared arm, neither of which exists on a Linux runner.
+# What CI can check is that the artifact still carries its own limits.
+# ---------------------------------------------------------------------------------------
+
+import json as _json                                                       # noqa: E402
+import isolation                                                           # noqa: E402
+
+BOUNDARY = _json.loads((BENCH / "boundary-evidence-a3.json").read_text())
+
+
+def test_the_shadow_controls_are_required_not_merely_present():
+    """`check_boundary` excludes a `None` from `all_hold` -- right for a control that may not
+    apply on a host, and exactly wrong for one A3 declares a precondition. Naming them in
+    `require` is what makes them binding."""
+    for k in ("cache_shadow_unreadable", "cache_shadow_file_unreadable",
+              "cache_shadow_listing_unreadable"):
+        assert k in isolation.REQUIRE_A3
+    assert BOUNDARY["required_unresolved"] == [] and BOUNDARY["required_failed"] == []
+
+
+def test_the_green_board_carries_what_it_does_not_establish():
+    c = BOUNDARY["conclusion"]
+    assert any("every equivalent destination" in n for n in c["not_established"])
+    assert any("later sweep" in n for n in c["not_established"])
+    assert c["established"], "a conclusion with no established half is not a conclusion"
+
+
+def test_the_unresolved_redirect_is_carried_not_closed():
+    """`redirect_reproduced: false` does not invalidate an exact-path deny test -- the test
+    depends on a known file at a known path, not on how it got there. What stays open is
+    whether the write channel that created the original exposure is still open, and that is
+    carried as unresolved rather than being read as a fix."""
+    c = BOUNDARY["conclusion"]
+    assert c["redirect_reproduced"] is False
+    assert c["placement"] == "direct"
+    assert c["deny_test_valid_regardless_of_placement"] is True
+    assert any("was NOT" in n and "unresolved" in n for n in c["not_established"])
+
+
+def test_a_reproduced_redirect_would_say_so_instead():
+    """The control on the sentence above: it is generated from the evidence, not pasted."""
+    c = isolation.boundary_conclusion(
+        {**BOUNDARY, "cache_shadow_sentinel": {**BOUNDARY["cache_shadow_sentinel"],
+                                               "redirect_reproduced": True,
+                                               "placement": "redirect"}})
+    assert c["redirect_reproduced"] is True
+    assert not any("was NOT" in n for n in c["not_established"])
+    # ... and the path-class limit survives either way
+    assert any("every equivalent destination" in n for n in c["not_established"])

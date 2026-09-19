@@ -133,5 +133,20 @@
    "network_egress_blocked",
    "dns_and_https_blocked"
   ]
+ },
+ "conclusion": {
+  "established": [
+   "the tested cache-shadow path is denied to the arm profile, with the token absent from its output and present outside the sandbox",
+   "the shadow directory listing is denied, as a separate operation",
+   "every runtime positive control holds, so the denials are not a dead profile"
+  ],
+  "not_established": [
+   "that every equivalent destination inside or beside the shadow is denied -- one path was tested, and sandbox policy is per operation and per path",
+   "that the redirection mechanism which produced the original exposure was reproduced -- it was NOT: placement was 'direct', so whether that write channel is still open is unresolved",
+   "anything about a later sweep; this board must be re-run on the prepared arms"
+  ],
+  "redirect_reproduced": false,
+  "placement": "direct",
+  "deny_test_valid_regardless_of_placement": true
  }
 }

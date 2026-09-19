@@ -638,7 +638,57 @@ def check_boundary(profile: Path, cwd: Path, held_checks: Path, python: str,
     out["all_hold"] = (all(out[k] for k in (*negative, *positive))
                        and not out["required_unresolved"]
                        and not out["required_failed"])
+    out["conclusion"] = boundary_conclusion(out)
     return out
+
+
+def boundary_conclusion(out: dict) -> dict:
+    """What a green board does and does NOT establish, carried WITH the evidence.
+
+    `all_hold: true` is a claim about the paths these probes tested, at the moment they ran,
+    on this host. It reads much larger than that in a summary, and the gap matters most for
+    the cache shadow, which is the control that exists because two A2-R arm-runs read
+    another sweep's bytecode through it.
+
+    Three limits, stated here so they travel with the artifact rather than living in a
+    document beside it:
+
+      1. **The exact path was denied; the class of paths was not.** The sentinel is read at
+         one path inside the shadow. Sandbox policy is per operation and per path, so a
+         denied read there does not establish that every equivalent destination is denied.
+         The listing control is run separately for exactly that reason and is still not the
+         same claim as "the shadow is unreachable".
+      2. **`redirect_reproduced: false` is not a failure of the deny test.** When the
+         `/private/tmp` redirect does not fire, the sentinel is placed directly and the read
+         test is valid: it depends on a known file being at a known path, not on how it got
+         there. What is lost is the OTHER half -- the direct placement says nothing about
+         whether the write channel that created the original exposure is still open. That
+         half is unresolved, not closed, and it is a precondition of no criterion.
+      3. **A control is evidence about the run that executed it.** This board must be
+         re-run on the prepared arms at launch; an earlier green board is not a property of
+         a later sweep.
+    """
+    sent = out.get("cache_shadow_sentinel") or {}
+    return {
+        "established": [
+            "the tested cache-shadow path is denied to the arm profile, with the token "
+            "absent from its output and present outside the sandbox",
+            "the shadow directory listing is denied, as a separate operation",
+            "every runtime positive control holds, so the denials are not a dead profile",
+        ],
+        "not_established": [
+            "that every equivalent destination inside or beside the shadow is denied -- one "
+            "path was tested, and sandbox policy is per operation and per path",
+            "that the redirection mechanism which produced the original exposure was "
+            "reproduced" + ("" if sent.get("redirect_reproduced") else
+                            f" -- it was NOT: placement was {sent.get('placement')!r}, so "
+                            f"whether that write channel is still open is unresolved"),
+            "anything about a later sweep; this board must be re-run on the prepared arms",
+        ],
+        "redirect_reproduced": sent.get("redirect_reproduced"),
+        "placement": sent.get("placement"),
+        "deny_test_valid_regardless_of_placement": bool(sent.get("sentinel_materialised")),
+    }
 
 
 #: The controls A3 declares as preconditions. `REGISTRATION-DRAFT-a3-consult.md` §10 says an
