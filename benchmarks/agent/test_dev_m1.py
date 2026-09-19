@@ -217,14 +217,42 @@ def test_a_missing_clone_is_unresolved_and_never_no_leakage(monkeypatch):
             V.fix_added_tokens(scratch, "k1", clone=None)
 
 
-def test_the_configured_clone_is_used_when_the_fixture_names_none():
-    """Every A2-R fixture is in this state. The path lives in gitignored `a1-config.json`, so
-    it has to be read at runtime -- and when it does not carry the revisions, the result is
-    still a refusal rather than an empty token set."""
+def test_the_configured_clone_is_used_when_the_fixture_names_none(monkeypatch):
+    """Every A2-R fixture is in this state: no `clone` key, so the path has to come from
+    gitignored `a1-config.json` at runtime.
+
+    This asserts the fallback POSITIVELY -- the configured clone is reached and the scan
+    completes on it -- rather than asserting which refusal fires. The earlier version took
+    the fixture's word for nothing and `_config_clone`'s word for everything: it called
+    `fix_added_tokens` with the host's real `a1-config.json` live, so on a machine carrying
+    that file the refusal came from `git diff` and on a machine without it from "no clone
+    recorded". Both are `Unresolved`, so the safety property held on both -- but the test
+    named a branch, and which branch ran was a fact about the host. It passed here and
+    failed in CI. The clone is supplied by the test now, so the assertion is the same
+    everywhere."""
     import tempfile
     with tempfile.TemporaryDirectory() as t:
-        scratch, _ = _fake_scratch(Path(t), clone=False)
-        with pytest.raises(V.Unresolved, match="git diff|clone .* is not a directory"):
+        scratch, clone = _fake_scratch(Path(t), new_identifier="leaked_marker")
+        # the fixture names no clone -- exactly the A2-R state
+        spec = json.loads((scratch / "c45/run-k1/base/fixtures.json").read_text())
+        spec[0].pop("clone")
+        (scratch / "c45/run-k1/base/fixtures.json").write_text(json.dumps(spec))
+        monkeypatch.setattr(V, "_config_clone", lambda: clone)
+        assert "leaked_marker" in V.fix_added_tokens(scratch, "k1", clone=None)
+
+
+def test_without_a_configured_clone_the_same_fixture_refuses(monkeypatch):
+    """The other half of the fallback, pinned separately so neither host's state decides
+    which one runs. No fixture clone and no configured clone is `Unresolved` -- never an
+    empty token set, which is what published as "none" on four tasks."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as t:
+        scratch, _ = _fake_scratch(Path(t), new_identifier="leaked_marker")
+        spec = json.loads((scratch / "c45/run-k1/base/fixtures.json").read_text())
+        spec[0].pop("clone")
+        (scratch / "c45/run-k1/base/fixtures.json").write_text(json.dumps(spec))
+        monkeypatch.setattr(V, "_config_clone", lambda: None)
+        with pytest.raises(V.Unresolved, match="no clone recorded"):
             V.fix_added_tokens(scratch, "k1", clone=None)
 
 

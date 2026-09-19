@@ -14,8 +14,9 @@ from pathlib import Path
 BENCH = Path(__file__).parent
 sys.path.insert(0, str(BENCH))
 
-from a3_decision import (ArmRun, Thresholds, bound_compliance, correctness,  # noqa: E402
-                         cost, decide, information, required_work, stale_advice)
+from a3_decision import (A3_PLAN, ArmRun, Plan, Thresholds, bound_compliance,  # noqa: E402
+                         consumption, correctness, cost, decide, information,
+                         required_work, run_id, stale_advice, validity)
 
 TASKS = ("k1", "k2", "k3", "k4")
 FACTS = {t: {f"{t}-mechanism": [f"{t}-m-primary", f"{t}-m-equivalent"]} for t in TASKS}
@@ -423,3 +424,155 @@ def test_an_unmeasured_class_member_is_unresolved_not_undelivered():
     r = decide(runs, FACTS)
     assert r["dimensions"]["information"]["per_task"]["k4"]["state"] == "indeterminate"
     assert r["decision"] == "indeterminate"
+
+
+# ---------------------------------------------------------------------------------------
+# EXPERIMENT VALIDITY -- established before any acceptance criterion is applied.
+#
+# None of the 33 checks above could fail if the validity gate did nothing: every one of them
+# either builds a complete 16-arm-run sweep or asserts on a single dimension directly. A gate
+# that no test can make fire is the same defect as the leakage scan that reported "none"
+# without looking, so each check below fires it in one specific way.
+# ---------------------------------------------------------------------------------------
+
+def test_the_result_identity_is_task_attempt_policy_not_task_arm():
+    """Both A3 policies run the nexus arm. `(task, arm)` collides them at every cell."""
+    a = run("k1", "A", 1)
+    b = run("k1", "B", 1)
+    assert run_id(a) != run_id(b)
+    assert run_id(a) == ("k1", 1, "A")
+    # the identity the historical harness had: both policies are the same arm
+    assert ("k1", "nexus") == ("k1", "nexus")          # the collision, stated
+    assert len({run_id(r) for r in clean_sweep()}) == 16
+
+
+def test_all_sixteen_planned_arm_runs_retain_distinct_identities():
+    v = validity(clean_sweep())
+    assert v["state"] == "hold"
+    assert v["distinct_identities"] == v["planned_arm_runs"] == 16
+    assert v["missing"] == [] and v["duplicate_identities"] == [] and v["unplanned"] == []
+
+
+def test_partial_coverage_cannot_be_accepted_as_a_complete_comparison():
+    """Everything that ran is clean; half the design did not run. That is not an accept."""
+    half = [r for r in clean_sweep() if r.task in ("k1", "k2")]
+    d = decide(half, FACTS)
+    assert d["decision"] == "indeterminate"
+    assert d["experiment_valid"] is False
+    assert d["validity"]["partial"] is True
+    assert len(d["validity"]["missing"]) == 8
+    assert "did not run in full" in d["reason"]
+
+
+def test_a_partial_sweep_still_rejects_an_established_failure():
+    """Partial coverage blocks ACCEPTANCE, not rejection: B losing a task that ran is real
+    evidence, and stopping the sweep early does not unmake it."""
+    half = [r for r in clean_sweep() if r.task in ("k1", "k2")]
+    half = [run(r.task, r.policy, r.attempt, ok=(r.policy == "A"))
+            if r.task == "k1" else r for r in half]
+    d = decide(half, FACTS)
+    assert d["decision"] == "reject"
+    assert "correctness" in d["failed"]
+
+
+def test_a_duplicate_identity_is_invalid_and_no_criterion_is_applied():
+    """A collision in the FILES is not a verdict about the POLICY. A duplicated A row
+    inflates A's passes, so "B has fewer" would be an artifact of the bookkeeping -- which is
+    exactly what an earlier version of `decide` rejected the policy for."""
+    runs = clean_sweep()
+    d = decide(runs + [runs[0]], FACTS)
+    assert d["decision"] == "invalid"
+    assert d["criteria_applied"] is False
+    assert d["validity"]["corrupt"] is True
+    assert d["validity"]["duplicate_identities"] == ["k1/A/1"]
+    assert d["failed"] == [] and d["indeterminate"] == []
+
+
+def test_an_unplanned_arm_run_is_invalid():
+    d = decide(clean_sweep() + [run("k9", "B", 1)], FACTS)
+    assert d["decision"] == "invalid"
+    assert d["validity"]["unplanned"] == ["k9/B/1"]
+
+
+def test_a_third_attempt_is_unplanned_against_the_registered_design():
+    """The plan is two attempts. A third is not extra evidence, it is a different design."""
+    d = decide(clean_sweep() + [run("k1", "A", 3)], FACTS)
+    assert d["decision"] == "invalid"
+    assert d["validity"]["unplanned"] == ["k1/A/3"]
+    # ... and it IS valid under a plan that registered three
+    v = validity(clean_sweep() + [run("k1", "A", 3)], Plan(attempts=3))
+    assert v["unplanned"] == [] and v["partial"] is True      # the other 8 are now missing
+
+
+# ---------------------------------------------------------------------------------------
+# CONSUMPTION vs OUTCOME -- missing evidence of two kinds, with opposite consequences.
+# ---------------------------------------------------------------------------------------
+
+def test_unresolved_consumption_stops_further_launches():
+    """§7: the sweep stops and the row stays unresolved, never zero, never covered by an
+    allowance written to unblock it."""
+    import dataclasses
+    runs = clean_sweep()
+    runs[0] = dataclasses.replace(runs[0], accounting_resolved=False)
+    d = decide(runs, FACTS)
+    assert d["further_launches_permitted"] is False
+    assert d["consumption"]["stopping_reason"] == "unresolved_accounting"
+    assert d["consumption"]["unresolved_arm_runs"] == ["k1/A/1"]
+
+
+def test_an_unnamed_counting_method_is_unresolved_consumption_too():
+    import dataclasses
+    runs = clean_sweep()
+    runs[0] = dataclasses.replace(runs[0], token_counting_method=None)
+    assert decide(runs, FACTS)["further_launches_permitted"] is False
+
+
+def test_unresolved_outcome_does_not_stop_further_launches():
+    """The separation the review asked for. A functional result nobody could settle makes a
+    DIMENSION indeterminate; it does not mean the sweep has lost track of what it spent."""
+    import dataclasses
+    runs = clean_sweep()
+    runs[0] = dataclasses.replace(runs[0], functional_pass=None, required_test_work="unresolved")
+    d = decide(runs, FACTS)
+    assert d["further_launches_permitted"] is True
+    assert d["consumption"]["unresolved_arm_runs"] == []
+    assert d["consumption"]["state"] == "hold"
+
+
+def test_consumption_is_computed_by_the_same_rule_cost_uses():
+    """Two implementations of one contract disagree eventually; there is one here."""
+    import dataclasses
+    runs = clean_sweep()
+    runs[3] = dataclasses.replace(runs[3], provider_total_tokens=None)
+    assert run_id(runs[3]) == ("k1", 2, "B")
+    assert (consumption(runs)["unresolved_arm_runs"]
+            == cost(runs)["unresolved_arm_runs"] == ["k1/B/2"])
+
+
+# ---------------------------------------------------------------------------------------
+# POSSIBLE-COUNT BOUNDS -- not confidence intervals.
+# ---------------------------------------------------------------------------------------
+
+def test_the_bounds_are_named_possible_counts_and_disclaim_being_intervals():
+    r = decide(clean_sweep(), FACTS)
+    row = r["dimensions"]["correctness"]["per_task"]["k1"]
+    assert row["A_possible_min"] == row["A_possible_max"] == 2
+    assert "NOT a confidence interval" in row["bounds_kind"]
+    assert any("confidence interval" in n for n in r["not_established"])
+
+
+def test_the_three_way_rule_at_its_two_boundaries():
+    """B_max < A_min -> fail; B_min >= A_max -> hold; anything between -> indeterminate."""
+    import dataclasses
+    # B loses even counting its unresolved run in its favour: B_max=1 < A_min=2
+    runs = [r for r in clean_sweep() if r.task == "k1"]
+    runs = [dataclasses.replace(r, functional_pass=(None if r.attempt == 1 else False))
+            if r.policy == "B" else r for r in runs]
+    k1 = correctness(runs)["per_task"]["k1"]
+    assert k1["B_possible_max"] == 1 and k1["A_possible_min"] == 2 and k1["state"] == "fail"
+    # one unresolved on each side: bounds overlap, so neither claim is settled
+    runs2 = [dataclasses.replace(r, functional_pass=(None if r.attempt == 1 else True))
+             for r in [x for x in clean_sweep() if x.task == "k1"]]
+    k1b = correctness(runs2)["per_task"]["k1"]
+    assert k1b["state"] == "indeterminate"
+    assert k1b["B_possible_min"] == 1 and k1b["B_possible_max"] == 2

@@ -31,9 +31,22 @@ Dimensions, each returning `hold`, `fail` or `indeterminate`:
   stale_adoption  incorrect ADOPTION does not increase; exposure is reported, not judged
   cost            the registered thresholds, applied to every arm-run including failures
 
-  decision        any established failure -> reject
-                  else any indeterminate   -> indeterminate
-                  else                     -> accept_for_further_development
+Validity is established BEFORE any of them. `validity()` asks whether the records are the
+registered experiment at all; the dimensions ask what it showed. A sweep that did not run
+cannot be accepted, and a record set with a duplicated or unplanned identity is not evidence
+about the policy at all -- the A3 result identity is `(task, attempt, policy)`, because both
+policies run the *nexus* arm and `(task, arm)` would collide them.
+
+Missing OUTCOME evidence and missing CONSUMPTION are also separated. The first makes a
+dimension indeterminate and the sweep may continue; the second means the sweep has lost track
+of what it spent, and §7 stops it -- `further_launches_permitted` keys on that and nothing
+else.
+
+  decision        record set corrupt          -> invalid (no criterion applied)
+                  any established failure     -> reject
+                  coverage partial            -> indeterminate (acceptance unavailable)
+                  any indeterminate dimension -> indeterminate
+                  else                        -> accept_for_further_development
 """
 from __future__ import annotations
 
@@ -106,29 +119,171 @@ def _by_cell(runs: list[ArmRun]) -> dict[tuple[str, str], list[ArmRun]]:
     return cells
 
 
-def _interval(a_pass: int, a_unresolved: int, b_pass: int, b_unresolved: int,
-              what: str) -> dict:
+#: What the bounds below are, said once, and carried in every row that reports them.
+BOUNDS_KIND = ("possible-count bounds: the smallest and largest count each policy could have "
+               "had, given that an unresolved arm-run is neither a pass nor a failure. NOT a "
+               "confidence interval -- nothing here is estimated from a distribution, no "
+               "sampling model is assumed, and the width says how much evidence is missing, "
+               "not how much the measurement varies")
+
+
+def _possible_count_bounds(a_pass: int, a_unresolved: int, b_pass: int, b_unresolved: int,
+                           what: str) -> dict:
     """Compare two counts when some observations are unresolved, without guessing them.
 
-    An unresolved arm-run is not a failure and not a pass, so the comparison is an INTERVAL,
-    not a number. B is established behind only if it loses even in its own best case against
-    A's worst; it is established level only if it holds in its worst case against A's best.
-    Anything between those is indeterminate -- which is the point: a single unresolved run
-    used to read as a loss, and "B scored fewer" is not the same claim as "B lost".
+    An unresolved arm-run is not a failure and not a pass, so each policy's count is known
+    only to lie between two integers: its resolved passes (every unresolved run went against
+    it) and its resolved passes plus its unresolved runs (every one went for it). Those two
+    integers are the POSSIBLE-COUNT BOUNDS.
+
+    They are not a confidence interval and the earlier name `_interval` invited that reading.
+    A confidence interval is an estimate under a sampling model; these bounds are arithmetic
+    over observations that exist and observations that are missing. Two attempts per cell
+    could not support the former, and nothing here computes one.
+
+    The rule, applied per task, for the requirement that B does at least as well as A:
+
+        B's maximum possible count < A's minimum possible count   -> fail
+        B's minimum possible count >= A's maximum possible count  -> hold
+        otherwise                                                 -> indeterminate
+
+    "B scored fewer" and "B lost" are different claims; the first draft conflated them and a
+    single unresolved run read as a loss.
     """
     b_max, b_min = b_pass + b_unresolved, b_pass
     a_max, a_min = a_pass + a_unresolved, a_pass
     row = {"A": a_pass, "B": b_pass,
-           "A_unresolved": a_unresolved, "B_unresolved": b_unresolved}
+           "A_unresolved": a_unresolved, "B_unresolved": b_unresolved,
+           "A_possible_min": a_min, "A_possible_max": a_max,
+           "B_possible_min": b_min, "B_possible_max": b_max,
+           "bounds_kind": BOUNDS_KIND}
     if b_max < a_min:
         return {**row, "state": FAIL,
-                "reason": f"{what}: B cannot reach A even if every unresolved run passed "
-                          f"({b_max} < {a_min})"}
+                "reason": f"{what}: B's maximum possible count is below A's minimum "
+                          f"({b_max} < {a_min}), so B loses even counting every unresolved "
+                          f"run in its favour"}
     if b_min >= a_max:
         return {**row, "state": HOLD}
     return {**row, "state": INDETERMINATE,
-            "reason": f"{what}: unresolved evidence spans the comparison "
-                      f"(B {b_min}-{b_max} vs A {a_min}-{a_max})"}
+            "reason": f"{what}: the possible-count bounds overlap "
+                      f"(B {b_min}-{b_max} vs A {a_min}-{a_max}), so the comparison is not "
+                      f"settled either way"}
+
+
+def run_id(r: ArmRun) -> tuple[str, int, str]:
+    """The result identity: (task, attempt, policy).
+
+    NOT (task, arm). Both A3 policies run the *nexus* arm -- they differ in one paragraph of
+    the prompt and in nothing else -- so an identity keyed on the arm collides A with B at
+    every task and attempt, and 16 arm-runs would land in 8 slots with the second of each
+    pair overwriting the first. The on-disk layout has the same hazard: `run_arms_isolated`
+    writes to `run-<task>/attempt<n>/arms/<arm>/`, which is one directory for both policies.
+    A3 varies a dimension the historical harness did not have.
+    """
+    return (r.task, r.attempt, r.policy)
+
+
+@dataclass(frozen=True)
+class Plan:
+    """The registered design. Coverage is checked against THIS, not against what arrived."""
+    tasks: tuple[str, ...] = ("k1", "k2", "k3", "k4")
+    policies: tuple[str, ...] = ("A", "B")
+    attempts: int = 2
+
+    def cells(self) -> list[tuple[str, int, str]]:
+        return [(t, a, p) for t in self.tasks
+                for a in range(1, self.attempts + 1) for p in self.policies]
+
+    def pairs(self) -> list[tuple[str, int]]:
+        return [(t, a) for t in self.tasks for a in range(1, self.attempts + 1)]
+
+
+A3_PLAN = Plan()
+
+
+def _consumption_unresolved(runs: list[ArmRun]) -> list[str]:
+    """Arm-runs whose CONSUMPTION is not accounted for. One rule, used by both readers."""
+    return [f"{r.task}/{r.policy}/{r.attempt}" for r in runs
+            if not r.accounting_resolved or r.delivered_text_tokens is None
+            or r.provider_total_tokens is None or not r.token_counting_method]
+
+
+def validity(runs: list[ArmRun], plan: Plan = A3_PLAN) -> dict:
+    """Is this evidence the registered experiment at all? Answered BEFORE the criteria.
+
+    An acceptance criterion applied to a sweep that did not run reports a verdict about
+    something that does not exist. Three ways that happens:
+
+      missing      a planned arm-run is absent -- the sweep stopped at the soft threshold,
+                   or a row refused. Legitimate, and §7 requires it be reported as partial;
+      duplicate    two records share one (task, attempt, policy). Under the historical
+                   (task, arm) identity this is what A and B would have done to each other;
+      unplanned    a record outside the registered design, which is not this experiment.
+
+    The first is PARTIAL and the other two are CORRUPT, and they are not interchangeable.
+
+    Partial coverage still carries evidence: B losing a task that DID run is real, and a
+    sweep stopping early does not unmake it, so an established failure still rejects. What
+    partial coverage forbids is ACCEPTANCE -- it cannot be read as a complete comparison.
+
+    A corrupt record set carries none. If two records share an identity the counts they feed
+    are not counts of anything: a duplicated A row inflates A's passes and "B has fewer"
+    becomes an artifact of the bookkeeping. `decide` therefore applies no acceptance
+    criterion at all to a corrupt set and returns `invalid` -- an earlier version of this
+    function rejected the POLICY for a collision in the FILES, a verdict about the wrong
+    thing.
+    """
+    seen: dict[tuple[str, int, str], int] = {}
+    for r in runs:
+        seen[run_id(r)] = seen.get(run_id(r), 0) + 1
+    planned = set(plan.cells())
+    missing = sorted(planned - set(seen))
+    duplicate = sorted(k for k, n in seen.items() if n > 1)
+    unplanned = sorted(set(seen) - planned)
+    corrupt = bool(duplicate or unplanned)
+    complete = not (missing or corrupt)
+    covered_pairs = sorted({(t, a) for (t, a, _) in seen}
+                           & {(t, a) for (t, a) in plan.pairs()
+                              if all((t, a, p) in seen for p in plan.policies)})
+    return {"state": HOLD if complete else FAIL,
+            "complete_coverage": complete,
+            # PARTIAL and CORRUPT are different failures with different consequences, and
+            # collapsing them is what made a bookkeeping collision reject the POLICY.
+            "partial": bool(missing) and not corrupt,
+            "corrupt": corrupt,
+            "planned_arm_runs": len(planned),
+            "distinct_identities": len(seen),
+            "records": len(runs),
+            "missing": [f"{t}/{p}/{a}" for (t, a, p) in missing],
+            "duplicate_identities": [f"{t}/{p}/{a}" for (t, a, p) in duplicate],
+            "unplanned": [f"{t}/{p}/{a}" for (t, a, p) in unplanned],
+            "complete_pairs": [f"{t}/attempt{a}" for (t, a) in covered_pairs],
+            "identity_is": "(task, attempt, policy)",
+            "reason": "" if complete else
+                      f"{len(missing)} missing, {len(duplicate)} duplicate, "
+                      f"{len(unplanned)} unplanned against a {len(planned)}-arm-run design"}
+
+
+def consumption(runs: list[ArmRun]) -> dict:
+    """Whether every arm-run's CONSUMPTION is accounted for -- the launch gate.
+
+    Kept separate from missing OUTCOME evidence on purpose, because the two have opposite
+    consequences. A run whose functional result is unresolved costs nothing further: the
+    sweep may continue and the dimension goes indeterminate. A run whose CONSUMPTION is
+    unresolved means the sweep does not know what it has spent, and §7 stops it -- the row
+    stays `unresolved`, never zero, never covered by an allowance written to unblock it.
+
+    So `further_launches_permitted` keys on this and on nothing else. An indeterminate
+    verdict does not stop a launch; an unaccounted token does.
+    """
+    unresolved = _consumption_unresolved(runs)
+    return {"state": HOLD if not unresolved else INDETERMINATE,
+            "resolved_arm_runs": len(runs) - len(unresolved),
+            "unresolved_arm_runs": unresolved,
+            "further_launches_permitted": not unresolved,
+            "stopping_reason": None if not unresolved else "unresolved_accounting",
+            "note": "missing outcome evidence does not stop a launch; unaccounted "
+                    "consumption does, and the total is then a lower bound"}
 
 
 def correctness(runs: list[ArmRun]) -> dict:
@@ -140,7 +295,7 @@ def correctness(runs: list[ArmRun]) -> dict:
         if not a or not b:
             per_task[task] = {"state": INDETERMINATE, "reason": "a cell has no arm-run"}
             continue
-        per_task[task] = _interval(
+        per_task[task] = _possible_count_bounds(
             sum(1 for r in a if r.functional_pass is True),
             sum(1 for r in a if r.functional_pass is None),
             sum(1 for r in b if r.functional_pass is True),
@@ -164,7 +319,7 @@ def required_work(runs: list[ArmRun]) -> dict:
         if not a or not b:
             per_task[task] = {"state": INDETERMINATE, "reason": "a cell has no arm-run"}
             continue
-        per_task[task] = _interval(
+        per_task[task] = _possible_count_bounds(
             sum(1 for r in a if r.required_test_work == "pass"),
             sum(1 for r in a if r.required_test_work == "unresolved"),
             sum(1 for r in b if r.required_test_work == "pass"),
@@ -250,9 +405,7 @@ def cost(runs: list[ArmRun], thresholds: Thresholds = Thresholds()) -> dict:
     method, NOT attributable provider spend; `provider_total_tokens` is the envelope's own
     categories. Both are required, and a run that does not name its counting method cannot be
     counted."""
-    unresolved = [f"{r.task}/{r.policy}/{r.attempt}" for r in runs
-                  if not r.accounting_resolved or r.delivered_text_tokens is None
-                  or r.provider_total_tokens is None or not r.token_counting_method]
+    unresolved = _consumption_unresolved(runs)
     methods = sorted({r.token_counting_method for r in runs if r.token_counting_method})
 
     def total(policy, attr):
@@ -313,12 +466,23 @@ def bound_compliance(runs: list[ArmRun]) -> dict:
 
 
 def decide(runs: list[ArmRun], required_facts: dict[str, dict[str, list[str]]],
-           thresholds: Thresholds = Thresholds()) -> dict:
-    """The whole table, in one pass.
+           thresholds: Thresholds = Thresholds(), plan: Plan = A3_PLAN) -> dict:
+    """The whole table, in one pass, with VALIDITY established first.
+
+    Order matters. `validity` asks whether the evidence is the registered experiment; the
+    criteria ask what the experiment showed. Applying the second without the first is how a
+    half-finished sweep reports "accept".
+
+    The wiring is asymmetric, deliberately. An established failure rejects whether or not
+    coverage is complete -- B losing a task that ran is evidence, and a stopped sweep does
+    not unmake it. But nothing is ACCEPTED on partial coverage: incomplete, duplicated or
+    unplanned records make the outcome indeterminate and say which.
 
     Guardrails are correctness, required work, information and stale ADOPTION. Cost is a
     criterion too -- a change that does not pay is not adopted -- but it is not a guardrail:
     failing it rejects the policy without implying the policy did harm."""
+    valid = validity(runs, plan)
+    consumed = consumption(runs)
     dims = {"correctness": correctness(runs),
             "required_work": required_work(runs),
             "information": information(runs, required_facts),
@@ -328,8 +492,17 @@ def decide(runs: list[ArmRun], required_facts: dict[str, dict[str, list[str]]],
     states = {k: v["state"] for k, v in dims.items()}
     failed = sorted(k for k, s in states.items() if s == FAIL)
     unresolved = sorted(k for k, s in states.items() if s == INDETERMINATE)
-    if failed:
+    if valid["corrupt"]:
+        decision = "invalid"
+        why = (f"the record set is not the registered experiment and no acceptance "
+               f"criterion was applied to it: {valid['reason']}")
+        failed, unresolved = [], []
+    elif failed:
         decision, why = "reject", f"established failure: {', '.join(failed)}"
+    elif valid["partial"]:
+        decision = "indeterminate"
+        why = (f"the registered experiment did not run in full, so acceptance is not "
+               f"available: {valid['reason']}")
     elif unresolved:
         decision, why = ("indeterminate",
                          f"insufficient decisive evidence: {', '.join(unresolved)}")
@@ -337,17 +510,34 @@ def decide(runs: list[ArmRun], required_facts: dict[str, dict[str, list[str]]],
         decision, why = "accept_for_further_development", "every criterion satisfied"
     return {"decision": decision, "reason": why, "dimensions": dims, "states": states,
             "failed": failed, "indeterminate": unresolved,
+            "validity": valid, "experiment_valid": valid["complete_coverage"],
+            "criteria_applied": not valid["corrupt"],
+            "consumption": consumed,
+            "further_launches_permitted": consumed["further_launches_permitted"],
             "guardrails": list(guardrails),
             "bound_compliance": bound_compliance(runs),
             "not_established": [
                 "that the thresholds exceed stochastic variation -- two attempts per cell",
+                "anything from the possible-count bounds about sampling variability: they "
+                "are arithmetic over missing observations, not confidence intervals",
                 "that any preserved fact is NECESSARY to the task",
                 "anything about tasks outside k1-k4, which are exposed development tasks"]}
 
 
 def render(report: dict) -> str:
+    v, c = report["validity"], report["consumption"]
     L = ["=" * 92, f"A3 decision: {report['decision'].upper()}", f"  {report['reason']}",
-         "=" * 92, ""]
+         "=" * 92, "",
+         f"experiment validity: {v['state']}   "
+         f"{v['distinct_identities']}/{v['planned_arm_runs']} planned arm-runs, identity "
+         f"{v['identity_is']}"]
+    for k in ("missing", "duplicate_identities", "unplanned"):
+        if v[k]:
+            L.append(f"    {k}: {', '.join(v[k])}")
+    L += [f"consumption: {c['state']}   {c['resolved_arm_runs']}/{report['validity']['records']}"
+          f" accounted; further launches "
+          f"{'permitted' if c['further_launches_permitted'] else 'STOPPED'}"
+          + (f" ({c['stopping_reason']})" if c["stopping_reason"] else ""), ""]
     for name, dim in report["dimensions"].items():
         L.append(f"{name:16} {dim['state']}"
                  + (f"   {dim['reason']}" if dim.get("reason") else ""))
@@ -356,7 +546,8 @@ def render(report: dict) -> str:
             L.append(f"    {task:4} {row['state']:14}{extra}"
                      + (f"  {row['reason']}" if row.get("reason") else ""))
     bc = report["bound_compliance"]
-    L += ["", f"bound compliance (B): respected {bc['respected']}, violated {bc['violated']}, "
+    L += ["", "counts compared as POSSIBLE-COUNT BOUNDS, not confidence intervals",
+          f"bound compliance (B): respected {bc['respected']}, violated {bc['violated']}, "
               f"unresolved {bc['unresolved']}; excluded {bc['excluded_from_any_dimension']}",
           "", "NOT ESTABLISHED"]
     L += [f"  - {n}" for n in report["not_established"]]
