@@ -662,7 +662,7 @@ def functional_of(rec: dict) -> tuple[str, str | None]:
     return ("pass" if passed else "fail"), None
 
 
-def read_compliance(scratch: Path) -> dict:
+def read_compliance(scratch: Path, artifact: Path | None = None) -> dict:
     """-> {(task, arm): row} from a compliance artifact, or {} when none has been produced.
 
     `run_arms_isolated` does NOT score requirement compliance: `a1-scorer-4` is a separate
@@ -670,8 +670,7 @@ def read_compliance(scratch: Path) -> dict:
     report must say -- printing a ratio, or an unknown count, for a scorer that never ran
     would imply a measurement that does not exist.
     """
-    for name in COMPLIANCE_FILES:
-        f = scratch / name
+    for f in ([artifact] if artifact else [scratch / n for n in COMPLIANCE_FILES]):
         if not f.exists():
             continue
         try:
@@ -722,9 +721,22 @@ def normalise(rec: dict, arm_dir: Path, compliance: dict, task: str, arm: str) -
 
 # ----------------------------------------------------------------- reading a sweep
 
-def read_cells(scratch: Path) -> list[dict]:
+#: What a row says when the compliance artifact does not name the scorer that wrote it.
+SCORER_UNNAMED = "compliance scorer (version unrecorded)"
+
+
+def scorer_name(compliance: dict) -> str:
+    """The scorer version the ARTIFACT records. It used to be the literal `a1-scorer-4` in
+    six places here, so re-running a repaired scorer would have published its numbers under
+    the previous scorer's name -- and a ratio is not comparable across versions."""
+    names = sorted({r.get("scorer_version") for r in compliance.values()
+                    if isinstance(r, dict) and r.get("scorer_version")})
+    return " / ".join(names) if names else SCORER_UNNAMED
+
+
+def read_cells(scratch: Path, compliance_artifact: Path | None = None) -> list[dict]:
     """Every arm-run A2-R wrote, normalised at the boundary. See `normalise` above."""
-    compliance = read_compliance(scratch)
+    compliance = read_compliance(scratch, compliance_artifact)
     cells = []
     for records in sorted(scratch.glob("*/run-*/attempt*/records.json")):
         data = json.loads(records.read_text())
@@ -756,13 +768,15 @@ def _tokens(u) -> int | None:
     return RC.usage_tokens(u)
 
 
-def build(scratch: Path) -> dict:
+def build(scratch: Path, compliance_artifact: Path | None = None) -> dict:
     import run_calibration as RC
-    cells = read_cells(scratch)
+    cells = read_cells(scratch, compliance_artifact)
     ledger = RC.consumed(scratch)
     ceilings = sorted({c["ceiling"] for c in cells})
     return {"scratch": str(scratch), "ceilings": ceilings, "cells": cells,
-            "ledger": ledger, "expected_cells": CELLS}
+            "ledger": ledger, "expected_cells": CELLS,
+            "compliance_artifact": str(compliance_artifact) if compliance_artifact else None,
+            "compliance_scorer": scorer_name(read_compliance(scratch, compliance_artifact))}
 
 
 # ----------------------------------------------------------------- the report
@@ -839,25 +853,26 @@ def render(rep: dict) -> str:
     out.append("or an unrelated edit satisfies the diff and not the requirement. `unknown` is")
     out.append("used where the evidence is missing and nothing is inferred from edit counts.")
     out.append("")
+    scorer = rep.get("compliance_scorer") or SCORER_UNNAMED
     out.append(f"  {'task':5} {'arm':9} {'src diff':9} {'test add':9} {'executed':9} "
-               f"{'result':8} {'relevance':10} {'a1-scorer-4':12}")
+               f"{'result':8} {'relevance':10} {scorer:12}")
     for c in cells:
         r = c["requirement"]
         u = c["scorer_a1_4_unknown"]
-        scorer = f"{c['scorer_a1_4']}{f' +{u}?' if u else ''}"
+        ratio = f"{c['scorer_a1_4']}{f' +{u}?' if u else ''}"
         out.append(f"  {c['task']:5} {c['arm']:9} {r['source_diff']:9} "
                    f"{r['test_addition']:9} {r['test_executed']:9} {r['test_result']:8} "
-                   f"{r['relevance']:10} {scorer:12}")
+                   f"{r['relevance']:10} {ratio:12}")
     out.append("")
     sources = sorted({c["scorer_a1_4_source"] for c in cells})
     if all(c["scorer_a1_4"] == NOT_SCORED for c in cells):
-        out.append("`a1-scorer-4` HAS NOT BEEN RUN over this sweep. `run_arms_isolated` does")
+        out.append(f"`{scorer}` HAS NOT BEEN RUN over this sweep. `run_arms_isolated` does")
         out.append("not score requirement compliance -- it is a separate offline pass -- so the")
         out.append("column reads `not_scored`. That is not `unknown`: a scorer that never ran")
         out.append("has not failed to decide anything, and printing a ratio or an unknown count")
         out.append("here would imply a measurement that does not exist.")
     else:
-        out.append("`a1-scorer-4` is the REGISTERED compliance scorer, reported under its own")
+        out.append(f"`{scorer}` is the REGISTERED compliance scorer, reported under its own")
         out.append("name and never merged with the four observations beside it. Its ratio is")
         out.append("over the SETTLED checks only -- `tally()` excludes unknowns from both")
         out.append("halves -- so it is shown with the unknown count beside it where the")
@@ -962,7 +977,10 @@ def main(argv: list[str]) -> int:
     scratch = Path(argv[1])
     if not scratch.is_dir():
         raise SystemExit(f"no such scratch: {scratch}")
-    rep = build(scratch)
+    art = (Path(argv[argv.index("--compliance") + 1]) if "--compliance" in argv else None)
+    if art and not art.exists():
+        raise SystemExit(f"no such compliance artifact: {art}")
+    rep = build(scratch, art)
     if "--json" in argv:
         out = Path(argv[argv.index("--json") + 1])
         out.write_text(json.dumps(rep, indent=1) + "\n")

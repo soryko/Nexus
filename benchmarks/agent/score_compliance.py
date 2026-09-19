@@ -64,6 +64,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from build_fixture import PYTEST_IGNORE
 from trace_parse import parse
 
 BENCH = Path(__file__).parent
@@ -77,7 +78,16 @@ EDIT_SCOPE = {"default": ("src/click",), "d4": ("pyproject.toml",)}
 
 CONTENT_TOOLS = {"mcp__nexus__get", "mcp__nexus__search"}
 NOTES_NAME = "NOTES-FROM-EARLIER-WORK"
-NOTES_FILE = BENCH / "notes-dev-a1.md"
+#: The rendering the NOTES arm was actually seeded with. `run_arms_isolated` copies
+#: `CFG.bench_path("notes_file")` into the arm, and that is a per-sweep choice: A1's
+#: development runs got `notes-dev-a1.md`, the A2/A2-R sweeps got `notes-heldout-a1.md`.
+#: This constant was hard-wired to the development rendering, so for every held-out task
+#: P2 compared the arm's result against prose the arm was never given, found no match, and
+#: reported "no prior-work content was delivered at any point" -- for four notes arms that
+#: had each read their notes file in their first tool call. `score()` takes the path now
+#: and no caller can inherit the wrong corpus by omission.
+NOTES_FILE_DEFAULT = BENCH / "notes-dev-a1.md"
+NOTES_FILE = NOTES_FILE_DEFAULT
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit", "Update", "str_replace_editor"}
 
 # A check that a machine cannot settle. It is neither a pass nor a fail: it is counted in
@@ -87,12 +97,17 @@ PASS, FAIL, UNKNOWN, NA = "pass", "fail", "unknown", "not_applicable"
 
 # Bumped whenever a check's meaning changes, so a saved record says which scorer produced it.
 # A ratio is not comparable across versions and the version is stored beside every one.
-SCORER_VERSION = "a1-scorer-4"
+SCORER_VERSION = "a1-scorer-5"
 SCORER_CHANGELOG = {
     "a1-scorer-2": "heuristics replaced; regression probe runs three trees",
     "a1-scorer-3": "delivery recognised by notes text; undetected edit is UNKNOWN",
     "a1-scorer-4": "every verdict carries a reason; instrument failures are separated from "
                    "arm outcomes and leave their check UNKNOWN",
+    "a1-scorer-5": "the regression probe applies the functional scorer's registered warning "
+                   "demotion, so a test file that cannot be COLLECTED is an instrument "
+                   "failure rather than a test that does not discriminate; and the notes "
+                   "corpus P2 recognises is the one the sweep seeded, passed in by the "
+                   "caller rather than hard-wired to the development rendering",
 }
 
 
@@ -132,7 +147,7 @@ def tally(checks: dict) -> dict:
     }
 
 
-def notes_lines() -> list[str]:
+def notes_lines(notes_file: Path | str | None = None) -> list[str]:
     """Substantial lines of the rendered notes, used to recognise the notes' actual text.
 
     Matching on the FILENAME was the defect. The old rule accepted any call whose input
@@ -146,7 +161,7 @@ def notes_lines() -> list[str]:
 
     Recognising the text itself cannot be satisfied by a command that merely names the file.
     """
-    return [ln.strip() for ln in NOTES_FILE.read_text().splitlines()
+    return [ln.strip() for ln in Path(notes_file or NOTES_FILE).read_text().splitlines()
             if len(ln.strip()) >= 80]
 
 
@@ -339,8 +354,16 @@ def _pytest(python: str, work: Path, targets: list[str]) -> dict:
     """
     xml = work.parent / f"{work.name}-junit.xml"
     try:
+        # `PYTEST_IGNORE` is the FUNCTIONAL scorer's registered demotion of one warning
+        # class, adopted for `a1-functional-2` because Click turns warnings into errors and
+        # an unrelated `parametrize` call in tests/test_basic.py raises
+        # `PytestRemovedIn10Warning` during COLLECTION under the pinned pytest. This scorer
+        # never applied it, so any arm whose added test lives in that file had all three
+        # probe trees come back `rc=4, collection error` -- and E1 reported `fail`, which
+        # says the test does not discriminate. It says nothing of the kind: the measurement
+        # did not happen. Same flag, same reason, one source of truth.
         run = subprocess.run([python, "-m", "pytest", *targets, "-q", "-p", "no:randomly",
-                              f"--junit-xml={xml}"],
+                              *PYTEST_IGNORE, f"--junit-xml={xml}"],
                              cwd=work, capture_output=True, text=True,
                              env={"PYTHONPATH": "src", "PATH": "/usr/bin:/bin"})
     except (OSError, subprocess.SubprocessError) as exc:
@@ -491,7 +514,11 @@ def final_text(env: dict | None) -> str:
     return ((env or {}).get("result") or "").strip()
 
 
-def score(run_dir: Path, task: str, arm: str, pristine: Path, python: str) -> dict:
+def score(run_dir: Path, task: str, arm: str, pristine: Path, python: str, *,
+          notes_file: Path | str) -> dict:
+    """`notes_file` is the rendering THIS sweep seeded its notes arm with, and it is
+    required: a default here is how P2 came to be evaluated against a corpus no arm in the
+    A2/A2-R sweeps was ever given."""
     patch = (run_dir / "arms" / arm / "patch.diff").read_text()
     t = parse(run_dir / "arms" / arm / "trace.jsonl")
     files = changed_files(patch)
@@ -553,7 +580,7 @@ def score(run_dir: Path, task: str, arm: str, pristine: Path, python: str) -> di
 
     # --- consultation must have DELIVERED content before the first edit, not merely been
     # --- issued before it
-    delivery = first_delivery_event(t["calls"])
+    delivery = first_delivery_event(t["calls"], notes_lines(notes_file))
     edit = first_edit_event(t["calls"], task)
     # An edit the matcher could not locate leaves the ORDER unknown, not satisfied. The
     # previous rule read `not edit["found"]` as "nothing to be late for" and passed the

@@ -10,7 +10,7 @@ them, because a ratio is not comparable across versions.
 from __future__ import annotations
 import json, sys
 from pathlib import Path
-from score_compliance import score
+from score_compliance import NOTES_FILE_DEFAULT, score
 from terminal_status import classify
 
 BENCH = Path(__file__).parent
@@ -31,7 +31,8 @@ for task, d in RUNS:
     for rec in data["records"]:
         arm = rec["arm"]
         term = classify(rec)
-        c = score(run, task, arm, pristine, PY_CLICK)
+        # A1's development runs: `notes-dev-a1.md` is the rendering they were seeded with.
+        c = score(run, task, arm, pristine, PY_CLICK, notes_file=NOTES_FILE_DEFAULT)
         rows.append({
             "task": task, "run": d, "arm": arm,
             "terminal": term["terminal"], "scored": term["scored"],

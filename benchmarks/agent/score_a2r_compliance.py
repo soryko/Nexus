@@ -73,7 +73,12 @@ def pristine_for(run_dir: Path, task: str) -> tuple[Path | None, str]:
     return None, f"{spec} records no fixture for {task}"
 
 
-def run(scratch: Path, ceilings: list[int] | None, python: str) -> list[dict]:
+def run(scratch: Path, ceilings: list[int] | None, python: str,
+        notes_file: Path | None = None) -> list[dict]:
+    # Resolved once, from the same configuration field `run_arms_isolated` seeded the notes
+    # arm from -- not from a constant inside the scorer, which is how P2 came to be read
+    # against the development rendering for four held-out notes arms.
+    notes_file = notes_file or a1_config.load().bench_path("notes_file")
     rows: list[dict] = []
     pattern = "*/run-*/attempt*/records.json"
     for records in sorted(scratch.glob(pattern)):
@@ -102,7 +107,7 @@ def run(scratch: Path, ceilings: list[int] | None, python: str) -> list[dict]:
                 print(f"  {task}/{arm:9} SCORER DID NOT RUN: {why}")
                 continue
             try:
-                c = score(run_dir, task, arm, pristine, python)
+                c = score(run_dir, task, arm, pristine, python, notes_file=notes_file)
             except Exception as exc:                       # the scorer, not the arm-run
                 row.update({COMPLIANCE_RATIO: None, COMPLIANCE_UNKNOWN: None,
                             "scorer_ran": False,
@@ -148,7 +153,7 @@ def main(argv: list[str]) -> int:
     python = (argv[argv.index("--python") + 1] if "--python" in argv
               else a1_config.load().pytest_python)
 
-    print(f"a1-scorer-4 ({SCORER_VERSION}) over {scratch}")
+    print(f"requirement compliance scorer {SCORER_VERSION} over {scratch}")
     print(f"  regression probe interpreter: {python}")
     rows = run(scratch, ceilings, python)
     if not rows:

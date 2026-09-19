@@ -35,11 +35,13 @@ python the import fails (`No module named expat`) and the run aborts inside
 3.14 is the interpreter these cases have been run against.
 """
 from __future__ import annotations
-import json, sys, tempfile
+import json, subprocess, sys, tempfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
-from score_compliance import (FAIL, NA, PASS, UNKNOWN, bash_mutates, first_delivery_event,
-                              first_edit_event, notes_lines, score)
+from score_compliance import (FAIL, NA, NOTES_FILE_DEFAULT, PASS, UNKNOWN, bash_mutates,
+                              first_delivery_event,
+                              first_edit_event, notes_lines, score, _pytest)
+from trace_parse import parse as parse_trace
 
 NOTES_LINES = notes_lines()
 
@@ -191,13 +193,44 @@ TRACE_EDIT_NOT_LOCATED = trace(
     envelope("DONE"))
 
 
+# --- round four: two ways the INSTRUMENT, not the arm, decided the verdict -----------------
+# Both were found reviewing A2-R's published compliance artifact against the traces.
+
+UNCOLLECTABLE_TEST = """import pytest
+from itertools import chain
+
+# Click's own configuration turns warnings into errors. Under pytest 9.x this parametrize
+# call raises PytestRemovedIn10Warning during COLLECTION, so the whole module errors out and
+# every test in it is unmeasurable -- including ones that have nothing to do with it.
+@pytest.mark.parametrize("v", chain([1, 2]))
+def test_unrelated(v):
+    assert v
+
+def test_added_by_the_arm():
+    assert True
+"""
+
+UNCOLLECTABLE_INI = """[tool.pytest.ini_options]
+filterwarnings = ["error"]
+"""
+
+
+def uncollectable_tree(root: Path) -> Path:
+    """A checkout shaped like k4's: one pre-existing test the pinned pytest refuses to
+    collect, sitting in the same module as the test under measurement."""
+    (root / "tests").mkdir(parents=True)
+    (root / "tests" / "test_basic.py").write_text(UNCOLLECTABLE_TEST)
+    (root / "pyproject.toml").write_text(UNCOLLECTABLE_INI)
+    return root
+
+
 def run_score(patch, tr, task, arm, pristine):
     with tempfile.TemporaryDirectory() as td:
         run = Path(td) / "run"
         (run / "arms" / arm).mkdir(parents=True)
         (run / "arms" / arm / "patch.diff").write_text(patch)
         (run / "arms" / arm / "trace.jsonl").write_text("\n".join(json.dumps(x) for x in tr))
-        return score(run, task, arm, pristine, PY_CLICK)
+        return score(run, task, arm, pristine, PY_CLICK, notes_file=NOTES_FILE_DEFAULT)
 
 
 def v(record, name):
@@ -298,6 +331,45 @@ def main() -> int:
                 "P2_content_delivered_before_edit" in r["failed"], False)
     ok &= check("an unknown check is listed for review",
                 "P2_content_delivered_before_edit" in r["unknown"], True)
+
+    print("\n round four -- a module the pinned pytest cannot COLLECT is not a test that "
+          "fails to discriminate")
+    with tempfile.TemporaryDirectory() as td:
+        tree = uncollectable_tree(Path(td) / "tree")
+        got = _pytest(PY_CLICK, tree, ["tests/test_basic.py::test_added_by_the_arm"])
+        ok &= check("the probe collects the module the functional scorer can collect",
+                    got["verdict"], "passed")
+        # The control: the same tree measured the way the probe used to measure it. If this
+        # stops erroring, the counterexample has gone stale and the check above is vacuous.
+        bare = subprocess.run(
+            [PY_CLICK, "-m", "pytest", "tests/test_basic.py::test_added_by_the_arm", "-q",
+             "-p", "no:randomly"],
+            cwd=tree, capture_output=True, text=True,
+            env={"PYTHONPATH": "src", "PATH": "/usr/bin:/bin"})
+        ok &= check("without the demotion the same tree still cannot be collected",
+                    bare.returncode, 4)
+
+    print("\n round four -- P2 is read against the corpus the sweep SEEDED")
+    dev, held = notes_lines(NOTES_FILE_DEFAULT), notes_lines(BENCH / "notes-heldout-a1.md")
+    ok &= check("the two renderings are different prose", set(dev) & set(held), set())
+    held_trace = trace(
+        call("t0", "Bash", {"command": "cat NOTES-FROM-EARLIER-WORK.md"}),
+        result("t0", "\n".join(held[:3])),
+        call("t1", "Edit", {"file_path": "src/click/core.py"}), result("t1", "ok"),
+        envelope("DONE"))
+    with tempfile.TemporaryDirectory() as td:
+        tf = Path(td) / "trace.jsonl"
+        tf.write_text("\n".join(json.dumps(x) for x in held_trace))
+        calls = parse_trace(tf)["calls"]
+    ok &= check("held-out notes are recognised when the held-out corpus is passed",
+                first_delivery_event(calls, held)["found"], True)
+    ok &= check("and are NOT recognised against the development corpus",
+                first_delivery_event(calls, dev)["found"], False)
+    try:
+        score(BENCH, "d1", "notes", PRISTINE, PY_CLICK)       # type: ignore[call-arg]
+        ok &= check("score() refuses to guess a notes corpus", "accepted", "TypeError")
+    except TypeError:
+        ok &= check("score() refuses to guess a notes corpus", "TypeError", "TypeError")
 
     print("\n  unsettled by machine:")
     for u in r["unsettled_by_machine"]:
