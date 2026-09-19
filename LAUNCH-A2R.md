@@ -1,8 +1,25 @@
 # A2-R — the execution identity, for approval
 
-**Nothing here has been executed.** This record is presented for the founder's approval. Every
-identifier below is **stamped**, and [`preflight-a2r.py`](preflight-a2r.py) asserts every one
-of them.
+**APPROVED 2026-09-19.** Every identifier below is **stamped**, and
+[`preflight-a2r.py`](preflight-a2r.py) asserts every one of them.
+
+> The founder approved this record naming `harness_revision`
+> `225d8538a5c7fcf4d161448c76ee0ba18b53378e` and `config_digest` `22eb0a3766cdde73`, and
+> authorised **one** A2-R sweep: at most **12 arm-runs**, all three arms, one attempt per cell,
+> **45 turns** and **600 seconds** per arm, accepting the **20 000 000-token soft launch
+> threshold and its disclosed possibility of overshoot by one row**.
+>
+> Conditions of the authorisation, recorded as given: rerun preflight and preserve its output
+> and execution HEAD; launch only if preflight and the per-arm gates pass; keep the execution
+> checkout unchanged during the sweep; honour every registered stop condition; **no retries, no
+> mid-sweep repairs, no new allowances, no budget increases**; preserve and report partial
+> results if stopped; afterwards run the compliance scorer and the reporter, review the patches
+> and their execution evidence, and report correctness, compliance, termination, runtime use
+> and consumption **separately**, making **no causal comparison with v2 and no claim of memory
+> benefit**.
+
+**This authorises exactly one sweep.** It is spent when the sweep ends, however it ends. A
+second sweep — including one begun because the first stopped early — is a new decision.
 
 The design it executes is [`benchmarks/agent/REGISTRATION-DRAFT-a2r.md`](benchmarks/agent/REGISTRATION-DRAFT-a2r.md),
 whose §7 decisions are closed. **A2-R is not the calibration.** The calibration is closed with
@@ -158,14 +175,20 @@ Model-free, on this revision:
 
 ## Approval
 
-- [ ] **The founder approves this record and the design it names.** Until this box is ticked,
-      `run_a2r.py` is not to be invoked against a live forwarder.
+- [x] **The founder approves this record and the design it names** — 2026-09-19, on the
+      identifiers and terms quoted at the top of this file.
 - [x] `benchmarks/agent/a2r-config-45.json` at `calib-v3` created — **a new file, not an edit
       to any `calib-config-*.json`** — and its `config_digest` stamped above
 - [x] `harness_revision` stamped above
 - [x] `preflight-a2r.py` green on this host — every identifier asserted, forwarder listening
 - [ ] the per-arm environment gate passing on a prepared arm — it runs at launch, inside the
       profile, and is the authority on the runtime; it refuses before spending
+
+The preflight output taken immediately before launch, and the execution HEAD it approved, are
+preserved **outside the repository** at
+`/Users/soko/Cerebros/nexus-a1-fixtures/a2r-run/preflight-at-launch.txt`. They are kept there
+rather than committed because committing them would move HEAD after the preflight had already
+reported it, and because the execution checkout must not change during the sweep.
 
 ### The run, once approved
 
