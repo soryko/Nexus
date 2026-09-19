@@ -38,6 +38,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import uuid
 import sys
 from pathlib import Path
 
@@ -303,6 +304,126 @@ def heredoc_probe(profile: Path, cwd: Path, env: dict,
     return out
 
 
+#: The macOS redirect target. A sandboxed process writing under `/private/tmp` has its write
+#: land HERE, inside `Library/Caches`, which is granted whole because the runner needs it.
+CACHE_SHADOW = Path.home() / "Library/Caches/com.apple.python/private/tmp"
+
+
+def cache_shadow_listing_probe(profile: Path, cwd: Path) -> dict:
+    """Can the arm LIST the shadow root? Kept as its own control.
+
+    Listing needs no file to exist inside the tree, so it cannot pass because the shadow
+    happens to be empty today. What it does NOT establish is the property that matters: an
+    unlistable directory does not, by itself, make a known file inside it unreadable. macOS
+    sandbox policy is per-operation, and `file-read-metadata` on a directory and
+    `file-read-data` on a path inside it are different operations. The sentinel probe below
+    tests the second one, and both are reported.
+    """
+    if not CACHE_SHADOW.is_dir():
+        return {"demonstrates_boundary": None, "applicable": False,
+                "reason": f"{CACHE_SHADOW} does not exist on this host; the deny is in the "
+                          f"profile and unexercised by a listing"}
+    out = paired(profile, ["/bin/ls", str(CACHE_SHADOW)], cwd)
+    out["applicable"] = True
+    return out
+
+
+def cache_shadow_sentinel_probe(profile: Path, cwd: Path,
+                                writer_profile: Path | None = None,
+                                writer_cwd: Path | None = None) -> dict:
+    """Read a KNOWN file in the shadow BY ITS EXACT PATH, and pair it outside the sandbox.
+
+    This is the probe that matches the exposure. Two A2-R arm-runs did not merely list the
+    shadow root; they read `.pyc` files inside it by path. An unlistable directory does not
+    by itself make a known file inside it unreadable -- macOS sandbox policy is per
+    operation, and reading a directory's metadata and reading data from a path inside it are
+    different operations -- so the file read is tested directly.
+
+      1. a sentinel with a unique token is placed at an exact path inside the shadow. It is
+         placed by a SANDBOXED WRITER first, because the redirect of `/private/tmp` writes is
+         the mechanism that put the other sweeps there, and with `writer_profile` supplied
+         that writer is a SIBLING ARM -- the real shape of the exposure, one arm's write
+         becoming another arm's read. Whether the redirect still fires is recorded as
+         `redirect_reproduced`; it is NOT assumed, and if it does not fire the sentinel is
+         written into the shadow directly from outside the sandbox. `placement` says which
+         happened. The read test below is valid either way; only the redirect case also
+         demonstrates that the write channel is still open.
+      2. the sentinel is confirmed to exist at the exact path with its token, checked from
+         outside any sandbox. Without that confirmation the probe reports `None` -- unknown,
+         never "blocked" -- because a denied read of a path holding nothing is the vacuous
+         control this module refuses everywhere else.
+      3. the arm's own profile reads that exact path. It must fail, AND the token must not
+         appear in its output: exit status alone does not say whether content crossed.
+      4. the same read runs OUTSIDE the sandbox and must succeed with the token, or step 3
+         failed for its own reasons and demonstrates nothing.
+
+    Only what this probe created is removed.
+    """
+    token = f"CACHE-SHADOW-SENTINEL-{os.getpid()}-{uuid.uuid4().hex[:12]}"
+    name = f"boundary-probe-{uuid.uuid4().hex[:12]}.txt"
+    src = Path("/private/tmp") / name
+    shadowed = CACHE_SHADOW / name
+    wprof = Path(writer_profile) if writer_profile else Path(profile)
+    wcwd = Path(writer_cwd) if writer_cwd else Path(cwd)
+    out: dict = {"demonstrates_boundary": None, "applicable": False,
+                 "sibling_arm_writer": bool(writer_profile and writer_cwd),
+                 "sentinel_path": str(shadowed), "placement": None,
+                 "redirect_reproduced": None}
+    created_shadow_root = not CACHE_SHADOW.exists()
+    try:
+        # Step 1a: the redirect route, through a sandboxed writer.
+        if wprof.exists() and wcwd.exists():
+            w = subprocess.run(["sandbox-exec", "-f", str(wprof), "/bin/sh", "-c",
+                                f'printf %s {token} > "{src}"'],
+                               cwd=str(wcwd), capture_output=True, text=True, timeout=90)
+            out["writer_exit"] = w.returncode
+            out["writer_tail"] = (w.stderr or w.stdout).strip().splitlines()[-1:]
+        else:
+            out["writer_note"] = f"writer profile {wprof} or cwd {wcwd} is absent"
+        out["redirect_reproduced"] = (shadowed.is_file()
+                                      and token in shadowed.read_text(errors="replace"))
+        if out["redirect_reproduced"]:
+            out["placement"] = "redirect"
+        else:
+            # Step 1b: place it directly. The read test does not depend on the redirect
+            # still firing; it depends on a known file being at a known path.
+            CACHE_SHADOW.mkdir(parents=True, exist_ok=True)
+            shadowed.write_text(token)
+            out["placement"] = "direct"
+        # Step 2.
+        out["sentinel_materialised"] = (shadowed.is_file()
+                                        and token in shadowed.read_text(errors="replace"))
+        if not out["sentinel_materialised"]:
+            out["reason"] = ("the sentinel could not be placed in the shadow, so a denied "
+                             "read of that path would be vacuous")
+            return out
+        # Steps 3 and 4. The question is whether CONTENT crossed, so the token is checked
+        # in the output of both halves and not merely the exit status.
+        inside = subprocess.run(["sandbox-exec", "-f", str(profile),
+                                 "/bin/cat", str(shadowed)],
+                                cwd=str(cwd), capture_output=True, text=True, timeout=90)
+        outside = subprocess.run(["/bin/cat", str(shadowed)], cwd=str(cwd),
+                                 capture_output=True, text=True, timeout=90)
+        out["token_leaked_inside"] = token in inside.stdout
+        out["works_outside"] = outside.returncode == 0 and token in outside.stdout
+        out["blocked_inside"] = inside.returncode != 0 and token not in inside.stdout
+        out["inside_tail"] = (inside.stderr or inside.stdout).strip().splitlines()[-1:]
+        out["outside_tail"] = (outside.stderr or "").strip().splitlines()[-1:]
+        out["applicable"] = True
+        if not out["works_outside"]:
+            out["reason"] = ("the same read failed outside the sandbox too, so the denial "
+                             "inside demonstrates nothing")
+            out["demonstrates_boundary"] = None
+        else:
+            out["demonstrates_boundary"] = out["blocked_inside"]
+        return out
+    finally:
+        src.unlink(missing_ok=True)
+        shadowed.unlink(missing_ok=True)
+        if created_shadow_root:
+            shutil.rmtree(CACHE_SHADOW, ignore_errors=True)
+
+
 def _first_file(root: Path) -> Path | None:
     if root.is_file():
         return root
@@ -383,9 +504,20 @@ def deny_ordering_probe(tmp: Path, cwd: Path) -> dict:
 
 def check_boundary(profile: Path, cwd: Path, held_checks: Path, python: str,
                    deny_paths: list[Path] | None = None,
-                   bench_dir: Path | None = None, runner: str = "claude") -> dict:
+                   bench_dir: Path | None = None, runner: str = "claude",
+                   writer_profile: Path | None = None, writer_cwd: Path | None = None,
+                   require: tuple[str, ...] = ()) -> dict:
     """Negative controls, executed inside the boundary. All must FAIL for the arm to run --
-    and the positive controls must all SUCCEED, or the profile is merely broken."""
+    and the positive controls must all SUCCEED, or the profile is merely broken.
+
+    `require` names controls whose result must be CONCLUSIVE for `all_hold`. A control that
+    comes back `None` -- unknown -- is normally excluded from `all_hold`, because unknown is
+    neither a hold nor a breach. That default is right for a control which may legitimately
+    not apply on a given host, and wrong for one an experiment has declared a precondition:
+    A3 requires `cache_shadow_unreadable`, so an absent or inconclusive shadow probe must
+    REFUSE the launch rather than be skipped. Naming it here is what makes that happen, and
+    `REQUIRE_A3` below is the tuple A3 passes.
+    """
     out: dict = {}
 
     # network: index deliberately ENABLED, so a failure means the socket was refused
@@ -428,16 +560,25 @@ def check_boundary(profile: Path, cwd: Path, held_checks: Path, python: str,
     # held-out arm-runs' compiled src/click through it. Probed by LISTING the shadow root,
     # which needs no file to exist inside it -- a probe that passes because the tree is empty
     # today would be the same vacuous control the held-checks probe already guards against.
-    shadow = Path.home() / "Library/Caches/com.apple.python/private/tmp"
-    if shadow.is_dir():
-        out["cache_shadow_paired"] = paired(profile, ["/bin/ls", str(shadow)], cwd)
-        out["cache_shadow_unreadable"] = out["cache_shadow_paired"]["demonstrates_boundary"]
-    else:
-        # Absent is not denied: it can appear the moment a sandboxed interpreter writes.
-        out["cache_shadow_paired"] = {"demonstrates_boundary": None,
-                                      "reason": f"{shadow} does not exist on this host; the "
-                                                f"deny is in the profile and unexercised"}
+    #
+    # TWO controls, not one. The listing control is retained because it cannot pass on an
+    # empty tree; the sentinel control is added because an unlistable directory does not by
+    # itself make a known file inside it unreadable, and reading known files by path is what
+    # the two A2-R arm-runs actually did.
+    out["cache_shadow_listing"] = cache_shadow_listing_probe(profile, cwd)
+    out["cache_shadow_listing_unreadable"] = out["cache_shadow_listing"]["demonstrates_boundary"]
+    out["cache_shadow_sentinel"] = cache_shadow_sentinel_probe(
+        profile, cwd, writer_profile=writer_profile, writer_cwd=writer_cwd)
+    out["cache_shadow_file_unreadable"] = out["cache_shadow_sentinel"]["demonstrates_boundary"]
+    # The combined verdict is the WEAKER of the two and is `None` if either is inconclusive:
+    # the sentinel is the load-bearing one, so a listing denial cannot stand in for it.
+    if out["cache_shadow_file_unreadable"] is None or out["cache_shadow_listing_unreadable"] is None:
         out["cache_shadow_unreadable"] = None
+    else:
+        out["cache_shadow_unreadable"] = bool(out["cache_shadow_file_unreadable"]) and \
+            bool(out["cache_shadow_listing_unreadable"])
+    # Backwards compatibility for readers of the A2-R-era key.
+    out["cache_shadow_paired"] = out["cache_shadow_listing"]
 
     # a denied path that did not exist when the profile was written
     out["future_deny_paired"] = future_path_probe(profile, list(deny_paths or []), cwd)
@@ -487,8 +628,25 @@ def check_boundary(profile: Path, cwd: Path, held_checks: Path, python: str,
                 "runner_scratch_usable"]
     out["negative_controls"] = {k: out[k] for k in negative}
     out["positive_controls"] = {k: out[k] for k in positive}
-    out["all_hold"] = all(out[k] for k in (*negative, *positive))
+    # A required control that came back `None` was EXCLUDED from `negative` above, which is
+    # exactly how an unexercised boundary used to pass a gate that declared it mandatory.
+    # Required-and-unknown is recorded here and fails `all_hold` on its own.
+    out["required_controls"] = list(require)
+    out["required_unresolved"] = sorted(k for k in require if out.get(k) is None)
+    out["required_failed"] = sorted(k for k in require
+                                    if out.get(k) is not None and not out.get(k))
+    out["all_hold"] = (all(out[k] for k in (*negative, *positive))
+                       and not out["required_unresolved"]
+                       and not out["required_failed"])
     return out
+
+
+#: The controls A3 declares as preconditions. `REGISTRATION-DRAFT-a3-consult.md` §10 says an
+#: absent or `None` shadow probe must stop the sweep; passing this tuple is what enforces it,
+#: and a gate that omits it silently reverts to "unknown is skipped".
+REQUIRE_A3 = ("cache_shadow_unreadable", "cache_shadow_file_unreadable",
+              "cache_shadow_listing_unreadable", "held_checks_unreadable",
+              "network_egress_blocked", "dns_and_https_blocked")
 
 
 if __name__ == "__main__":

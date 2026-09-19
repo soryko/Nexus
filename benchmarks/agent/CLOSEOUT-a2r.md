@@ -7,6 +7,14 @@ beyond the twelve arm-runs it contains.
 Everything below is derived from the retained records. No cell was rerun and no model was
 invoked. Where the evidence does not settle a question, it says so.
 
+> **Boundary exposure — read before any number below.** Two arm-runs, **k3/nexus** and
+> **k4/nexus**, accessed bytecode from other sweeps through the macOS cache shadow (§6, R5).
+> The effect on their behavior and outcomes is **unresolved**. A2-R's recorded outcomes remain
+> **descriptive observations under that exposure**. Every result here retains both runs and
+> their accounting; nothing is excluded. Disjoint task ids do **not** establish independence —
+> all eight tasks across A1 and A2-R are defects in `src/click/core.py` and can share
+> functions, implementation details and fixes.
+
 ---
 
 ## 1. The identities, kept apart
@@ -38,6 +46,10 @@ on every run. Twelve match; none refused.
 12 of 12 arm-runs present and scored, 0 excluded, **9 functional passes**, **5 normal
 completions**, **14 942 135 tokens** measured with no allowance, nothing unresolved,
 `consumption_certain: true`, no overshoot against the 20 000 000-token soft threshold.
+
+**Two of the twelve — k3/nexus and k4/nexus — ran under the boundary exposure of §6 R5.** They
+are counted here, as they should be; the figures above are the sweep as it ran. What they are
+not is twelve independently isolated arm-runs.
 
 The closed v2 calibration's one unresolved arm-run (`c60/run-k1/attempt1/arms/baseline`,
 560 844 tokens over its cap) **stays outstanding**. A2-R neither resolves it, covers it, nor
@@ -234,15 +246,38 @@ held-out execution tree — h1–h4, every attempt, every arm — grepped those 
 they were working on, and disassembled `core.cpython-39.pyc` from them.
 
 **What was exposed, checked rather than assumed: 221 files, all `.pyc`.** No `.py` source, no
-tests, no hidden checks, no patches. Every content grep the two arms ran came back empty —
-there is no `tests/` directory in the shadow. k3/nexus made no source edit at all and failed;
-k4/nexus's probes ended at call 31 and its first source edit is call 35. **Nothing was
-extracted, on this evidence.**
+tests, no hidden checks, no patches. Every *source-text* grep the two arms ran came back empty
+— there is no `tests/` directory in the shadow. k3/nexus made no source edit at all and
+failed; k4/nexus's probes ended at call 31 and its first source edit is call 35.
 
-A2-R is a development sweep on tasks disjoint from A1's, so this does not void it. **It would
-void a held-out run.** The path is denied as of this branch, the deny is the subpath rather
-than the cache root, `check_boundary` probes it every run by *listing* the shadow root so the
-control cannot pass on an empty tree, and an absent shadow is `None` rather than `True`.
+**The earlier wording here said "nothing was extracted, on this evidence". That is withdrawn:
+it was not established.** Bytecode carries implementation information, and disassembly can
+expose it while a grep over source text returns nothing — k3/nexus *did* disassemble
+`core.cpython-39.pyc`. A source-text grep is not a test of what a disassembler can recover.
+The honest statement, and the one carried forward:
+
+> Two arm-runs accessed bytecode from other sweeps. The effect on their behavior and outcomes
+> is unresolved. A2-R's recorded outcomes remain descriptive observations under that exposure.
+
+**Nor does task disjointness establish independence.** A2-R runs k1–k4 and the shadow held
+A1's h1–h4, but different Click tasks can share functions, implementation details and fixes:
+all eight are defects in `src/click/core.py`. Disjoint task ids are not disjoint subject
+matter, and the earlier "disjoint from A1's, so this does not void it" understated what would
+have to be shown.
+
+**All results and accounting are kept. No arm-run is retroactively excluded**, and the two
+affected runs are flagged wherever A2-R's numbers are read — excluding them would produce
+cleaner figures by dropping the runs selected on the problem being reported. The
+runtime-usability finding is unaffected and remains supported. What did not hold is the
+intended isolation.
+
+The path is denied as of this branch, the deny is the subpath rather than the cache root, and
+`check_boundary` now runs **two** controls over it: the original *listing* of the shadow root,
+which cannot pass on an empty tree, and a **sentinel read by exact path** with an
+outside-sandbox positive control, because an unlistable directory does not by itself make a
+known file inside it unreadable — and reading files by path is what these two arm-runs did. An
+absent or inconclusive result is `None` rather than `True`, and A3 declares both controls
+preconditions so that `None` refuses the launch instead of being skipped.
 
 **A second, milder exposure is not new and is not closed.** `/opt/homebrew` is a system read
 root, and k4/notes spent 10 of its 47 calls reading a released Click under
@@ -260,6 +295,10 @@ deliberately whether that is acceptable.
 - **No causal comparison with v2.** Prompt digests differ on all four tasks, so no v3 row
   pools with a v2 row.
 - **No rate.** One attempt per cell, four tasks, twelve arm-runs.
+- **Not clean isolation.** Two arm-runs read another sweep's bytecode (§6 R5). Whether that
+  changed their behaviour or outcomes is unresolved and cannot be settled from the records:
+  disassembly leaves no trace a source-text grep would find. The runtime-usability finding
+  stands; a claim that these twelve runs were independent does not.
 - **Not "the requirements were satisfied".** Nine hidden-check passes; **eight** patches add a
   test; `P1_final_reply_opens_done` fails in all twelve — no arm-run opened its final reply
   with `DONE`, and **eight have no final reply at all**: all seven that hit the ceiling, plus

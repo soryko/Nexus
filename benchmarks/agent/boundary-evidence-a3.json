@@ -1,0 +1,137 @@
+{
+ "network_egress_blocked": true,
+ "network_probe_tail": [
+  "ERROR: No matching distribution found for click"
+ ],
+ "dns_and_https_blocked": true,
+ "dns_probe_tail": [
+  "curl: (6) Could not resolve host: pypi.org"
+ ],
+ "held_checks_paired": {
+  "blocked_inside": true,
+  "works_outside": true,
+  "demonstrates_boundary": true,
+  "inside_tail": [
+   "cat: /Users/soko/Cerebros/nexus-a1-fixtures/a2r-run/c45/run-k1/base/checks/k1/tests/test_context.py: Operation not permitted"
+  ],
+  "outside_tail": [
+   "    assert ctx._opt_prefixes == {\"-\", \"--\", \"!\"}"
+  ]
+ },
+ "held_checks_unreadable": true,
+ "bench_dir_paired": {
+  "blocked_inside": true,
+  "works_outside": true,
+  "demonstrates_boundary": true,
+  "inside_tail": [
+   "cat: /Users/soko/Cerebros/nexus-memory/benchmarks/agent/.hypothesis/.gitignore: Operation not permitted"
+  ],
+  "outside_tail": [
+   "*"
+  ]
+ },
+ "bench_dir_unreadable": true,
+ "cache_shadow_listing": {
+  "blocked_inside": true,
+  "works_outside": true,
+  "demonstrates_boundary": true,
+  "inside_tail": [
+   "ls: /Users/soko/Library/Caches/com.apple.python/private/tmp: Operation not permitted"
+  ],
+  "outside_tail": [
+   "g2wt"
+  ],
+  "applicable": true
+ },
+ "cache_shadow_listing_unreadable": true,
+ "cache_shadow_sentinel": {
+  "demonstrates_boundary": true,
+  "applicable": true,
+  "sibling_arm_writer": true,
+  "sentinel_path": "/Users/soko/Library/Caches/com.apple.python/private/tmp/boundary-probe-b78e6b68dd4b.txt",
+  "placement": "direct",
+  "redirect_reproduced": false,
+  "writer_exit": 0,
+  "writer_tail": [],
+  "sentinel_materialised": true,
+  "token_leaked_inside": false,
+  "works_outside": true,
+  "blocked_inside": true,
+  "inside_tail": [
+   "cat: /Users/soko/Library/Caches/com.apple.python/private/tmp/boundary-probe-b78e6b68dd4b.txt: Operation not permitted"
+  ],
+  "outside_tail": []
+ },
+ "cache_shadow_file_unreadable": true,
+ "cache_shadow_unreadable": true,
+ "cache_shadow_paired": {
+  "blocked_inside": true,
+  "works_outside": true,
+  "demonstrates_boundary": true,
+  "inside_tail": [
+   "ls: /Users/soko/Library/Caches/com.apple.python/private/tmp: Operation not permitted"
+  ],
+  "outside_tail": [
+   "g2wt"
+  ],
+  "applicable": true
+ },
+ "future_deny_paired": {
+  "applicable": false,
+  "reason": "every denied path already exists -- probe would not test the absent-path case"
+ },
+ "future_path_denied": null,
+ "own_checkout_readable": true,
+ "interpreter_runs": true,
+ "interpreter_tail": [],
+ "git_runs": true,
+ "git_tail": [],
+ "runner_starts": true,
+ "runner_version": [
+  "2.1.270 (Claude Code)"
+ ],
+ "runner_tail": [],
+ "runner_scratch_usable": true,
+ "runner_scratch_dir": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-a1-fixtures-a2r-run-c45-run-k1-base-k1",
+ "runner_scratch_tail": [],
+ "negative_controls": {
+  "network_egress_blocked": true,
+  "dns_and_https_blocked": true,
+  "held_checks_unreadable": true,
+  "bench_dir_unreadable": true,
+  "cache_shadow_unreadable": true
+ },
+ "positive_controls": {
+  "own_checkout_readable": true,
+  "interpreter_runs": true,
+  "git_runs": true,
+  "runner_starts": true,
+  "runner_scratch_usable": true
+ },
+ "required_controls": [
+  "cache_shadow_unreadable",
+  "cache_shadow_file_unreadable",
+  "cache_shadow_listing_unreadable",
+  "held_checks_unreadable",
+  "network_egress_blocked",
+  "dns_and_https_blocked"
+ ],
+ "required_unresolved": [],
+ "required_failed": [],
+ "all_hold": true,
+ "_context": {
+  "purpose": "A3 pre-launch boundary evidence. Model-free; no arm-run, no budget approved.",
+  "arm_profile": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/c63a1c31-f57c-4178-bc63-1751c82b08ad/scratchpad/arm-a.sb",
+  "sibling_writer_profile": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/c63a1c31-f57c-4178-bc63-1751c82b08ad/scratchpad/arm-b.sb",
+  "arm_checkout": "/Users/soko/Cerebros/nexus-a1-fixtures/a2r-run/c45/run-k1/base/k1",
+  "sibling_checkout": "/Users/soko/Cerebros/nexus-a1-fixtures/a2r-run/c45/run-k2/base/k2",
+  "required": [
+   "cache_shadow_unreadable",
+   "cache_shadow_file_unreadable",
+   "cache_shadow_listing_unreadable",
+   "held_checks_unreadable",
+   "network_egress_blocked",
+   "dns_and_https_blocked"
+  ]
+ }
+}

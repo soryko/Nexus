@@ -993,6 +993,70 @@ def test_an_absent_shadow_is_neither_a_hold_nor_a_breach():
           'if out["cache_shadow_unreadable"] is not None:' in src2)
 
 
+def test_a_required_control_that_is_unknown_refuses_the_launch():
+    """Excluding `None` from `all_hold` is right for a control that may not apply, and WRONG
+    for one an experiment declared a precondition. A3 §10 says an absent or `None` shadow
+    probe stops the sweep; without `require` the exclusion above silently let it through.
+
+    Both directions are checked: required-and-unknown must refuse, and the same result must
+    still pass when nothing is required of it."""
+    sys.path.insert(0, str(pathlib.Path(__file__).parent))
+    import isolation
+    base = {"network_egress_blocked": True, "dns_and_https_blocked": True,
+            "held_checks_unreadable": True, "bench_dir_unreadable": None,
+            "future_path_denied": None, "cache_shadow_unreadable": None,
+            "own_checkout_readable": True, "interpreter_runs": True, "git_runs": True,
+            "runner_starts": True, "runner_scratch_usable": True}
+
+    def verdict(out, require):
+        negative = ["network_egress_blocked", "dns_and_https_blocked", "held_checks_unreadable"]
+        for k in ("bench_dir_unreadable", "future_path_denied", "cache_shadow_unreadable"):
+            if out[k] is not None:
+                negative.append(k)
+        positive = ["own_checkout_readable", "interpreter_runs", "git_runs", "runner_starts",
+                    "runner_scratch_usable"]
+        unresolved = [k for k in require if out.get(k) is None]
+        failed = [k for k in require if out.get(k) is not None and not out.get(k)]
+        return all(out[k] for k in (*negative, *positive)) and not unresolved and not failed
+
+    check("unknown shadow passes when nothing requires it", verdict(dict(base), ()) is True)
+    check("unknown shadow REFUSES when A3 requires it",
+          verdict(dict(base), ("cache_shadow_unreadable",)) is False)
+    check("a required control that is present and False also refuses",
+          verdict({**base, "cache_shadow_unreadable": False},
+                  ("cache_shadow_unreadable",)) is False)
+    check("A3's required tuple names the shadow controls",
+          "cache_shadow_unreadable" in isolation.REQUIRE_A3
+          and "cache_shadow_file_unreadable" in isolation.REQUIRE_A3,
+          str(isolation.REQUIRE_A3))
+    src = inspect.getsource(isolation.check_boundary)
+    check("all_hold consults required_unresolved", 'required_unresolved' in src)
+
+
+def test_a_listing_denial_does_not_stand_in_for_a_file_read():
+    """An unlistable directory does not, by itself, make a known file inside it unreadable.
+    The two A2-R arm-runs read `.pyc` files by path, so the sentinel probe is the load-bearing
+    control and the combined verdict may not be satisfied by the listing alone."""
+    sys.path.insert(0, str(pathlib.Path(__file__).parent))
+    import isolation
+    check("a sentinel probe exists", hasattr(isolation, "cache_shadow_sentinel_probe"))
+    check("the listing probe is retained separately",
+          hasattr(isolation, "cache_shadow_listing_probe"))
+    src = inspect.getsource(isolation.check_boundary)
+    check("the combined verdict is None if EITHER is inconclusive",
+          'out["cache_shadow_file_unreadable"] is None or '
+          'out["cache_shadow_listing_unreadable"] is None' in src, src[-1200:])
+    sentinel = inspect.getsource(isolation.cache_shadow_sentinel_probe)
+    check("the sentinel read is paired against an outside-sandbox control",
+          'works_outside' in sentinel and 'demonstrates_boundary"] = None' in sentinel)
+    check("an unmaterialised sentinel is unknown, never blocked",
+          'sentinel_materialised' in sentinel and 'would be vacuous' in sentinel)
+    check("content, not exit status, decides whether the read crossed",
+          'token_leaked_inside' in sentinel)
+    check("the sibling-arm writer is supported",
+          'writer_profile' in sentinel and 'sibling_arm_writer' in sentinel)
+
+
 def main() -> int:
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_") and callable(v)]
