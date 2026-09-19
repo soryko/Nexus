@@ -43,6 +43,7 @@ from pathlib import Path
 BENCH = Path(__file__).parent
 sys.path.insert(0, str(BENCH))
 
+import assess_a2r as A2R                                                # noqa: E402
 import report_calibration as RC                                         # noqa: E402
 
 NOTES_FILE = "NOTES-FROM-EARLIER-WORK.md"
@@ -50,7 +51,46 @@ NOTES_FILE = "NOTES-FROM-EARLIER-WORK.md"
 # A command that RUNS pytest, as against one that merely names it -- `which pytest` and
 # `find / -name pytest` are the agent hunting for the binary, which is friction to report and
 # not a test attempt to count.
-RUNS_PYTEST = re.compile(r'(?:python[0-9.]*\s+-m\s+pytest|(?:^|[;&|]\s*|/)pytest)\b')
+#: Superseded by `runs_pytest` below, and kept only as the shape the repair's counterexamples
+#: control against. Nothing reads it.
+RUNS_PYTEST_V2 = re.compile(r'(?:python[0-9.]*\s+-m\s+pytest|(?:^|[;&|]\s*|/)pytest)\b')
+
+
+def runs_pytest(cmd: str) -> bool:
+    r"""Does this Bash command actually INVOKE pytest?
+
+    Scanning the whole command for the old pattern is wrong in both directions, and both
+    were measured on real records rather than imagined:
+
+      MISSED   under `calib-v3` the interpreter arrives by NAME -- `PYTHONPATH=src
+               "$A2_PYTHON" -m pytest ...` -- which `python[0-9.]*` does not match. k1's
+               baseline ran pytest eight times and the old rule found one.
+      CREDITED `grep -n "filterwarnings\|pytest\|\[tool" pyproject.toml` matched, because
+               the `|` inside the grep pattern satisfies the `[;&|]` separator. That call is
+               the agent hunting for a warnings setting, not a test run -- and it was the
+               single "test attempt" the old rule reported for that arm-run.
+
+    `assess_a2r` already settles this per SEGMENT: the segment's command token must be an
+    interpreter, pinned or otherwise, before `-m pytest` in it counts. One parser, already
+    controlled against `echo pytest` and against a segment that merely names the pin.
+    """
+    return any(A2R.classify_segment(seg) in ("pinned", "other_interpreter")
+               and A2R.RUNS_PYTEST.search(seg)
+               for seg in A2R.segments(cmd))
+
+
+def runs_script(cmd: str) -> bool:
+    """Does this command run a local .py file through an interpreter?
+
+    Same segment rule as `runs_pytest`, and for the same reason: three of this sweep's
+    arm-runs wrote reproduction scripts and ran them with the pinned interpreter, and the
+    old whole-command pattern -- which required the literal word `python` -- reported zero
+    reproduction runs for every one of them.
+    """
+    return any(A2R.classify_segment(seg) in ("pinned", "other_interpreter")
+               and not A2R.RUNS_PYTEST.search(seg)
+               and RUNS_SCRIPT.search(seg)
+               for seg in A2R.segments(cmd))
 WRITE_INTO_SRC = re.compile(r'(?:>>?|tee(?:\s+-a)?)\s*["\']?(?:\./)?(src/[\w./-]+)')
 SED_IN_PLACE = re.compile(r'sed\s+(?:-[a-zA-Z]*i[a-zA-Z]*\s|--in-place)')
 CP_INTO_SRC = re.compile(r'\bcp\s+\S+\s+(?:\./)?src/')
@@ -66,7 +106,11 @@ INVESTIGATE = re.compile(r'^\s*(grep|rg|cat|ls|find|head|tail|sed -n|awk|wc|git 
 # Running a local script -- `python3 repro.py`. This is verification too, and two arm-runs did
 # ALL of theirs this way without ever invoking pytest, one of them passing the hidden checks.
 # `-m pytest` and `-c "..."` carry no `.py`, so neither is matched here.
-RUNS_SCRIPT = re.compile(r'python[0-9.]*\s+(?:-\S+\s+)*([\w./-]+\.py)\b')
+#: The same hazard as `runs_pytest`: under `calib-v3` the interpreter arrives BY NAME, so
+#: `"$A2_PYTHON" repro.py` matches nothing here. Applied per segment, after the segment's
+#: command token has been shown to be an interpreter, so the literal `python` is no longer
+#: load-bearing.
+RUNS_SCRIPT = re.compile(r'(?:^|\s)(?:-\S+\s+)*([\w./-]+\.py)(?:\s|$)')
 WRITE_TARGET = re.compile(r'(?:>>?|tee(?:\s+-a)?)\s*["\']?([\w./-]+\.py)')
 # Searching the HOST for another copy of click to compare the fixture against. Reported
 # because it is a distinctive way turns were spent, and because its INTENSITY differs between
@@ -132,9 +176,9 @@ def classify_call(tc: dict, arm: str) -> dict:
     elif name == "Bash":
         cmd = inp.get("command") or ""
         detail = cmd
-        if RUNS_PYTEST.search(cmd):
+        if runs_pytest(cmd):
             kinds.append("test_attempt")
-        elif RUNS_SCRIPT.search(cmd):
+        elif runs_script(cmd):
             kinds.append("repro_run")
         if WRITE_INTO_SRC.search(cmd) or (SED_IN_PLACE.search(cmd) and "src/" in cmd) \
                 or CP_INTO_SRC.search(cmd):

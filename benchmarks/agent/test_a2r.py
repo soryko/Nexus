@@ -8,7 +8,9 @@ failing test read as a broken interpreter, two sweeps sharing one budget.
 """
 import contextlib
 import io
+import inspect
 import json
+import pathlib
 import os
 import sys
 import tempfile
@@ -938,6 +940,57 @@ def test_the_report_refuses_to_pool_two_ceilings():
            "expected_cells": 12}
     text = A.render(rep)
     check("two ceilings -> refused", "REFUSED TO SUMMARISE" in text, text[:300])
+
+
+def test_the_cache_shadow_of_private_tmp_is_denied_after_the_Library_allow():
+    """macOS redirects a sandboxed process's writes under /private/tmp into
+    ~/Library/Caches/com.apple.python/private/tmp. `Library/Caches` is granted whole because
+    the runner needs it, so the shadow arrived inside an allowed subtree -- and two A2-R
+    arm-runs read A1 capture and HELD-OUT arm-runs' compiled src/click through it. The deny
+    has to come AFTER the allow or the profile does not mean what it says.
+    """
+    import tempfile
+    sys.path.insert(0, str(pathlib.Path(__file__).parent))
+    import isolation
+    check("the shadow is on the deny list",
+          "Library/Caches/com.apple.python" in isolation.HOME_DENIES,
+          isolation.HOME_DENIES)
+    with tempfile.TemporaryDirectory() as td:
+        cwd = pathlib.Path(td) / "repo"
+        cwd.mkdir()
+        text = isolation.write_profile(pathlib.Path(td) / "p.sb", cwd, [], None,
+                                       8899).read_text()
+        allow_at = text.find('(allow file-read* (subpath "/Library"))')
+        home_lib = text.find(str(pathlib.Path.home() / "Library/Caches"))
+        deny_at = text.find("Library/Caches/com.apple.python")
+        check("the shadow deny is present", deny_at != -1, text[-900:])
+        check("and it comes after the /Library allow", deny_at > allow_at,
+              f"deny at {deny_at}, allow at {allow_at}")
+        if home_lib != -1:
+            check("and after the ~/Library/Caches allow", deny_at > home_lib,
+                  f"deny at {deny_at}, home allow at {home_lib}")
+        # The deny must be the SUBPATH, not the cache root: the runner reads its own caches
+        # under ~/Library/Caches, and a deny one level up would break every arm-run while
+        # looking, in this same profile, exactly as correct.
+        cache_root = str(pathlib.Path.home() / "Library/Caches")
+        denied_lines = [ln for ln in text.splitlines() if "deny file-read" in ln
+                        and cache_root in ln]
+        check("the deny names the shadow, not the cache root",
+              denied_lines and all("com.apple.python" in ln for ln in denied_lines),
+              denied_lines)
+
+
+def test_an_absent_shadow_is_neither_a_hold_nor_a_breach():
+    """On a host that has never run a sandboxed interpreter the shadow does not exist. That
+    is `None` -- excluded from `all_hold` -- and not `True`, which would report a boundary
+    demonstrated by a probe that never ran."""
+    sys.path.insert(0, str(pathlib.Path(__file__).parent))
+    import isolation
+    src = inspect.getsource(isolation.check_boundary)
+    check("absent shadow yields None", '"cache_shadow_unreadable"] = None' in src, src[-400:])
+    src2 = inspect.getsource(isolation.check_boundary)
+    check("None keeps it out of all_hold",
+          'if out["cache_shadow_unreadable"] is not None:' in src2)
 
 
 def main() -> int:

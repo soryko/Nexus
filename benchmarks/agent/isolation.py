@@ -64,11 +64,22 @@ HOME_READ_ROOTS = (
 
 # ...minus the parts of `~/.claude` that hold transcripts of earlier work on this very
 # repository. They are inside an allowed subtree, so they need an explicit deny.
+#
+# `Library/Caches/com.apple.python` is the one that was not guessed and had to be found in a
+# trace. macOS REDIRECTS a sandboxed process's writes under `/private/tmp` into
+# `~/Library/Caches/com.apple.python/private/tmp/...`, so every earlier sandboxed run's
+# `__pycache__` reappears there -- under `Library/Caches`, which is granted whole because the
+# runner needs it. The entry-only grant on `/tmp/claude-<uid>` below exists precisely to keep
+# other sessions' working directories out of an arm; the redirect put a shadow of that tree
+# back inside an allowed subtree under a different name, and two A2-R arm-runs walked into it
+# and read A1 capture and HELD-OUT arm-runs' compiled `src/click`. Denying a subtree the
+# runner does not need is cheaper than reasoning about what the shadow contains today.
 HOME_DENIES = (
     ".claude/projects", ".claude/history.jsonl", ".claude/sessions",
     ".claude/file-history", ".claude/paste-cache", ".claude/shell-snapshots",
     ".claude/backups", ".claude/debug", ".claude/plans", ".claude/tasks",
     ".claude/todos", ".claude/telemetry",
+    "Library/Caches/com.apple.python",
 )
 
 # Claude Code opens its own scratch root at startup and fails with
@@ -411,6 +422,23 @@ def check_boundary(profile: Path, cwd: Path, held_checks: Path, python: str,
     else:
         out["bench_dir_unreadable"] = None
 
+    # the macOS redirect of /private/tmp into an ALLOWED cache subtree. The entry-only grant
+    # on /tmp/claude-<uid> keeps other sessions' working directories out of an arm; the
+    # shadow put them back under a different name and two A2-R arm-runs read A1 capture and
+    # held-out arm-runs' compiled src/click through it. Probed by LISTING the shadow root,
+    # which needs no file to exist inside it -- a probe that passes because the tree is empty
+    # today would be the same vacuous control the held-checks probe already guards against.
+    shadow = Path.home() / "Library/Caches/com.apple.python/private/tmp"
+    if shadow.is_dir():
+        out["cache_shadow_paired"] = paired(profile, ["/bin/ls", str(shadow)], cwd)
+        out["cache_shadow_unreadable"] = out["cache_shadow_paired"]["demonstrates_boundary"]
+    else:
+        # Absent is not denied: it can appear the moment a sandboxed interpreter writes.
+        out["cache_shadow_paired"] = {"demonstrates_boundary": None,
+                                      "reason": f"{shadow} does not exist on this host; the "
+                                                f"deny is in the profile and unexercised"}
+        out["cache_shadow_unreadable"] = None
+
     # a denied path that did not exist when the profile was written
     out["future_deny_paired"] = future_path_probe(profile, list(deny_paths or []), cwd)
     out["future_path_denied"] = (out["future_deny_paired"].get("demonstrates_boundary")
@@ -450,6 +478,11 @@ def check_boundary(profile: Path, cwd: Path, held_checks: Path, python: str,
         negative.append("bench_dir_unreadable")
     if out["future_path_denied"] is not None:
         negative.append("future_path_denied")
+    # None means the shadow does not exist on this host, which is neither a hold nor a
+    # breach. It is excluded from `all_hold` rather than counted as either -- the same rule
+    # `future_path_denied` follows, and the reason it is not silently True.
+    if out["cache_shadow_unreadable"] is not None:
+        negative.append("cache_shadow_unreadable")
     positive = ["own_checkout_readable", "interpreter_runs", "git_runs", "runner_starts",
                 "runner_scratch_usable"]
     out["negative_controls"] = {k: out[k] for k in negative}
