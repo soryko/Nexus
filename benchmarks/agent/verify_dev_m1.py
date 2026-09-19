@@ -29,7 +29,7 @@ The category rule, stated before the numbers so it can be argued with:
 A task may carry more than one. `useful` and `stale` together is the interesting case and is
 not resolved into one label.
 
-    python3 verify_dev_m1.py <scratch> [--corpus <f>] [--out <f>] [--no-reach]
+    python3 verify_dev_m1.py <scratch> [--corpus <f>] [--out <f>] [--clone <d>] [--no-reach]
 """
 from __future__ import annotations
 
@@ -79,36 +79,134 @@ def probe_tree(probe: dict | None, root: Path) -> str:
     return "true"
 
 
-def fix_added_tokens(scratch: Path, task: str) -> set[str]:
-    """Distinctive identifiers appearing only on the ADDED side of the task's own fix."""
+class Unresolved(Exception):
+    """Evidence could not be gathered. The distinction this whole module turns on: a scan
+    that gathered nothing found no leakage only if it actually looked."""
+
+
+def _config_clone() -> str | None:
+    """`a1-config.json` names the upstream clone. It is gitignored, so nothing in git records
+    the path and it must be read at runtime or supplied."""
+    cfg = BENCH / "a1-config.json"
+    if not cfg.is_file():
+        return None
+    try:
+        return json.loads(cfg.read_text()).get("source_clone")
+    except (ValueError, OSError):
+        return None
+
+
+def _code_tokens(block: str) -> set[str]:
+    """Identifiers in a block of Python, with comments and string bodies removed.
+
+    The scan is looking for an identifier the fix introduces. Prose is not that. k4's fix
+    adds a docstring reading "The invocation order takes precedence over the declaration
+    order", and without this the scan flagged two memories for using the English words
+    `precedence` and `declared` about unrelated subjects. Stripping comments and string
+    bodies is what makes a hit mean "this memory names something the fix introduced".
+    """
+    block = re.sub(r'"""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'', " ", block)
+    # A diff's added lines are not valid Python: a docstring can OPEN on a `+` line and close
+    # on an unchanged one, leaving the region unterminated and unstripped. That is exactly
+    # k4's fix, and it is why `precedence` and `takes` survived the pass above. An unmatched
+    # opener therefore strips to the end of the block.
+    block = re.sub(r'"""[\s\S]*|\'\'\'[\s\S]*', " ", block)
+    block = re.sub(r'"[^"\n]*"|\'[^\'\n]*\'', " ", block)
+    block = re.sub(r"#[^\n]*", " ", block)
+    return set(re.findall(r"[A-Za-z_][A-Za-z0-9_]{4,}", block))
+
+
+def fix_added_tokens(scratch: Path, task: str, clone: str | None = None) -> set[str]:
+    """Distinctive identifiers appearing only on the ADDED side of the task's own fix.
+
+    RAISES rather than returning an empty set when the diff could not be taken. The previous
+    version returned `set()` for a missing clone, a missing revision or a failed `git`, and
+    every one of those published as "no leakage" -- which is how this check ran vacuously
+    across all four tasks: no A2-R `fixtures.json` records a `clone` key at all.
+    """
     base = scratch / f"c45/run-{task}/base"
-    spec = json.loads((base / "fixtures.json").read_text())
+    fixtures = base / "fixtures.json"
+    if not fixtures.is_file():
+        raise Unresolved(f"{fixtures} is absent")
+    spec = json.loads(fixtures.read_text())
     entry = spec[0] if isinstance(spec, list) else spec
     fix, pre = entry.get("fix"), entry.get("pre_fix")
-    clone = entry.get("clone") or entry.get("source_clone")
-    if not (fix and pre and clone and Path(clone).is_dir()):
-        return set()
-    d = subprocess.run(["git", "-C", str(clone), "diff", f"{pre}..{fix}", "--", "src/"],
+    if not (fix and pre):
+        raise Unresolved(f"{task}: fixtures.json records no fix/pre_fix pair")
+    src = clone or entry.get("clone") or entry.get("source_clone") or _config_clone()
+    if not src:
+        raise Unresolved(f"{task}: no clone recorded in fixtures.json, and none supplied "
+                         f"(--clone) or named by a1-config.json")
+    if not Path(src).is_dir():
+        raise Unresolved(f"{task}: clone {src} is not a directory")
+    d = subprocess.run(["git", "-C", str(src), "diff", f"{pre}..{fix}", "--", "src/"],
                        capture_output=True, text=True)
-    added, removed = set(), set()
-    for line in d.stdout.splitlines():
-        if line.startswith("+") and not line.startswith("+++"):
-            added |= set(re.findall(r"[A-Za-z_][A-Za-z0-9_]{4,}", line))
-        elif line.startswith("-") and not line.startswith("---"):
-            removed |= set(re.findall(r"[A-Za-z_][A-Za-z0-9_]{4,}", line))
-    return added - removed
+    if d.returncode != 0:
+        raise Unresolved(f"{task}: git diff {pre}..{fix} failed in {src}: "
+                         f"{(d.stderr or '').strip().splitlines()[-1:]}")
+    if not d.stdout.strip():
+        raise Unresolved(f"{task}: git diff {pre}..{fix} over src/ is empty -- the revisions "
+                         f"resolve but the fix touches nothing, so the scan would be vacuous")
+    plus = "\n".join(l[1:] for l in d.stdout.splitlines()
+                     if l.startswith("+") and not l.startswith("+++"))
+    minus = "\n".join(l[1:] for l in d.stdout.splitlines()
+                      if l.startswith("-") and not l.startswith("---"))
+    added, removed = _code_tokens(plus), _code_tokens(minus)
+    # "Appears only on the added side" has to mean NEW TO THE CODEBASE, not merely "on a `+`
+    # line". Taken literally it matched `click`, `option`, `close`, `before` and `which` --
+    # words all over the pre-fix tree and all over ordinary prose -- and flagged 5 to 20 of
+    # the 24 memories on every task. That is the opposite failure to the vacuous one and just
+    # as uninformative: a check that can never pass says nothing when it fires. A token
+    # already present in the pre-fix tree cannot be evidence that a memory carries the fix,
+    # so the pre-fix tree itself is the discriminator.
+    pre_tree = scratch / f"c45/run-{task}/base/{task}/src"
+    if not pre_tree.is_dir():
+        raise Unresolved(f"{task}: pre-fix tree {pre_tree} is absent, so 'new to the "
+                         f"codebase' cannot be computed and every added word would flag")
+    # Deliberately NOT `_code_tokens` here. The two sides are asymmetric on purpose: the
+    # added side is narrowed to code, because a hit should mean the memory names something
+    # the fix INTRODUCED; the "already in the tree" side is widened to every word in the
+    # file, prose included, because any prior occurrence at all disqualifies a token as
+    # distinctive. Narrowing this side instead made `invoked` and `behavior` look new when
+    # they were sitting in a pre-fix docstring.
+    present: set[str] = set()
+    for f in pre_tree.rglob("*.py"):
+        present |= set(re.findall(r"[A-Za-z_][A-Za-z0-9_]{4,}",
+                                  f.read_text(errors="replace")))
+    tokens = added - removed - present
+    if not tokens:
+        raise Unresolved(f"{task}: the fix diff introduces no identifier absent from the "
+                         f"pre-fix tree, so a token scan against it cannot detect anything")
+    return tokens
 
 
 def hidden_check_names(scratch: Path, task: str) -> set[str]:
+    """Function names defined in the hidden checks and not in the visible tree.
+
+    RAISES when the checks directory is absent or defines no test function: an empty name set
+    makes the scan below match nothing, which reads identically to "no leakage".
+    """
     checks = scratch / f"c45/run-{task}/base/checks/{task}"
+    if not checks.is_dir():
+        raise Unresolved(f"{task}: hidden checks directory {checks} is absent")
     names: set[str] = set()
     for f in checks.rglob("*.py"):
         names |= set(re.findall(r"^def (test_\w+)", f.read_text(errors="replace"), re.M))
+    if not names:
+        raise Unresolved(f"{task}: {checks} defines no test function, so the scan would be "
+                         f"vacuous")
     visible: set[str] = set()
     tree = scratch / f"c45/run-{task}/base/{task}/tests"
+    if not tree.is_dir():
+        raise Unresolved(f"{task}: visible test tree {tree} is absent, so 'hidden and not "
+                         f"visible' cannot be computed")
     for f in tree.rglob("test_*.py"):
         visible |= set(re.findall(r"^def (test_\w+)", f.read_text(errors="replace"), re.M))
-    return names - visible
+    remaining = names - visible
+    if not remaining:
+        raise Unresolved(f"{task}: every hidden check name is also visible in the tree, so "
+                         f"the scan has nothing to look for")
+    return remaining
 
 
 #: The four conditions, as SUBSETS of one frozen corpus rather than four corpora. Holding the
@@ -176,22 +274,35 @@ def reachability(corpus: Path, out_dir: Path, only: list[str] | None = None,
     return {"store": str(db), "seeded": len(rows), "per_task": out}
 
 
-def build(scratch: Path, corpus_path: Path, do_reach: bool, out_dir: Path) -> dict:
+def build(scratch: Path, corpus_path: Path, do_reach: bool, out_dir: Path,
+          clone: str | None = None) -> dict:
     corpus = json.loads(corpus_path.read_text())
     truth = {}
     for m in corpus["memories"]:
         truth[m["id"]] = {t: probe_tree(m.get("probe"),
                                         scratch / f"c45/run-{t}/base/{t}") for t in TASKS}
 
+    # Each scan reports its own STATUS beside its findings. `{}` used to mean both "looked
+    # and found nothing" and "never looked"; they are different answers and are now different
+    # values. `unresolved` is never rendered or exited as "no leakage".
     leak_fix, leak_check = {}, {}
+    fix_status, check_status = {}, {}
     for t in TASKS:
-        added = fix_added_tokens(scratch, t)
-        hidden = hidden_check_names(scratch, t)
+        try:
+            added = fix_added_tokens(scratch, t, clone)
+            fix_status[t] = {"state": "measured", "tokens_scanned": len(added)}
+        except Unresolved as e:
+            added, fix_status[t] = set(), {"state": "unresolved", "reason": str(e)}
+        try:
+            hidden = hidden_check_names(scratch, t)
+            check_status[t] = {"state": "measured", "names_scanned": len(hidden)}
+        except Unresolved as e:
+            hidden, check_status[t] = set(), {"state": "unresolved", "reason": str(e)}
         for m in corpus["memories"]:
             words = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]{4,}", m["content"]))
-            if hit := sorted(words & added):
+            if added and (hit := sorted(words & added)):
                 leak_fix.setdefault(t, {})[m["id"]] = hit
-            if hit := sorted(words & hidden):
+            if hidden and (hit := sorted(words & hidden)):
                 leak_check.setdefault(t, {})[m["id"]] = hit
 
     labels = {}
@@ -214,7 +325,16 @@ def build(scratch: Path, corpus_path: Path, do_reach: bool, out_dir: Path) -> di
 
     rep = {"corpus": str(corpus_path), "corpus_version": corpus["corpus_version"],
            "scratch": str(scratch), "truth_at_checkout": truth, "labels": labels,
-           "fix_leakage": leak_fix, "hidden_check_leakage": leak_check}
+           "fix_leakage": leak_fix, "hidden_check_leakage": leak_check,
+           "fix_leakage_status": fix_status, "hidden_check_leakage_status": check_status,
+           "leakage_scan_scope": (
+               "Identifier-level scans only. They compare tokens; they do not establish that "
+               "no memory conveys a fix SEMANTICALLY, in different words. Provenance review "
+               "is what covers that, and is recorded in FREEZE-dev-m1.md rather than here."),
+           "unresolved_scans": sorted(
+               [f"fix_leakage/{t}" for t in TASKS if fix_status[t]["state"] != "measured"]
+               + [f"hidden_check_leakage/{t}" for t in TASKS
+                  if check_status[t]["state"] != "measured"])}
     if do_reach:
         rep["reachability"] = reachability(corpus_path, out_dir)
         conds = {}
@@ -260,11 +380,23 @@ def render(rep: dict) -> str:
         if "useful_ranks" in lab:
             L.append(f"      ranks: useful {lab['useful_ranks']}  stale {lab['stale_ranks']}  "
                      f"distracting={lab['distracting']}")
-    L += ["", "LEAKAGE"]
-    L.append(f"  memories containing a token added only by the fix: "
-             f"{rep['fix_leakage'] or 'none'}")
-    L.append(f"  memories naming a hidden check not visible in the tree: "
-             f"{rep['hidden_check_leakage'] or 'none'}")
+    L += ["", "LEAKAGE -- limited, identifier-level scans; see `leakage_scan_scope`"]
+    for label, key, status in (
+            ("token added only by the fix", "fix_leakage", "fix_leakage_status"),
+            ("hidden check name not visible in the tree", "hidden_check_leakage",
+             "hidden_check_leakage_status")):
+        L.append(f"  memories containing a {label}:")
+        for t in TASKS:
+            st = rep[status][t]
+            if st["state"] != "measured":
+                L.append(f"    {t}: UNRESOLVED -- {st['reason']}")
+            else:
+                hits = rep[key].get(t)
+                n = st.get("tokens_scanned", st.get("names_scanned"))
+                L.append(f"    {t}: {hits if hits else 'none'}   (scanned against {n})")
+    if rep["unresolved_scans"]:
+        L.append(f"  UNRESOLVED SCANS: {rep['unresolved_scans']} -- these are NOT 'no "
+                 f"leakage'; no evidence was gathered for them")
     if "reachability" in rep:
         L += ["", "REACHABILITY -- the arm's own search, over a store seeded from this corpus"]
         for t in TASKS:
@@ -281,6 +413,16 @@ def render(rep: dict) -> str:
 
 
 def main(argv: list[str]) -> int:
+    """Exit status is a verdict, not a report of whether the script crashed.
+
+      0  every scan ran and found nothing
+      1  a scan found leakage -- the corpus carries part of an answer
+      3  a scan could not gather its evidence; the answer is UNKNOWN, not "clean"
+
+    The previous version returned 0 in all three cases, which is the same defect as the
+    boundary control that excluded `None` from `all_hold`: an absent measurement passing as
+    a satisfied one.
+    """
     if len(argv) < 2:
         print(__doc__.strip().splitlines()[-1], file=sys.stderr)
         return 2
@@ -288,12 +430,21 @@ def main(argv: list[str]) -> int:
     corpus = (Path(argv[argv.index("--corpus") + 1]) if "--corpus" in argv
               else BENCH / "corpus-dev-m1.json")
     out = Path(argv[argv.index("--out") + 1]) if "--out" in argv else None
+    clone = Path(argv[argv.index("--clone") + 1]).as_posix() if "--clone" in argv else None
     rep = build(scratch, corpus, "--no-reach" not in argv,
-                (out.parent if out else BENCH))
+                (out.parent if out else BENCH), clone)
     if out:
         out.write_text(json.dumps(rep, indent=1) + "\n")
         print(f"wrote {out}", file=sys.stderr)
     print(render(rep))
+    if rep["fix_leakage"] or rep["hidden_check_leakage"]:
+        print(f"LEAKAGE FOUND: fix={rep['fix_leakage']} "
+              f"checks={rep['hidden_check_leakage']}", file=sys.stderr)
+        return 1
+    if rep["unresolved_scans"]:
+        print(f"UNRESOLVED: {rep['unresolved_scans']} -- refusing to report 'no leakage' "
+              f"from a scan that gathered no evidence", file=sys.stderr)
+        return 3
     return 0
 
 
