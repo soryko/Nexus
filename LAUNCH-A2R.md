@@ -42,7 +42,7 @@ sweep.**
 | | |
 | --- | --- |
 | `product_revision` | `2cd531f9d7c274a065533e58ba3fde8582f8c269` |
-| `harness_revision` | `136866f79ec689cdac3e1b45e61853e712dc9fa8` |
+| `harness_revision` | `225d8538a5c7fcf4d161448c76ee0ba18b53378e` |
 | `config_version` | `calib-v3` |
 | `schedule_digest` | `0a352b82ced14f10e85d50d17989ac38e02d4d9582c032ed743a75554a6a5d97` |
 | `corpus_digest` | `9ae2a9f268dd894d` — A1's frozen held-out corpus, unchanged |
@@ -166,3 +166,27 @@ Model-free, on this revision:
 - [x] `preflight-a2r.py` green on this host — every identifier asserted, forwarder listening
 - [ ] the per-arm environment gate passing on a prepared arm — it runs at launch, inside the
       profile, and is the authority on the runtime; it refuses before spending
+
+### The run, once approved
+
+```bash
+python3 preflight-a2r.py                       # immediately before launch; preserve its output
+python3 benchmarks/agent/run_a2r.py /Users/soko/Cerebros/nexus-a1-fixtures/a2r-run --ceiling 45
+```
+
+Then, and only then:
+
+```bash
+python3 benchmarks/agent/score_a2r_compliance.py /Users/soko/Cerebros/nexus-a1-fixtures/a2r-run
+python3 benchmarks/agent/assess_a2r.py /Users/soko/Cerebros/nexus-a1-fixtures/a2r-run \
+  --json benchmarks/agent/results-a2r.json
+```
+
+**No retry, no mid-sweep repair, no budget increase.** Every stop condition in
+[`REGISTRATION-DRAFT-a2r.md`](benchmarks/agent/REGISTRATION-DRAFT-a2r.md) §6 ends the sweep and
+the partial results are kept and reported as partial. `run_calibration.preserve_partial` moves
+an interrupted attempt aside rather than letting a rerun overwrite it.
+
+`score_a2r_compliance.py` was validated on a **copy** of the v2 ceiling-45 tree before any
+spend: 12 of 12 arm-runs scored, and the reporter then read its artifact with every row
+carrying a ratio and an unknown count instead of `not_scored`.
