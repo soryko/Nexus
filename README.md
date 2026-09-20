@@ -40,18 +40,23 @@ Python 3.12+ and [uv](https://docs.astral.sh/uv/getting-started/installation/), 
 
 ## Quickstart
 
+**To use it.** This builds a normal installation in its own environment, so the checkout is
+only needed to install and upgrade — not to run:
+
 ```bash
-python3 tools/install.py
-.venv/bin/python tools/check_install.py
+nexus_runtime="$HOME/.local/share/nexus-memory/venvs/0.1.0a2"
+python3 tools/install.py --venv "$nexus_runtime"
+"$nexus_runtime/bin/nexus-memory-check"
 ```
 
 The first probes candidate interpreters, prints **both** version numbers for each, builds
-`.venv` from the first that satisfies the Python **and** SQLite floors, and re-checks the
-environment it built. The second drives the **installed** command over MCP in three separate
-processes — store, restart, read back byte-identical, search, retry without duplicating —
-and exits nonzero if any of it fails.
+the environment from the first that satisfies the Python **and** SQLite floors, and
+re-checks the environment it built. The second is installed alongside the server and drives
+it over MCP in three separate processes — store, restart, read back byte-identical, search,
+retry without duplicating — exiting nonzero if any of it fails.
 
-Doing it by hand instead:
+**To work on it.** `uv sync` installs the project *editable*, linked to this checkout, with
+the development dependencies:
 
 ```bash
 uv sync --frozen
@@ -64,6 +69,9 @@ Read that version before going further. If it is below 3.51.3, rebuild the envir
 uv venv --python /path/to/python3.12-or-newer   # one whose linked SQLite is 3.51.3+
 uv sync --frozen
 ```
+
+The two are not interchangeable: an editable environment stops working if this checkout
+moves, which is why it is the developer path and not the user one.
 
 **Installing to use it?** [`docs/experimental-release.md`](docs/experimental-release.md) is
 the short path: install, verify, connect Claude Code (tested), back up, and the known limits
@@ -103,14 +111,14 @@ Add a stdio server entry to your MCP client's configuration, substituting your a
 {
   "mcpServers": {
     "nexus-memory": {
-      "command": "/absolute/path/nexus-memory/.venv/bin/nexus-memory",
+      "command": "/absolute/path/.local/share/nexus-memory/venvs/0.1.0a2/bin/nexus-memory",
       "args": ["--namespace", "my-repo", "--actor", "local"]
     }
   }
 }
 ```
 
-On Windows the installed command is `.venv/Scripts/nexus-memory.exe`. Your client's configuration file location may differ; the JSON shape above is the common one.
+On Windows the installed command is `<environment>\Scripts\nexus-memory.exe`. Your client's configuration file location may differ; the JSON shape above is the common one.
 
 > [!TIP]
 > Point `command` at the environment whose SQLite check passed. A client launching an interpreter below the floor only sees the transport close, because the diagnosis (`startup_error: unsupported_runtime`) goes to the server's stderr where the client is not looking.
