@@ -71,6 +71,24 @@ jobs:
           uv run pytest -q tests/core/test_b2a_mutations.py tests/core/test_b2b_mutations.py \
             --junitxml=artifacts/junit/mutations.xml
 
+      # The INSTALLED package, not the source tree. `uv sync` has already built the
+      # environment this step checks, and the console script it exercises is the one an MCP
+      # client launches. Nine checks in three separate processes: store, let the process
+      # exit, start a new one on the same file, read byte-identical content back, search,
+      # then retry the write and confirm the receipt replays with no duplicate.
+      #
+      # It is here because "the tests pass" and "the thing you installed holds a memory
+      # across a restart" are different claims, and only the second is what the project
+      # promises. It also re-checks both runtime floors on the built environment. The
+      # fresh-install jobs below cover the installer's own creation path, which this step
+      # does not exercise: here the environment already exists.
+      - name: Installed-package lifecycle check
+        run: |
+          uv run python tools/install.py --check-only
+          uv run python tools/check_install.py \
+            --server "$(uv run python -c 'import sys,pathlib;print(pathlib.Path(sys.prefix)/"bin"/"nexus-memory")')" \
+            --json artifacts/install-check.json
+
       - name: Collect failure evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
