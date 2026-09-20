@@ -243,6 +243,29 @@ def report_over_production(scratch: Path, task: str, attempt: int) -> dict:
     return rep
 
 
+def rehearsal_failures(report: dict, dry_run: bool) -> list[str]:
+    """Everything the rehearsal OBSERVED that means it did not rehearse successfully.
+
+    Each condition below was already recorded in the report and then thrown away by an
+    unconditional `return 0`: a runner exiting non-zero, a policy that wrote no artifacts,
+    and a reporter that raised were each printed as prose and exited 0, so CI and every
+    caller read a failed rehearsal as green. A rehearsal that cannot fail catches nothing.
+    """
+    failures: list[str] = []
+    if report.get("runner_exit"):
+        failures.append(f"production runner exited {report['runner_exit']}")
+    if not dry_run:
+        for pol, row in (report.get("artifacts") or {}).get("per_policy", {}).items():
+            if not [k for k, v in row.items() if k != "dir" and v]:
+                failures.append(f"policy {pol} wrote no artifacts")
+    dec = report.get("decision") or {}
+    if "error" in dec:
+        failures.append(f"reporter failed: {dec['error']}")
+    elif not dry_run and "decision" not in dec:
+        failures.append("reporter produced no decision")
+    return failures
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("scratch")
@@ -360,9 +383,17 @@ def main() -> int:
         print(f"  reporter read {len(n)} production row(s); functional settled in "
               f"{sum(1 for r in n if r.get('functional_source', '').startswith('functional'))}")
         print(f"  decision through the production artifacts: {d['decision'].upper()}")
+    failures = rehearsal_failures(report, a.dry_run)
+    report["failures"] = failures
+
     if a.json:
         Path(a.json).write_text(json.dumps(report, indent=1, default=str) + "\n")
         print(f"\n-> {a.json}")
+    if failures:
+        print("\nREHEARSAL FAILED:")
+        for f in failures:
+            print(f"  - {f}")
+        return 1
     return 0
 
 

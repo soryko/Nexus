@@ -620,16 +620,41 @@ def test_unreviewed_relevance_does_not_block_a_rejection():
     assert "correctness" in r["failed"]
 
 
-def test_a_review_finding_the_test_irrelevant_is_recorded():
-    """`False` is a completed review with an adverse result. It is reported, and it does not
-    silently become a failure of the required-work criterion."""
+def test_a_review_finding_the_test_irrelevant_is_recorded_and_withholds_acceptance():
+    """`False` is a completed review with an adverse result. It is reported, it does NOT
+    silently become a failure of the required-work criterion -- and it withholds acceptance
+    exactly as an absent review does.
+
+    `blocks_acceptance` keyed off `unreviewed` alone, which read the wrong half of the
+    review: marking a test irrelevant emptied that list, so an adverse conclusion was
+    indistinguishable from a satisfied gate.
+    """
     import dataclasses
     runs = clean_sweep()
     runs[1] = dataclasses.replace(runs[1], relevance_reviewed=False)
     r = decide(runs, FACTS)
     assert r["relevance"]["reviewed_not_relevant"] == ["k1/B/1"]
-    assert r["relevance"]["blocks_acceptance"] is False
+    assert r["relevance"]["blocks_acceptance"] is True
+    assert r["decision"] == "indeterminate"
+    assert "NOT relevant" in r["reason"]
     assert r["dimensions"]["required_work"]["state"] == "hold"
+
+
+def test_every_added_test_reviewed_irrelevant_never_reaches_acceptance():
+    """The reported case: A's tests relevant, every one of B's explicitly irrelevant. Each
+    row IS reviewed, so `unreviewed` is empty -- and the old gate read an empty list as a
+    satisfied gate and returned accept_for_further_development on tests a reviewer had just
+    rejected."""
+    import dataclasses
+    runs = [dataclasses.replace(r, relevance_reviewed=(r.policy != "B"))
+            for r in clean_sweep()]
+    r = decide(runs, FACTS)
+    assert r["relevance"]["unreviewed_arm_runs"] == []
+    assert r["relevance"]["reviewed_not_relevant"], "B's rows must be recorded as adverse"
+    assert r["relevance"]["blocks_acceptance"] is True
+    assert r["decision"] == "indeterminate"
+    assert r["decision"] != "accept_for_further_development"
+    assert "correctness" not in r["failed"], "an adverse review must never cause a FAIL"
 
 
 def test_relevance_is_not_in_the_required_work_criterion():

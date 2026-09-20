@@ -170,7 +170,28 @@ def facts_delivered(calls: list[dict], facts: dict[str, list[str]],
 #: anywhere in the command. A command position is the start of the string or just after a
 #: separator, optionally preceded by `VAR=value` assignments and an interpreter with `-m`.
 _CMD_POS = r"(?:^|[;&|(]|&&|\|\|)\s*(?:[A-Za-z_][\w]*=[^\s]*\s+)*"
-_PYTEST = re.compile(_CMD_POS + r"(?:[\w./$-]*python[\w.]*\s+-m\s+)?pytest\b")
+#: The interpreter in `<interp> -m pytest`. It may be quoted and it may be a variable
+#: expansion, so `PYTHONPATH=src "$A2_PYTHON" -m pytest ...` -- the form the protocol
+#: PRESCRIBES -- has to match. The first version required a bare lowercase `python` token,
+#: which that form does not contain: `$A2_PYTHON` is uppercase and quoted, and the bare
+#: `pytest` fallback cannot fire because `pytest` sits after `-m`, not at a command
+#: position. The prescribed command therefore earned NO execution credit.
+_INTERP = (r"(?:"
+           r"[\"']?\$\{?\w+\}?[\"']?"       # $A2_PYTHON, "$A2_PYTHON", ${A2_PYTHON}
+           r"|[\w./-]*(?i:python)[\w.]*"      # python, python3.13, /usr/bin/python
+           r")")
+_PYTEST = re.compile(_CMD_POS + r"(?:" + _INTERP + r"\s+-m\s+)?pytest\b")
+#: `--deselect <nodeid>` removes one node from a run that otherwise targets its file. The
+#: siblings still reach verdicts, so the summary alone cannot see the exclusion.
+_DESELECT = re.compile(r"(?<![\w-])--deselect(?:=|\s+)(\S+)")
+#: Collection failed: the module never imported, so nothing in it reached a verdict. pytest
+#: still prints `N error` in the summary, which `_RAN` counts as a verdict -- so a test file
+#: that cannot even be imported earned full execution credit.
+_COLLECT_ERROR = re.compile(r"ERROR collecting|errors? during collection|INTERNALERROR",
+                            re.I)
+#: Verdicts that are unambiguously a test RUNNING, used to tell a collection error that
+#: stopped everything from one that sat beside real results.
+_VERDICT_WORD = re.compile(r"(?<![\w])(\d+)\s+(passed|failed|xpassed|xfailed)(?![\w])")
 #: An explicit path argument to that invocation.
 _PATH_ARG = re.compile(r"(?<![\w-])(tests?/[\w./:-]+|[\w./-]+_test\.py[\w:]*)")
 #: Collection without execution. `--collect-only` reports what WOULD run.
@@ -217,12 +238,65 @@ def _tests_actually_ran(result: str) -> bool | None:
         return None
     if _NO_TESTS.search(result):
         return False
+    if _COLLECT_ERROR.search(result):
+        # A module that did not import ran nothing. If the same run also reported real
+        # verdicts elsewhere, the trace does not settle whether THIS test was among them.
+        real = [(int(n), w) for n, w in _VERDICT_WORD.findall(result)]
+        return None if any(n > 0 for n, _ in real) else False
     hits = [(int(n), w) for n, w in _RAN.findall(result)]
     if hits:
         return any(n > 0 for n, _ in hits)
     if _NO_VERDICT.search(result):
         return False                        # a summary, and nothing reached a verdict
     return None
+
+
+def _same_file(a: str, b: str) -> bool:
+    """Does target `a` reach test file `b`, without pretending to resolve paths?
+
+    Directory targets count: `pytest tests` reaches `tests/test_pkg.py`. Sibling files do
+    not, so `tests/other_test.py` still fails to reach it.
+    """
+    if not a or not b:
+        return False
+    if a == b or a.endswith("/" + b) or b.endswith("/" + a):
+        return True
+    return (b.startswith(a.rstrip("/") + "/")     # a directory target above the file
+            or a.startswith(b.rstrip("/") + "/"))
+
+
+def _covers_added(cmd: str, added_tests: list[str]) -> bool:
+    """Would this invocation have RUN one of the added tests?
+
+    File-level containment was the whole test before, so a command that named a DIFFERENT
+    node in the same file, and a command that explicitly `--deselect`ed the added test,
+    both "covered" the very test they were written to avoid. A target that names a node
+    covers that node only, and an explicit deselect removes the node it names.
+    """
+    targets = set(_PATH_ARG.findall(cmd))
+    deselected = set(_DESELECT.findall(cmd))
+    for a in added_tests:
+        a_file, _, a_node = a.partition("::")
+        removed = False
+        for d in deselected:
+            d_file, _, d_node = d.partition("::")
+            if _same_file(d_file, a_file) and (not d_node or d_node == a_node):
+                removed = True
+                break
+        if removed:
+            continue                        # explicitly taken out of this run
+        if not targets:
+            return True                     # a whole-suite run reaches it
+        for t in targets:
+            t_file, _, t_node = t.partition("::")
+            if not _same_file(t_file, a_file):
+                continue
+            if t_node and a_node and t_node != a_node:
+                continue                    # a different node in the same file
+            return True
+        if a_node and a_node in cmd:
+            return True                     # named directly, e.g. `-k test_added`
+    return False
 
 
 def observed_test_execution(calls: list[dict], added_tests: list[str]) -> bool | None:
@@ -255,8 +329,6 @@ def observed_test_execution(calls: list[dict], added_tests: list[str]) -> bool |
     """
     if not added_tests:
         return False
-    files = {t.split("::", 1)[0] for t in added_tests}
-    names = {t.split("::", 1)[1] for t in added_tests if "::" in t}
     saw_unsettled = False
     for c in calls:
         cmd = _command_text(c)
@@ -267,11 +339,7 @@ def observed_test_execution(calls: list[dict], added_tests: list[str]) -> bool |
         if c.get("is_error") or c.get("result") is None:
             saw_unsettled = True
             continue
-        targets = set(_PATH_ARG.findall(cmd))
-        covers = (not targets
-                  or any(f in t or t in f for f in files for t in targets)
-                  or any(n in cmd for n in names))
-        if not covers:
+        if not _covers_added(cmd, added_tests):
             continue                        # ran, but not over the added test
         ran = _tests_actually_ran(c.get("result") or "")
         if ran is True:

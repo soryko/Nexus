@@ -663,6 +663,26 @@ def _bash(command, result="", is_error=False):
     # -- invoked, outcome unreadable -------------------------------------------------
     ("pytest tests/test_pkg.py -q", "", None),
     ("pytest tests/test_pkg.py -q", "something unrecognisable", None),
+    # -- the interpreter form the protocol PRESCRIBES --------------------------------
+    # `$A2_PYTHON` is uppercase and usually quoted, and `pytest` sits after `-m` rather
+    # than at a command position, so the prescribed command earned no credit at all.
+    ('PYTHONPATH=src "$A2_PYTHON" -m pytest tests/test_pkg.py -q', "1 passed in 0.03s", True),
+    ("PYTHONPATH=src $A2_PYTHON -m pytest tests/test_pkg.py -q", "1 passed in 0.03s", True),
+    ("PYTHONPATH=src ${A2_PYTHON} -m pytest tests/test_pkg.py -q", "1 passed in 0.03s", True),
+    ('"$A2_PYTHON" -m pytest tests/test_pkg.py::test_add_one_adds_one', "1 passed", True),
+    # -- invoked over the added test's FILE, but never over the added test ------------
+    ("pytest tests/test_pkg.py::test_something_else -q", "1 passed in 0.02s", False),
+    ("pytest tests/test_pkg.py --deselect tests/test_pkg.py::test_add_one_adds_one",
+     "4 passed, 1 deselected in 0.03s", False),
+    ("pytest tests/test_pkg.py --deselect=tests/test_pkg.py::test_add_one_adds_one",
+     "4 passed, 1 deselected in 0.03s", False),
+    # -- collection failed, so nothing in that module reached a verdict ---------------
+    ("pytest tests/test_pkg.py -q",
+     "ERROR collecting tests/test_pkg.py\nImportError: cannot import x\n1 error in 0.03s",
+     False),
+    # -- a collection error beside real verdicts does not settle THIS test ------------
+    ("pytest tests -q",
+     "ERROR collecting tests/test_pkg.py\n5 passed, 1 error in 0.10s", None),
 ])
 def test_execution_credit(command, result, expected):
     assert P.observed_test_execution([_bash(command, result)], ADDED) is expected

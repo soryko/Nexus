@@ -17,6 +17,7 @@ import inspect
 import json
 import socket
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -303,3 +304,110 @@ def test_a_record_without_the_artifact_is_unknown_not_a_pass(tmp_path):
     # `normalise` reads functional.json and nothing else for this field
     assert 'functional = json.loads(fn.read_text()).get("passed") if fn.is_file() else None' \
         in (BENCH / "a3_pipeline.py").read_text()
+
+
+# -- the rehearsal's own exit status -------------------------------------------------
+# A mocked runner exiting 9, a policy that wrote nothing, and a reporter that raised were
+# all RECORDED and then discarded by an unconditional `return 0`.
+
+def _ok_report(**kw):
+    report = {"runner_exit": 0,
+              "artifacts": {"per_policy": {"A": {"dir": "/x/A", "record.json": True},
+                                           "B": {"dir": "/x/B", "record.json": True}}},
+              "decision": {"decision": "accept_for_further_development"}}
+    report.update(kw)
+    return report
+
+
+def test_a_clean_rehearsal_reports_no_failures():
+    assert RP.rehearsal_failures(_ok_report(), dry_run=False) == []
+
+
+def test_a_runner_exiting_non_zero_fails_the_rehearsal():
+    f = RP.rehearsal_failures(_ok_report(runner_exit=9), dry_run=False)
+    assert any("exited 9" in x for x in f)
+
+
+def test_a_policy_that_wrote_no_artifacts_fails_the_rehearsal():
+    r = _ok_report()
+    r["artifacts"]["per_policy"]["B"] = {"dir": "/x/B", "record.json": False}
+    f = RP.rehearsal_failures(r, dry_run=False)
+    assert any("policy B wrote no artifacts" in x for x in f)
+    assert not any("policy A" in x for x in f)
+
+
+def test_a_reporter_exception_fails_the_rehearsal():
+    f = RP.rehearsal_failures(_ok_report(decision={"error": "KeyError: 'functional'"}),
+                              dry_run=False)
+    assert any("reporter failed" in x for x in f)
+
+
+def test_a_missing_decision_fails_the_rehearsal():
+    r = _ok_report()
+    del r["decision"]
+    assert any("no decision" in x for x in RP.rehearsal_failures(r, dry_run=False))
+
+
+def test_a_dry_run_is_not_failed_by_absent_artifacts_or_decision():
+    """A dry run legitimately writes less and decides nothing; only a runner that actually
+    exited non-zero is a failure there."""
+    r = {"runner_exit": 0,
+         "artifacts": {"per_policy": {"A": {"dir": "/x/A", "record.json": False}}}}
+    assert RP.rehearsal_failures(r, dry_run=True) == []
+    assert RP.rehearsal_failures({**r, "runner_exit": 9}, dry_run=True)
+
+
+def test_every_named_failure_is_reported_together():
+    r = _ok_report(runner_exit=9, decision={"error": "boom"})
+    r["artifacts"]["per_policy"]["B"] = {"dir": "/x/B", "record.json": False}
+    assert len(RP.rehearsal_failures(r, dry_run=False)) == 3
+
+
+
+def _main_dry_run(monkeypatch, tmp_path, returncode):
+    """Drive the REAL `main()` in dry-run with only its external effects substituted.
+
+    `rehearsal_failures` is unit-tested above, but testing the predicate ALONE cannot catch
+    a `main` that computes its failures and returns 0 anyway -- which is precisely the shape
+    of the defect this file exists to prevent, one layer up. So this exercises the
+    connection: real argument parsing, real report assembly, the real call into
+    `rehearsal_failures`, and the real return statement.
+
+    Dry-run skips the port checks, the stub and the forwarder outright, so nothing here
+    needs a model, a sandbox, a free port or the A2-R fixture trees. It runs on Linux CI.
+    """
+    monkeypatch.setattr(RP, "prepare_scratch", lambda *a, **k: None)
+    monkeypatch.setattr(RP, "artifacts_written_by_production", lambda *a, **k: {
+        "per_policy": {"A": {"dir": "/x/A", "record.json": True}},
+        "distinct_directories": 1,
+        "ledger": {"arm_runs_started": 0, "tokens_known": 0, "unresolved": 0}})
+    monkeypatch.setattr(RP.subprocess, "run", lambda *a, **k: types.SimpleNamespace(
+        returncode=returncode, stdout="", stderr=""))
+    monkeypatch.setattr(sys, "argv",
+                        ["rehearse_a3_production.py", str(tmp_path), "--dry-run"])
+    return RP.main()
+
+
+def test_main_exits_zero_when_the_substituted_runner_succeeds(monkeypatch, tmp_path):
+    assert _main_dry_run(monkeypatch, tmp_path, 0) == 0
+
+
+def test_main_exits_non_zero_when_the_substituted_runner_fails(monkeypatch, tmp_path):
+    """A runner exiting 9 must reach the process exit status, not just the report."""
+    assert _main_dry_run(monkeypatch, tmp_path, 9) == 1
+
+
+def test_the_failing_runner_is_named_in_the_report_main_wrote(monkeypatch, tmp_path,
+                                                              capsys):
+    """The exit status and the stated reason come from the same report, so a non-zero exit
+    can never be attributed to a condition the run did not actually observe."""
+    assert _main_dry_run(monkeypatch, tmp_path, 9) == 1
+    assert "REHEARSAL FAILED" in capsys.readouterr().out
+
+
+def test_main_is_the_entry_point_the_module_actually_exits_with():
+    """`raise SystemExit(main())` -- the return value IS the exit status. If this module is
+    ever changed to call `main()` without propagating it, the tests above would keep passing
+    while the executable went back to always succeeding."""
+    src = inspect.getsource(RP)
+    assert "raise SystemExit(main())" in src

@@ -462,19 +462,23 @@ def relevance(runs: list[ArmRun]) -> dict:
     on tests nobody had read, which is the gap this closes.
 
     So it gates acceptance exactly as partial coverage does -- it can never cause a FAIL,
-    and acceptance is unavailable until the review has happened. Rejection is unaffected: a
-    task that lost is a task that lost whether or not its tests were read.
+    and acceptance is unavailable until the review has happened AND CONCLUDED THE TESTS ARE
+    RELEVANT. Gating on the review merely having happened read the wrong half of the review:
+    marking every added test irrelevant emptied `unreviewed`, and the policy was ACCEPTED on
+    tests a reviewer had just rejected. A negative review blocks acceptance exactly as an
+    absent one does. Rejection is unaffected: a task that lost is a task that lost whether or
+    not its tests were read.
     """
     reviewed = [r for r in runs if r.relevance_reviewed is not None]
     unreviewed = sorted(f"{r.task}/{r.policy}/{r.attempt}" for r in runs
                         if r.relevance_reviewed is None)
     irrelevant = sorted(f"{r.task}/{r.policy}/{r.attempt}" for r in runs
                         if r.relevance_reviewed is False)
-    return {"state": HOLD if not unreviewed else INDETERMINATE,
+    return {"state": HOLD if not (unreviewed or irrelevant) else INDETERMINATE,
             "reviewed": len(reviewed), "total": len(runs),
             "unreviewed_arm_runs": unreviewed,
             "reviewed_not_relevant": irrelevant,
-            "blocks_acceptance": bool(unreviewed),
+            "blocks_acceptance": bool(unreviewed or irrelevant),
             "in_the_required_work_criterion": False,
             "note": "no machine settles relevance; it gates ACCEPTANCE and never causes a "
                     "failure, and it never blocks a rejection"}
@@ -537,10 +541,15 @@ def decide(runs: list[ArmRun], required_facts: dict[str, dict[str, list[str]]],
                f"available: {valid['reason']}")
     elif rel["blocks_acceptance"]:
         decision = "indeterminate"
-        why = (f"the added tests in {len(rel['unreviewed_arm_runs'])} arm-run(s) have not "
-               f"been reviewed for relevance to the reported defect, so acceptance is not "
-               f"available. No machine settles this, and a machine verdict may not stand "
-               f"in for the review.")
+        parts = []
+        if rel["unreviewed_arm_runs"]:
+            parts.append(f"the added tests in {len(rel['unreviewed_arm_runs'])} arm-run(s) "
+                         f"have not been reviewed for relevance to the reported defect")
+        if rel["reviewed_not_relevant"]:
+            parts.append(f"the added tests in {len(rel['reviewed_not_relevant'])} arm-run(s) "
+                         f"were reviewed and found NOT relevant to the reported defect")
+        why = ("; and ".join(parts) + ", so acceptance is not available. No machine settles "
+               "this, and a machine verdict may not stand in for the review.")
     elif unresolved:
         decision, why = ("indeterminate",
                          f"insufficient decisive evidence: {', '.join(unresolved)}")
