@@ -45,6 +45,19 @@ Python 3.12+ and [uv](https://docs.astral.sh/uv/getting-started/installation/), 
 ## Quickstart
 
 ```bash
+python3 tools/install.py
+.venv/bin/python tools/check_install.py
+```
+
+The first probes candidate interpreters, prints **both** version numbers for each, builds
+`.venv` from the first that satisfies the Python **and** SQLite floors, and re-checks the
+environment it built. The second drives the **installed** command over MCP in three separate
+processes — store, restart, read back byte-identical, search, retry without duplicating —
+and exits nonzero if any of it fails.
+
+Doing it by hand instead:
+
+```bash
 uv sync --frozen
 .venv/bin/python -c "import sqlite3; print(sqlite3.sqlite_version)"
 ```
@@ -55,6 +68,10 @@ Read that version before going further. If it is below 3.51.3, rebuild the envir
 uv venv --python /path/to/python3.12-or-newer   # one whose linked SQLite is 3.51.3+
 uv sync --frozen
 ```
+
+**Installing to use it?** [`docs/experimental-release.md`](docs/experimental-release.md) is
+the short path: install, verify, connect Claude Code (tested), back up, and the known limits
+in one page.
 
 Then launch:
 
