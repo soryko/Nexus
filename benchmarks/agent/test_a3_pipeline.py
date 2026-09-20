@@ -683,6 +683,27 @@ def _bash(command, result="", is_error=False):
     # -- a collection error beside real verdicts does not settle THIS test ------------
     ("pytest tests -q",
      "ERROR collecting tests/test_pkg.py\n5 passed, 1 error in 0.10s", None),
+    # -- `-k` decides selection, and the summary cannot see it -----------------------
+    # The siblings run and print a passing summary, so neither the target list nor the
+    # summary shows that the added test was excluded. Confirmed against real pytest: with
+    # `-k "not test_add_one_adds_one"` JUnit records only the sibling as executed.
+    ('pytest tests/test_pkg.py -k "not test_add_one_adds_one"',
+     "1 passed, 1 deselected in 0.02s", False),
+    ("pytest tests/test_pkg.py -k 'not test_add_one_adds_one'",
+     "1 passed, 1 deselected in 0.02s", False),
+    ('pytest tests/test_pkg.py -k="not test_add_one_adds_one"',
+     "1 passed, 1 deselected in 0.02s", False),
+    ('pytest tests/test_pkg.py -k "test_other"', "1 passed, 1 deselected in 0.02s", False),
+    ('pytest tests/test_pkg.py -k "test_other and not test_add_one_adds_one"',
+     "1 passed, 1 deselected in 0.02s", False),
+    # -- `-k` that DOES select it still earns credit ---------------------------------
+    ('pytest tests/test_pkg.py -k "test_add_one_adds_one"', "1 passed in 0.02s", True),
+    ('pytest tests/test_pkg.py -k "test_add_one_adds_one or test_other"',
+     "2 passed in 0.02s", True),
+    ('PYTHONPATH=src "$A2_PYTHON" -m pytest tests/test_pkg.py -k "not test_add_one_adds_one"',
+     "1 passed, 1 deselected in 0.02s", False),
+    # -- an expression this reader cannot settle earns nothing, and is not a denial ---
+    ('pytest tests/test_pkg.py -k "foo(bar)"', "1 passed in 0.02s", None),
 ])
 def test_execution_credit(command, result, expected):
     assert P.observed_test_execution([_bash(command, result)], ADDED) is expected

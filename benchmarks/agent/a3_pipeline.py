@@ -31,6 +31,7 @@ measured.
 """
 from __future__ import annotations
 
+import ast
 import json
 import re
 from dataclasses import dataclass
@@ -184,6 +185,10 @@ _PYTEST = re.compile(_CMD_POS + r"(?:" + _INTERP + r"\s+-m\s+)?pytest\b")
 #: `--deselect <nodeid>` removes one node from a run that otherwise targets its file. The
 #: siblings still reach verdicts, so the summary alone cannot see the exclusion.
 _DESELECT = re.compile(r"(?<![\w-])--deselect(?:=|\s+)(\S+)")
+#: `-k <expr>` selects by keyword expression. `-k "not test_regression"` runs the file's
+#: OTHER tests, which reach verdicts and print a passing summary, so neither the target
+#: list nor the summary can see that the added test was excluded.
+_K = re.compile(r"""(?<![\w-])-k(?:=|\s+)("[^"]*"|'[^']*'|\S+)""")
 #: Collection failed: the module never imported, so nothing in it reached a verdict. pytest
 #: still prints `N error` in the summary, which `_RAN` counts as a verdict -- so a test file
 #: that cannot even be imported earned full execution credit.
@@ -251,6 +256,45 @@ def _tests_actually_ran(result: str) -> bool | None:
     return None
 
 
+def _k_expression(cmd: str) -> str | None:
+    """The `-k` keyword expression, unquoted, or None when the command has none."""
+    m = _K.search(cmd)
+    if not m:
+        return None
+    return m.group(1).strip("\"'")
+
+
+def _k_selects(expr: str, nodeid: str) -> bool | None:
+    """Would `-k <expr>` select `nodeid`? None when the expression is beyond this reader.
+
+    pytest matches a bare word as a SUBSTRING of the node id and composes words with `and`,
+    `or`, `not` and parentheses. Parsing it as a Python expression and walking the tree
+    keeps that grammar exactly and evaluates nothing: anything outside it -- a call, a
+    comparison, a keyword argument -- yields None rather than a guess.
+    """
+    try:
+        tree = ast.parse(expr.strip(), mode="eval")
+    except SyntaxError:
+        return None
+
+    def ev(n):
+        if isinstance(n, ast.BoolOp):
+            vals = [ev(v) for v in n.values]
+            if any(v is None for v in vals):
+                return None
+            return all(vals) if isinstance(n.op, ast.And) else any(vals)
+        if isinstance(n, ast.UnaryOp) and isinstance(n.op, ast.Not):
+            v = ev(n.operand)
+            return None if v is None else not v
+        if isinstance(n, ast.Name):
+            return n.id in nodeid
+        if isinstance(n, ast.Constant) and isinstance(n.value, str):
+            return n.value in nodeid
+        return None
+
+    return ev(tree.body)
+
+
 def _same_file(a: str, b: str) -> bool:
     """Does target `a` reach test file `b`, without pretending to resolve paths?
 
@@ -265,16 +309,23 @@ def _same_file(a: str, b: str) -> bool:
             or a.startswith(b.rstrip("/") + "/"))
 
 
-def _covers_added(cmd: str, added_tests: list[str]) -> bool:
+def _covers_added(cmd: str, added_tests: list[str]) -> bool | None:
     """Would this invocation have RUN one of the added tests?
 
     File-level containment was the whole test before, so a command that named a DIFFERENT
-    node in the same file, and a command that explicitly `--deselect`ed the added test,
-    both "covered" the very test they were written to avoid. A target that names a node
-    covers that node only, and an explicit deselect removes the node it names.
+    node in the same file, and a command that explicitly `--deselect`ed or `-k`-excluded the
+    added test, all "covered" the very test they were written to avoid. A target that names
+    a node covers that node only; an explicit deselect removes the node it names; and a `-k`
+    expression decides selection before any of that.
+
+    -> True   at least one added test would have run
+       False  none would have: every one is excluded, or nothing targets it
+       None   a `-k` expression this reader cannot settle, so the command does not say
     """
     targets = set(_PATH_ARG.findall(cmd))
     deselected = set(_DESELECT.findall(cmd))
+    kexpr = _k_expression(cmd)
+    unsettled = False
     for a in added_tests:
         a_file, _, a_node = a.partition("::")
         removed = False
@@ -285,18 +336,29 @@ def _covers_added(cmd: str, added_tests: list[str]) -> bool:
                 break
         if removed:
             continue                        # explicitly taken out of this run
+        if kexpr is not None:
+            selected = _k_selects(kexpr, a)
+            if selected is None:
+                unsettled = True
+                continue                    # the expression does not say; do not guess
+            if not selected:
+                continue                    # -k excluded it, whatever the summary says
         if not targets:
             return True                     # a whole-suite run reaches it
+        reached = False
         for t in targets:
             t_file, _, t_node = t.partition("::")
             if not _same_file(t_file, a_file):
                 continue
             if t_node and a_node and t_node != a_node:
                 continue                    # a different node in the same file
+            reached = True
+            break
+        if reached:
             return True
-        if a_node and a_node in cmd:
-            return True                     # named directly, e.g. `-k test_added`
-    return False
+        if kexpr is None and a_node and a_node in cmd:
+            return True                     # named directly, with no selection expression
+    return None if unsettled else False
 
 
 def observed_test_execution(calls: list[dict], added_tests: list[str]) -> bool | None:
@@ -339,7 +401,11 @@ def observed_test_execution(calls: list[dict], added_tests: list[str]) -> bool |
         if c.get("is_error") or c.get("result") is None:
             saw_unsettled = True
             continue
-        if not _covers_added(cmd, added_tests):
+        covers = _covers_added(cmd, added_tests)
+        if covers is None:
+            saw_unsettled = True            # a selection expression we cannot read
+            continue
+        if not covers:
             continue                        # ran, but not over the added test
         ran = _tests_actually_ran(c.get("result") or "")
         if ran is True:

@@ -243,21 +243,47 @@ def report_over_production(scratch: Path, task: str, attempt: int) -> dict:
     return rep
 
 
+#: What the REPORTER calls usable, mirrored so the rehearsal cannot pass evidence the
+#: reporter will refuse: `a3_pipeline.normalise_production` keys `usable` on exactly these
+#: two files, and a cell without them becomes a "launched, no usable artifacts" row.
+#: Checking "any artifact at all" accepted launch markers and a record with no trace and no
+#: patch -- the production writer having started and left nothing to measure.
+USABLE_ARTIFACTS = ("trace.jsonl", "patch.diff")
+
+
 def rehearsal_failures(report: dict, dry_run: bool) -> list[str]:
     """Everything the rehearsal OBSERVED that means it did not rehearse successfully.
 
     Each condition below was already recorded in the report and then thrown away by an
-    unconditional `return 0`: a runner exiting non-zero, a policy that wrote no artifacts,
-    and a reporter that raised were each printed as prose and exited 0, so CI and every
-    caller read a failed rehearsal as green. A rehearsal that cannot fail catches nothing.
+    unconditional `return 0`: a runner exiting non-zero, a policy that left no usable
+    artifacts, a prompt that never went out, and a reporter that raised were each printed as
+    prose and exited 0, so CI and every caller read a failed rehearsal as green. A rehearsal
+    that cannot fail catches nothing.
+
+    What is deliberately NOT a failure: an `indeterminate` experimental decision. The
+    rehearsal exists to prove the production path carries evidence end to end, and
+    indeterminate is a legitimate verdict about the EXPERIMENT, not a fault in the path. A
+    reporter that raised, or produced no decision at all, is a different matter.
     """
     failures: list[str] = []
     if report.get("runner_exit"):
         failures.append(f"production runner exited {report['runner_exit']}")
     if not dry_run:
         for pol, row in (report.get("artifacts") or {}).get("per_policy", {}).items():
-            if not [k for k, v in row.items() if k != "dir" and v]:
-                failures.append(f"policy {pol} wrote no artifacts")
+            missing = [f for f in USABLE_ARTIFACTS if not row.get(f)]
+            if missing:
+                failures.append(f"policy {pol} left no usable artifacts: missing "
+                                f"{', '.join(missing)}")
+        op = report.get("outbound_prompts")
+        if op is None:
+            failures.append("outbound prompt verification did not run")
+        elif not op.get("all_registered_prompts_observed"):
+            unseen = sorted(pol for pol, v in (op.get("per_policy") or {}).items()
+                            if not v.get("observed_outbound"))
+            failures.append("the registered prompt never went out for policy "
+                            + (", ".join(unseen) or "(unknown)"))
+        elif not op.get("policies_sent_different_prompts"):
+            failures.append("both policies sent the same outbound prompt")
     dec = report.get("decision") or {}
     if "error" in dec:
         failures.append(f"reporter failed: {dec['error']}")

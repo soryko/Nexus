@@ -310,10 +310,24 @@ def test_a_record_without_the_artifact_is_unknown_not_a_pass(tmp_path):
 # A mocked runner exiting 9, a policy that wrote nothing, and a reporter that raised were
 # all RECORDED and then discarded by an unconditional `return 0`.
 
+def _policy_row(usable=True, **kw):
+    """One policy's artifact row. `usable` mirrors what the reporter requires: a trace AND
+    a patch. Launch markers and a record alone are what "launched, no usable artifacts"
+    means, and are NOT a successful rehearsal."""
+    row = {"dir": "/x", "launched.json": True, "record.json": True,
+           "trace.jsonl": usable, "patch.diff": usable}
+    row.update(kw)
+    return row
+
+
 def _ok_report(**kw):
     report = {"runner_exit": 0,
-              "artifacts": {"per_policy": {"A": {"dir": "/x/A", "record.json": True},
-                                           "B": {"dir": "/x/B", "record.json": True}}},
+              "artifacts": {"per_policy": {"A": _policy_row(), "B": _policy_row()}},
+              "outbound_prompts": {
+                  "per_policy": {"A": {"observed_outbound": True},
+                                 "B": {"observed_outbound": True}},
+                  "all_registered_prompts_observed": True,
+                  "policies_sent_different_prompts": True},
               "decision": {"decision": "accept_for_further_development"}}
     report.update(kw)
     return report
@@ -330,10 +344,63 @@ def test_a_runner_exiting_non_zero_fails_the_rehearsal():
 
 def test_a_policy_that_wrote_no_artifacts_fails_the_rehearsal():
     r = _ok_report()
-    r["artifacts"]["per_policy"]["B"] = {"dir": "/x/B", "record.json": False}
+    r["artifacts"]["per_policy"]["B"] = {"dir": "/x/B"}
     f = RP.rehearsal_failures(r, dry_run=False)
-    assert any("policy B wrote no artifacts" in x for x in f)
+    assert any("policy B left no usable artifacts" in x for x in f)
     assert not any("policy A" in x for x in f)
+
+
+def test_a_launched_policy_with_no_trace_or_patch_is_not_a_successful_rehearsal():
+    """The injected fault: both policies have a launch marker and a record but no trace and
+    no patch. The reporter calls that "launched, no usable artifacts"; checking whether ANY
+    artifact exists called it success."""
+    r = _ok_report()
+    for pol in ("A", "B"):
+        r["artifacts"]["per_policy"][pol] = _policy_row(usable=False)
+    f = RP.rehearsal_failures(r, dry_run=False)
+    assert [x for x in f if "policy A left no usable artifacts" in x]
+    assert [x for x in f if "policy B left no usable artifacts" in x]
+    assert all("trace.jsonl" in x and "patch.diff" in x
+               for x in f if "usable artifacts" in x)
+
+
+def test_a_missing_trace_alone_fails_even_when_the_patch_landed():
+    r = _ok_report()
+    r["artifacts"]["per_policy"]["A"] = _policy_row(**{"trace.jsonl": False})
+    f = RP.rehearsal_failures(r, dry_run=False)
+    assert any("missing trace.jsonl" in x for x in f)
+
+
+def test_a_prompt_that_never_went_out_fails_the_rehearsal():
+    r = _ok_report()
+    r["outbound_prompts"] = {"per_policy": {"A": {"observed_outbound": True},
+                                            "B": {"observed_outbound": False}},
+                             "all_registered_prompts_observed": False,
+                             "policies_sent_different_prompts": False}
+    f = RP.rehearsal_failures(r, dry_run=False)
+    assert any("never went out for policy B" in x for x in f)
+
+
+def test_absent_prompt_verification_is_itself_a_failure():
+    """Verification that did not run is not verification that passed."""
+    r = _ok_report()
+    del r["outbound_prompts"]
+    assert any("did not run" in x for x in RP.rehearsal_failures(r, dry_run=False))
+
+
+def test_both_policies_sending_one_prompt_fails_the_rehearsal():
+    r = _ok_report()
+    r["outbound_prompts"]["policies_sent_different_prompts"] = False
+    assert any("same outbound prompt" in x
+               for x in RP.rehearsal_failures(r, dry_run=False))
+
+
+def test_an_indeterminate_experimental_decision_is_not_a_rehearsal_failure():
+    """The rehearsal proves the PATH carries evidence; indeterminate is a legitimate verdict
+    about the EXPERIMENT. Failing on it would make the rehearsal refuse a correct run."""
+    r = _ok_report(decision={"decision": "indeterminate",
+                             "reason": "insufficient decisive evidence"})
+    assert RP.rehearsal_failures(r, dry_run=False) == []
 
 
 def test_a_reporter_exception_fails_the_rehearsal():
@@ -359,8 +426,14 @@ def test_a_dry_run_is_not_failed_by_absent_artifacts_or_decision():
 
 def test_every_named_failure_is_reported_together():
     r = _ok_report(runner_exit=9, decision={"error": "boom"})
-    r["artifacts"]["per_policy"]["B"] = {"dir": "/x/B", "record.json": False}
-    assert len(RP.rehearsal_failures(r, dry_run=False)) == 3
+    r["artifacts"]["per_policy"]["B"] = _policy_row(usable=False)
+    r["outbound_prompts"]["all_registered_prompts_observed"] = False
+    f = RP.rehearsal_failures(r, dry_run=False)
+    assert len(f) == 4, f
+    assert any("exited 9" in x for x in f)
+    assert any("policy B left no usable artifacts" in x for x in f)
+    assert any("never went out" in x for x in f)
+    assert any("reporter failed" in x for x in f)
 
 
 
