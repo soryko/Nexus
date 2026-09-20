@@ -193,6 +193,38 @@ def main() -> int:
         return 2
 
     venv = REPO / a.venv
+
+    # An occupied destination is a question for the person, not a directory problem.
+    # uv will not reuse an environment and answers with its own wording plus a `--clear`
+    # hint -- an offer to delete an environment a client may be running right now. That
+    # offer is not this tool's to accept, and uv's wording is about a directory when what
+    # matters is the installation that may be living in it. So recognise it here, say
+    # which destination is occupied and what is in it, name both ways forward, and change
+    # nothing.
+    if (venv / "pyvenv.cfg").exists():
+        scripts = "Scripts" if os.name == "nt" else "bin"
+        suffix = ".exe" if os.name == "nt" else ""
+        existing_check = venv / scripts / f"nexus-memory-check{suffix}"
+        existing_python = venv / scripts / ("python.exe" if os.name == "nt" else "python")
+        found = inspect(str(existing_python))
+        what = (f"python {'.'.join(map(str, found['python']))}, sqlite {found['sqlite']}"
+                if found else "an interpreter that would not answer")
+        print(f"\nAn environment already exists at\n  {venv}\n"
+              f"  ({what})\n\n"
+              f"Nothing has been changed. Nexus installs each version into its own\n"
+              f"environment, so this command will not modify or replace that one.\n\n"
+              f"To check whether it already works:\n"
+              f"  {_sh(existing_check)}\n"
+              f"  (on an environment from v0.1.0a1 this command does not exist; that\n"
+              f"   release's checker is tools/check_install.py in its own checkout)\n\n"
+              f"To install this version somewhere else, at a destination that is not\n"
+              f"this one:\n"
+              f"  {_sh(sys.executable)} tools/install.py --venv "
+              f"/path/to/a/different/environment\n\n"
+              f"To reuse this destination, remove it yourself first -- deliberately, and\n"
+              f"with any client that launches it stopped.")
+        return 2
+
     print(f"building {venv} ...")
     # An explicit choice must not be quietly overridden by an inherited request. uv reads
     # UV_PYTHON from the environment, and CI exports it; dropping it here is what keeps

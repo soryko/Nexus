@@ -102,8 +102,14 @@ editable environment keeps working only while the checkout stays where it is. Ru
 plain `uv sync` against a runtime environment **converts it back** to an editable one, so
 use the installer for user upgrades.
 
-Exit `0` built and verified · `1` nothing meets both floors · `2` the build could not run, or
-ran and produced something below a floor.
+Exit `0` built and verified · `1` nothing meets both floors · `2` the build could not run,
+ran and produced something below a floor, or the destination is already occupied.
+
+**If the destination already holds an environment, the installer stops and changes
+nothing.** It does not replace or clear it, because that environment may be the one your
+client is running. It prints what is there and two ways forward: verify it with its own
+`nexus-memory-check`, or install to a different `--venv`. To reuse the destination, remove
+it yourself, with any client that launches it stopped.
 
 If nothing passes, install an interpreter that does and pass it with `--python`.
 
