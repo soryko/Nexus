@@ -41,7 +41,7 @@ CEILING, WALL_CLOCK, ARM_RUNS, PAIRS = 45, 600, 16, 8
 
 FROZEN = {
     "product": "2cd531f9d7c274a065533e58ba3fde8582f8c269",
-    "harness": "dbf8c226293aa6052685fa405ff80677cdba91bc",
+    "harness": "f8c548b5a9ebac6aedbd8af6834b8d5e6c2a4974",
     "config_version": "a3-v1",
     "config_digest": "40f1f18bcfd25cb6",
     "max_turns": 45,
@@ -164,6 +164,27 @@ if prov_path.is_file():
             note("FLAGGED", f"{r['id']} — no k4 result may be read as evidence that "
                             f"retrieval located that mechanism unaided")
 
+print("\nthe predeclared facts, and the production path")
+facts_path = BENCH / "facts-a3.json"
+ck("facts-a3.json present", "yes" if facts_path.is_file() else "MISSING", "yes")
+if facts_path.is_file():
+    fd = json.loads(facts_path.read_text())
+    lab = json.loads((BENCH / "results-dev-m1-r2.json").read_text())["labels"]
+    ck("facts cover every task", sorted(fd["facts"]), ["k1", "k2", "k3", "k4"])
+    off = [f"{t}/{fid}/{m}" for t, fs in fd["facts"].items() for fid, f in fs.items()
+           for m in f["members"] if m not in lab[t]["useful"]]
+    ck("every fact member is `useful` there", off or "none", "none")
+    note("facts declared", f"{sum(len(v) for v in fd['facts'].values())} over 4 tasks; "
+                           f"{sum(1 for fs in fd['facts'].values() for f in fs.values() if f['redundant'])}"
+                           f" genuinely redundant, the rest singletons")
+ck("production adapter present", "yes" if (BENCH / "run_a3.py").is_file() else "MISSING",
+   "yes")
+ck("adapter requires the A3 boundary",
+   "yes" if "require=isolation.REQUIRE_A3" in (BENCH / "run_a3.py").read_text() else "NO",
+   "yes")
+ck("adapter assembles per policy",
+   "yes" if "AP.assemble(task, policy)" in (BENCH / "run_a3.py").read_text() else "NO", "yes")
+
 print("\nthe frozen A/B schedule")
 sched_path = BENCH / "schedule-a3.json"
 ck("schedule present", "yes" if sched_path.is_file() else "MISSING", "yes")
@@ -244,6 +265,14 @@ note("disclosed overshoot", "NO NUMERIC MAXIMUM IS ESTABLISHED. An admitted pair
                             "reservation estimate.")
 note("", "the threshold is an engineering proposal and a green preflight is not its "
          "approval. LAUNCH-A3.md must be approved first.")
+
+print("\nprior unauthorised execution, recorded and NOT netted against this")
+inc = REPO / "INCIDENT-a3-unauthorized-spend.md"
+ck("incident record present", "yes" if inc.is_file() else "MISSING", "yes")
+note("2026-09-20", "2 669 285 tokens spent on k1/attempt1 A and B by a rehearsal that "
+                   "reached a stale forwarder on the production port")
+note("", "those two arm-runs are NOT A3 results, are not reused, and are not netted "
+         "against the 30 000 000 proposal in either direction")
 
 print()
 if bad:

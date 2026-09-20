@@ -5,6 +5,25 @@ and [`preflight-a3.py`](preflight-a3.py) asserts every one of them — but a gre
 is not an authorisation. No budget is approved, no arm-run has been executed, and **paid
 execution remains stopped** until the founder approves this record.
 
+> ## Unauthorised execution already happened against this design
+>
+> On **2026-09-20** a development rehearsal ran two A3-shaped arm-runs against the **real**
+> model endpoint and spent **2 669 285 tokens** — `k1/attempt1`, policies A and B — while
+> paid execution was stopped. It reached a forwarder that had been listening on the
+> production port since 2026-09-15, aimed at the real upstream. Full account:
+> [`INCIDENT-a3-unauthorized-spend.md`](INCIDENT-a3-unauthorized-spend.md).
+>
+> **Those two arm-runs are not A3 results and are not used as any.** They fill a registered
+> cell, so reusing them would launder unauthorised spend into the experiment; they are also
+> a single cell selected by an accident. If A3 is approved it starts from nothing. They are
+> **not netted against the 30 000 000 proposal** in either direction.
+>
+> The cause was a rehearsal that read "something is listening" as "my stub is listening".
+> It is closed by a positive egress control: the stub echoes a per-run token and the
+> rehearsal refuses to launch unless that token comes back through the forwarder. The
+> sandbox is not implicated — a boundary governs what an arm can read and reach, not what it
+> costs.
+
 The design it would execute is
 [`benchmarks/agent/REGISTRATION-DRAFT-a3-consult.md`](benchmarks/agent/REGISTRATION-DRAFT-a3-consult.md).
 
@@ -46,7 +65,7 @@ sweep.**
 | | |
 | --- | --- |
 | `product_revision` | `2cd531f9d7c274a065533e58ba3fde8582f8c269` |
-| `harness_revision` | `dbf8c226293aa6052685fa405ff80677cdba91bc` |
+| `harness_revision` | `f8c548b5a9ebac6aedbd8af6834b8d5e6c2a4974` |
 | `config_version` | `a3-v1` |
 | `config_digest` | `40f1f18bcfd25cb6` |
 | `max_turns` | **45** — 45 *model responses*; the envelope's `num_turns` is two different counters and is not a bound |
@@ -83,6 +102,33 @@ given.
 8 pairs, seed `20260919`, **two** distinct orders (`A->B` and `B->A`), each policy first
 four times. **Reported, not corrected**: a seeded draw is not a balanced design, and the
 failure this replaces is a "randomised" order that was reproducibly constant.
+
+## The execution path, rehearsed
+
+[`run_a3.py`](benchmarks/agent/run_a3.py) is the adapter that would execute this. It imports
+`run_arms_isolated` rather than forking it — §2 holds the runner fixed — and changes five
+things: the prompt is assembled **per policy**; `OUT` carries `(task, attempt, policy)` so
+two policies that are the same arm cannot share a directory; each policy's profile **denies
+the other**; `check_boundary` is called with **`require=isolation.REQUIRE_A3`**; and the
+launch is **ledgered** before the process starts.
+
+[`rehearse_a3_production.py`](benchmarks/agent/rehearse_a3_production.py) drives that path
+against the real fixture trees, sandbox profiles, environment gate, boundary controls and
+compliance scorer, replacing **only** the model endpoint with the loopback stub. Measured on
+this host:
+
+| | |
+| --- | --- |
+| outbound prompt A | `5f4f1e210aa7f7ea` **observed** |
+| outbound prompt B | `2b00dc58add11488` **observed** |
+| artifacts | `a3-launch.json`, `launched.json`, `trace.jsonl`, `patch.diff`, `record.json`, `sandbox.sb`, `envcheck.json` — written by the **production** writer, for both policies, in **two distinct directories** |
+| environment gate | 8 checks pass, runtime pinned |
+| boundary | `required_unresolved: []`, `required_failed: []` on **prepared A3 arms** |
+| cost | **108 tokens** |
+
+A preflight that computes prompt digests establishes nothing about what reaches the model.
+This is the observation that closes that gap: the digests were read from what the stub
+actually received, and compared against digests computed from the registration.
 
 ## Design
 
@@ -239,12 +285,24 @@ would support that.
       execution → real compliance scoring → normalisation → decision, reaching accept,
       reject and indeterminate
 - [x] **the preflight demonstrated to refuse a stale value**, not merely to pass
+- [x] the **production adapter** exercised against the loopback stub, with the outbound
+      prompt digests observed and the production writer producing every artifact
+- [x] **the boundary controls run on prepared A3 arms** with `require=isolation.REQUIRE_A3`,
+      both policies, `required_unresolved` and `required_failed` empty
+- [x] the predeclared facts frozen in [`facts-a3.json`](benchmarks/agent/facts-a3.json),
+      every member drawn from that task's `useful` set
+- [x] the launch ledger: a marker before the process, a launch without terminal accounting
+      unresolved whether or not a trace exists, and fatal stops separate from pair budget
 
 ## Outstanding before any launch
 
-- [ ] **the boundary board re-run on the prepared A3 arms** with `require=isolation.REQUIRE_A3`
-- [ ] the per-arm environment gate run on each prepared arm
+- [ ] the boundary board and the per-arm gate re-run **at launch, on the arms that will
+      run** — the green board above is evidence the gate works on prepared A3 arms, and a
+      board captured earlier is not a property of a later sweep
 - [ ] `preflight-a3.py` re-run, its output and execution HEAD preserved
+- [ ] **the forwarder confirmed to be the intended one before any arm-run.** The 2026-09-20
+      incident spent 2.67M tokens against a stale forwarder on the configured port; a
+      listener answering is not evidence of which endpoint is behind it
 - [ ] **the founder's approval of the identifiers, the design and the 30 000 000 threshold**
 
 **Nothing above is an approval.** This record exists to be approved or refused.
