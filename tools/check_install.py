@@ -21,6 +21,13 @@ checks the claim end to end:
 Step 7 is the one a manual check usually skips. A retry that quietly writes a second copy
 looks identical to a successful retry from the caller's side, and only the count shows it.
 
+One caveat about the word "installed", so the result is not read as more than it is: a
+source installation via `uv sync` is EDITABLE, so the venv points at the checkout's `src/`
+and the package code under test is the working tree's. What this genuinely exercises is the
+installed console script, the environment's interpreter -- and therefore both runtime floors
+-- and the resolved dependency set, driven the way a client drives it. That is the supported
+source installation. It is not a wheel installation test.
+
     python3 tools/check_install.py --server /path/to/.venv/bin/nexus-memory
     python3 tools/check_install.py            # uses ./.venv/bin/nexus-memory
 

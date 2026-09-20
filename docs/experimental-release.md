@@ -131,6 +131,11 @@ sequence and an emoji outside the BMP, and the comparison is on bytes.
 Exit `0` pass · `1` a check failed, or the command did not serve MCP · `2` nothing installed
 at that path. `--json PATH` also writes the full report to a file.
 
+> A source installation is **editable**: the environment points at this checkout's `src/`.
+> So this exercises the installed console script, the environment's interpreter and both
+> runtime floors, and the resolved dependencies — not a wheel. Moving or deleting the
+> checkout breaks the installed command.
+
 Expected tail on success:
 
 ```
@@ -334,4 +339,5 @@ at the backup you took in step 1. There is no migration tooling and no automatic
 | Writes refused with `verification_unavailable` | no `--repo` bound, or `git` not on PATH |
 | A retry seems to have written twice | run `tools/check_install.py`; it asserts exactly this |
 | Search misses something you know you stored | it may live only in a superseded revision — try `history` |
+| `ModuleNotFoundError: No module named 'nexus_memory'` | the checkout was moved, renamed or deleted — a source install is editable and points at it; re-clone to the old path or rerun `tools/install.py` from the new one |
 | A backup opened empty, with no error | the source URI was built by string interpolation and a `#` in the path truncated it — use the `as_uri()` snippet in §5 |
