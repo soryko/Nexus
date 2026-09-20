@@ -36,7 +36,7 @@ An agent stores a fact once and reads it back in a later session, on a different
 Python 3.12+ and [uv](https://docs.astral.sh/uv/getting-started/installation/), with a Python whose **linked SQLite is 3.51.3 or newer**.
 
 > [!WARNING]
-> A Python that satisfies the version floor can still fail the SQLite one — the two are independent. uv's own managed CPython builds currently link SQLite 3.50.4 on macOS, so a plain `uv sync` can produce an environment that cannot start this server.
+> A Python that satisfies the version floor can still fail the SQLite one — the two are independent. Which SQLite an interpreter links is a property of that individual build, not of its Python version, its distributor or the `sqlite3` on your PATH, and builds from one distributor have been observed on both sides of the floor. So a plain `uv sync` can produce an environment that cannot start this server, and no distributor is assumed safe: `tools/install.py` probes each candidate and reports both numbers.
 
 ## Quickstart
 
