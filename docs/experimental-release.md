@@ -38,21 +38,16 @@ closed transport with no reason attached. That is what §1 and §2 exist to prev
 
 ### Get the source
 
-> [!IMPORTANT]
-> **`v0.1.0a2` is not published yet.** Until it is, this guide describes the candidate
-> branch, and the checkout below names that branch. At publication it becomes
-> `git checkout v0.1.0a2` and this notice is removed. Everything else on this page applies
-> to the candidate as written.
->
-> If you want the **published** release instead, use
-> [`v0.1.0a1`](https://github.com/soryko/Nexus/blob/v0.1.0a1/docs/experimental-release.md)
-> and follow *that* tag's guide — its installation is editable and its instructions differ.
-
 ```bash
 git clone https://github.com/soryko/Nexus.git
 cd Nexus
-git checkout release/independent-installation   # becomes: git checkout v0.1.0a2
+git checkout v0.1.0a2
 ```
+
+> [!NOTE]
+> Upgrading from `v0.1.0a1`? Its installation is **editable** and its instructions differ —
+> read [§5](#5-back-up-update-recover) before checking anything out, because the upgrade
+> must not run `git checkout` in the checkout that release was installed from.
 
 The version you check out here is the version you install. Installing into a directory
 named `0.1.0a2` does not make the checkout `0.1.0a2`; if these disagree you will get the
