@@ -18,12 +18,41 @@ inferred from the envelope that is the thing under measurement.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import http.server
 import json
 import signal
 import socketserver
 import sys
 import uuid
+
+def _texts(body: dict, role: str | None, system: bool = False) -> list[str]:
+    """Every text block of the requested role, in order. `system` reads the system array."""
+    if system:
+        blocks = body.get("system") or []
+        return [b.get("text", "") for b in blocks if isinstance(b, dict)]
+    out = []
+    for m in body.get("messages") or []:
+        if role and m.get("role") != role:
+            continue
+        c = m.get("content")
+        if isinstance(c, str):
+            out.append(c)
+        elif isinstance(c, list):
+            out += [b.get("text", "") for b in c
+                    if isinstance(b, dict) and b.get("type") == "text"]
+    return out
+
+
+def _text_digests(body: dict, role: str | None, system: bool = False) -> list[str]:
+    return [hashlib.sha256(t.encode()).hexdigest()[:16]
+            for t in _texts(body, role, system) if t]
+
+
+def _first_text(body: dict, role: str | None) -> str:
+    t = _texts(body, role)
+    return t[0] if t else ""
+
 
 # Each script is a list of assistant turns; each turn is a list of blocks.
 #   {"text": "..."}                     one text block
@@ -50,6 +79,19 @@ SCRIPTS: dict[str, list[list[dict]]] = {
         [{"tool": "Bash", "input": {"command": "exit 7"}}],
         [{"tool": "Bash", "input": {"command": "echo recovered"}}],
         [{"text": "done"}],
+    ],
+    # An A3-SHAPED run: consult the memory service, edit source, run the test, answer.
+    # Used by `rehearse_a3_production.py` to drive the real runner with no model. The tool
+    # NAMES matter -- the compliance scorer keys on `mcp__nexus__*` for delivery and on an
+    # Edit within the task's edit scope for ordering -- so this is not a generic script.
+    "a3_consult_edit_test": [
+        [{"tool": "mcp__nexus__search",
+          "input": {"query": "click option parameter default flag"}}],
+        [{"tool": "mcp__nexus__get", "input": {"memory_id": "1"}}],
+        [{"tool": "Bash", "input": {"command": "ls src/click/core.py"}}],
+        [{"tool": "Bash",
+          "input": {"command": "PYTHONPATH=src $A2_PYTHON -m pytest tests -q -x || true"}}],
+        [{"text": "DONE. No source change was made; this is a scripted stub."}],
     ],
     # no tool at all
     "final_only": [
@@ -122,6 +164,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     script: list[list[dict]] = []
     served = 0
     requests: list[dict] = []
+    instance_token: str = ""
 
     def do_POST(self):
         raw = self.rfile.read(int(self.headers.get("content-length", 0) or 0))
@@ -151,9 +194,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "system_blocks": len(body.get("system") or []),
             "tools": len(body.get("tools") or []),
             "stream": bool(body.get("stream")),
+            # WHAT WAS SENT, not merely how much of it. Shapes alone cannot answer whether
+            # the prompt that reached the model is the prompt whose digest a preflight
+            # froze -- and computing digests in a preflight establishes nothing about the
+            # outbound request unless something observes the outbound request.
+            #
+            # Digests rather than bodies: a digest is what the registration froze, it is
+            # what a comparison needs, and it keeps a log of full prompts out of the tree.
+            # The prefix is for reading a failure, and is short enough not to be the prompt.
+            "user_text_digests": _text_digests(body, "user"),
+            "first_user_prefix": _first_text(body, "user")[:120],
+            "system_text_digests": _text_digests(body, None, system=True),
         })
         if not scripted:
-            payload = stream([{"text": "untitled"}], body.get("model") or "stub")
+            # A request with no client-side tool definitions is not a loop request. It is
+            # also the shape of the UPSTREAM CONTROL a rehearsal sends before launching
+            # anything: the instance token comes back through the forwarder, so the caller
+            # can prove the port it is about to spend against reaches THIS stub and not a
+            # forwarder pointed at a paid endpoint. The log cannot serve that purpose --
+            # it is only written on SIGTERM, so mid-run it does not exist.
+            answer = Handler.instance_token or "untitled"
+            payload = stream([{"text": answer}], body.get("model") or "stub")
             return self._sse(payload)
         i = Handler.served
         Handler.served += 1
@@ -195,8 +256,12 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--port", type=int, default=8903)
     ap.add_argument("--script", default="sequential", choices=sorted(SCRIPTS))
     ap.add_argument("--log", default="")
+    ap.add_argument("--instance-token", default="",
+                    help="echoed to non-loop requests, so a caller can prove which stub "
+                         "instance a forwarder actually reaches")
     args = ap.parse_args(argv[1:])
     Handler.script = SCRIPTS[args.script]
+    Handler.instance_token = args.instance_token
     srv = Server(("127.0.0.1", args.port), Handler)
 
     def dump(*_a):
