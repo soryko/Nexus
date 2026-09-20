@@ -1,0 +1,30 @@
+[
+ {
+  "task": "d3",
+  "fix": "6de212151893e4072ca21779b7b6f4cb82452f51",
+  "pre_fix": "1339fd3323",
+  "checks": [
+   "tests/test_defaults.py"
+  ],
+  "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d3/base/d3",
+  "held_checks": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d3/base/checks/d3",
+  "oracle": {
+   "fix_object_present": false,
+   "refs": [
+    "refs/heads/main"
+   ],
+   "remotes": [],
+   "unreachable_commits": 0,
+   "inherited_packs": false,
+   "isolated": true
+  },
+  "no_model": {
+   "exit": 1,
+   "summary": "1 failed, 33 passed in 0.03s",
+   "failing_instances": 1,
+   "failing_functions": 1,
+   "passed": false
+  },
+  "checks_absent_from_fixture": true
+ }
+]

@@ -1,0 +1,67 @@
+diff --git a/src/click/core.py b/src/click/core.py
+index 6dc44f3..9903f39 100644
+--- a/src/click/core.py
++++ b/src/click/core.py
+@@ -709,7 +709,13 @@ class Context:
+             value = self.default_map.get(name)
+ 
+             if call and callable(value):
+-                return value()
++                value = value()
++
++            # ``UNSET`` is an internal sentinel meaning "no value was supplied".
++            # A mapping entry holding it must behave as if the key were absent,
++            # so hide it from callers instead of handing the sentinel back.
++            if value is UNSET:
++                value = None
+ 
+             return value
+ 
+@@ -2281,9 +2287,19 @@ class Parameter:
+         name = self.name
+         value = ctx.lookup_default(name, call=False) if name is not None else None
+ 
+-        if value is None and not (
+-            ctx.default_map is not None and name is not None and name in ctx.default_map
+-        ):
++        # A ``default_map`` entry holding ``UNSET`` means no value was supplied
++        # and must not shadow the parameter's own default. Membership is
++        # checked on the raw mapping value because ``lookup_default`` hides the
++        # sentinel as ``None``, which is indistinguishable from an explicit
++        # ``None`` entry.
++        has_default_map_value = (
++            ctx.default_map is not None
++            and name is not None
++            and name in ctx.default_map
++            and ctx.default_map[name] is not UNSET
++        )
++
++        if value is None and not has_default_map_value:
+             value = self.default
+ 
+         if call and callable(value):
+@@ -2325,9 +2341,21 @@ class Parameter:
+ 
+         if value is UNSET:
+             default_map_value = ctx.lookup_default(self.name)  # type: ignore[arg-type]
+-            if default_map_value is not None or (
+-                ctx.default_map is not None and self.name in ctx.default_map
+-            ):
++            # An ``UNSET`` entry means no value was supplied; treat it as absent
++            # so the parameter's own default is used below. ``lookup_default``
++            # hides the sentinel as ``None``, so the raw mapping value is
++            # inspected to tell it apart from an explicit ``None`` entry.
++            if default_map_value is UNSET:
++                default_map_value = None
++                has_default_map_value = False
++            else:
++                has_default_map_value = (
++                    ctx.default_map is not None
++                    and self.name in ctx.default_map
++                    and ctx.default_map[self.name] is not UNSET
++                )
++
++            if default_map_value is not None or has_default_map_value:
+                 value = default_map_value
+                 source = ParameterSource.DEFAULT_MAP
+ 

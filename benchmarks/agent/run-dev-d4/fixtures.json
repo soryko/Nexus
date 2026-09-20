@@ -1,0 +1,43 @@
+[
+ {
+  "task": "d4",
+  "authored": true,
+  "pinned_tree": "1339fd3323",
+  "checks": [
+   "tests/test_marker_registration.py"
+  ],
+  "path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4/base/d4",
+  "held_checks": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4/base/checks/d4",
+  "oracle": {
+   "fix_object_present": false,
+   "refs": [
+    "refs/heads/main"
+   ],
+   "remotes": [],
+   "unreachable_commits": 0,
+   "inherited_packs": false,
+   "isolated": true
+  },
+  "no_model": {
+   "exit": 2,
+   "summary": "1 error in 0.04s",
+   "failing_instances": 0,
+   "failing_functions": 0,
+   "passed": false
+  },
+  "stale_advice": {
+   "exit": 2,
+   "summary": "1 error in 0.05s",
+   "failing_instances": 0,
+   "failing_functions": 0,
+   "passed": false
+  },
+  "correct_fix": {
+   "exit": 0,
+   "summary": "1 passed in 0.00s",
+   "failing_instances": 0,
+   "failing_functions": 0,
+   "passed": true
+  }
+ }
+]

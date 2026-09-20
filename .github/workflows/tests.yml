@@ -71,6 +71,84 @@ jobs:
           uv run pytest -q tests/core/test_b2a_mutations.py tests/core/test_b2b_mutations.py \
             --junitxml=artifacts/junit/mutations.xml
 
+      # The benchmark harness is not covered by the product suite: its defects are in the
+      # driver, the accounting, the gate and the selection rule, none of which `tests/`
+      # imports. These suites are deterministic -- they stub every subprocess and never
+      # invoke `sandbox-exec`, so they run on Linux. The macOS sandbox and isolation probes
+      # are host verification and are captured separately by `make-verification.sh`.
+      #
+      # `test_report_calibration.py` covers freeze-calib-a2 §5. A rule applied only by hand
+      # is how two COMPLETE ceilings came to be read as two QUALIFYING ceilings.
+      # `test_diagnose_workflow.py` covers the workflow diagnostic's classifier: its report
+      # concludes that 10 of 11 failing arm-runs never wrote to `src/`, which a detector
+      # silently missing a write would invert.
+      # `test_interpreter_pinning.py` covers the interpreter repair. It stubs the shell rather
+      # than running it, so the decision logic is exercised where the fixtures do not exist --
+      # and the defect it closes was a gate that probed one shell startup and passed.
+      # `test_a2r.py` covers A2-R's assessment and its SEPARATE accounting. Two of its cases
+      # are the ones a summary count cannot show: an absent `No module named pytest` in a run
+      # that never invoked pytest is not a pass, and a comment added under `tests/` is not an
+      # extension of the test suite.
+      - name: Benchmark harness counterexamples
+        run: |
+          uv run python benchmarks/agent/test_calibration_counterexamples.py
+          uv run python benchmarks/agent/test_diagnose_counterexamples.py
+          uv run python benchmarks/agent/test_report_calibration.py
+          uv run python benchmarks/agent/test_diagnose_workflow.py
+          uv run python benchmarks/agent/test_interpreter_pinning.py
+          uv run python benchmarks/agent/test_a2r.py
+
+      # `testpaths = ["tests"]`, so these two pytest files under `benchmarks/agent` are NOT
+      # collected by the Suite step above and have to be named. They were written and then
+      # would never have run here -- the same shape as the fix-leakage scan that reported
+      # "none" on four tasks while gathering no evidence.
+      #
+      # `test_dev_m1.py` covers the dev-m1 labels AND the leakage scans themselves: a missing
+      # clone, a failed diff, missing checks and a deliberately contaminated memory the scan
+      # must catch. `test_a3_decision.py` exercises A3's decision table against synthetic
+      # outcomes -- a loss on one task not offset by a gain on another, an equivalent memory
+      # satisfying a fact, stale advice read and rejected, and unresolved accounting that is
+      # indeterminate rather than excluded. Both are deterministic: they build their own git
+      # fixtures in a tmpdir and never invoke `sandbox-exec`, so they run on Linux.
+      #
+      # `test_a3_pipeline.py` is the INTEGRATION rehearsal: schedule -> stubbed execution ->
+      # saved records -> real compliance scoring -> normalisation -> decision. It is here
+      # because the synthetic decision-table checks cannot reach the join between them, and
+      # the join is where the fix-leakage scan's defect lived. It writes 16 arm-runs to a
+      # tmpdir and runs the real regression probe over them, so it is the slow one (~80s);
+      # it stubs every subprocess but pytest and never invokes `sandbox-exec`.
+      #
+      # It needs `pyexpat` in the interpreter running pytest HERE, not merely in the one the
+      # probe shells out to: `regression_discriminates` parses the JUnit report in its own
+      # process. Without it every tree returns `unknown` and every task reports
+      # `required_work: indeterminate` -- which reads like a finding. `rehearse_a3` refuses
+      # rather than running in that state, so a missing pyexpat fails this step loudly
+      # instead of passing it vacuously.
+      - name: Benchmark harness pytest suites
+        run: |
+          uv run pytest -q benchmarks/agent/test_dev_m1.py \
+            benchmarks/agent/test_a3_decision.py \
+            benchmarks/agent/test_a3_pipeline.py \
+            benchmarks/agent/test_provenance.py \
+            benchmarks/agent/test_a3_production.py \
+            --junitxml=artifacts/junit/bench.xml
+
+      # The INSTALLED package, not the source tree. `uv sync` has already built the
+      # environment this step checks, and the console script it exercises is the one an MCP
+      # client launches. Nine checks in three separate processes: store, let the process
+      # exit, start a new one on the same file, read byte-identical content back, search,
+      # then retry the write and confirm the receipt replays with no duplicate.
+      #
+      # It is here because "the tests pass" and "the thing you installed holds a memory
+      # across a restart" are different claims, and only the second is what the project
+      # promises. It also re-checks both runtime floors on the built environment.
+      - name: Installed-package lifecycle check
+        run: |
+          uv run python tools/install.py --check-only
+          uv run python tools/check_install.py \
+            --server "$(uv run python -c 'import sys,pathlib;print(pathlib.Path(sys.prefix)/"bin"/"nexus-memory")')" \
+            --json artifacts/install-check.json
+
       - name: Collect failure evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

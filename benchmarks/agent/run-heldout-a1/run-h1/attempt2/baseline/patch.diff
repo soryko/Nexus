@@ -1,0 +1,19 @@
+diff --git a/repro.py b/repro.py
+new file mode 100644
+index 0000000..30a7ada
+--- /dev/null
++++ b/repro.py
+@@ -0,0 +1,13 @@
++import click
++from click.testing import CliRunner
++
++@click.command()
++@click.option("--without-xyz", "xyz", flag_value=False)
++@click.option("--with-xyz", "xyz", flag_value=True, default=True)
++def cli(xyz):
++    click.echo(repr(xyz))
++
++r = CliRunner()
++for args in ([], ["--with-xyz"], ["--without-xyz"], ["--with-xyz","--without-xyz"], ["--without-xyz","--with-xyz"]):
++    res = r.invoke(cli, args)
++    print(args, "->", res.output.strip(), res.exception)
