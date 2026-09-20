@@ -25,7 +25,17 @@ trusting that the venv inherited what the candidate had.
     python3 tools/install.py                      # probe and build .venv
     python3 tools/install.py --python /path/to/python3.12
     python3 tools/install.py --check-only         # report, build nothing
-    python3 tools/install.py --venv .venv-nexus
+    python3 tools/install.py --venv "$HOME/.local/share/nexus-memory/venvs/0.1.0a2"
+
+What this builds is a NORMAL installation: the package is copied into the environment,
+not linked back to this checkout, and development dependencies are left out. So the
+sources are needed to build and to upgrade, and not to run. Point `--venv` outside the
+checkout and the checkout becomes disposable; the default `.venv` is kept for
+compatibility and is not, since deleting the checkout deletes it too.
+
+Developers want the opposite and should keep using `uv sync --frozen`, which installs the
+project editable with the development dependencies. Running that against an environment
+built here converts it back to an editable one.
 
 Exit status: 0 built and verified, 1 no interpreter meets both floors, 2 the build could
 not run or ran and produced something that does not meet them.
@@ -62,6 +72,18 @@ def floors() -> tuple[tuple[int, ...], tuple[int, ...]]:
                          "that enforce them; refusing to guess")
     return (tuple(int(p) for p in py.group(1).split(".")),
             tuple(int(p.strip()) for p in sq.group(1).split(",") if p.strip()))
+
+
+def _version() -> str:
+    """The version being installed, for the suggested per-version environment path.
+
+    Read from the same file that declares it, so the suggestion cannot name a version
+    this checkout does not actually build. A miss here only costs the example its
+    precision, so it degrades to a placeholder instead of refusing to install.
+    """
+    m = re.search(r'^version\s*=\s*"([^"]+)"', (REPO / "pyproject.toml").read_text(),
+                  re.MULTILINE)
+    return m.group(1) if m else "VERSION"
 
 
 def inspect(python: str) -> dict | None:
@@ -164,8 +186,16 @@ def main() -> int:
     # built environment is re-checked below either way.
     env = {**os.environ, "UV_PROJECT_ENVIRONMENT": str(venv)}
     env.pop("UV_PYTHON", None)
+    # `--no-editable` is what makes the installation survive its source. A plain
+    # `uv sync` installs the project EDITABLE: the environment gets a path entry pointing
+    # back at this checkout, so the server keeps running only for as long as the checkout
+    # stays where it is. `--no-dev` leaves pytest and hypothesis out of a user runtime.
+    # `--python` is belt and braces over UV_PROJECT_ENVIRONMENT: the environment was just
+    # created from `chosen`, and naming it again means a stale or inherited preference
+    # cannot quietly resolve the sync somewhere else.
     for cmd in (["uv", "venv", "--python", chosen, str(venv)],
-                ["uv", "sync", "--frozen"]):
+                ["uv", "sync", "--frozen", "--no-editable", "--no-dev",
+                 "--python", chosen]):
         try:
             r = subprocess.run(cmd, cwd=REPO, env=env)
         except OSError as exc:
@@ -193,10 +223,34 @@ def main() -> int:
         print("REFUSING to report success: this environment cannot start the server.")
         return 2
 
-    server = venv / ("Scripts/nexus-memory.exe" if os.name == "nt" else "bin/nexus-memory")
-    print(f"\nVerified. The installed command is:\n  {server}\n\n"
-          f"Check it end to end (starts, stores, restarts, reads back):\n"
-          f"  {exe} tools/check_install.py --server {server}\n\n"
+    scripts = "Scripts" if os.name == "nt" else "bin"
+    suffix = ".exe" if os.name == "nt" else ""
+    server = venv / scripts / f"nexus-memory{suffix}"
+    checker = venv / scripts / f"nexus-memory-check{suffix}"
+
+    # Whether the environment lives inside the checkout decides whether the checkout is
+    # disposable, and it is the one thing a user cannot infer from a success message.
+    # `--venv` defaults to `.venv` HERE, so the common case is the dependent one.
+    try:
+        inside = venv.resolve().is_relative_to(REPO.resolve())
+    except OSError:
+        inside = False
+    if inside:
+        note = (f"\nThis environment is INSIDE the checkout ({REPO}).\n"
+                f"  The package itself no longer needs these sources, but deleting this\n"
+                f"  directory would delete the environment along with them. To make the\n"
+                f"  checkout disposable, build somewhere else, for example:\n"
+                f"    {sys.executable} tools/install.py --venv "
+                f"$HOME/.local/share/nexus-memory/venvs/{_version()}\n")
+    else:
+        note = (f"\nThis environment is OUTSIDE the checkout ({REPO}),\n"
+                f"  which may now be moved or deleted. Keep the environment and your\n"
+                f"  database where they are; neither is relocatable.\n")
+
+    print(f"\nVerified. The installed commands are:\n  {server}\n  {checker}\n"
+          + note
+          + f"\nCheck it end to end (starts, stores, restarts, reads back):\n"
+          f"  {checker}\n\n"
           f"MCP client entry:\n"
           + json.dumps({"mcpServers": {"nexus-memory": {
               "command": str(server),
