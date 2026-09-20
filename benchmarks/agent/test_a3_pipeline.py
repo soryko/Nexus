@@ -401,3 +401,225 @@ def test_an_empty_bound_is_refused_as_one_policy():
     d = AP.assembly_diff(reg)
     assert not d["holds"]
     assert any("assemble to the same bytes" in f for f in d["failures"])
+
+
+# ---------------------------------------------------------------------------------------
+# THE LAUNCH LEDGER. A started process can consume tokens and leave nothing else.
+# ---------------------------------------------------------------------------------------
+
+import a3_ledger as L                                                      # noqa: E402
+
+
+def test_a_launch_with_no_trace_is_unresolved_not_absent(tmp_path):
+    """The reported reproduction. `saved_consumption` keyed on `trace.jsonl` and returned
+    `[]` for a launch that had spent tokens -- "no trace" read as "not started"."""
+    L.mark_launch(tmp_path, "k1", 1, "A", identity={}, max_turns=45, wall_clock_s=600,
+                  prompt_digest="5f4f1e210aa7f7ea")
+    assert not (P.arm_run_dir(tmp_path, "k1", 1, "A") / "trace.jsonl").exists()
+    led = L.read(tmp_path)
+    assert led.started == ["k1/A/1"]
+    assert led.unresolved == ["k1/A/1"]
+    assert led.consumption_certain is False
+    assert P.saved_consumption(tmp_path) == ["k1/A/1"]
+
+
+def test_a_cell_never_launched_is_absent_not_unresolved(tmp_path):
+    """The other half. Absent is missing COVERAGE; unresolved is a row that spent an unknown
+    amount. Collapsing them in either direction loses something different."""
+    led = L.read(tmp_path)
+    assert led.started == [] and led.unresolved == []
+    assert L.fatal_stop(tmp_path) is None
+
+
+def test_an_interrupted_launch_stops_the_next_pair(tmp_path):
+    first = A3_PLAN.tasks[0]
+    rep = R.build(tmp_path, overrides={**R.cheaper_B(),
+                                       (first, 1, "B"): {"artifacts": False}})
+    gates = rep["launch_gate"]
+    assert gates[0]["may_start"] is True
+    assert gates[1]["may_start"] is False
+    assert gates[1]["stopping_reason"] == "unresolved_accounting"
+    assert gates[1]["gate"] == "fatal"
+    assert rep["further_launches_permitted"] is False
+
+
+def test_an_interrupted_A_does_not_authorise_its_own_pairs_B(tmp_path):
+    """The gate separation. A pair is ADMITTED on budget, once, before it starts. Whether
+    its second member may launch is a FATAL-STOP question asked again, after the first --
+    reserving a pair does not authorise launching its B once A lost its accounting."""
+    L.mark_launch(tmp_path, "k1", 1, "A", identity={}, max_turns=45, wall_clock_s=600,
+                  prompt_digest="a")                      # launched, never accounted
+    stop = L.fatal_stop(tmp_path)
+    assert stop and stop["stopping_reason"] == "unresolved_accounting"
+    # the budget alone would happily admit: nothing is known to have been spent
+    led = L.read(tmp_path)
+    assert led.tokens_known + L.PAIR_RESERVATION <= L.SOFT_LAUNCH_THRESHOLD
+    # ... and the pair gate still refuses, on the fatal gate rather than the budget one
+    g = L.may_admit_pair(tmp_path, "k1", 1)
+    assert g["may_start"] is False and g["gate"] == "fatal"
+
+
+def test_a_recorded_refusal_is_a_fatal_stop(tmp_path):
+    """A boundary or environment-gate refusal is not an arm-run that spent nothing."""
+    L.mark_refusal(tmp_path, "k1", 1, "A", "boundary not demonstrated",
+                   {"required_unresolved": ["cache_shadow_unreadable"]})
+    stop = L.fatal_stop(tmp_path)
+    assert stop and stop["stopping_reason"] == "refused"
+    assert L.may_admit_pair(tmp_path, "k2", 1)["may_start"] is False
+
+
+def test_an_allowance_cannot_clear_an_unresolved_row(tmp_path):
+    """§7: never covered by an allowance written to unblock it. A2-R's ledger honours
+    `resolution.json`; A3's refuses it and keeps the stop."""
+    L.mark_launch(tmp_path, "k1", 1, "A", identity={}, max_turns=45, wall_clock_s=600,
+                  prompt_digest="a")
+    (P.arm_run_dir(tmp_path, "k1", 1, "A") / "resolution.json").write_text(
+        '{"tokens": 1500000, "basis": "assumed from the mean"}')
+    led = L.read(tmp_path)
+    assert led.unresolved == ["k1/A/1"]
+    assert led.rejected_allowances and "REFUSED" in led.rejected_allowances[0]
+    assert L.fatal_stop(tmp_path)["stopping_reason"] == "unresolved_accounting"
+
+
+def test_the_budget_gate_is_monetary_independent_and_reserves_a_pair(tmp_path):
+    """Tokens, not dollars: the CLI's cost field has no provenance on this model. The
+    reservation is set aside BEFORE a pair is admitted."""
+    import json as _j
+    for i, (t, a, pol) in enumerate([("k1", 1, "A"), ("k1", 1, "B")]):
+        d = P.arm_run_dir(tmp_path, t, a, pol)
+        L.mark_launch(tmp_path, t, a, pol, identity={}, max_turns=45, wall_clock_s=600,
+                      prompt_digest="a")
+        (d / "record.json").write_text(_j.dumps({"usage": R.usage_block(13_000_000)}))
+    led = L.read(tmp_path)
+    assert led.tokens_known == 2 * 13_000_000 and led.unresolved == []
+    g = L.may_admit_pair(tmp_path, "k1", 2)
+    assert g["may_start"] is False and g["gate"] == "budget"
+    assert g["stopping_reason"] == "soft_threshold"
+    assert "reserved" in g["reason"]
+
+
+def test_the_ledger_and_the_normaliser_read_usage_by_one_rule(tmp_path):
+    """A usage block of four nulls -- what the runner writes when the envelope carried none
+    -- must not read as a measurement in one place and unknown in the other."""
+    import json as _j
+    d = P.arm_run_dir(tmp_path, "k1", 1, "A")
+    L.mark_launch(tmp_path, "k1", 1, "A", identity={}, max_turns=45, wall_clock_s=600,
+                  prompt_digest="a")
+    (d / "record.json").write_text(_j.dumps({"usage": {k: None for k in
+                                                       ("input_tokens", "output_tokens",
+                                                        "cache_read_input_tokens",
+                                                        "cache_creation_input_tokens")}}))
+    assert L.read(tmp_path).unresolved == ["k1/A/1"]
+
+
+def test_a_launched_cell_with_no_artifacts_is_still_a_row(tmp_path):
+    """It must reach the decision as an unresolved row, not vanish from coverage."""
+    first = A3_PLAN.tasks[0]
+    rep = R.build(tmp_path, overrides={**R.cheaper_B(),
+                                       (first, 1, "B"): {"artifacts": False}})
+    ids = {n["dir"].split("/")[-4:][0] for n in rep["normalisation"]}
+    assert len(rep["normalisation"]) == 2          # the pair that ran, both members
+    assert any(n.get("consumption") == "UNRESOLVED" for n in rep["normalisation"])
+
+
+# ---------------------------------------------------------------------------------------
+# THE TWO MEASUREMENT MAPPINGS.
+# ---------------------------------------------------------------------------------------
+
+def test_information_arriving_only_after_the_edit_is_not_delivered(tmp_path):
+    """The registered measure is delivery BEFORE the first source edit. Concatenating every
+    consultation result and asking whether the body appears anywhere credits a memory
+    retrieved after the edit it was supposed to inform."""
+    first = A3_PLAN.tasks[0]
+    rep = R.build(tmp_path, overrides={
+        **R.cheaper_B(),
+        (first, 1, "B"): {"deliver_late": True, "fetches": 1,
+                          "deliver": [f"{first}-m-primary"], "total_tokens": 80_000},
+        (first, 2, "B"): {"deliver_late": True, "fetches": 1,
+                          "deliver": [f"{first}-m-primary"], "total_tokens": 80_000}})
+    fact = rep["dimensions"]["information"]["per_task"][first]["facts"][f"{first}-mechanism"]
+    assert fact["A"] is True and fact["B"] is False
+    assert rep["dimensions"]["information"]["per_task"][first]["state"] == "fail"
+    assert rep["decision"] == "reject"
+
+
+def test_delivery_with_no_locatable_edit_is_unresolved_not_delivered(tmp_path):
+    """Delivered, but against what? If the edit cannot be located the ORDER is unknown, and
+    unknown is not credit."""
+    calls = P.parse.__self__ if False else None                    # (parse is a function)
+    trace = R._trace("k1", "A", deliver=["k1-m-primary"], searches=1, fetches=1, edit=False)
+    f = tmp_path / "t.jsonl"; f.write_text(trace)
+    parsed = P.parse(f)
+    got = P.facts_delivered(parsed["calls"], {"k1-mechanism": ["k1-m-primary"]},
+                            R.BODIES, "k1")
+    assert got["k1-m-primary"] is None
+
+
+def test_a_body_never_delivered_is_false_even_with_no_edit(tmp_path):
+    """Ordering only arises for something that arrived. Nothing arrived here."""
+    trace = R._trace("k1", "A", deliver=[], searches=1, fetches=0, edit=False)
+    f = tmp_path / "t.jsonl"; f.write_text(trace)
+    got = P.facts_delivered(P.parse(f)["calls"], {"k1-mechanism": ["k1-m-primary"]},
+                            R.BODIES, "k1")
+    assert got["k1-m-primary"] is False
+
+
+def test_an_offline_pass_the_agent_never_ran_is_not_required_work(tmp_path):
+    """The second control the review asked for. `E1_regression_discriminates` applies the
+    patch to three trees of its own and runs pytest AFTERWARDS -- that is evidence about the
+    submitted test, not an execution event. §5.3 asks for both."""
+    first = A3_PLAN.tasks[0]
+    rep = R.build(tmp_path, overrides={
+        **R.cheaper_B(),
+        (first, 1, "B"): {"ran_test": False, "fetches": 1,
+                          "deliver": [f"{first}-m-primary"], "total_tokens": 80_000},
+        (first, 2, "B"): {"ran_test": False, "fetches": 1,
+                          "deliver": [f"{first}-m-primary"], "total_tokens": 80_000}})
+    b = [n for n in rep["normalisation"]
+         if f"run-{first}/attempt1/policy-B" in n["dir"]][0]
+    assert b["E1"] == "pass"                       # the offline probe is satisfied
+    assert b["required_work"]["observed_execution"] is False
+    assert b["required_work"]["criterion"] == "fail"
+    assert rep["dimensions"]["required_work"]["per_task"][first]["state"] == "fail"
+    assert rep["decision"] == "reject"
+
+
+def test_the_three_observations_are_reported_separately(clean):
+    n = clean["normalisation"][0]["required_work"]
+    assert n["offline_discrimination"] == "pass"
+    assert n["observed_execution"] is True
+    assert n["reviewed_relevance"] == "unreviewed"
+    assert n["relevance_is_in_the_criterion"] is False
+
+
+def test_relevance_is_never_machine_settled(clean):
+    """A launch may not substitute a machine verdict for a review that has not happened."""
+    assert all(n["required_work"]["reviewed_relevance"] == "unreviewed"
+               for n in clean["normalisation"])
+
+
+def test_the_production_fact_mapping_is_frozen_and_loaded():
+    """`facts-a3.json` is declared before launch and LOADED. Computing the equivalence
+    classes at scoring time would let them move after the numbers exist."""
+    detail = P.registered_fact_detail()
+    facts = P.registered_facts()
+    assert set(facts) == set(A3_PLAN.tasks)
+    labels = _json.loads((BENCH / "results-dev-m1-r2.json").read_text())["labels"]
+    for task, fs in detail["facts"].items():
+        for fid, f in fs.items():
+            assert f["members"], fid
+            for m in f["members"]:
+                assert m in labels[task]["useful"], (fid, m)
+            assert f["claim"] and f["basis"]
+    # the equivalence machinery is exercised by at least one real class, and the singletons
+    # are declared as singletons rather than padded
+    red = [fid for fs in detail["facts"].values() for fid, f in fs.items() if f["redundant"]]
+    assert len(red) >= 1, "no genuinely redundant class: the machinery would be vacuous"
+    assert any(not f["redundant"] for fs in detail["facts"].values() for f in fs.values())
+
+
+def test_the_k4_fact_carries_the_m02_flag():
+    detail = P.registered_fact_detail()
+    k4 = detail["facts"]["k4"]["k4-help-option-is-constructed-per-call-and-compared-by-object"]
+    assert k4.get("flagged") == "m02"
+    assert "unaided" in k4["basis"]

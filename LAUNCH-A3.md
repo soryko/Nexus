@@ -158,7 +158,7 @@ beside it:
 | 8 pairs at that mean | **26 082 160** | **estimate** |
 | 16 arm-runs at the largest observed row | 38 652 560 | **scenario estimate** |
 | **proposed soft launch threshold** | **30 000 000**, `cap_is_soft: true` | **engineering proposal** |
-| **per-pair reservation** | **4 831 570** — two arm-runs at the largest observed row | **derived** |
+| **per-pair reservation** | **4 831 570** — two arm-runs at the largest observed row. A *planning* figure: what the sweep sets aside before admitting a pair, **not a cap on what that pair may spend** | **derived** |
 
 **38 652 560 is a scenario, not a ceiling.** Nothing caps an arm-run's tokens below the turn
 ceiling, and four measurements do not bound a fifth. **30M is plausible planning headroom,
@@ -175,10 +175,21 @@ stopping consultation early sends the agent into repository investigation it wou
 have skipped. That possibility is why the cost dimension measures provider total tokens as
 well as delivered text tokens.
 
-**Soft** means it decides where the sweep stops *starting* pairs. A pair in flight is not
-interrupted, so the sweep may finish above the threshold by **up to one pair — 4 831 570
-tokens of disclosed overshoot**, the same unit as the reservation. The closed calibration's
-outstanding arm-run stays outstanding and is **not netted against this**.
+**Soft** means it decides where the sweep stops *starting* pairs. The threshold is checked
+**before a pair is started**, and a pair already admitted is not interrupted. **An admitted
+pair may carry consumption above 30 000 000, and its consumption is NOT bounded by the
+4 831 570-token reservation estimate: no numeric maximum overshoot is established.**
+
+The reservation is a *planning* figure derived from four historical measurements. It is what
+the sweep sets aside before admitting a pair; it is not a cap on what that pair may then
+spend, and nothing in the design caps an arm-run's tokens below the turn ceiling. An earlier
+version of this record said the overshoot was "at most 4 831 570 tokens", which read a
+planning estimate as a bound — the same error it had already disclaimed for the 38 652 560
+scenario figure two paragraphs earlier. **Any approval must be given on the accurate
+disclosure above.**
+
+The closed calibration's outstanding arm-run stays outstanding and is **not netted against
+this**.
 
 ## Stop conditions
 

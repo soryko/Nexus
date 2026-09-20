@@ -32,10 +32,13 @@ measured.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
+import a3_ledger
 import score_compliance
+from run_calibration import usage_tokens
 from a3_decision import CONSULT_TOOLS, A3_PLAN, ArmRun, Plan, decide
 from trace_parse import parse
 
@@ -54,6 +57,25 @@ def _utf8_div4(text: str) -> int:
 
 COUNTING_METHODS = {"harness-utf8-bytes-div4": _utf8_div4}
 DEFAULT_COUNTING_METHOD = "harness-utf8-bytes-div4"
+
+
+FACTS_FILE = Path(__file__).parent / "facts-a3.json"
+
+
+def registered_facts(path: Path | None = None) -> dict[str, dict[str, list[str]]]:
+    """A3's predeclared task-relevant facts, LOADED from the frozen file.
+
+    `facts-a3.json` is declared before launch and is what the production pipeline uses.
+    Computing the classes at scoring time would let the equivalence relation move after the
+    numbers exist, which is the one thing predeclaring them is for.
+    """
+    d = json.loads(Path(path or FACTS_FILE).read_text())
+    return {task: {fid: f["members"] for fid, f in facts.items()}
+            for task, facts in d["facts"].items()}
+
+
+def registered_fact_detail(path: Path | None = None) -> dict:
+    return json.loads(Path(path or FACTS_FILE).read_text())
 
 
 def arm_run_dir(root: Path, task: str, attempt: int, policy: str) -> Path:
@@ -101,32 +123,138 @@ def delivered_text(calls: list[dict]) -> tuple[int, str]:
     return len(text.encode()), text
 
 
-def facts_delivered(text: str, facts: dict[str, list[str]],
-                    bodies: dict[str, str]) -> dict[str, bool | None]:
-    """EVERY member of every equivalence class, measured.
+def facts_delivered(calls: list[dict], facts: dict[str, list[str]],
+                    bodies: dict[str, str], task: str) -> dict[str, bool | None]:
+    """EVERY member of every equivalence class, measured BY EVENT ORDERING.
 
-    A member left out of this dict is `unresolved` to the decision table, not "not
-    delivered" -- and a helper that populated only the primary would make every comparison
-    indeterminate for a reason that has nothing to do with the run.
+    The registered measure is delivery **before the first source edit** (§5.6). An earlier
+    version of this function concatenated every consultation result and asked whether the
+    body appeared anywhere in it, which credits a memory retrieved AFTER the edit it was
+    supposed to inform -- the same defect `score_compliance.P2` exists to prevent,
+    reintroduced one layer up.
+
+    Four outcomes, and the third is the one a boolean cannot carry:
+
+      True   the body arrived, and arrived before the first edit
+      False  the body never arrived at all -- ordering is then irrelevant
+      False  the body arrived only AFTER the first edit: late is not delivered
+      None   the body arrived but the first edit could not be located, so the ORDER is
+             unknown. Unresolved, never "delivered": the same rule `score_compliance` uses
+             when its edit matcher misses.
+
+    A member with no recorded body is `None` too -- not measured is not "not delivered".
     """
+    edit = score_compliance.first_edit_event(calls, task)
     out: dict[str, bool | None] = {}
     for members in facts.values():
         for mid in members:
             body = bodies.get(mid)
-            out[mid] = None if body is None else \
-                score_compliance.notes_content_delivered(text, [body], need=1)
+            if not body:
+                out[mid] = None
+                continue
+            arrivals = [c["resolved_at"] for c in calls
+                        if not c.get("is_error") and c.get("resolved_at") is not None
+                        and score_compliance.notes_content_delivered(
+                            c.get("result") or "", [body], need=1)]
+            if not arrivals:
+                out[mid] = False            # never delivered; ordering does not arise
+            elif not edit["found"]:
+                out[mid] = None             # delivered, but against what? order unknown
+            else:
+                out[mid] = min(arrivals) < edit["at"]
     return out
 
 
-def _required_test_work(scored: dict) -> str:
-    """The scorer's executed check, mapped without inventing a pass.
+#: A shell command that invokes pytest. `-m pytest` and a bare `pytest` both count.
+_PYTEST = re.compile(r"(?:^|[;&|]|\s)(?:[\w./-]*python[\w.]*\s+-m\s+)?pytest\b")
+#: An explicit path argument to that invocation.
+_PATH_ARG = re.compile(r"(?<![\w-])(tests?/[\w./:-]+|[\w./-]+_test\.py[\w:]*)")
 
-    `E1_regression_discriminates` is the only requirement a machine settles here. UNKNOWN is
-    an instrument failure or an unlocatable test, and it stays `unresolved`: it is not
-    compliance, and A2-R's k1/nexus passed the hidden checks having added no test at all.
+
+def observed_test_execution(calls: list[dict], added_tests: list[str]) -> bool | None:
+    """Did the ARM-RUN actually run the test it submitted? Read from the trace.
+
+    Separate from `E1_regression_discriminates`, which is an OFFLINE probe: the scorer takes
+    the patch, applies it to three trees of its own and runs pytest itself, afterwards. That
+    establishes something about the submitted test and NOTHING about whether the agent ever
+    executed it -- and §5.3 asks for both, because A2-R's k1/nexus passed the hidden checks
+    having added no test at all. Retrospective verification is not an execution event.
+
+      True   pytest was invoked, without error, in a way that would collect the added test:
+             either naming its file or id, or with no path argument at all (the checkout's
+             `testpaths` then covers it)
+      False  pytest was never invoked, or only ever on paths that exclude the added test
+      None   pytest was invoked but its result is missing or errored, so whether it ran is
+             not settled by the trace
     """
-    v = (scored.get("checks", {}).get("E1_regression_discriminates") or {}).get("verdict")
-    return {"pass": "pass", "fail": "fail"}.get(v, "unresolved")
+    if not added_tests:
+        return False
+    files = {t.split("::", 1)[0] for t in added_tests}
+    names = {t.split("::", 1)[1] for t in added_tests if "::" in t}
+    saw_unsettled = False
+    for c in calls:
+        cmd = json.dumps(c.get("input") or {})
+        if not _PYTEST.search(cmd):
+            continue
+        if c.get("is_error") or c.get("result") is None:
+            saw_unsettled = True            # invoked, outcome unknown
+            continue
+        targets = set(_PATH_ARG.findall(cmd))
+        if not targets:
+            return True                     # whole suite: the added test is collected
+        if any(f in t or t in f for f in files for t in targets):
+            return True
+        if any(n in cmd for n in names):
+            return True
+    return None if saw_unsettled else False
+
+
+def required_work_observations(scored: dict, calls: list[dict]) -> dict:
+    """Three separate observations, and the registered criterion built from two of them.
+
+    They are different claims about different evidence and the first draft read one as all
+    three:
+
+      offline_discrimination  the scorer's own probe over three trees -- absent on the
+                              fixture, failing with the test hunks alone, passing on the
+                              full patch. Evidence about the SUBMITTED TEST.
+      observed_execution      whether the arm-run itself ran that test. Evidence about the
+                              AGENT, read from the trace.
+      reviewed_relevance      whether the test covers the reported defect rather than merely
+                              failing in the predicted way. NOT machine-settled --
+                              `score_compliance` already lists it under
+                              `unsettled_by_machine` -- and it is REPORTED, never folded
+                              into the criterion. A launch may not substitute a machine
+                              verdict for a review that has not happened.
+
+    §5.3's criterion is: does the patch add a test node, AND did the arm-run execute it.
+    So the criterion is `offline_discrimination AND observed_execution`, stated explicitly:
+
+      fail        the probe says the test does not discriminate -- the work is not there
+      fail        the probe passes but the agent NEVER RAN IT -- half the work is missing
+      pass        the probe passes and the agent ran it
+      unresolved  either observation is unknown. Unresolved is not compliance.
+    """
+    e1 = (scored.get("checks", {}).get("E1_regression_discriminates") or {})
+    offline = {"pass": "pass", "fail": "fail"}.get(e1.get("verdict"), "unknown")
+    added = (scored.get("regression_probe") or {}).get("added_tests") or []
+    executed = observed_test_execution(calls, added)
+    if offline == "fail":
+        criterion = "fail"
+    elif offline == "pass" and executed is True:
+        criterion = "pass"
+    elif offline == "pass" and executed is False:
+        criterion = "fail"
+    else:
+        criterion = "unresolved"
+    return {"offline_discrimination": offline,
+            "observed_execution": executed,
+            "reviewed_relevance": "unreviewed",
+            "relevance_is_in_the_criterion": False,
+            "added_tests": added,
+            "criterion": criterion,
+            "criterion_rule": "offline_discrimination AND observed_execution; relevance is "
+                              "reported and decides nothing"}
 
 
 @dataclass(frozen=True)
@@ -152,6 +280,7 @@ def normalise(root: Path, task: str, attempt: int, policy: str, *,
 
     scored = score_compliance.score(policy_run_dir(root, task, attempt, policy),
                                     task, ARM, pristine, python, notes_file=notes_file)
+    work = required_work_observations(scored, calls)
 
     # functional and adoption are recorded by the runner and the trace reader; absent is
     # unresolved, and `.get` on a missing file must not become False.
@@ -162,10 +291,15 @@ def normalise(root: Path, task: str, attempt: int, policy: str, *,
 
     rec = d / "record.json"
     record = json.loads(rec.read_text()) if rec.is_file() else {}
-    usage = record.get("usage") or {}
-    total = usage.get("total_tokens")
+    usage = (record.get("record") or record).get("usage") or {}
+    # ONE rule for what a usage block accounts for, shared with `a3_ledger` and
+    # `run_calibration`. Reading `total_tokens` here while the ledger summed the four
+    # registered categories would let the decision's cost dimension and the launch gate
+    # disagree about the same arm-run -- and a usage block of four nulls, which the runner
+    # writes whenever the envelope carried no usage, would read as a measurement.
+    total = usage_tokens(usage)
     # An accounting that is absent, or that the runner marked unreconciled, is unresolved.
-    resolved = bool(record.get("accounting_resolved", rec.is_file() and total is not None))
+    resolved = bool(record.get("accounting_resolved", rec.is_file())) and total is not None
 
     nbytes, text = delivered_text(calls)
     method = COUNTING_METHODS.get(counting_method)
@@ -173,8 +307,8 @@ def normalise(root: Path, task: str, attempt: int, policy: str, *,
     arm_run = ArmRun(
         task=task, policy=policy, attempt=attempt,
         functional_pass=functional,
-        required_test_work=_required_test_work(scored),
-        facts_delivered=facts_delivered(text, facts, bodies),
+        required_test_work=work["criterion"],
+        facts_delivered=facts_delivered(calls, facts, bodies, task),
         stale_exposed=outcomes.get("stale_exposed"),
         stale_adopted=outcomes.get("stale_adopted"),
         consultation_calls=consultation_calls(calls),
@@ -190,11 +324,31 @@ def normalise(root: Path, task: str, attempt: int, policy: str, *,
         "dir": str(d),
         "compliance": scored.get("compliance"),
         "E1": (scored.get("checks", {}).get("E1_regression_discriminates") or {}).get("verdict"),
+        "required_work": work,
+        "facts_delivered": arm_run.facts_delivered,
         "functional_source": "functional.json" if fn.is_file() else "absent -> unresolved",
         "accounting_source": "record.json" if rec.is_file() else "absent -> unresolved",
         "consultation_calls": arm_run.consultation_calls,
         "bound_respected": arm_run.bound_respected,
     })
+
+
+def unresolved_arm_run(task: str, attempt: int, policy: str,
+                       facts: dict[str, list[str]]) -> ArmRun:
+    """A cell that was LAUNCHED and left nothing usable. Everything unknown, nothing zero.
+
+    It is a record, not an absence: `validity` counts it toward coverage and `consumption`
+    stops further launches on it. Skipping it -- which is what keying on `trace.jsonl` did --
+    turns a run that spent tokens into a cell that never happened.
+    """
+    return ArmRun(task=task, policy=policy, attempt=attempt,
+                  functional_pass=None, required_test_work="unresolved",
+                  facts_delivered={m: None for members in facts.values() for m in members},
+                  stale_exposed=None, stale_adopted=None,
+                  consultation_calls={}, delivered_bytes=None,
+                  delivered_text_tokens=None, token_counting_method=None,
+                  provider_total_tokens=None, accounting_resolved=False,
+                  bound_respected=None)
 
 
 def collect(root: Path, required_facts: dict[str, dict[str, list[str]]],
@@ -213,7 +367,19 @@ def collect(root: Path, required_facts: dict[str, dict[str, list[str]]],
     """
     runs, sources = [], []
     for task, attempt, policy in plan.cells():
-        if not (arm_run_dir(root, task, attempt, policy) / "trace.jsonl").is_file():
+        d = arm_run_dir(root, task, attempt, policy)
+        launched = (d / a3_ledger.LAUNCH_MARKER).is_file()
+        usable = (d / "trace.jsonl").is_file() and (d / "patch.diff").is_file()
+        if not launched and not usable:
+            continue                        # never started: missing coverage, not a row
+        if not usable:
+            # LAUNCHED and nothing usable came back. It spent an unknown amount and it is a
+            # row. Keying on the trace made this case vanish.
+            runs.append(unresolved_arm_run(task, attempt, policy,
+                                           required_facts.get(task, {})))
+            sources.append({"dir": str(d), "state": "launched, no usable artifacts",
+                            "E1": None, "accounting_source": "launch marker only",
+                            "consumption": "UNRESOLVED"})
             continue
         n = normalise(root, task, attempt, policy,
                       facts=required_facts.get(task, {}), **kw)
@@ -223,40 +389,27 @@ def collect(root: Path, required_facts: dict[str, dict[str, list[str]]],
 
 
 def saved_consumption(root: Path, plan: Plan = A3_PLAN) -> list[str]:
-    """Consumption of every saved arm-run, read from `record.json` and NOTHING else.
+    """Arm-runs LAUNCHED without usable terminal accounting. Delegates to `a3_ledger`.
 
-    Deliberately independent of the compliance scorer. The launch gate asks whether the
-    sweep knows what it has spent; coupling that to a scorer that applies patches and runs
-    pytest would let an instrument failure in the OUTCOME half stop launches -- the exact
-    conflation §7 separates -- besides re-scoring every finished arm-run before every pair.
-
-    A record that is absent, carries no usage, or is marked unreconciled is unresolved. It
-    is never read as zero: a row whose spend is unknown is not a row that spent nothing.
+    It used to key on `trace.jsonl` and skip anything without one, with the comment "not
+    started: absent, not unresolved". That asserted "not started" from "no trace", and they
+    are different facts: `run_arms_isolated` buffers the whole trace until the subprocess
+    returns, so an interruption inside that window leaves a launch marker, spent tokens, and
+    no trace. Such a row reported `[]` -- the failure class that lost A2-R's k4, rebuilt one
+    layer up. The ledger is keyed on the MARKER, which is written before the process starts.
     """
-    out = []
-    for task, attempt, policy in plan.cells():
-        d = arm_run_dir(root, task, attempt, policy)
-        if not (d / "trace.jsonl").is_file():
-            continue                                   # not started: absent, not unresolved
-        rec = d / "record.json"
-        record = json.loads(rec.read_text()) if rec.is_file() else {}
-        total = (record.get("usage") or {}).get("total_tokens")
-        if not record.get("accounting_resolved", rec.is_file() and total is not None) \
-                or total is None:
-            out.append(f"{task}/{policy}/{attempt}")
-    return out
+    return a3_ledger.read(root, plan).unresolved
 
 
 def may_start_from_disk(root: Path, task: str, attempt: int,
                         plan: Plan = A3_PLAN) -> dict:
-    """The launch gate, over the saved records. §8's launch unit is the A/B PAIR."""
-    unresolved = saved_consumption(root, plan)
-    if unresolved:
-        return {"may_start": False, "task": task, "attempt": attempt,
-                "stopping_reason": "unresolved_accounting",
-                "reason": f"consumption unresolved in {unresolved}; no new pair is started"}
-    return {"may_start": True, "task": task, "attempt": attempt, "stopping_reason": None,
-            "reason": "every saved arm-run's consumption is accounted for"}
+    """PAIR ADMISSION: the budget gate, checked once before a pair starts.
+
+    NOT the only gate. `a3_ledger.fatal_stop` is checked before EVERY arm-run, including the
+    second member of a pair already admitted -- reserving a pair does not authorise
+    launching its B after A lost its accounting or the boundary refused.
+    """
+    return a3_ledger.may_admit_pair(root, task, attempt, plan)
 
 
 def may_start(runs: list[ArmRun], task: str, attempt: int) -> dict:

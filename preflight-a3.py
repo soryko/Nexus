@@ -236,9 +236,12 @@ ck("model forwarder on :8899", _forwarder(), "listening")
 
 print("\nthe budget, as proposed — NOT approved by this script")
 note("launch unit", "the A/B pair. 8 pairs, 16 arm-runs.")
-note("per-pair reservation", "4 831 570 tokens (two arm-runs at the largest observed row)")
-note("proposed soft threshold", "30 000 000, cap_is_soft: true")
-note("disclosed overshoot", "up to one pair — 4 831 570 tokens")
+note("per-pair reservation", "4 831 570 tokens — a PLANNING figure set aside before a "
+                            "pair is admitted, not a cap on what it may spend")
+note("proposed soft threshold", "30 000 000, cap_is_soft: true, checked BEFORE a pair starts")
+note("disclosed overshoot", "NO NUMERIC MAXIMUM IS ESTABLISHED. An admitted pair may carry "
+                            "consumption above 30 000 000 and is not bounded by the "
+                            "reservation estimate.")
 note("", "the threshold is an engineering proposal and a green preflight is not its "
          "approval. LAUNCH-A3.md must be approved first.")
 

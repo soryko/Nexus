@@ -31,6 +31,7 @@ BENCH = Path(__file__).parent
 REPO = BENCH.parent.parent
 sys.path.insert(0, str(BENCH))
 
+import a3_ledger as L                                                     # noqa: E402
 import a3_pipeline as P                                                   # noqa: E402
 import schedule as S                                                      # noqa: E402
 from a3_decision import A3_PLAN, Plan, render                             # noqa: E402
@@ -129,6 +130,14 @@ def probe_python(candidates: tuple[str, ...] = PROBE_CANDIDATES) -> str:
         "no interpreter with pytest for the probe subprocess. Checked: " + "; ".join(checked))
 
 
+def usage_block(total: int) -> dict:
+    """`total` split across the four registered categories, deterministically."""
+    out = total // 100
+    cache = total // 4
+    return {"input_tokens": total - out - cache, "output_tokens": out,
+            "cache_read_input_tokens": cache, "cache_creation_input_tokens": 0}
+
+
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
     env = {"GIT_AUTHOR_NAME": "r", "GIT_AUTHOR_EMAIL": "r@r", "GIT_COMMITTER_NAME": "r",
            "GIT_COMMITTER_EMAIL": "r@r", "PATH": "/usr/bin:/bin:/usr/local/bin"}
@@ -174,7 +183,8 @@ def make_patches(work: Path) -> dict[str, str]:
 # ---------------------------------------------------------------------------------------
 
 def _trace(task: str, policy: str, *, deliver: list[str], searches: int, fetches: int,
-           empty_searches: int = 0, edit: bool = True) -> str:
+           empty_searches: int = 0, edit: bool = True, ran_test: bool = True,
+           deliver_late: bool = False) -> str:
     """A real trace in the runner's own JSONL shape.
 
     Consultation comes back BEFORE the edit, because that is what the compliance scorer
@@ -192,23 +202,35 @@ def _trace(task: str, policy: str, *, deliver: list[str], searches: int, fetches
             {"type": "tool_result", "tool_use_id": tid, "content": result}]}}))
         ev += 1
 
-    for i in range(searches):
-        hits = [{"memory_id": m, "excerpt": BODIES[m][:60]} for m in deliver] or []
-        call("mcp__nexus__search", {"query": f"{task} mechanism {i}"},
-             json.dumps({"hits": hits}))
+    def consult() -> None:
+        for i in range(searches):
+            hits = [{"memory_id": m, "excerpt": BODIES[m][:60]} for m in deliver] or []
+            call("mcp__nexus__search", {"query": f"{task} mechanism {i}"},
+                 json.dumps({"hits": hits}))
+        for i in range(fetches):
+            mid = deliver[i] if i < len(deliver) else None
+            call("mcp__nexus__get", {"memory_id": mid or "unrelated"},
+                 json.dumps({"memory_id": mid,
+                             "content": BODIES.get(mid, "unrelated body")}))
+
+    if not deliver_late:
+        consult()
     # A second search that returns nothing is a real bound violation that delivers almost
     # no text. It is the only way to vary bound compliance while holding delivered volume
     # fixed, and without it "a violation changes the decision" would be measuring the extra
     # bytes the violation carried rather than the violation.
     for i in range(empty_searches):
         call("mcp__nexus__search", {"query": f"{task} retry {i}"}, json.dumps({"hits": []}))
-    for i in range(fetches):
-        mid = deliver[i] if i < len(deliver) else None
-        call("mcp__nexus__get", {"memory_id": mid or "unrelated"},
-             json.dumps({"memory_id": mid, "content": BODIES.get(mid, "unrelated body")}))
     if edit:
         call("Edit", {"file_path": "src/click/core.py", "old_string": "a", "new_string": "b"},
              "ok")
+    if deliver_late:
+        consult()                      # AFTER the edit: retrieved, and too late to inform it
+    if ran_test:
+        # §5.3 asks whether the ARM-RUN executed its test, which the offline probe cannot
+        # say. A stub whose agent never runs pytest fails the criterion, correctly.
+        call("Bash", {"command": "PYTHONPATH=src python -m pytest tests/test_pkg.py -q"},
+             "1 passed")
     lines.append(json.dumps({"type": "result", "subtype": "success",
                              "result": "DONE. the behaviour is fixed and covered.",
                              "num_turns": 2 + ev}))
@@ -221,10 +243,20 @@ def write_arm_run(root: Path, task: str, attempt: int, policy: str, patches: dic
                   empty_searches: int = 0,
                   total_tokens: int | None = 100_000, accounted: bool = True,
                   stale_exposed: bool | None = False,
-                  stale_adopted: bool | None = False) -> Path:
-    """One saved arm-run, at an identity distinct in (task, attempt, policy)."""
+                  stale_adopted: bool | None = False,
+                  ran_test: bool = True, deliver_late: bool = False,
+                  artifacts: bool = True) -> Path:
+    """One saved arm-run, at an identity distinct in (task, attempt, policy).
+
+    The launch marker goes down FIRST, exactly as the runner writes it, so `artifacts=False`
+    reproduces the interrupted launch: a marker, spent tokens, and nothing else.
+    """
     d = P.arm_run_dir(root, task, attempt, policy)
     d.mkdir(parents=True, exist_ok=True)
+    L.mark_launch(root, task, attempt, policy, identity={"config_version": "rehearsal"},
+                  max_turns=45, wall_clock_s=600, prompt_digest=f"stub-{policy}")
+    if not artifacts:
+        return d
     # A is the current policy and consults without a bound, so the default delivers the
     # whole equivalence class. B's overrides narrow it. If both delivered the same text the
     # cost dimension would compare a number with itself and the threshold would test
@@ -232,12 +264,17 @@ def write_arm_run(root: Path, task: str, attempt: int, policy: str, patches: dic
     deliver = list(FACTS[task][f"{task}-mechanism"]) if deliver is None else deliver
     (d / "patch.diff").write_text(patches[patch])
     (d / "trace.jsonl").write_text(_trace(task, policy, deliver=deliver, searches=searches,
-                                          fetches=fetches, empty_searches=empty_searches))
+                                          fetches=fetches, empty_searches=empty_searches,
+                                          ran_test=ran_test, deliver_late=deliver_late))
     # A record with no usage is UNRESOLVED accounting, not zero tokens.
+    # The REAL four categories `usage_tokens` sums. Writing `total_tokens` instead made the
+    # ledger refuse every row -- correctly: a usage block it cannot read is not a
+    # measurement, and the first run of this rehearsal against the ledger stopped the sweep
+    # after one pair because of it.
     record = {"task": task, "policy": policy, "attempt": attempt,
               "accounting_resolved": accounted}
     if total_tokens is not None:
-        record["usage"] = {"total_tokens": total_tokens}
+        record["usage"] = usage_block(total_tokens)
     (d / "record.json").write_text(json.dumps(record, indent=1))
     if functional is not None:
         (d / "functional.json").write_text(json.dumps({"passed": functional}))
