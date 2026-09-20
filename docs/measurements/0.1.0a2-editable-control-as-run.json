@@ -1,0 +1,39 @@
+{
+ "mode": "editable-control",
+ "started": "2026-09-20T17:12:24.000887+00:00",
+ "repo": "/Users/soko/Cerebros/Nexus-independent",
+ "requested_python": "/Users/soko/.local/bin/python3.13",
+ "host": {
+  "platform": "macOS-26.1-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "driver_python": "3.14.7"
+ },
+ "passed": true,
+ "candidate_sha": "8616b33f9164281a204af2071563cba90e8143f5",
+ "before_exit": 0,
+ "after_exit": 1,
+ "after_stderr": "Traceback (most recent call last):\n  File \"/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/1a541aae-c3bc-4c74-8792-4ce966702202/scratchpad/nexus-dist-v6pm1vu9/nexus runtime env/bin/nexus-memory-check\", line 6, in <module>\n    from nexus_memory.install_check import main\nModuleNotFoundError: No module named 'nexus_memory'\n",
+ "steps": [
+  {
+   "step": "disposable source copy",
+   "passed": true,
+   "detail": "8616b33f9164 -> /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/1a541aae-c3bc-4c74-8792-4ce966702202/scratchpad/nexus-dist-v6pm1vu9/nexus source copy"
+  },
+  {
+   "step": "editable control passes with source",
+   "passed": true,
+   "detail": "9/9 while the checkout exists"
+  },
+  {
+   "step": "source removed",
+   "passed": true,
+   "detail": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/1a541aae-c3bc-4c74-8792-4ce966702202/scratchpad/nexus-dist-v6pm1vu9/nexus source copy no longer exists"
+  },
+  {
+   "step": "editable control fails without source",
+   "passed": true,
+   "detail": "exit 1: ModuleNotFoundError: No module named 'nexus_memory'"
+  }
+ ],
+ "finished": "2026-09-20T17:12:27.407468+00:00"
+}

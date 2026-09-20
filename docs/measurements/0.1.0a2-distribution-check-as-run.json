@@ -1,0 +1,127 @@
+{
+ "mode": "distribution-check",
+ "started": "2026-09-20T17:12:08.390084+00:00",
+ "repo": "/Users/soko/Cerebros/Nexus-independent",
+ "requested_python": "/Users/soko/.local/bin/python3.13",
+ "host": {
+  "platform": "macOS-26.1-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "driver_python": "3.14.7"
+ },
+ "passed": true,
+ "candidate_sha": "8616b33f9164281a204af2071563cba90e8143f5",
+ "source_path": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/1a541aae-c3bc-4c74-8792-4ce966702202/scratchpad/nexus-dist-6j70po5i/nexus source copy",
+ "source_absent_after_removal": true,
+ "environment": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/1a541aae-c3bc-4c74-8792-4ce966702202/scratchpad/nexus-dist-6j70po5i/nexus runtime env",
+ "origin_before": {
+  "install_check": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/1a541aae-c3bc-4c74-8792-4ce966702202/scratchpad/nexus-dist-6j70po5i/nexus runtime env/lib/python3.13/site-packages/nexus_memory/install_check.py",
+  "sqlite_module": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/1a541aae-c3bc-4c74-8792-4ce966702202/scratchpad/nexus-dist-6j70po5i/nexus runtime env/lib/python3.13/site-packages/nexus_memory/storage/sqlite.py",
+  "prefix": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/1a541aae-c3bc-4c74-8792-4ce966702202/scratchpad/nexus-dist-6j70po5i/nexus runtime env",
+  "version": "0.1.0a1",
+  "direct_url": {
+   "url": "file:///private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/1a541aae-c3bc-4c74-8792-4ce966702202/scratchpad/nexus-dist-6j70po5i/nexus%20source%20copy",
+   "dir_info": {
+    "editable": false
+   }
+  },
+  "pytest_present": false
+ },
+ "origin_after": {
+  "install_check": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/1a541aae-c3bc-4c74-8792-4ce966702202/scratchpad/nexus-dist-6j70po5i/nexus runtime env/lib/python3.13/site-packages/nexus_memory/install_check.py",
+  "sqlite_module": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/1a541aae-c3bc-4c74-8792-4ce966702202/scratchpad/nexus-dist-6j70po5i/nexus runtime env/lib/python3.13/site-packages/nexus_memory/storage/sqlite.py",
+  "prefix": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/1a541aae-c3bc-4c74-8792-4ce966702202/scratchpad/nexus-dist-6j70po5i/nexus runtime env",
+  "version": "0.1.0a1",
+  "direct_url": {
+   "url": "file:///private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/1a541aae-c3bc-4c74-8792-4ce966702202/scratchpad/nexus-dist-6j70po5i/nexus%20source%20copy",
+   "dir_info": {
+    "editable": false
+   }
+  },
+  "pytest_present": false
+ },
+ "database": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/1a541aae-c3bc-4c74-8792-4ce966702202/scratchpad/nexus-dist-6j70po5i/seeded store/memory.sqlite3",
+ "lifecycle_after_removal": {
+  "passed": true,
+  "checks": 9,
+  "steps": [
+   "start and store",
+   "one memory after the write",
+   "restart: server starts again",
+   "content is byte-identical",
+   "kind and tags survive",
+   "revision id is stable",
+   "search finds it",
+   "retry replays the whole receipt",
+   "retry wrote no duplicate"
+  ]
+ },
+ "persisted_memory": {
+  "seed_receipt": {
+   "memory_id": "aaa46504-86f2-483d-85bb-a7071f8e74af",
+   "revision_id": "991a5adb-b44a-41b5-b64e-156f51df69c6",
+   "operation_id": "4e128055-6089-4b86-9b3c-647038170ff2",
+   "durable_seq": 1,
+   "operation": "record"
+  },
+  "content_bytes": 248,
+  "content_identical": true,
+  "revision_stable": true,
+  "search_hits": 1,
+  "replay_receipt": {
+   "memory_id": "aaa46504-86f2-483d-85bb-a7071f8e74af",
+   "revision_id": "991a5adb-b44a-41b5-b64e-156f51df69c6",
+   "operation_id": "4e128055-6089-4b86-9b3c-647038170ff2",
+   "durable_seq": 1,
+   "operation": "record"
+  },
+  "active_memories": 1
+ },
+ "steps": [
+  {
+   "step": "disposable source copy",
+   "passed": true,
+   "detail": "8616b33f9164 -> /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/1a541aae-c3bc-4c74-8792-4ce966702202/scratchpad/nexus-dist-6j70po5i/nexus source copy"
+  },
+  {
+   "step": "installer built the environment",
+   "passed": true,
+   "detail": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/1a541aae-c3bc-4c74-8792-4ce966702202/scratchpad/nexus-dist-6j70po5i/nexus runtime env"
+  },
+  {
+   "step": "package origin (source present)",
+   "passed": true,
+   "detail": "0.1.0a1 in site-packages, editable=False, no dev deps"
+  },
+  {
+   "step": "lifecycle before removal",
+   "passed": true,
+   "detail": "9/9, establishes the baseline"
+  },
+  {
+   "step": "seeded a memory before removal",
+   "passed": true,
+   "detail": "memory_id=aaa46504-86f\u2026 durable_seq=1"
+  },
+  {
+   "step": "source removed",
+   "passed": true,
+   "detail": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/1a541aae-c3bc-4c74-8792-4ce966702202/scratchpad/nexus-dist-6j70po5i/nexus source copy no longer exists"
+  },
+  {
+   "step": "lifecycle after removal",
+   "passed": true,
+   "detail": "9/9 checks, new database"
+  },
+  {
+   "step": "pre-removal memory retrieved",
+   "passed": true,
+   "detail": "248 bytes identical, ids stable, receipt replayed, active_memories=1"
+  },
+  {
+   "step": "package origin (source removed)",
+   "passed": true,
+   "detail": "0.1.0a1 in site-packages, editable=False, no dev deps"
+  }
+ ],
+ "finished": "2026-09-20T17:12:14.896559+00:00"
+}

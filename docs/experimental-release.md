@@ -41,24 +41,66 @@ closed transport with no reason attached. That is what §1 and §2 exist to prev
 ```bash
 git clone https://github.com/soryko/Nexus.git
 cd Nexus
-git checkout v0.1.0a1
+git checkout v0.1.0a2
+```
+
+> [!NOTE]
+> Upgrading from `v0.1.0a1`? Its installation is **editable** and its instructions differ —
+> read [§5](#5-back-up-update-recover) before checking anything out, because the upgrade
+> must not run `git checkout` in the checkout that release was installed from.
+
+The version you check out here is the version you install. Installing into a directory
+named `0.1.0a2` does not make the checkout `0.1.0a2`; if these disagree you will get the
+other release's package, and on `v0.1.0a1` there is no `nexus-memory-check` to run in §2.
+Confirm after installing:
+
+```bash
+"$nexus_runtime/bin/python" -c "import importlib.metadata as m; print(m.version('nexus-memory'))"
 ```
 
 ## 1. Install
 
 ```bash
-python3 tools/install.py
+nexus_runtime="$HOME/.local/share/nexus-memory/venvs/0.1.0a2"
+python3 tools/install.py --venv "$nexus_runtime"
 ```
 
-It probes candidate interpreters, prints **both** numbers for each, builds `.venv` from the
-first that passes both floors, then **re-checks the environment it built** rather than
-assuming the venv inherited what the candidate had.
+It probes candidate interpreters, prints **both** numbers for each, builds the environment
+from the first that passes both floors, then **re-checks the environment it built** rather
+than assuming the venv inherited what the candidate had.
+
+What it builds is a **normal installation**: the package is copied into the environment,
+not linked back to this checkout, and development dependencies are left out. So the source
+is needed to *build* and to *upgrade* — not to *run*. Once the install succeeds you may
+move or delete this checkout, provided the environment and your database are outside it.
+
+> [!IMPORTANT]
+> `--venv` still defaults to `./.venv`, **inside the checkout**. That default is kept so the
+> v0.1.0a1 command keeps working, and it is the one case where deleting the checkout still
+> destroys the environment — not because the package needs the sources, but because the
+> environment is sitting in them. Pass a path outside the checkout, as above, if you want
+> the checkout to be disposable. The installer tells you which side you landed on.
+
+That directory is an explicit choice you are making here. It is **not** a change to where
+Nexus keeps its database, which is unchanged and documented in §4.
 
 | flag | |
 | --- | --- |
 | `--python /abs/path/to/python3.13` | use this interpreter **and no other** — never substituted |
 | `--venv /abs/path` | build somewhere other than `./.venv` |
 | `--check-only` | report and build nothing; works on a host without uv |
+
+### Users and developers install differently
+
+| | command | installation | dev dependencies |
+| --- | --- | --- | --- |
+| **User runtime** | `python3 tools/install.py --venv PATH` | normal (copied) | no |
+| **Development** | `uv sync --frozen` | editable (linked to `src/`) | yes |
+
+They are not interchangeable, and the difference is invisible until the source moves. An
+editable environment keeps working only while the checkout stays where it is. Running a
+plain `uv sync` against a runtime environment **converts it back** to an editable one, so
+use the installer for user upgrades.
 
 Exit `0` built and verified · `1` nothing meets both floors · `2` the build could not run, or
 ran and produced something below a floor.
@@ -73,7 +115,10 @@ The pair CI pins, and the one the fresh-install job runs on `ubuntu-24.04`:
 curl -LsSf https://astral.sh/uv/0.11.21/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 uv python install 3.13.14
-python3 tools/install.py --python "$(uv python find --system 3.13.14)"
+nexus_runtime="$HOME/.local/share/nexus-memory/venvs/0.1.0a2"
+python3 tools/install.py \
+  --python "$(uv python find --system 3.13.14)" \
+  --venv "$nexus_runtime"
 ```
 
 `--system` matters: without it, `uv python find` returns the interpreter of any `.venv` in the
@@ -86,7 +131,10 @@ Measured on macOS 26.1 (arm64) with uv 0.11.21 — same commands:
 
 ```bash
 uv python install 3.13.14
-python3 tools/install.py --python "$(uv python find --system 3.13.14)"
+nexus_runtime="$HOME/.local/share/nexus-memory/venvs/0.1.0a2"
+python3 tools/install.py \
+  --python "$(uv python find --system 3.13.14)" \
+  --venv "$nexus_runtime"
 ```
 
 That built `python 3.13.14, sqlite 3.53.1`, above both floors.
@@ -110,8 +158,12 @@ That built `python 3.13.14, sqlite 3.53.1`, above both floors.
 problem, because it shows you a closed transport and nothing else.
 
 ```bash
-.venv/bin/python tools/check_install.py --server "$PWD/.venv/bin/nexus-memory"
+"$nexus_runtime/bin/nexus-memory-check"
 ```
+
+That command is installed **beside the server, inside the environment**. It is not a script
+from this checkout, and it keeps working when the checkout is gone. With no `--server` it
+checks the `nexus-memory` installed next to itself.
 
 Nine checks against the **installed console command**, over MCP stdio, in **three separate
 processes**: store a memory; let the process exit; start a new one against the same file;
@@ -135,10 +187,27 @@ notice.
 Exit `0` pass · `1` a check failed, or the command did not serve MCP · `2` nothing installed
 at that path. `--json PATH` also writes the full report to a file.
 
-> A source installation is **editable**: the environment points at this checkout's `src/`.
-> So this exercises the installed console script, the environment's interpreter and both
-> runtime floors, and the resolved dependencies — not a wheel. Moving or deleting the
-> checkout breaks the installed command.
+`python -m nexus_memory.install_check` runs the same thing without the console script.
+`tools/check_install.py` also still works, as a thin wrapper, for as long as you have the
+checkout — run it with the environment's own interpreter, since it deliberately does not
+put this checkout's `src/` on `sys.path`.
+
+> **What a pass here does and does not establish.** It exercises the installed console
+> script, the environment's interpreter and therefore both runtime floors, the resolved
+> dependencies, and — for an environment built by `tools/install.py` — the environment's own
+> copy of the package. It does **not**, on its own, establish that the checkout is
+> unnecessary: the checkout is still sitting there while this runs, and an environment that
+> secretly needed it would pass exactly like this.
+>
+> That claim is tested separately, by deleting the source first. CI runs
+> `.github/scripts/check_installed_distribution.py` on Linux and macOS, which installs from
+> a disposable copy, stores a memory, deletes the copy, and then requires nine checks on a
+> new database plus byte-identical retrieval of the memory stored beforehand. The same
+> driver run against the old editable mechanism fails with `ModuleNotFoundError` once the
+> source is gone, which is what makes the passing result mean something.
+>
+> If you built a **developer** environment with `uv sync --frozen`, it is editable and
+> moving the checkout does break it. That is expected, and is why it is not the user path.
 
 Expected tail on success:
 
@@ -151,12 +220,16 @@ PASS: 9/9 checks
 **Verified with Claude Code CLI 2.1.270 on macOS 26.1, user scope**, against the environment
 built in §1.
 
+The `command` is the server inside your runtime environment. With the environment outside
+the checkout, that path does not name the checkout at all — which is what lets you delete
+the sources without touching the client's configuration.
+
 Use a **temporary, distinctly-named** entry to verify, so you cannot overwrite an entry you
 already depend on:
 
 ```bash
 claude mcp add nexus-memory-release-check -s user -- \
-  /absolute/path/Nexus/.venv/bin/nexus-memory \
+  /absolute/path/.local/share/nexus-memory/venvs/0.1.0a2/bin/nexus-memory \
   --db /absolute/path/nexus-data/memory.sqlite3 \
   --namespace my-repo --actor local
 
@@ -178,7 +251,7 @@ Project scope is the alternative — a `.mcp.json` committed with the repository
 {
   "mcpServers": {
     "nexus-memory": {
-      "command": "/absolute/path/Nexus/.venv/bin/nexus-memory",
+      "command": "/absolute/path/.local/share/nexus-memory/venvs/0.1.0a2/bin/nexus-memory",
       "args": [
         "--db", "/absolute/path/nexus-data/memory.sqlite3",
         "--namespace", "my-repo",
@@ -194,7 +267,7 @@ Project scope is the alternative — a `.mcp.json` committed with the repository
 > *does* expand `${VAR}` and `${VAR:-default}` in `.mcp.json`, in `command`, `args`, `env`,
 > `url` and `headers`
 > ([docs](https://code.claude.com/docs/en/mcp#environment-variable-expansion-in-mcp-json)).
-> So `${HOME}/Nexus/.venv/bin/nexus-memory` works.
+> So `${HOME}/.local/share/nexus-memory/venvs/0.1.0a2/bin/nexus-memory` works.
 >
 > What does **not** expand is shell syntax: a bare `~` is not a home directory here, it is a
 > filename that does not exist, and `$HOME` without braces is not the documented form. If a
@@ -254,7 +327,7 @@ The store is one SQLite file plus, in WAL mode, up to two sidecars beside it.
 Correct whether or not the server is running, and the procedure this page recommends:
 
 ```bash
-.venv/bin/python - '/absolute/path/nexus-data/memory.sqlite3' '/absolute/path/backups/memory-2026-09-20.sqlite3' <<'PY'
+"$nexus_runtime/bin/python" - '/absolute/path/nexus-data/memory.sqlite3' '/absolute/path/backups/memory-2026-09-20.sqlite3' <<'PY'
 import sqlite3, sys
 from pathlib import Path
 
@@ -298,12 +371,15 @@ There is no automatic backup and no rotation.
 
 ### Update
 
-**Order matters: stop → back up → checkout and rebuild → verify → restart.**
+**Order matters: stop → back up → build a NEW environment → verify → switch the client → restart.**
 
-A stdio server is launched and held open by the client, and a source install is *editable* —
-the running process is executing the checkout's `src/` directly. So checking out a new
-revision underneath a live server swaps the code out from under it, and the database is being
-written to while you copy it. Stop first; do not just restart afterwards.
+Each version gets its own environment. You are not upgrading an environment in place; you
+are building a second one beside the first and then pointing the client at it. The old one
+stays exactly as it was, which is what makes rollback a path change rather than a rebuild.
+
+A stdio server is launched and held open by the client, so stop it first — the database is
+being written to while you copy it, and the client is holding a process you are about to
+replace.
 
 ```bash
 # 1. STOP the server the client is running.
@@ -314,21 +390,68 @@ written to while you copy it. Stop first; do not just restart afterwards.
 
 # 2. BACK UP, with the procedure above, against a stopped server.
 
-# 3. CHECKOUT and REBUILD.
+# 3. BUILD A NEW ENVIRONMENT from a SEPARATE checkout of the new sources.
+#    Do NOT `git checkout` in the checkout your current environment was built from
+#    -- see the warning below. A worktree beside it, or a second clone, both work:
 git fetch --tags
-git checkout <the new tag>
-python3 tools/install.py
+git worktree add ../Nexus-<the new version> <the new tag>
+cd ../Nexus-<the new version>
+new_runtime="$HOME/.local/share/nexus-memory/venvs/<the new version>"
+python3 tools/install.py --venv "$new_runtime"
 
 # 4. VERIFY before letting the client near it.
-.venv/bin/python tools/check_install.py --server "$PWD/.venv/bin/nexus-memory"
+"$new_runtime/bin/nexus-memory-check"
 
-# 5. RESTART: re-add the entry, or restart the client.
+# 5. SWITCH the client to the new executable, changing ONLY the command path.
+#    Keep your existing --db, --namespace, --actor and any --repo argument.
+#      claude mcp remove <name> -s user
+#      claude mcp add <name> -s user -- \
+#        "$new_runtime/bin/nexus-memory" \
+#        --db /absolute/path/nexus-data/memory.sqlite3 \
+#        --namespace my-repo --actor local
+
+# 6. RESTART the client.
 #      claude mcp get <name>     # shows what it is now running
 ```
 
-If an update misbehaves, check out the previous tag, rebuild the same way, and point `--db`
-at the backup you took in step 2 — stopping the server again first. There is no migration
-tooling and no automatic rollback.
+> [!WARNING]
+> **Do not upgrade in place, and do not delete the old checkout yet.** If your current
+> environment came from `v0.1.0a1`, or from any `uv sync`, it is **editable**: it imports
+> from its checkout rather than owning a copy. Running `git checkout <new tag>` there
+> rewrites the code that environment is running, so the "previous version" you were keeping
+> for rollback silently becomes the new one — and deleting that checkout breaks the old
+> server outright.
+>
+> This is a property of the release you are upgrading *from*, not of the one you are
+> upgrading *to*. It is also the last time it applies: an environment built by
+> `tools/install.py` from this release onwards owns its code, so future upgrades no longer
+> need the old checkout kept.
+
+**Keep the old environment — and, if it is editable, its checkout — until you are
+satisfied.** To roll back, stop the server and point the client's `command` back at the
+previous environment's `nexus-memory`. If the database itself needs to go back, stop the
+server and restore the backup from step 2. Once you are satisfied, remove the old
+environment and the extra checkout together:
+
+```bash
+rm -rf "$HOME/.local/share/nexus-memory/venvs/<the old version>"
+git worktree remove ../Nexus-<the old version>     # if you used a worktree
+```
+
+This was checked from the released `v0.1.0a1` to this candidate **with each version built
+from its own separate source tree**, which is the procedure above and the reason it is
+written that way. On one temporary database:
+a memory written and revised by the old server was read by the new one with identical
+content bytes, the same memory and revision identifiers, both revisions still in `history`,
+a working search hit, and the original receipt replaying without a duplicate — then read
+again by the retained old environment, and again from the backup. It is a compatibility
+observation about this installation change. **There is no migration tooling, and no claim
+that a future schema change will be reversible.**
+
+Once the new environment is verified and the client is running against it, **the new
+checkout** is no longer required — provided that environment and your database are outside
+it. The **old** checkout is a separate question: keep it for as long as you are keeping an
+editable old environment for rollback, and delete the two together.
 
 ## 6. Known limits
 
@@ -374,8 +497,9 @@ tooling and no automatic rollback.
 | The client launches a different build than you expect | `command` is a path, not a name; check it, and restart the client after an update |
 | `⏸ Pending approval` | project-scoped entry — start `claude` interactively once, or use user scope |
 | Writes refused with `verification_unavailable` | no `--repo` bound, or `git` not on PATH |
-| A retry seems to have written twice | run `tools/check_install.py`; it asserts exactly this |
+| A retry seems to have written twice | run `nexus-memory-check`; it asserts exactly this |
 | Search misses something you know you stored | it may live only in a superseded revision — try `history` |
 | `ENOENT ... posix_spawn` on a path containing `${...}` | the variable is unset and has no default, so the literal text was passed through — set it, add `${VAR:-default}`, or use an absolute literal path |
-| `ModuleNotFoundError: No module named 'nexus_memory'` | the checkout was moved, renamed or deleted — a source install is editable and points at it; re-clone to the old path or rerun `tools/install.py` from the new one |
+| `ModuleNotFoundError: No module named 'nexus_memory'` | the environment is an **editable** one (built by `uv sync`, or a v0.1.0a1 install) and its checkout moved or was deleted. Build a runtime environment with `tools/install.py --venv PATH` outside the checkout; that one does not point at sources. |
+| The server vanished when I deleted the repository | the environment was inside it — the default `.venv` lives in the checkout. Rebuild with `--venv` pointing somewhere else; your database is unaffected. |
 | A backup opened empty, with no error | the source URI was built by string interpolation and a `#` in the path truncated it — use the `as_uri()` snippet in §5 |

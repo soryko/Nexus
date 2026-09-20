@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import stat
 import subprocess
@@ -144,6 +145,111 @@ class TestInstallerPrerequisites:
 
         assert r.returncode == 0, r.stdout + r.stderr
         assert "chosen:" in r.stdout
+
+
+class TestInstallerBuildsARuntimeNotADevelopmentTree:
+    """The sync must ask for a NON-editable installation, and must say so to uv.
+
+    This is the whole of the v0.1.0a2 claim, and it is invisible in a passing install: an
+    editable environment and a normal one both start the server, pass the lifecycle check
+    and print the same success message. They differ only once the checkout is gone, which
+    no fast test can stage. So this records what the installer actually asks uv for, by
+    putting a `uv` on PATH that writes down its argv -- the real script, the real CLI, the
+    real command construction, and no assumption that the flags reached the subprocess.
+
+    The end-to-end property (a server that runs with its source deleted) is established by
+    the installed-distribution job in CI, not here.
+    """
+
+    def _recording_uv(self, tmp_path: Path) -> tuple[Path, Path]:
+        """A `uv` that records each invocation's argv and otherwise does nothing."""
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        log = tmp_path / "uv-argv.jsonl"
+        uv = bin_dir / "uv"
+        uv.write_text(textwrap.dedent(f"""\
+            #!{sys.executable}
+            import json, sys
+            with open({str(log)!r}, "a") as fh:
+                fh.write(json.dumps(sys.argv[1:]) + "\\n")
+            """))
+        uv.chmod(uv.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        return bin_dir, log
+
+    def _sync_argv(self, tmp_path: Path) -> list[str]:
+        good = fake_python(tmp_path, "py-good", (3, 13, 14), "3.53.1")
+        bin_dir, log = self._recording_uv(tmp_path)
+        r = run(INSTALL, "--python", str(good), "--venv", str(tmp_path / "venv"),
+                env={"PATH": f"{bin_dir}:{os.environ['PATH']}"})
+
+        # The fake uv builds nothing, so the installer's re-check of the built environment
+        # finds no interpreter and refuses to report success. That refusal is correct and
+        # is asserted so this test cannot pass against an installer that skipped the
+        # re-check entirely.
+        assert r.returncode == 2, r.stdout + r.stderr
+        assert "Nothing has been verified" in r.stdout
+
+        assert log.exists(), (
+            "the recording uv never ran; the installer's exit says nothing about the "
+            "sync command when the venv step failed first\n" + r.stdout + r.stderr)
+        calls = [json.loads(line) for line in log.read_text().splitlines()]
+        assert [c[0] for c in calls if c] == ["venv", "sync"], calls
+        sync = [c for c in calls if c and c[0] == "sync"]
+        assert len(sync) == 1, calls
+        return sync[0]
+
+    def test_the_sync_is_not_editable(self, tmp_path: Path) -> None:
+        assert "--no-editable" in self._sync_argv(tmp_path)
+
+    def test_the_sync_excludes_development_dependencies(self, tmp_path: Path) -> None:
+        # pytest and hypothesis have no business in a user's runtime.
+        assert "--no-dev" in self._sync_argv(tmp_path)
+
+    def test_the_sync_stays_frozen_and_names_the_chosen_interpreter(
+            self, tmp_path: Path) -> None:
+        argv = self._sync_argv(tmp_path)
+        assert "--frozen" in argv
+        assert argv[argv.index("--python") + 1] == str(tmp_path / "py-good")
+
+
+class TestThePrintedCommandsAreRunnable:
+    """What the installer prints must survive being pasted into a shell.
+
+    A path with a space in it is the ordinary case on macOS -- "Application Support",
+    "My Project" -- and an unquoted one splits into several words. The shell then reports
+    127, which reads as "this command is not installed" for a command that is installed and
+    working. The CI driver cannot catch this: it invokes the checker as an argument LIST,
+    which never goes through word splitting at all.
+
+    So this builds a real environment at a path containing spaces, takes the command the
+    installer actually printed, and runs that text through bash.
+    """
+
+    @pytest.mark.skipif(shutil.which("uv") is None, reason="needs uv to build")
+    @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+    def test_the_printed_verification_command_runs_verbatim(self, tmp_path: Path) -> None:
+        venv = tmp_path / "runtime with spaces" / "0.1.0a2"
+        r = run(INSTALL, "--python", sys.executable, "--venv", str(venv))
+        assert r.returncode == 0, r.stdout + r.stderr
+
+        printed = [ln.strip() for ln in r.stdout.splitlines()
+                   if ln.strip().endswith(("nexus-memory-check", "nexus-memory-check'",
+                                           'nexus-memory-check"'))]
+        assert printed, f"the installer printed no verification command:\n{r.stdout}"
+        command = printed[-1]
+        assert " " in str(venv)                      # the hazard is actually present
+
+        # One word after splitting, and that word is the checker that was installed.
+        assert shlex.split(command) == [str(venv / "bin" / "nexus-memory-check")]
+
+        # And the text itself, through a shell, exactly as a reader would paste it.
+        proc = subprocess.run(["bash", "-c", command], capture_output=True, text=True,
+                              timeout=300, cwd=str(tmp_path))
+        assert proc.returncode == 0, (
+            f"the printed command failed in a shell (exit {proc.returncode}); "
+            f"127 means it word-split on the spaces\n{command}\n"
+            f"{proc.stdout[-1500:]}{proc.stderr[-1500:]}")
+        assert "PASS: 9/9 checks" in proc.stdout
 
 
 class TestCheckerFailurePaths:

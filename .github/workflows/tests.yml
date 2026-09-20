@@ -159,27 +159,41 @@ jobs:
           # The installer's status, not tee's. Without this a failed install is green.
           exit "${PIPESTATUS[0]}"
 
-      # From OUTSIDE the checkout, against the installed console script by absolute path.
+      # From OUTSIDE the checkout, against the INSTALLED console script -- by its own name,
+      # with no interpreter and no script path from the source tree. The installer now
+      # builds a non-editable environment, so the package code exercised here is the
+      # environment's own copy rather than the working tree's.
       #
-      # Be precise about what this does and does not establish. `uv sync` installs the
-      # project EDITABLE, so the venv carries a .pth pointing at the checkout's src/ and the
-      # package code is the working tree's no matter which directory this runs from. What is
-      # genuinely under test is the installed console script, the venv's interpreter and
-      # therefore both runtime floors, and the resolved dependency set. Changing directory
-      # removes cwd-relative accidents; it does NOT isolate the source tree, and claiming it
-      # did would be the kind of false success this job exists to prevent.
-      #
-      # This is the supported SOURCE installation. It is not a wheel installation test and
-      # must not be described as one.
+      # What this step still does NOT establish is independence from the checkout: the
+      # checkout is right there, and an environment that secretly needed it would pass
+      # exactly like this. That claim belongs to the next step, which takes the source
+      # away before asking.
       - name: Lifecycle check of the installed command
         run: |
           nexus_repo="$(pwd -P)"
           nexus_env="$RUNNER_TEMP/nexus-release-venv"
           cd "$RUNNER_TEMP"
-          "$nexus_env/bin/python" "$nexus_repo/tools/check_install.py" \
-            --server "$nexus_env/bin/nexus-memory" \
+          "$nexus_env/bin/nexus-memory-check" \
             --json "$nexus_repo/artifacts/install-check-${{ matrix.os }}.json" \
             2>&1 | tee "$nexus_repo/artifacts/lifecycle-${{ matrix.os }}.log"
+          exit "${PIPESTATUS[0]}"
+
+      # The claim of this release: the installation outlives the source that built it.
+      #
+      # The driver builds its OWN disposable copy with `git archive`, installs from it into
+      # a separate environment, stores a memory, deletes that copy, and then requires a
+      # fresh `nexus-memory-check` process to pass nine checks against a NEW database --
+      # which is what exercises the packaged SQL migrations -- and a fresh server to return
+      # the memory stored before the deletion, byte for byte. This checkout is only ever
+      # read from; nothing here moves or deletes it.
+      - name: Installed distribution survives removal of its source
+        run: |
+          nexus_python="$(uv python find --system "$UV_PYTHON")"
+          python3 .github/scripts/check_installed_distribution.py \
+            --repo . \
+            --python "$nexus_python" \
+            --artifacts "$(pwd -P)/artifacts" \
+            2>&1 | tee "artifacts/distribution-${{ matrix.os }}.log"
           exit "${PIPESTATUS[0]}"
 
       - name: Fresh-install evidence

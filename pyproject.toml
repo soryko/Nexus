@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nexus-memory"
-version = "0.1.0a1"
+version = "0.1.0a2"
 description = "Local durable memory for programming agents, served over MCP"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -12,6 +12,7 @@ dependencies = ["mcp==2.1.1"]
 
 [project.scripts]
 nexus-memory = "nexus_memory.transport.mcp_server:main"
+nexus-memory-check = "nexus_memory.install_check:main"
 
 [dependency-groups]
 dev = ["pytest==9.1.1", "hypothesis==6.167.1"]
