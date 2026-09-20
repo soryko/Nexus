@@ -41,7 +41,7 @@ CEILING, WALL_CLOCK, ARM_RUNS, PAIRS = 45, 600, 16, 8
 
 FROZEN = {
     "product": "2cd531f9d7c274a065533e58ba3fde8582f8c269",
-    "harness": "29566b629283f92b4491e27cc62a28458cdae754",
+    "harness": "75d2e55c0805cf3dc7f91910aeefcd5e273011ee",
     "config_version": "a3-v1",
     "config_digest": "40f1f18bcfd25cb6",
     "max_turns": 45,

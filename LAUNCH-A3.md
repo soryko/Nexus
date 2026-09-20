@@ -65,7 +65,7 @@ sweep.**
 | | |
 | --- | --- |
 | `product_revision` | `2cd531f9d7c274a065533e58ba3fde8582f8c269` |
-| `harness_revision` | `29566b629283f92b4491e27cc62a28458cdae754` |
+| `harness_revision` | `75d2e55c0805cf3dc7f91910aeefcd5e273011ee` |
 | `config_version` | `a3-v1` |
 | `config_digest` | `40f1f18bcfd25cb6` |
 | `max_turns` | **45** — 45 *model responses*; the envelope's `num_turns` is two different counters and is not a bound |
