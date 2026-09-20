@@ -44,21 +44,6 @@ cd Nexus
 git checkout v0.1.0a1
 ```
 
-<!-- PREPUBLICATION NOTICE — DELETE THIS BLOCK WHEN v0.1.0a1 IS PUBLISHED -->
-> [!NOTE]
-> **Before the tag is published**, `v0.1.0a1` does not resolve. Check out the release
-> candidate instead:
->
-> ```bash
-> git checkout release/experimental-v0.1
-> ```
->
-> **Do not use the default branch for this.** `main` does not carry `tools/install.py` yet,
-> so every command on this page fails there with "No such file or directory" — which looks
-> like a broken guide rather than a branch without the tooling. Do not use a long-running
-> evaluation branch either.
-<!-- END PREPUBLICATION NOTICE -->
-
 ## 1. Install
 
 ```bash
