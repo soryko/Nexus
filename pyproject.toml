@@ -12,6 +12,7 @@ dependencies = ["mcp==2.1.1"]
 
 [project.scripts]
 nexus-memory = "nexus_memory.transport.mcp_server:main"
+nexus-memory-check = "nexus_memory.install_check:main"
 
 [dependency-groups]
 dev = ["pytest==9.1.1", "hypothesis==6.167.1"]
