@@ -71,11 +71,122 @@ jobs:
           uv run pytest -q tests/core/test_b2a_mutations.py tests/core/test_b2b_mutations.py \
             --junitxml=artifacts/junit/mutations.xml
 
+      # The INSTALLED package, not the source tree. `uv sync` has already built the
+      # environment this step checks, and the console script it exercises is the one an MCP
+      # client launches. Nine checks in three separate processes: store, let the process
+      # exit, start a new one on the same file, read byte-identical content back, search,
+      # then retry the write and confirm the receipt replays with no duplicate.
+      #
+      # It is here because "the tests pass" and "the thing you installed holds a memory
+      # across a restart" are different claims, and only the second is what the project
+      # promises. It also re-checks both runtime floors on the built environment. The
+      # fresh-install jobs below cover the installer's own creation path, which this step
+      # does not exercise: here the environment already exists.
+      - name: Installed-package lifecycle check
+        run: |
+          uv run python tools/install.py --check-only
+          uv run python tools/check_install.py \
+            --server "$(uv run python -c 'import sys,pathlib;print(pathlib.Path(sys.prefix)/"bin"/"nexus-memory")')" \
+            --json artifacts/install-check.json
+
       - name: Collect failure evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: test-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/
+          retention-days: 14
+          if-no-files-found: warn
+
+  # A SECOND job, deliberately not folded into `suite`. The step above checks an environment
+  # `uv sync` already built; this one checks the path a new developer actually walks, where
+  # nothing exists yet and `tools/install.py` has to create it. Those are different claims
+  # and a green `suite` has never evidenced the second one.
+  #
+  # Both platforms run, because which SQLite an interpreter links is a property of the
+  # individual build: a Linux pass says nothing about the macOS one.
+  fresh-install:
+    name: fresh install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false        # one platform's failure must not hide the other's result
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      # Only the prerequisite. Notably NOT `uv sync`: syncing here would create the project
+      # environment before the installer runs, and the installer would then be checked
+      # against an environment it did not build -- which is the gap this job exists to close.
+      - name: Install uv ${{ env.UV_VERSION }}
+        run: |
+          curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install the pinned interpreter
+        run: uv python install "$UV_PYTHON"
+
+      - name: Record the candidate and the host
+        run: |
+          mkdir -p artifacts
+          {
+            echo "candidate sha : $GITHUB_SHA"
+            echo "ref           : $GITHUB_REF"
+            echo "os            : ${{ matrix.os }}"
+            echo "uname         : $(uname -srm)"
+            echo "uv            : $(uv --version)"
+            # --system so a .venv in the working directory cannot answer instead of the
+            # managed interpreter we asked for. Without it `uv python find` returns the
+            # project environment's python, which is not what we are pinning.
+            nexus_python="$(uv python find --system "$UV_PYTHON")"
+            echo "interpreter   : $nexus_python"
+            echo "python        : $("$nexus_python" -c 'import sys; print(sys.version.split()[0])')"
+            echo "sqlite linked : $("$nexus_python" -c 'import sqlite3; print(sqlite3.sqlite_version)')"
+          } | tee artifacts/candidate-${{ matrix.os }}.txt
+
+      # The installer creates a previously nonexistent environment, OUTSIDE the checkout, from
+      # an explicitly named interpreter. The installer drops UV_PYTHON from the environment it
+      # builds in, so the interpreter named here is the one `uv sync` uses; the built
+      # environment is re-probed by the installer itself either way.
+      - name: Create a fresh environment with the installer
+        run: |
+          nexus_python="$(uv python find --system "$UV_PYTHON")"
+          "$nexus_python" tools/install.py \
+            --python "$nexus_python" \
+            --venv "$RUNNER_TEMP/nexus-release-venv" \
+            2>&1 | tee artifacts/install-${{ matrix.os }}.log
+          # The installer's status, not tee's. Without this a failed install is green.
+          exit "${PIPESTATUS[0]}"
+
+      # From OUTSIDE the checkout, against the installed console script by absolute path.
+      #
+      # Be precise about what this does and does not establish. `uv sync` installs the
+      # project EDITABLE, so the venv carries a .pth pointing at the checkout's src/ and the
+      # package code is the working tree's no matter which directory this runs from. What is
+      # genuinely under test is the installed console script, the venv's interpreter and
+      # therefore both runtime floors, and the resolved dependency set. Changing directory
+      # removes cwd-relative accidents; it does NOT isolate the source tree, and claiming it
+      # did would be the kind of false success this job exists to prevent.
+      #
+      # This is the supported SOURCE installation. It is not a wheel installation test and
+      # must not be described as one.
+      - name: Lifecycle check of the installed command
+        run: |
+          nexus_repo="$(pwd -P)"
+          nexus_env="$RUNNER_TEMP/nexus-release-venv"
+          cd "$RUNNER_TEMP"
+          "$nexus_env/bin/python" "$nexus_repo/tools/check_install.py" \
+            --server "$nexus_env/bin/nexus-memory" \
+            --json "$nexus_repo/artifacts/install-check-${{ matrix.os }}.json" \
+            2>&1 | tee "$nexus_repo/artifacts/lifecycle-${{ matrix.os }}.log"
+          exit "${PIPESTATUS[0]}"
+
+      - name: Fresh-install evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: fresh-install-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/
           retention-days: 14
           if-no-files-found: warn

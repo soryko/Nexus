@@ -11,6 +11,13 @@ An agent stores a fact once and reads it back in a later session, on a different
 
 > [!IMPORTANT]
 > **Search covers current revisions only.** A term that appears solely in a superseded revision will not find that memory — use `history` to browse a memory's revisions and `get` to read an older one. Ranking is BM25 lexical ordering, not relevance: there is no semantic similarity, no embeddings and no learned ranking. Repository-verified references are implemented and closed, and `search` filters on that recorded evidence by repository, path and commit. Nothing *ranks* by it: a reference filter narrows a result set and never reorders it, adds no evidence and never re-verifies on read. Symbol indexing, automatic extraction and context-budget packing are later milestones. **No retrieval-quality advantage over any other tool has been measured or is claimed.** The v2 evaluation set *is* now judged and this build is measured against it ([results](benchmarks/eval/results-v2.md)) — but that is one 17-query set scoring this build alone, with labels that are AI-assessed, AI-audited twice and human-authorised, with no human audit at label level. No comparison against another system has been run.
+> **Nor has any end-to-end benefit to an agent been shown.** The A1 held-out agent comparison
+> is closed with a negative result ([closeout](https://github.com/soryko/Nexus/blob/f5e75cad6321640992fae87c49585e7ffb2b73b2/benchmarks/agent/CLOSEOUT-a1.md)): over
+> four tasks and 36 arm-runs the memory arm did not beat the no-memory baseline on any task,
+> lost on one, and consumed 1.56x the baseline's combined input tokens. A rendered-notes arm
+> tied on all four. **A working, durable memory service is what this release claims; improved
+> coding outcomes are not.** That evidence lives on the evaluation branch, linked above at an
+> immutable commit, and is not part of this release.
 
 ## What it gives you
 
@@ -29,9 +36,22 @@ An agent stores a fact once and reads it back in a later session, on a different
 Python 3.12+ and [uv](https://docs.astral.sh/uv/getting-started/installation/), with a Python whose **linked SQLite is 3.51.3 or newer**.
 
 > [!WARNING]
-> A Python that satisfies the version floor can still fail the SQLite one — the two are independent. uv's own managed CPython builds currently link SQLite 3.50.4 on macOS, so a plain `uv sync` can produce an environment that cannot start this server.
+> A Python that satisfies the version floor can still fail the SQLite one — the two are independent. Which SQLite an interpreter links is a property of that individual build, not of its Python version, its distributor or the `sqlite3` on your PATH, and builds from one distributor have been observed on both sides of the floor. So a plain `uv sync` can produce an environment that cannot start this server, and no distributor is assumed safe: `tools/install.py` probes each candidate and reports both numbers.
 
 ## Quickstart
+
+```bash
+python3 tools/install.py
+.venv/bin/python tools/check_install.py
+```
+
+The first probes candidate interpreters, prints **both** version numbers for each, builds
+`.venv` from the first that satisfies the Python **and** SQLite floors, and re-checks the
+environment it built. The second drives the **installed** command over MCP in three separate
+processes — store, restart, read back byte-identical, search, retry without duplicating —
+and exits nonzero if any of it fails.
+
+Doing it by hand instead:
 
 ```bash
 uv sync --frozen
@@ -44,6 +64,10 @@ Read that version before going further. If it is below 3.51.3, rebuild the envir
 uv venv --python /path/to/python3.12-or-newer   # one whose linked SQLite is 3.51.3+
 uv sync --frozen
 ```
+
+**Installing to use it?** [`docs/experimental-release.md`](docs/experimental-release.md) is
+the short path: install, verify, connect Claude Code (tested), back up, and the known limits
+in one page.
 
 Then launch:
 
