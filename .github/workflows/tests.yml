@@ -130,6 +130,7 @@ jobs:
             benchmarks/agent/test_a3_decision.py \
             benchmarks/agent/test_a3_pipeline.py \
             benchmarks/agent/test_provenance.py \
+            benchmarks/agent/test_a3_production.py \
             --junitxml=artifacts/junit/bench.xml
 
       - name: Collect failure evidence

@@ -36,7 +36,18 @@ from pathlib import Path
 from a3_decision import A3_PLAN, Plan
 from run_calibration import usage_tokens
 
+#: A3's own marker, written by `run_a3` before the process starts. It carries the POLICY and
+#: the PROMPT DIGEST, which `run_arms_isolated`'s marker does not have and cannot: that
+#: runner has no notion of a policy.
+A3_MARKER = "a3-launch.json"
+#: The runner's own marker, written inside `invoke` immediately before the subprocess. It
+#: lands at the same path and OVERWRITES nothing of A3's, because they are different files --
+#: an earlier version used one name for both and the runner's subset silently replaced the
+#: richer record.
 LAUNCH_MARKER = "launched.json"
+#: Either proves a launch. The A3 marker is written first and the runner's second, so the
+#: window in which neither exists is before anything could have been spent.
+MARKERS = (A3_MARKER, LAUNCH_MARKER)
 TERMINAL_RECORD = "record.json"
 
 #: Written by the runner when it refuses to launch. A recorded refusal is a FATAL STOP: it
@@ -61,7 +72,7 @@ def mark_launch(root: Path, task: str, attempt: int, policy: str, *,
     """
     d = _dir(root, task, attempt, policy)
     d.mkdir(parents=True, exist_ok=True)
-    p = d / LAUNCH_MARKER
+    p = d / A3_MARKER
     p.write_text(json.dumps({
         "task": task, "attempt": attempt, "policy": policy,
         "launched_utc": datetime.now(timezone.utc).isoformat(),
@@ -151,7 +162,7 @@ def read(root: Path, plan: Plan = A3_PLAN) -> Ledger:
                 refusals[key] = json.loads((d / REFUSAL).read_text()).get("reason", "?")
             except ValueError:
                 refusals[key] = "unreadable refusal record"
-        if not (d / LAUNCH_MARKER).is_file():
+        if not any((d / m).is_file() for m in MARKERS):
             # NOT started. Absent, which `validity` reports as missing coverage -- a
             # different fact from an unresolved row, and the only case this may skip.
             continue

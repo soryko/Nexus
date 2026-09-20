@@ -368,7 +368,10 @@ def collect(root: Path, required_facts: dict[str, dict[str, list[str]]],
     runs, sources = [], []
     for task, attempt, policy in plan.cells():
         d = arm_run_dir(root, task, attempt, policy)
-        launched = (d / a3_ledger.LAUNCH_MARKER).is_file()
+        # EITHER marker proves a launch: A3's own, written first by `run_a3`, and the
+        # runner's, written inside `invoke`. Checking only one of them made a cell that the
+        # ledger counts as started invisible to the reporter.
+        launched = any((d / m).is_file() for m in a3_ledger.MARKERS)
         usable = (d / "trace.jsonl").is_file() and (d / "patch.diff").is_file()
         if not launched and not usable:
             continue                        # never started: missing coverage, not a row

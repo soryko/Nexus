@@ -1,7 +1,11 @@
-"""The model-free integration rehearsal, as checks.
+"""The DOWNSTREAM integration rehearsal, as checks.
 
-    frozen A/B schedule -> stubbed execution -> saved records -> REAL compliance scoring
-                        -> normalisation -> decision report
+    saved records -> REAL compliance scoring -> normalisation -> decision report
+
+Execution is stubbed by WRITING the records, so nothing here establishes that the real
+runner produces them. `test_a3_production.py` covers the production adapter and the egress
+control; this file covers the join between the artifacts and the decision, which is where
+the fix-leakage scan's defect lived.
 
 `test_a3_decision.py` builds `ArmRun` objects in memory and asks what the table decides.
 That is necessary and it is not sufficient, and the reason is on the record rather than

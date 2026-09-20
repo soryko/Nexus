@@ -1,7 +1,18 @@
-"""A model-free integration rehearsal of the whole A3 path. No model, no budget, no arm-run.
+"""A model-free integration rehearsal of the DOWNSTREAM A3 path. No model, no arm-run.
 
-    frozen A/B schedule -> stubbed execution -> saved records -> REAL compliance scoring
-                        -> normalisation -> decision report
+    saved records -> REAL compliance scoring -> normalisation -> decision report
+
+**Not the whole path, and it used to say it was.** Execution is stubbed by WRITING the
+records: this file produces `record.json`, `functional.json`, `outcomes.json` and the traces
+itself. That validates everything downstream of the artifacts and NOTHING about the thing
+that produces them -- it cannot establish that the real runner emits what the reporter
+consumes, nor that the prompt whose digest a preflight froze is the prompt that reaches the
+model. `rehearse_a3_production.py` covers that half, by driving `run_a3.py` with only the
+model endpoint replaced.
+
+What this file still earns its place for: it is fast, it is deterministic, it needs no
+`sandbox-exec` and no fixtures, so it runs on a Linux CI runner -- and the four defects it
+caught were all in the join between the artifacts and the decision.
 
 `test_a3_decision.py` checks the decision table against synthetic `ArmRun` objects, and that
 is not enough on its own. The fix-leakage scan had tests too. Its defect was in the join --
