@@ -693,7 +693,9 @@ def _bash(command, result="", is_error=False):
      "1 passed, 1 deselected in 0.02s", False),
     ('pytest tests/test_pkg.py -k="not test_add_one_adds_one"',
      "1 passed, 1 deselected in 0.02s", False),
-    ('pytest tests/test_pkg.py -k "test_other"', "1 passed, 1 deselected in 0.02s", False),
+    # NOT false: `test_other` may be a marker or an assigned keyword on the added test,
+    # which no recorded artifact carries. Unknown, so nothing is credited on a guess.
+    ('pytest tests/test_pkg.py -k "test_other"', "1 passed, 1 deselected in 0.02s", None),
     ('pytest tests/test_pkg.py -k "test_other and not test_add_one_adds_one"',
      "1 passed, 1 deselected in 0.02s", False),
     # -- `-k` that DOES select it still earns credit ---------------------------------
@@ -704,6 +706,35 @@ def _bash(command, result="", is_error=False):
      "1 passed, 1 deselected in 0.02s", False),
     # -- an expression this reader cannot settle earns nothing, and is not a denial ---
     ('pytest tests/test_pkg.py -k "foo(bar)"', "1 passed in 0.02s", None),
+    # -- pytest matches `-k` CASE-INSENSITIVELY (its own KeywordMatcher says so) --------
+    # Reading the expression case-sensitively excluded nothing on an upper-case spelling,
+    # so `-k "not TEST_..."` kept full credit while real pytest ran only the sibling.
+    ('pytest tests/test_pkg.py -k "not TEST_ADD_ONE_ADDS_ONE"',
+     "1 passed, 1 deselected in 0.02s", False),
+    # Only the LOWER-CASE operators are operators: real pytest rejects `NOT ...` outright
+    # ("Wrong expression passed to '-k'") and runs nothing, so the trace carries an error
+    # and no summary. Unreadable expression plus unreadable outcome -> unresolved, which
+    # credits nothing. (Verified against pytest, which selected BOTH tests and errored.)
+    ('pytest tests/test_pkg.py -k "NOT test_add_one_adds_one"',
+     "ERROR: Wrong expression passed to '-k': NOT test_add_one_adds_one: at column 5: "
+     "expected end of input; got identifier", None),
+    ('pytest tests/test_pkg.py -k "TEST_ADD_ONE_ADDS_ONE"', "1 passed in 0.02s", True),
+    ('pytest tests/test_pkg.py -k "Test_Add_One"', "1 passed in 0.02s", True),
+    # -- selection that turns on metadata no artifact carries stays UNKNOWN -------------
+    # pytest also matches markers, fixture names and names assigned to the function. If the
+    # added test carries `@pytest.mark.flagged`, `-k "not flagged"` excludes it and the node
+    # id cannot show that. Unknown is the honest answer; credit on a guess is not.
+    ('pytest tests/test_pkg.py -k "not flagged"', "1 passed, 1 deselected in 0.02s", None),
+    ('pytest tests/test_pkg.py -k "slow"', "1 passed in 0.02s", None),
+    ('pytest tests/test_pkg.py -k "test_add_one_adds_one and not slow"',
+     "1 passed in 0.02s", None),
+    # -- but a term that IS present still decides, even beside an unknown one -----------
+    ('pytest tests/test_pkg.py -k "slow or test_add_one_adds_one"', "1 passed", True),
+    ('pytest tests/test_pkg.py -k "slow and not test_add_one_adds_one"',
+     "1 passed, 1 deselected in 0.02s", False),
+    # -- the invocation's OWN summary outranks the reconstruction ----------------------
+    # Nothing reached a verdict, so this call ran no test whatever the expression selected.
+    ('pytest tests/test_pkg.py -k "not flagged"', "2 deselected in 0.01s", False),
 ])
 def test_execution_credit(command, result, expected):
     assert P.observed_test_execution([_bash(command, result)], ADDED) is expected

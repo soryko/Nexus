@@ -265,31 +265,50 @@ def _k_expression(cmd: str) -> str | None:
 
 
 def _k_selects(expr: str, nodeid: str) -> bool | None:
-    """Would `-k <expr>` select `nodeid`? None when the expression is beyond this reader.
+    """Would `-k <expr>` select `nodeid`? None whenever the trace cannot settle it.
 
-    pytest matches a bare word as a SUBSTRING of the node id and composes words with `and`,
-    `or`, `not` and parentheses. Parsing it as a Python expression and walking the tree
-    keeps that grammar exactly and evaluates nothing: anything outside it -- a call, a
-    comparison, a keyword argument -- yields None rather than a guess.
+    pytest's own `KeywordMatcher` says what this has to reproduce: "matches any substring of
+    one of these names. The string inclusion check is CASE-INSENSITIVE", over the names of
+    the item AND ITS PARENTS, plus `extra_keyword_matches` (markers) and names assigned
+    directly to the test function. A node id carries only some of that.
+
+    So the reading here is deliberately one-sided:
+
+      term IS a substring of the node id (case-insensitively) -> definitely matches
+      term is NOT                                             -> UNKNOWN, never false
+
+    because it may still match a marker, a fixture name or an assigned keyword that no
+    recorded artifact carries. Treating a non-substring as "does not match" is what credited
+    `-k "not flagged"`: the added test carried that marker, pytest excluded it, and reading
+    the node id alone concluded the opposite.
+
+    The three values propagate by Kleene logic, so an expression whose result depends on
+    metadata this reader cannot see returns None and the observation stays unresolved.
+    Unresolved is not compliance, so nothing is credited on a guess.
     """
     try:
         tree = ast.parse(expr.strip(), mode="eval")
     except SyntaxError:
         return None
+    low = nodeid.lower()
 
     def ev(n):
         if isinstance(n, ast.BoolOp):
             vals = [ev(v) for v in n.values]
-            if any(v is None for v in vals):
-                return None
-            return all(vals) if isinstance(n.op, ast.And) else any(vals)
+            if isinstance(n.op, ast.And):
+                if any(v is False for v in vals):
+                    return False
+                return True if all(v is True for v in vals) else None
+            if any(v is True for v in vals):
+                return True
+            return False if all(v is False for v in vals) else None
         if isinstance(n, ast.UnaryOp) and isinstance(n.op, ast.Not):
             v = ev(n.operand)
             return None if v is None else not v
         if isinstance(n, ast.Name):
-            return n.id in nodeid
+            return True if n.id.lower() in low else None
         if isinstance(n, ast.Constant) and isinstance(n.value, str):
-            return n.value in nodeid
+            return True if n.value.lower() in low else None
         return None
 
     return ev(tree.body)
@@ -401,17 +420,19 @@ def observed_test_execution(calls: list[dict], added_tests: list[str]) -> bool |
         if c.get("is_error") or c.get("result") is None:
             saw_unsettled = True
             continue
-        covers = _covers_added(cmd, added_tests)
-        if covers is None:
-            saw_unsettled = True            # a selection expression we cannot read
-            continue
-        if not covers:
-            continue                        # ran, but not over the added test
+        # The run's OWN evidence first, and only then the reconstruction. A summary saying
+        # nothing reached a verdict settles this call outright, whatever the selection
+        # expression did -- reconstructing selection from a node id is the weaker source and
+        # must not override what the invocation reported about itself.
         ran = _tests_actually_ran(c.get("result") or "")
-        if ran is True:
+        if ran is False:
+            continue                        # a summary, and nothing reached a verdict
+        covers = _covers_added(cmd, added_tests)
+        if covers is False:
+            continue                        # ran, but demonstrably not over the added test
+        if ran is True and covers is True:
             return True
-        if ran is None:
-            saw_unsettled = True            # invoked over it; outcome unreadable
+        saw_unsettled = True                # outcome unreadable, or selection unknowable
     return None if saw_unsettled else False
 
 
