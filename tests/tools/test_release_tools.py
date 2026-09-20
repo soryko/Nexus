@@ -50,6 +50,26 @@ def run(script: Path, *args: str, env: dict | None = None) -> subprocess.Complet
     )
 
 
+def recording_uv(tmp_path: Path) -> tuple[Path, Path]:
+    """A `uv` that records each invocation's argv and otherwise does nothing.
+
+    Lets a test assert what the installer asked uv for -- or, just as usefully, that it
+    never asked uv anything at all.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "uv-argv.jsonl"
+    uv = bin_dir / "uv"
+    uv.write_text(textwrap.dedent(f"""\
+        #!{sys.executable}
+        import json, sys
+        with open({str(log)!r}, "a") as fh:
+            fh.write(json.dumps(sys.argv[1:]) + "\\n")
+        """))
+    uv.chmod(uv.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+    return bin_dir, log
+
+
 def fake_python(tmp_path: Path, name: str, version: tuple[int, int, int],
                 sqlite: str) -> Path:
     """An executable that answers the installer's probe with a chosen pair of versions.
@@ -161,24 +181,9 @@ class TestInstallerBuildsARuntimeNotADevelopmentTree:
     the installed-distribution job in CI, not here.
     """
 
-    def _recording_uv(self, tmp_path: Path) -> tuple[Path, Path]:
-        """A `uv` that records each invocation's argv and otherwise does nothing."""
-        bin_dir = tmp_path / "bin"
-        bin_dir.mkdir()
-        log = tmp_path / "uv-argv.jsonl"
-        uv = bin_dir / "uv"
-        uv.write_text(textwrap.dedent(f"""\
-            #!{sys.executable}
-            import json, sys
-            with open({str(log)!r}, "a") as fh:
-                fh.write(json.dumps(sys.argv[1:]) + "\\n")
-            """))
-        uv.chmod(uv.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
-        return bin_dir, log
-
     def _sync_argv(self, tmp_path: Path) -> list[str]:
         good = fake_python(tmp_path, "py-good", (3, 13, 14), "3.53.1")
-        bin_dir, log = self._recording_uv(tmp_path)
+        bin_dir, log = recording_uv(tmp_path)
         r = run(INSTALL, "--python", str(good), "--venv", str(tmp_path / "venv"),
                 env={"PATH": f"{bin_dir}:{os.environ['PATH']}"})
 
@@ -210,6 +215,114 @@ class TestInstallerBuildsARuntimeNotADevelopmentTree:
         argv = self._sync_argv(tmp_path)
         assert "--frozen" in argv
         assert argv[argv.index("--python") + 1] == str(tmp_path / "py-good")
+
+
+class TestInstallerRefusesAnExistingEnvironment:
+    """A destination that already holds an environment is a question, not a crash.
+
+    `uv venv` will not reuse a directory, and left to itself it answers with uv's own
+    wording and a `--clear` hint -- an offer to delete an environment a client may be
+    running right now. The installer has no business taking that offer on someone's
+    behalf, and it should not let uv do the explaining either: the reader needs to know
+    which destination is occupied, how to check what is already there, and that this
+    command changed nothing.
+
+    The refusal must therefore be diagnostic, must keep exit 2, and above all must leave
+    the existing environment exactly as it found it.
+    """
+
+    def _existing_env(self, tmp_path: Path) -> tuple[Path, Path]:
+        """A directory that looks like an environment, plus a sentinel inside it."""
+        venv = tmp_path / "existing runtime"
+        (venv / "bin").mkdir(parents=True)
+        (venv / "pyvenv.cfg").write_text("home = /somewhere\nversion = 3.13.14\n")
+        sentinel = venv / "bin" / "nexus-memory"
+        sentinel.write_text("#!/bin/sh\necho original\n")
+        return venv, sentinel
+
+    def test_it_refuses_with_exit_2_and_names_the_destination(self, tmp_path: Path) -> None:
+        good = fake_python(tmp_path, "py-good", (3, 13, 14), "3.53.1")
+        venv, _ = self._existing_env(tmp_path)
+        r = run(INSTALL, "--python", str(good), "--venv", str(venv))
+
+        assert r.returncode == 2, r.stdout + r.stderr
+        assert str(venv) in r.stdout                      # which one is occupied
+        assert "Traceback" not in r.stderr
+
+    def test_it_says_how_to_check_what_is_there_and_how_to_install_elsewhere(
+            self, tmp_path: Path) -> None:
+        good = fake_python(tmp_path, "py-good", (3, 13, 14), "3.53.1")
+        venv, _ = self._existing_env(tmp_path)
+        r = run(INSTALL, "--python", str(good), "--venv", str(venv))
+
+        # Both ways forward, named. A refusal that only says "no" sends the reader to
+        # uv's hint, which is the one option this tool declines to take for them.
+        assert "nexus-memory-check" in r.stdout           # verify what is already there
+        assert "--venv" in r.stdout                       # or choose a fresh destination
+
+    def test_it_does_not_offer_to_clear_the_existing_environment(
+            self, tmp_path: Path) -> None:
+        good = fake_python(tmp_path, "py-good", (3, 13, 14), "3.53.1")
+        venv, _ = self._existing_env(tmp_path)
+        r = run(INSTALL, "--python", str(good), "--venv", str(venv))
+
+        # Deleting an environment a client may be running is the user's decision to make
+        # deliberately, not one to copy out of a hint. Checked across BOTH streams: uv
+        # writes its hint to stderr, so asserting on stdout alone would pass while the
+        # suggestion still reached the reader.
+        both = r.stdout + r.stderr
+        assert "--clear" not in both
+        assert "UV_VENV_CLEAR" not in both
+
+    def test_it_refuses_before_uv_runs_at_all(self, tmp_path: Path) -> None:
+        # The installer must recognise this itself rather than forwarding uv's failure.
+        # Asserted as the actual property -- uv is never invoked -- because the obvious
+        # proxy, looking for uv's phrasing in the output, matches our own message too:
+        # "an environment already exists at" is what either of us would write.
+        good = fake_python(tmp_path, "py-good", (3, 13, 14), "3.53.1")
+        venv, _ = self._existing_env(tmp_path)
+        bin_dir, log = recording_uv(tmp_path)
+
+        r = run(INSTALL, "--python", str(good), "--venv", str(venv),
+                env={"PATH": f"{bin_dir}:{os.environ['PATH']}"})
+
+        assert r.returncode == 2, r.stdout + r.stderr
+        assert not log.exists(), (
+            f"uv was invoked before the refusal: {log.read_text()}")
+        # And the post-failure path, which only runs after a command fails, is not reached.
+        assert "Nothing has been verified" not in r.stdout + r.stderr
+
+    def test_the_existing_environment_is_left_exactly_as_it_was(
+            self, tmp_path: Path) -> None:
+        good = fake_python(tmp_path, "py-good", (3, 13, 14), "3.53.1")
+        venv, sentinel = self._existing_env(tmp_path)
+        before = {p.relative_to(venv): p.read_bytes()
+                  for p in sorted(venv.rglob("*")) if p.is_file()}
+
+        r = run(INSTALL, "--python", str(good), "--venv", str(venv))
+
+        assert r.returncode == 2, r.stdout + r.stderr
+        after = {p.relative_to(venv): p.read_bytes()
+                 for p in sorted(venv.rglob("*")) if p.is_file()}
+        assert after == before, "the refusal modified the existing environment"
+        assert sentinel.read_text() == "#!/bin/sh\necho original\n"
+
+    def test_an_empty_directory_is_not_an_existing_environment(
+            self, tmp_path: Path) -> None:
+        # Refusing here would break the ordinary case of pointing at a path someone has
+        # already created, e.g. with `mkdir -p`. Only a real environment refuses.
+        good = fake_python(tmp_path, "py-good", (3, 13, 14), "3.53.1")
+        venv = tmp_path / "empty dir"
+        venv.mkdir()
+        empty_bin = tmp_path / "bin"
+        empty_bin.mkdir()
+        r = run(INSTALL, "--python", str(good), "--venv", str(venv),
+                env={"PATH": str(empty_bin)})
+
+        # It gets PAST the existing-environment check and stops at the missing uv,
+        # which is the next gate -- so the refusal above is specific, not a blanket
+        # "the directory exists".
+        assert "uv is required" in r.stdout, r.stdout
 
 
 class TestThePrintedCommandsAreRunnable:
