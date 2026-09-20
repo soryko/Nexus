@@ -46,6 +46,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -72,6 +73,19 @@ def floors() -> tuple[tuple[int, ...], tuple[int, ...]]:
                          "that enforce them; refusing to guess")
     return (tuple(int(p) for p in py.group(1).split(".")),
             tuple(int(p.strip()) for p in sq.group(1).split(",") if p.strip()))
+
+
+def _sh(word: str | Path) -> str:
+    """One shell word, safe to paste.
+
+    The success message is meant to be copied into a terminal, so a path containing a space
+    must arrive as ONE argument. Unquoted, `/some/env with spaces/bin/nexus-memory-check`
+    is three words and the shell reports 127 -- a "command not found" for a command that is
+    installed and working, which sends the reader looking for the wrong fault entirely.
+    """
+    if os.name == "nt":                      # cmd/PowerShell, not POSIX quoting
+        return f'"{word}"' if " " in str(word) else str(word)
+    return shlex.quote(str(word))
 
 
 def _version() -> str:
@@ -240,17 +254,19 @@ def main() -> int:
                 f"  The package itself no longer needs these sources, but deleting this\n"
                 f"  directory would delete the environment along with them. To make the\n"
                 f"  checkout disposable, build somewhere else, for example:\n"
-                f"    {sys.executable} tools/install.py --venv "
-                f"$HOME/.local/share/nexus-memory/venvs/{_version()}\n")
+                f"    {_sh(sys.executable)} tools/install.py --venv "
+                f'"$HOME/.local/share/nexus-memory/venvs/{_version()}"\n')
     else:
         note = (f"\nThis environment is OUTSIDE the checkout ({REPO}),\n"
                 f"  which may now be moved or deleted. Keep the environment and your\n"
                 f"  database where they are; neither is relocatable.\n")
 
+    # The two paths above are shown bare, to be read. The command below is shown quoted,
+    # to be run. They are the same path and the difference is deliberate.
     print(f"\nVerified. The installed commands are:\n  {server}\n  {checker}\n"
           + note
           + f"\nCheck it end to end (starts, stores, restarts, reads back):\n"
-          f"  {checker}\n\n"
+          f"  {_sh(checker)}\n\n"
           f"MCP client entry:\n"
           + json.dumps({"mcpServers": {"nexus-memory": {
               "command": str(server),

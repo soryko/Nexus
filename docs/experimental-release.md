@@ -38,10 +38,29 @@ closed transport with no reason attached. That is what §1 and §2 exist to prev
 
 ### Get the source
 
+> [!IMPORTANT]
+> **`v0.1.0a2` is not published yet.** Until it is, this guide describes the candidate
+> branch, and the checkout below names that branch. At publication it becomes
+> `git checkout v0.1.0a2` and this notice is removed. Everything else on this page applies
+> to the candidate as written.
+>
+> If you want the **published** release instead, use
+> [`v0.1.0a1`](https://github.com/soryko/Nexus/blob/v0.1.0a1/docs/experimental-release.md)
+> and follow *that* tag's guide — its installation is editable and its instructions differ.
+
 ```bash
 git clone https://github.com/soryko/Nexus.git
 cd Nexus
-git checkout v0.1.0a1
+git checkout release/independent-installation   # becomes: git checkout v0.1.0a2
+```
+
+The version you check out here is the version you install. Installing into a directory
+named `0.1.0a2` does not make the checkout `0.1.0a2`; if these disagree you will get the
+other release's package, and on `v0.1.0a1` there is no `nexus-memory-check` to run in §2.
+Confirm after installing:
+
+```bash
+"$nexus_runtime/bin/python" -c "import importlib.metadata as m; print(m.version('nexus-memory'))"
 ```
 
 ## 1. Install
@@ -101,7 +120,10 @@ The pair CI pins, and the one the fresh-install job runs on `ubuntu-24.04`:
 curl -LsSf https://astral.sh/uv/0.11.21/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 uv python install 3.13.14
-python3 tools/install.py --python "$(uv python find --system 3.13.14)"
+nexus_runtime="$HOME/.local/share/nexus-memory/venvs/0.1.0a2"
+python3 tools/install.py \
+  --python "$(uv python find --system 3.13.14)" \
+  --venv "$nexus_runtime"
 ```
 
 `--system` matters: without it, `uv python find` returns the interpreter of any `.venv` in the
@@ -114,7 +136,10 @@ Measured on macOS 26.1 (arm64) with uv 0.11.21 — same commands:
 
 ```bash
 uv python install 3.13.14
-python3 tools/install.py --python "$(uv python find --system 3.13.14)"
+nexus_runtime="$HOME/.local/share/nexus-memory/venvs/0.1.0a2"
+python3 tools/install.py \
+  --python "$(uv python find --system 3.13.14)" \
+  --venv "$nexus_runtime"
 ```
 
 That built `python 3.13.14, sqlite 3.53.1`, above both floors.
@@ -370,10 +395,12 @@ replace.
 
 # 2. BACK UP, with the procedure above, against a stopped server.
 
-# 3. BUILD A NEW ENVIRONMENT from the new sources. This does not touch the old
-#    environment and does not touch your database.
+# 3. BUILD A NEW ENVIRONMENT from a SEPARATE checkout of the new sources.
+#    Do NOT `git checkout` in the checkout your current environment was built from
+#    -- see the warning below. A worktree beside it, or a second clone, both work:
 git fetch --tags
-git checkout <the new tag>
+git worktree add ../Nexus-<the new version> <the new tag>
+cd ../Nexus-<the new version>
 new_runtime="$HOME/.local/share/nexus-memory/venvs/<the new version>"
 python3 tools/install.py --venv "$new_runtime"
 
@@ -392,11 +419,33 @@ python3 tools/install.py --venv "$new_runtime"
 #      claude mcp get <name>     # shows what it is now running
 ```
 
-**Keep the old environment until you are satisfied.** To roll back, stop the server and
-point the client's `command` back at the previous environment's `nexus-memory`. If the
-database itself needs to go back, stop the server and restore the backup from step 2.
+> [!WARNING]
+> **Do not upgrade in place, and do not delete the old checkout yet.** If your current
+> environment came from `v0.1.0a1`, or from any `uv sync`, it is **editable**: it imports
+> from its checkout rather than owning a copy. Running `git checkout <new tag>` there
+> rewrites the code that environment is running, so the "previous version" you were keeping
+> for rollback silently becomes the new one — and deleting that checkout breaks the old
+> server outright.
+>
+> This is a property of the release you are upgrading *from*, not of the one you are
+> upgrading *to*. It is also the last time it applies: an environment built by
+> `tools/install.py` from this release onwards owns its code, so future upgrades no longer
+> need the old checkout kept.
 
-This was checked from the released `v0.1.0a1` to this candidate on one temporary database:
+**Keep the old environment — and, if it is editable, its checkout — until you are
+satisfied.** To roll back, stop the server and point the client's `command` back at the
+previous environment's `nexus-memory`. If the database itself needs to go back, stop the
+server and restore the backup from step 2. Once you are satisfied, remove the old
+environment and the extra checkout together:
+
+```bash
+rm -rf "$HOME/.local/share/nexus-memory/venvs/<the old version>"
+git worktree remove ../Nexus-<the old version>     # if you used a worktree
+```
+
+This was checked from the released `v0.1.0a1` to this candidate **with each version built
+from its own separate source tree**, which is the procedure above and the reason it is
+written that way. On one temporary database:
 a memory written and revised by the old server was read by the new one with identical
 content bytes, the same memory and revision identifiers, both revisions still in `history`,
 a working search hit, and the original receipt replaying without a duplicate — then read
@@ -404,8 +453,10 @@ again by the retained old environment, and again from the backup. It is a compat
 observation about this installation change. **There is no migration tooling, and no claim
 that a future schema change will be reversible.**
 
-Once the new environment is verified and the client is running against it, the checkout is
-no longer required — provided your environment and database are outside it.
+Once the new environment is verified and the client is running against it, **the new
+checkout** is no longer required — provided that environment and your database are outside
+it. The **old** checkout is a separate question: keep it for as long as you are keeping an
+editable old environment for rollback, and delete the two together.
 
 ## 6. Known limits
 

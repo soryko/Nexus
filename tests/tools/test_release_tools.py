@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import stat
 import subprocess
@@ -209,6 +210,46 @@ class TestInstallerBuildsARuntimeNotADevelopmentTree:
         argv = self._sync_argv(tmp_path)
         assert "--frozen" in argv
         assert argv[argv.index("--python") + 1] == str(tmp_path / "py-good")
+
+
+class TestThePrintedCommandsAreRunnable:
+    """What the installer prints must survive being pasted into a shell.
+
+    A path with a space in it is the ordinary case on macOS -- "Application Support",
+    "My Project" -- and an unquoted one splits into several words. The shell then reports
+    127, which reads as "this command is not installed" for a command that is installed and
+    working. The CI driver cannot catch this: it invokes the checker as an argument LIST,
+    which never goes through word splitting at all.
+
+    So this builds a real environment at a path containing spaces, takes the command the
+    installer actually printed, and runs that text through bash.
+    """
+
+    @pytest.mark.skipif(shutil.which("uv") is None, reason="needs uv to build")
+    @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+    def test_the_printed_verification_command_runs_verbatim(self, tmp_path: Path) -> None:
+        venv = tmp_path / "runtime with spaces" / "0.1.0a2"
+        r = run(INSTALL, "--python", sys.executable, "--venv", str(venv))
+        assert r.returncode == 0, r.stdout + r.stderr
+
+        printed = [ln.strip() for ln in r.stdout.splitlines()
+                   if ln.strip().endswith(("nexus-memory-check", "nexus-memory-check'",
+                                           'nexus-memory-check"'))]
+        assert printed, f"the installer printed no verification command:\n{r.stdout}"
+        command = printed[-1]
+        assert " " in str(venv)                      # the hazard is actually present
+
+        # One word after splitting, and that word is the checker that was installed.
+        assert shlex.split(command) == [str(venv / "bin" / "nexus-memory-check")]
+
+        # And the text itself, through a shell, exactly as a reader would paste it.
+        proc = subprocess.run(["bash", "-c", command], capture_output=True, text=True,
+                              timeout=300, cwd=str(tmp_path))
+        assert proc.returncode == 0, (
+            f"the printed command failed in a shell (exit {proc.returncode}); "
+            f"127 means it word-split on the spaces\n{command}\n"
+            f"{proc.stdout[-1500:]}{proc.stderr[-1500:]}")
+        assert "PASS: 9/9 checks" in proc.stdout
 
 
 class TestCheckerFailurePaths:
