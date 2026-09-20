@@ -48,10 +48,13 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
-# Deliberately awkward bytes. A round-trip that re-encodes, normalises or line-folds its
-# payload can still return something that reads correctly to a human while differing from
-# what was written, so the sample carries a newline, a tab, non-ASCII text, an emoji outside
-# the BMP, a combining sequence and an embedded quote. Compared as UTF-8 bytes below.
+# Deliberately awkward bytes: a newline, a tab, non-ASCII text, an emoji outside the BMP and
+# a combining sequence. The point is the SAMPLE, not the comparison. Python's `==` on str is
+# already codepoint-exact -- "\u00e9" == "e\u0301" is False -- so the byte comparison below
+# is exactly as strict as `==`, not stricter; it is written that way to make the unit
+# explicit and to report a byte count. What the payload buys is coverage of the round trip:
+# JSON encoding, a stdio transport, one process writing and another reading. That is where
+# something gets re-encoded, escaped or line-folded, and an ASCII sample would sail through.
 CONTENT = (
     "Nexus install check: the payments retry budget is three attempts with "
     "exponential backoff.\n"
@@ -168,9 +171,9 @@ def check(server: str, keep: bool = False) -> dict:
         got, found, st2 = back
         step("restart: server starts again", bool(st2),
              f"active_memories={st2.get('active_memories')}")
-        # Encode both sides and compare the bytes. `==` on str would pass for a payload
-        # that came back in a different Unicode normal form, which is exactly the class of
-        # corruption this sample was chosen to expose.
+        # Compare the bytes. Not because `==` is too weak -- it is not, see the note on
+        # CONTENT -- but because the unit under test is what the server stored and returned,
+        # and the isinstance guard makes a non-str payload fail the check rather than raise.
         returned = got.get("content")
         same = (isinstance(returned, str)
                 and returned.encode("utf-8") == CONTENT.encode("utf-8"))

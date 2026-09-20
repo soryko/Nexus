@@ -41,11 +41,23 @@ closed transport with no reason attached. That is what §1 and §2 exist to prev
 ```bash
 git clone https://github.com/soryko/Nexus.git
 cd Nexus
-git checkout v0.1.0a1     # PROPOSED prerelease tag — not published yet; see §7
+git checkout v0.1.0a1
 ```
 
-> **The tag does not exist yet.** Until the prerelease is published, use the default branch
-> and expect it to move. Install from a tag, never from a long-running evaluation branch.
+<!-- PREPUBLICATION NOTICE — DELETE THIS BLOCK WHEN v0.1.0a1 IS PUBLISHED -->
+> [!NOTE]
+> **Before the tag is published**, `v0.1.0a1` does not resolve. Check out the release
+> candidate instead:
+>
+> ```bash
+> git checkout release/experimental-v0.1
+> ```
+>
+> **Do not use the default branch for this.** `main` does not carry `tools/install.py` yet,
+> so every command on this page fails there with "No such file or directory" — which looks
+> like a broken guide rather than a branch without the tooling. Do not use a long-running
+> evaluation branch either.
+<!-- END PREPUBLICATION NOTICE -->
 
 ## 1. Install
 
@@ -124,9 +136,16 @@ that **no duplicate was written**.
 
 Two of those are the ones a manual walkthrough skips. A retry that quietly writes a second
 copy looks exactly like a successful retry from the caller's side, and only the count shows
-it. And a payload compared with `==` on text can pass while coming back in a different
-Unicode normal form, so the sample carries a newline, a tab, CJK, Cyrillic, a combining
-sequence and an emoji outside the BMP, and the comparison is on bytes.
+it.
+
+The strength here is in the **sample, not the comparison**. Python's `==` on `str` is already
+codepoint-exact — `"é" == "e\u0301"` is `False` — so comparing UTF-8 bytes is exactly as
+strict as `==` and no stricter; it is used because it makes the unit explicit and lets the
+check report a byte count. What actually earns its place is the payload: a newline, a tab,
+CJK, Cyrillic, a combining sequence and an emoji outside the BMP, carried through JSON
+encoding and a stdio transport in one process and read back in another. That round trip is
+where a payload gets re-encoded, escaped or line-folded, and an ASCII sample would not
+notice.
 
 Exit `0` pass · `1` a check failed, or the command did not serve MCP · `2` nothing installed
 at that path. `--json PATH` also writes the full report to a file.
@@ -186,9 +205,26 @@ Project scope is the alternative — a `.mcp.json` committed with the repository
 ```
 
 > [!IMPORTANT]
-> **Paths in JSON must be absolute and literal.** `~`, `$HOME` and `${VAR}` are shell and
-> environment syntax; nothing expands them here, and a `~` in `command` is a file that does
-> not exist. The server's own `--db` argument is not expanded either.
+> **Prefer absolute literal paths — but know what does and does not expand.** Claude Code
+> *does* expand `${VAR}` and `${VAR:-default}` in `.mcp.json`, in `command`, `args`, `env`,
+> `url` and `headers`
+> ([docs](https://code.claude.com/docs/en/mcp#environment-variable-expansion-in-mcp-json)).
+> So `${HOME}/Nexus/.venv/bin/nexus-memory` works.
+>
+> What does **not** expand is shell syntax: a bare `~` is not a home directory here, it is a
+> filename that does not exist, and `$HOME` without braces is not the documented form. If a
+> referenced variable is unset and has no default, the config still loads — Claude Code warns
+> about the missing variable in `claude mcp list` and passes the literal `${VAR}` text
+> through, which then surfaces as a path that cannot be found.
+>
+> Both behaviours were checked against CLI 2.1.270 rather than taken from the documentation:
+> an entry whose `command` **and** `--db` argument were written as `${HOME}/...` reported
+> `Status: ✔ Connected`, and one referencing an unset variable with no default loaded and
+> then failed with `✘ Failed to connect — ENOENT ... posix_spawn`.
+>
+> Absolute literal paths remain the recommendation: they are what the rest of this page was
+> tested with, and they fail loudly rather than depending on the environment the client
+> happened to inherit.
 >
 > Observations from client testing, recorded rather than assumed:
 > - A **project-scoped** server reports `⏸ Pending approval` until you start `claude`
@@ -277,21 +313,37 @@ There is no automatic backup and no rotation.
 
 ### Update
 
+**Order matters: stop → back up → checkout and rebuild → verify → restart.**
+
+A stdio server is launched and held open by the client, and a source install is *editable* —
+the running process is executing the checkout's `src/` directly. So checking out a new
+revision underneath a live server swaps the code out from under it, and the database is being
+written to while you copy it. Stop first; do not just restart afterwards.
+
 ```bash
-# 1. back up first, with the procedure above
-# 2. then
+# 1. STOP the server the client is running.
+#    In Claude Code, quit the client, or remove the entry for the duration:
+#      claude mcp remove <name> -s user
+#    Confirm nothing is still holding the database:
+#      pgrep -fl nexus-memory
+
+# 2. BACK UP, with the procedure above, against a stopped server.
+
+# 3. CHECKOUT and REBUILD.
 git fetch --tags
 git checkout <the new tag>
-python3 tools/install.py                       # rebuild the environment
+python3 tools/install.py
+
+# 4. VERIFY before letting the client near it.
 .venv/bin/python tools/check_install.py --server "$PWD/.venv/bin/nexus-memory"
+
+# 5. RESTART: re-add the entry, or restart the client.
+#      claude mcp get <name>     # shows what it is now running
 ```
 
-Restart the client's server process afterwards — a stdio server is launched by the client, so
-the old process keeps running until the client restarts it. In Claude Code, `claude mcp get
-<name>` after a restart shows what it is now running.
-
 If an update misbehaves, check out the previous tag, rebuild the same way, and point `--db`
-at the backup you took in step 1. There is no migration tooling and no automatic rollback.
+at the backup you took in step 2 — stopping the server again first. There is no migration
+tooling and no automatic rollback.
 
 ## 6. Known limits
 
@@ -339,5 +391,6 @@ at the backup you took in step 1. There is no migration tooling and no automatic
 | Writes refused with `verification_unavailable` | no `--repo` bound, or `git` not on PATH |
 | A retry seems to have written twice | run `tools/check_install.py`; it asserts exactly this |
 | Search misses something you know you stored | it may live only in a superseded revision — try `history` |
+| `ENOENT ... posix_spawn` on a path containing `${...}` | the variable is unset and has no default, so the literal text was passed through — set it, add `${VAR:-default}`, or use an absolute literal path |
 | `ModuleNotFoundError: No module named 'nexus_memory'` | the checkout was moved, renamed or deleted — a source install is editable and points at it; re-clone to the old path or rerun `tools/install.py` from the new one |
 | A backup opened empty, with no error | the source URI was built by string interpolation and a `#` in the path truncated it — use the `as_uri()` snippet in §5 |
