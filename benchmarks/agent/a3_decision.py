@@ -92,6 +92,10 @@ class ArmRun:
     #: B only: did the run stay inside "one search, at most three fetches". RECORDED, never
     #: used to exclude the run -- a policy that is not followed is a result about the policy.
     bound_respected: bool | None = None
+    #: Did a HUMAN review find the added test relevant to the reported defect, rather than
+    #: merely failing in the predicted way? `None` = not reviewed. No machine settles this;
+    #: `score_compliance` lists it under `unsettled_by_machine` and always has.
+    relevance_reviewed: bool | None = None
 
     def consult_total(self) -> int:
         return sum(self.consultation_calls.get(t, 0) for t in CONSULT_TOOLS)
@@ -449,6 +453,33 @@ def cost(runs: list[ArmRun], thresholds: Thresholds = Thresholds()) -> dict:
     return out
 
 
+def relevance(runs: list[ArmRun]) -> dict:
+    """Whether the added tests have been REVIEWED for relevance, and what that gates.
+
+    It is not in the required-work criterion and must not be: relevance is a judgement no
+    machine makes, and folding an unreviewed row into a machine verdict would substitute
+    the verdict for the review. But leaving it merely "reported" let a policy be ACCEPTED
+    on tests nobody had read, which is the gap this closes.
+
+    So it gates acceptance exactly as partial coverage does -- it can never cause a FAIL,
+    and acceptance is unavailable until the review has happened. Rejection is unaffected: a
+    task that lost is a task that lost whether or not its tests were read.
+    """
+    reviewed = [r for r in runs if r.relevance_reviewed is not None]
+    unreviewed = sorted(f"{r.task}/{r.policy}/{r.attempt}" for r in runs
+                        if r.relevance_reviewed is None)
+    irrelevant = sorted(f"{r.task}/{r.policy}/{r.attempt}" for r in runs
+                        if r.relevance_reviewed is False)
+    return {"state": HOLD if not unreviewed else INDETERMINATE,
+            "reviewed": len(reviewed), "total": len(runs),
+            "unreviewed_arm_runs": unreviewed,
+            "reviewed_not_relevant": irrelevant,
+            "blocks_acceptance": bool(unreviewed),
+            "in_the_required_work_criterion": False,
+            "note": "no machine settles relevance; it gates ACCEPTANCE and never causes a "
+                    "failure, and it never blocks a rejection"}
+
+
 def bound_compliance(runs: list[ArmRun]) -> dict:
     """Reported, never a filter.
 
@@ -483,6 +514,7 @@ def decide(runs: list[ArmRun], required_facts: dict[str, dict[str, list[str]]],
     failing it rejects the policy without implying the policy did harm."""
     valid = validity(runs, plan)
     consumed = consumption(runs)
+    rel = relevance(runs)
     dims = {"correctness": correctness(runs),
             "required_work": required_work(runs),
             "information": information(runs, required_facts),
@@ -503,6 +535,12 @@ def decide(runs: list[ArmRun], required_facts: dict[str, dict[str, list[str]]],
         decision = "indeterminate"
         why = (f"the registered experiment did not run in full, so acceptance is not "
                f"available: {valid['reason']}")
+    elif rel["blocks_acceptance"]:
+        decision = "indeterminate"
+        why = (f"the added tests in {len(rel['unreviewed_arm_runs'])} arm-run(s) have not "
+               f"been reviewed for relevance to the reported defect, so acceptance is not "
+               f"available. No machine settles this, and a machine verdict may not stand "
+               f"in for the review.")
     elif unresolved:
         decision, why = ("indeterminate",
                          f"insufficient decisive evidence: {', '.join(unresolved)}")
@@ -512,7 +550,7 @@ def decide(runs: list[ArmRun], required_facts: dict[str, dict[str, list[str]]],
             "failed": failed, "indeterminate": unresolved,
             "validity": valid, "experiment_valid": valid["complete_coverage"],
             "criteria_applied": not valid["corrupt"],
-            "consumption": consumed,
+            "consumption": consumed, "relevance": rel,
             "further_launches_permitted": consumed["further_launches_permitted"],
             "guardrails": list(guardrails),
             "bound_compliance": bound_compliance(runs),
@@ -521,6 +559,8 @@ def decide(runs: list[ArmRun], required_facts: dict[str, dict[str, list[str]]],
                 "anything from the possible-count bounds about sampling variability: they "
                 "are arithmetic over missing observations, not confidence intervals",
                 "that any preserved fact is NECESSARY to the task",
+                "that an added test covers the defect rather than merely failing in the "
+                "predicted way, wherever `relevance` reports it unreviewed",
                 "anything about tasks outside k1-k4, which are exposed development tasks"]}
 
 
@@ -546,7 +586,10 @@ def render(report: dict) -> str:
             L.append(f"    {task:4} {row['state']:14}{extra}"
                      + (f"  {row['reason']}" if row.get("reason") else ""))
     bc = report["bound_compliance"]
-    L += ["", "counts compared as POSSIBLE-COUNT BOUNDS, not confidence intervals",
+    r = report["relevance"]
+    L += ["", f"relevance: {r['reviewed']}/{r['total']} reviewed"
+              + ("  -- ACCEPTANCE BLOCKED until reviewed" if r["blocks_acceptance"] else ""),
+          "counts compared as POSSIBLE-COUNT BOUNDS, not confidence intervals",
           f"bound compliance (B): respected {bc['respected']}, violated {bc['violated']}, "
               f"unresolved {bc['unresolved']}; excluded {bc['excluded_from_any_dimension']}",
           "", "NOT ESTABLISHED"]

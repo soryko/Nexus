@@ -37,6 +37,11 @@ def run(task, policy, attempt=1, *, ok=True, work="pass", fact=True,
                   delivered_bytes=consult * 4, delivered_text_tokens=consult,
                   token_counting_method="harness-tiktoken-o200k", provider_total_tokens=total,
                   accounting_resolved=True, bound_respected=(True if policy == "B" else None),
+                  # `run()` is "everything measured", and relevance is part of everything:
+                  # left unreviewed it blocks acceptance, which would make every scenario
+                  # below indeterminate for a reason unrelated to the scenario. The gate
+                  # itself is exercised in its own section.
+                  relevance_reviewed=kw.pop("relevance_reviewed", True),
                   **kw)
 
 
@@ -576,3 +581,58 @@ def test_the_three_way_rule_at_its_two_boundaries():
     k1b = correctness(runs2)["per_task"]["k1"]
     assert k1b["state"] == "indeterminate"
     assert k1b["B_possible_min"] == 1 and k1b["B_possible_max"] == 2
+
+
+# ---------------------------------------------------------------------------------------
+# RELEVANCE. Reported is not enough: it gates ACCEPTANCE.
+# ---------------------------------------------------------------------------------------
+
+def test_unreviewed_relevance_blocks_acceptance():
+    """A policy must not be accepted on added tests nobody has read. The criterion cannot
+    carry this -- no machine settles relevance -- so it gates acceptance instead."""
+    import dataclasses
+    runs = [dataclasses.replace(r, relevance_reviewed=None) for r in clean_sweep()]
+    r = decide(runs, FACTS)
+    assert r["decision"] == "indeterminate"
+    assert r["relevance"]["blocks_acceptance"] is True
+    assert len(r["relevance"]["unreviewed_arm_runs"]) == 16
+    assert "reviewed for relevance" in r["reason"]
+
+
+def test_relevance_never_causes_a_failure():
+    """It can withhold acceptance and nothing else -- an unreviewed row is not a loss."""
+    import dataclasses
+    runs = [dataclasses.replace(r, relevance_reviewed=None) for r in clean_sweep()]
+    r = decide(runs, FACTS)
+    assert r["failed"] == []
+    assert all(s != "fail" for s in r["states"].values())
+
+
+def test_unreviewed_relevance_does_not_block_a_rejection():
+    """A task that lost is a task that lost whether or not its tests were read."""
+    import dataclasses
+    runs = [dataclasses.replace(r, relevance_reviewed=None,
+                                functional_pass=(r.policy == "A") if r.task == "k1"
+                                else r.functional_pass)
+            for r in clean_sweep()]
+    r = decide(runs, FACTS)
+    assert r["decision"] == "reject"
+    assert "correctness" in r["failed"]
+
+
+def test_a_review_finding_the_test_irrelevant_is_recorded():
+    """`False` is a completed review with an adverse result. It is reported, and it does not
+    silently become a failure of the required-work criterion."""
+    import dataclasses
+    runs = clean_sweep()
+    runs[1] = dataclasses.replace(runs[1], relevance_reviewed=False)
+    r = decide(runs, FACTS)
+    assert r["relevance"]["reviewed_not_relevant"] == ["k1/B/1"]
+    assert r["relevance"]["blocks_acceptance"] is False
+    assert r["dimensions"]["required_work"]["state"] == "hold"
+
+
+def test_relevance_is_not_in_the_required_work_criterion():
+    r = decide(clean_sweep(), FACTS)
+    assert r["relevance"]["in_the_required_work_criterion"] is False
+    assert any("merely failing in the predicted way" in n for n in r["not_established"])

@@ -165,10 +165,64 @@ def facts_delivered(calls: list[dict], facts: dict[str, list[str]],
     return out
 
 
-#: A shell command that invokes pytest. `-m pytest` and a bare `pytest` both count.
-_PYTEST = re.compile(r"(?:^|[;&|]|\s)(?:[\w./-]*python[\w.]*\s+-m\s+)?pytest\b")
+#: pytest INVOKED, at a command position. `echo pytest` and `grep pytest ...` mention it and
+#: run nothing, and the first version of this matched them: the token was searched for
+#: anywhere in the command. A command position is the start of the string or just after a
+#: separator, optionally preceded by `VAR=value` assignments and an interpreter with `-m`.
+_CMD_POS = r"(?:^|[;&|(]|&&|\|\|)\s*(?:[A-Za-z_][\w]*=[^\s]*\s+)*"
+_PYTEST = re.compile(_CMD_POS + r"(?:[\w./$-]*python[\w.]*\s+-m\s+)?pytest\b")
 #: An explicit path argument to that invocation.
 _PATH_ARG = re.compile(r"(?<![\w-])(tests?/[\w./:-]+|[\w./-]+_test\.py[\w:]*)")
+#: Collection without execution. `--collect-only` reports what WOULD run.
+_COLLECT_ONLY = re.compile(r"(?<![\w-])--collect-only(?![\w-])|(?<![\w-])--co(?![\w-])")
+#: pytest's own summary line. At least one test must have REACHED a verdict: a run that is
+#: entirely deselected, or that collected and ran nothing, executed no test.
+_RAN = re.compile(r"(?<![\w])(\d+)\s+(passed|failed|error|errors|xpassed|xfailed)(?![\w])")
+_NO_TESTS = re.compile(r"no tests ran|collected 0 items", re.I)
+#: A summary that reports only non-verdict outcomes. `-k nomatch` prints "2 deselected",
+#: exits 0, and executed nothing -- a summary WAS produced, so this is `False` and not the
+#: `None` that "no recognisable summary" earns.
+_NO_VERDICT = re.compile(r"(?<![\w])(\d+)\s+(deselected|skipped)(?![\w])")
+
+
+def _command_text(call: dict) -> str:
+    """The shell command a call actually runs, not the JSON envelope around it.
+
+    Matching against `json.dumps(input)` put a `"` immediately before a command that STARTS
+    with `pytest`, so a command-position anchor could never fire on the ordinary case while
+    still firing on `echo pytest` (which has a space in front of it). The envelope has to
+    come off before the anchor means anything.
+    """
+    inp = call.get("input") or {}
+    if isinstance(inp, dict):
+        for key in ("command", "cmd", "script"):
+            v = inp.get(key)
+            if isinstance(v, str):
+                return v
+    return json.dumps(inp)
+
+
+def _tests_actually_ran(result: str) -> bool | None:
+    """Did pytest's own output say a test reached a verdict?
+
+    -> True  at least one passed/failed/errored
+       False the run produced a summary and nothing reached a verdict (all deselected,
+             nothing collected, "no tests ran")
+       None  no recognisable summary, so the trace does not settle it
+
+    Exit status is not used. A deselected run exits 0 and a collection-only run exits 0, and
+    both were counted as execution before this.
+    """
+    if not result:
+        return None
+    if _NO_TESTS.search(result):
+        return False
+    hits = [(int(n), w) for n, w in _RAN.findall(result)]
+    if hits:
+        return any(n > 0 for n, _ in hits)
+    if _NO_VERDICT.search(result):
+        return False                        # a summary, and nothing reached a verdict
+    return None
 
 
 def observed_test_execution(calls: list[dict], added_tests: list[str]) -> bool | None:
@@ -180,12 +234,24 @@ def observed_test_execution(calls: list[dict], added_tests: list[str]) -> bool |
     executed it -- and §5.3 asks for both, because A2-R's k1/nexus passed the hidden checks
     having added no test at all. Retrospective verification is not an execution event.
 
-      True   pytest was invoked, without error, in a way that would collect the added test:
-             either naming its file or id, or with no path argument at all (the checkout's
-             `testpaths` then covers it)
-      False  pytest was never invoked, or only ever on paths that exclude the added test
-      None   pytest was invoked but its result is missing or errored, so whether it ran is
-             not settled by the trace
+      True   pytest was INVOKED at a command position, not collection-only, on a target
+             that would collect the added test, and its own output says at least one test
+             reached a verdict
+      False  pytest was never invoked; or only on paths that exclude the added test; or it
+             ran and nothing reached a verdict (everything deselected, nothing collected)
+      None   pytest was invoked but its output does not settle whether tests ran -- the
+             result is missing, errored, or carries no recognisable summary
+
+    Three ways this was overcredited before, all of them reported and all reproduced in
+    `test_a3_pipeline.py`:
+
+      `echo pytest`      the token was searched for anywhere in the command, so mentioning
+                         pytest counted as running it;
+      `--collect-only`   collection reports what WOULD run and exits 0;
+      full deselection   `-k nomatch` runs nothing, prints "2 deselected", and exits 0.
+
+    None of the three executes a test, and all three are excluded here. The evidence is
+    pytest's own summary rather than the exit status, because all three exit 0.
     """
     if not added_tests:
         return False
@@ -193,19 +259,25 @@ def observed_test_execution(calls: list[dict], added_tests: list[str]) -> bool |
     names = {t.split("::", 1)[1] for t in added_tests if "::" in t}
     saw_unsettled = False
     for c in calls:
-        cmd = json.dumps(c.get("input") or {})
+        cmd = _command_text(c)
         if not _PYTEST.search(cmd):
-            continue
+            continue                        # mentioned, not invoked
+        if _COLLECT_ONLY.search(cmd):
+            continue                        # collection is not execution
         if c.get("is_error") or c.get("result") is None:
-            saw_unsettled = True            # invoked, outcome unknown
+            saw_unsettled = True
             continue
         targets = set(_PATH_ARG.findall(cmd))
-        if not targets:
-            return True                     # whole suite: the added test is collected
-        if any(f in t or t in f for f in files for t in targets):
+        covers = (not targets
+                  or any(f in t or t in f for f in files for t in targets)
+                  or any(n in cmd for n in names))
+        if not covers:
+            continue                        # ran, but not over the added test
+        ran = _tests_actually_ran(c.get("result") or "")
+        if ran is True:
             return True
-        if any(n in cmd for n in names):
-            return True
+        if ran is None:
+            saw_unsettled = True            # invoked over it; outcome unreadable
     return None if saw_unsettled else False
 
 
@@ -288,6 +360,10 @@ def normalise(root: Path, task: str, attempt: int, policy: str, *,
     functional = json.loads(fn.read_text()).get("passed") if fn.is_file() else None
     on = d / "outcomes.json"
     outcomes = json.loads(on.read_text()) if on.is_file() else {}
+    # A HUMAN review of whether the added test covers the reported defect. Absent means not
+    # reviewed, which blocks acceptance and never causes a failure. Nothing computes it.
+    rn = d / "relevance.json"
+    reviewed = json.loads(rn.read_text()).get("relevant") if rn.is_file() else None
 
     rec = d / "record.json"
     record = json.loads(rec.read_text()) if rec.is_file() else {}
@@ -319,12 +395,14 @@ def normalise(root: Path, task: str, attempt: int, policy: str, *,
         accounting_resolved=resolved,
         # recorded for B; meaningless for A, which is not bounded
         bound_respected=bound_respected(calls) if policy == "B" else None,
+        relevance_reviewed=reviewed,
     )
     return Normalised(arm_run, {
         "dir": str(d),
         "compliance": scored.get("compliance"),
         "E1": (scored.get("checks", {}).get("E1_regression_discriminates") or {}).get("verdict"),
         "required_work": work,
+        "relevance_reviewed": reviewed,
         "facts_delivered": arm_run.facts_delivered,
         "functional_source": "functional.json" if fn.is_file() else "absent -> unresolved",
         "accounting_source": "record.json" if rec.is_file() else "absent -> unresolved",
@@ -348,7 +426,7 @@ def unresolved_arm_run(task: str, attempt: int, policy: str,
                   consultation_calls={}, delivered_bytes=None,
                   delivered_text_tokens=None, token_counting_method=None,
                   provider_total_tokens=None, accounting_resolved=False,
-                  bound_respected=None)
+                  bound_respected=None, relevance_reviewed=None)
 
 
 def collect(root: Path, required_facts: dict[str, dict[str, list[str]]],

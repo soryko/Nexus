@@ -627,3 +627,98 @@ def test_the_k4_fact_carries_the_m02_flag():
     k4 = detail["facts"]["k4"]["k4-help-option-is-constructed-per-call-and-compared-by-object"]
     assert k4.get("flagged") == "m02"
     assert "unaided" in k4["basis"]
+
+
+# ---------------------------------------------------------------------------------------
+# GAP 3 -- test execution was overcredited. `echo pytest`, collection-only runs and fully
+# deselected runs all counted, and all three exit 0.
+# ---------------------------------------------------------------------------------------
+
+ADDED = ["tests/test_pkg.py::test_add_one_adds_one"]
+
+
+def _bash(command, result="", is_error=False):
+    return {"name": "Bash", "input": {"command": command}, "result": result,
+            "is_error": is_error, "resolved_at": 1, "issued_at": 0, "index": 0}
+
+
+@pytest.mark.parametrize("command,result,expected", [
+    # -- mentioned, never invoked ---------------------------------------------------
+    ("echo pytest", "pytest", False),
+    ("grep -rn pytest .", "tests/test_pkg.py: import pytest", False),
+    ('echo "next: run pytest" && ls', "next: run pytest", False),
+    # -- invoked, but nothing executed ----------------------------------------------
+    ("pytest tests/test_pkg.py --collect-only", "collected 27 items", False),
+    ("pytest tests/test_pkg.py --co", "collected 27 items", False),
+    ("pytest tests/test_pkg.py -k nomatch", "2 deselected in 0.01s", False),
+    ("pytest tests/test_pkg.py", "no tests ran in 0.01s", False),
+    ("pytest tests/test_pkg.py", "3 skipped in 0.01s", False),
+    # -- invoked over something else -------------------------------------------------
+    ("pytest tests/other_test.py -q", "5 passed in 0.02s", False),
+    # -- genuinely executed ----------------------------------------------------------
+    ("pytest tests/test_pkg.py -q", "3 failed, 24 passed in 0.06s", True),
+    ("PYTHONPATH=src python -m pytest tests -q", "1 passed in 0.03s", True),
+    ("cd repo && pytest tests -q", "2 passed in 0.01s", True),
+    ("pytest tests/test_pkg.py -q", "1 passed, 2 deselected in 0.02s", True),
+    # -- invoked, outcome unreadable -------------------------------------------------
+    ("pytest tests/test_pkg.py -q", "", None),
+    ("pytest tests/test_pkg.py -q", "something unrecognisable", None),
+])
+def test_execution_credit(command, result, expected):
+    assert P.observed_test_execution([_bash(command, result)], ADDED) is expected
+
+
+def test_an_errored_pytest_call_is_unresolved_not_absent():
+    calls = [_bash("pytest tests/test_pkg.py -q", "boom", is_error=True)]
+    assert P.observed_test_execution(calls, ADDED) is None
+
+
+def test_no_added_test_means_no_execution_to_observe():
+    assert P.observed_test_execution([_bash("pytest tests -q", "1 passed")], []) is False
+
+
+def test_the_summary_reader_uses_pytest_output_not_the_exit_status():
+    """All three overcredited shapes exit 0, so the exit status cannot separate them."""
+    assert P._tests_actually_ran("1 passed in 0.1s") is True
+    assert P._tests_actually_ran("2 deselected in 0.1s") is False
+    assert P._tests_actually_ran("no tests ran in 0.1s") is False
+    assert P._tests_actually_ran("collected 0 items") is False
+    assert P._tests_actually_ran("") is None
+
+
+def test_the_command_is_read_from_the_command_field_not_the_json_envelope():
+    """Matching `json.dumps(input)` put a quote before a command STARTING with pytest, so a
+    command-position anchor could never fire on the ordinary case."""
+    assert P._command_text(_bash("pytest -q")) == "pytest -q"
+    assert P._command_text({"input": {"file_path": "a.py"}}).startswith("{")
+
+
+def test_overcredit_changes_the_decision(tmp_path):
+    """End to end: a B that only ever ECHOED pytest fails required work, where before it
+    would have passed."""
+    first = A3_PLAN.tasks[0]
+    rep = R.build(tmp_path, overrides={
+        **R.cheaper_B(),
+        (first, 1, "B"): {"ran_test": False, "fetches": 1,
+                          "deliver": [f"{first}-m-primary"], "total_tokens": 80_000},
+        (first, 2, "B"): {"ran_test": False, "fetches": 1,
+                          "deliver": [f"{first}-m-primary"], "total_tokens": 80_000}})
+    assert rep["dimensions"]["required_work"]["per_task"][first]["state"] == "fail"
+
+
+def test_an_unreviewed_production_sweep_cannot_be_accepted(tmp_path):
+    """The gate, through the files: omit the review artifact and acceptance is withheld
+    while nothing fails."""
+    rep = R.build(tmp_path, overrides={
+        (t, a, "B"): {**R.cheaper_B()[(t, a, "B")], "reviewed": None}
+        for t in A3_PLAN.tasks for a in (1, 2)})
+    assert rep["decision"] == "indeterminate"
+    assert rep["relevance"]["blocks_acceptance"] is True
+    assert len(rep["relevance"]["unreviewed_arm_runs"]) == 8
+    assert rep["failed"] == []
+
+
+def test_the_review_artifact_is_read_from_disk(clean):
+    assert clean["relevance"]["reviewed"] == 16
+    assert clean["relevance"]["blocks_acceptance"] is False
+    assert all(n.get("relevance_reviewed") is True for n in clean["normalisation"])

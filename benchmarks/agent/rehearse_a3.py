@@ -256,7 +256,7 @@ def write_arm_run(root: Path, task: str, attempt: int, policy: str, patches: dic
                   stale_exposed: bool | None = False,
                   stale_adopted: bool | None = False,
                   ran_test: bool = True, deliver_late: bool = False,
-                  artifacts: bool = True) -> Path:
+                  artifacts: bool = True, reviewed: bool | None = True) -> Path:
     """One saved arm-run, at an identity distinct in (task, attempt, policy).
 
     The launch marker goes down FIRST, exactly as the runner writes it, so `artifacts=False`
@@ -291,6 +291,14 @@ def write_arm_run(root: Path, task: str, attempt: int, policy: str, patches: dic
         (d / "functional.json").write_text(json.dumps({"passed": functional}))
     (d / "outcomes.json").write_text(json.dumps(
         {"stale_exposed": stale_exposed, "stale_adopted": stale_adopted}))
+    # A HUMAN review of the added test's relevance. Written here because the downstream
+    # rehearsal's job is to exercise the decision path, and an unreviewed sweep is
+    # indeterminate by design -- which would make every scenario below indeterminate for a
+    # reason unrelated to the scenario. `reviewed=None` omits it and exercises the gate.
+    if reviewed is not None:
+        (d / "relevance.json").write_text(json.dumps(
+            {"relevant": reviewed, "reviewer": "rehearsal-fixture",
+             "note": "synthetic: no human read this test"}))
     return d
 
 

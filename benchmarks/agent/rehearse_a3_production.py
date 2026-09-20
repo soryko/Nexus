@@ -213,6 +213,36 @@ def artifacts_written_by_production(scratch: Path, task: str, attempt: int,
             "distinct_directories": len({r["dir"] for r in rows.values()})}
 
 
+def report_over_production(scratch: Path, task: str, attempt: int) -> dict:
+    """Run the PRODUCTION artifacts through the decision reporter. Model-free.
+
+    Checking that the files exist and that the prompts went out is not the same as checking
+    that the reporter can read them. It could not: the production writer recorded the
+    functional result inside `record.json` while `normalise` looked for `functional.json`,
+    so every production row arrived at the decision table as `functional_pass: None` --
+    unknown -- with the scorer having settled it. Nothing in an artifact-presence check sees
+    that, because the artifact was present.
+
+    The plan here is narrowed to the ONE pair that ran. Against the full 16-cell plan the
+    report would be dominated by missing coverage and the rows that did run would not be
+    legible, which is a property of rehearsing one pair rather than a finding.
+    """
+    import a3_pipeline as P
+    from a3_decision import Plan, render
+
+    corpus = json.loads((BENCH / "corpus-dev-m1.json").read_text())
+    bodies = {m["id"]: m["content"] for m in corpus["memories"]}
+    facts = P.registered_facts()
+    plan = Plan(tasks=(task,), policies=("A", "B"), attempts=attempt)
+    pristine = scratch / f"run-{task}" / "base" / task
+    cfg = json.loads((BENCH / "a3-config-45.json").read_text())
+
+    rep = P.report(scratch, facts, plan, bodies=bodies, pristine=pristine,
+                   python=cfg["pytest_python"], notes_file=BENCH / "notes-dev-m1.md")
+    print("\n" + render(rep))
+    return rep
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("scratch")
@@ -292,6 +322,19 @@ def main() -> int:
                     proc.kill()
 
     report["artifacts"] = artifacts_written_by_production(scratch, a.task, a.attempt)
+    if not a.dry_run:
+        try:
+            decided = report_over_production(scratch, a.task, a.attempt)
+            report["decision"] = {
+                "decision": decided["decision"], "reason": decided["reason"],
+                "states": decided["states"],
+                "experiment_valid": decided["experiment_valid"],
+                "consumption": decided["consumption"],
+                "relevance": decided["relevance"],
+                "normalisation": decided["normalisation"]}
+        except Exception as exc:
+            report["decision"] = {"error": f"{type(exc).__name__}: {exc}"[:300]}
+            print(f"\nREPORTER FAILED: {type(exc).__name__}: {exc}")
     if not a.dry_run and stub_log.is_file():
         report["outbound_prompts"] = verify_outbound_prompts(stub_log, a.task)
 
@@ -311,6 +354,12 @@ def main() -> int:
                   f"observed={v['observed_outbound']}")
         print(f"  all registered prompts observed: "
               f"{op['all_registered_prompts_observed']}")
+    d = report.get("decision") or {}
+    if "decision" in d:
+        n = d["normalisation"]
+        print(f"  reporter read {len(n)} production row(s); functional settled in "
+              f"{sum(1 for r in n if r.get('functional_source', '').startswith('functional'))}")
+        print(f"  decision through the production artifacts: {d['decision'].upper()}")
     if a.json:
         Path(a.json).write_text(json.dumps(report, indent=1, default=str) + "\n")
         print(f"\n-> {a.json}")

@@ -162,9 +162,9 @@ def test_the_adapter_denies_the_sibling_policy():
 def test_the_adapter_checks_a_fatal_stop_before_every_arm_run():
     """An admitted pair does not authorise its second member."""
     src = inspect.getsource(__import__("run_a3").run_pair)
-    body = src.split("for policy in order:", 1)[1]
-    assert "L.fatal_stop(scratch)" in body
-    assert body.index("L.fatal_stop(scratch)") < body.index("R.invoke(")
+    body = src[src.index("R.ARMS = {ARM"):]            # the execution half
+    assert "L.fatal_stop(scratch, registered)" in body
+    assert body.index("L.fatal_stop(") < body.index("R.invoke(")
 
 
 def test_the_adapter_marks_the_launch_before_invoking():
@@ -214,3 +214,92 @@ def test_outbound_verification_passes_when_both_are_observed(tmp_path):
     out = RP.verify_outbound_prompts(log, "k1")
     assert out["all_registered_prompts_observed"] is True
     assert out["policies_sent_different_prompts"] is True
+
+
+# ---------------------------------------------------------------------------------------
+# GAP 1 -- the budget gate was never reached from production.
+# ---------------------------------------------------------------------------------------
+
+def test_the_adapter_admits_the_pair_on_BUDGET_before_launching():
+    """`may_admit_pair` lives in `a3_ledger` and was called only by the rehearsal's driver.
+    Production checked `fatal_stop` alone, so the threshold was never consulted and both
+    invocations were reached at any level of consumption."""
+    src = inspect.getsource(__import__("run_a3").run_pair)
+    assert "L.may_admit_pair(" in src
+    assert src.index("L.may_admit_pair(") < src.index("for policy in order:")
+
+
+def test_admission_is_asked_once_and_the_fatal_stop_per_arm_run():
+    """They are different questions. Budget once for the pair; safety before each member."""
+    src = inspect.getsource(__import__("run_a3").run_pair)
+    body = src[src.index("R.ARMS = {ARM"):]            # the execution half
+    assert "L.may_admit_pair(" not in body          # not re-asked per arm-run
+    assert "L.fatal_stop(" in body
+    assert src.count("L.may_admit_pair(") == 1
+
+
+def test_a_refused_pair_records_a_refusal_for_both_policies():
+    """A pair the budget refuses is recorded as refused for BOTH policies, and nothing is
+    launched -- a refusal is not an arm-run that spent nothing."""
+    src = inspect.getsource(__import__("run_a3").run_pair)
+    head = src[:src.index("R.ARMS = {ARM")]            # everything before execution
+    assert "L.mark_refusal(" in head
+    assert head.index("L.mark_refusal(") > head.index("L.may_admit_pair(")
+    assert "no arm-run was launched" in head
+
+
+def test_the_adapter_passes_the_registered_plan_not_the_schedule():
+    """The first version passed the Schedule to the ledger, which wants the registered Plan.
+    Two objects, one name `plan`, and it crashed on the gate's first production run."""
+    src = inspect.getsource(__import__("run_a3").run_pair)
+    assert "registered = A3_PLAN" in src
+    assert "L.may_admit_pair(scratch, task, attempt, registered)" in src
+    assert "L.fatal_stop(scratch, registered)" in src
+
+
+def test_the_budget_refuses_at_the_reported_level(tmp_path):
+    """26M consumed plus a 4 831 570 reservation exceeds 30M, so no new pair starts."""
+    import json as _j
+    per = 26_000_000 // 4
+    for t, a, pol in (("k2", 1, "A"), ("k2", 1, "B"), ("k2", 2, "A"), ("k2", 2, "B")):
+        L.mark_launch(tmp_path, t, a, pol, identity={}, max_turns=45, wall_clock_s=600,
+                      prompt_digest="x")
+        out, cache = int(per * 0.01), int(per * 0.25)
+        (P.arm_run_dir(tmp_path, t, a, pol) / "record.json").write_text(_j.dumps({"usage": {
+            "input_tokens": per - out - cache, "output_tokens": out,
+            "cache_read_input_tokens": cache, "cache_creation_input_tokens": 0}}))
+    assert L.read(tmp_path).tokens_known == 26_000_000
+    g = L.may_admit_pair(tmp_path, "k1", 1)
+    assert g["may_start"] is False and g["gate"] == "budget"
+
+
+# ---------------------------------------------------------------------------------------
+# GAP 2 -- the functional result has to reach the reporter.
+# ---------------------------------------------------------------------------------------
+
+def test_the_adapter_writes_the_artifact_the_reporter_reads():
+    """The production writer recorded the functional result inside `record.json` while
+    `normalise` looked for `functional.json`, so every production row arrived as unknown
+    with the scorer having settled it. An artifact-presence check cannot see that."""
+    src = inspect.getsource(__import__("run_a3").run_pair)
+    assert 'functional.json' in src
+    assert src.index("R.score(") < src.index('"functional.json"')
+    pipeline = (BENCH / "a3_pipeline.py").read_text()
+    assert 'd / "functional.json"' in pipeline           # one name, both sides
+
+
+def test_a_record_without_the_artifact_is_unknown_not_a_pass(tmp_path):
+    """The failure mode, pinned: a row carrying the scorer's verdict only inside
+    `record.json` must read as unresolved rather than being silently believed."""
+    import json as _j
+    d = P.arm_run_dir(tmp_path, "k1", 1, "A")
+    d.mkdir(parents=True)
+    (d / "record.json").write_text(_j.dumps(
+        {"record": {"scored": {"passed": True}, "usage": {"input_tokens": 10,
+                                                          "output_tokens": 1,
+                                                          "cache_read_input_tokens": 0,
+                                                          "cache_creation_input_tokens": 0}}}))
+    assert not (d / "functional.json").exists()
+    # `normalise` reads functional.json and nothing else for this field
+    assert 'functional = json.loads(fn.read_text()).get("passed") if fn.is_file() else None' \
+        in (BENCH / "a3_pipeline.py").read_text()

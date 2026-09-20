@@ -76,16 +76,37 @@ def run_pair(scratch: Path, task: str, attempt: int, schedule: Path,
     import a3_prompts as AP
     import a3_pipeline as P
     import isolation
+    from a3_decision import A3_PLAN
     import schedule as sched
 
     R = _load_runner(scratch, task, attempt, schedule)
-    plan = sched.load(schedule)
-    if sorted(plan.arms) != ["A", "B"]:
-        raise SystemExit(f"run_a3: schedule registers arms {plan.arms}; A3's schedule is "
+    # TWO different objects, and naming them both `plan` cost a crash on the first run of
+    # the pair-admission gate: `drawn` is the frozen SCHEDULE (which policy goes first),
+    # `registered` is the registered PLAN (which cells exist at all, and therefore which
+    # the ledger scans). The ledger takes the second.
+    drawn = sched.load(schedule)
+    registered = A3_PLAN
+    if sorted(drawn.arms) != ["A", "B"]:
+        raise SystemExit(f"run_a3: schedule registers arms {drawn.arms}; A3's schedule is "
                          f"over POLICIES and must register exactly A,B")
-    order = plan.order_for(task, attempt)
-    print(f"schedule {schedule.name} digest={plan.schedule_digest[:16]} seed={plan.seed}\n"
+    order = drawn.order_for(task, attempt)
+    print(f"schedule {schedule.name} digest={drawn.schedule_digest[:16]} seed={drawn.seed}\n"
           f"{task} attempt {attempt}: realised policy order {' -> '.join(order)}\n")
+
+    # PAIR ADMISSION -- the budget gate, before the pair starts. It lives in `a3_ledger`
+    # and, until now, was called only by the rehearsal's driver: production reached both
+    # invocations with the threshold never consulted. The launch unit is the pair, so this
+    # is asked once, here, and never again inside the loop.
+    admit = L.may_admit_pair(scratch, task, attempt, registered)
+    print(f"pair admission [{admit['gate']}]: "
+          f"{'START' if admit['may_start'] else 'REFUSED'} -- {admit['reason']}")
+    if not admit["may_start"]:
+        for policy in order:
+            L.mark_refusal(scratch, task, attempt, policy,
+                           admit.get("stopping_reason") or "not_admitted", admit)
+        print("no arm-run was launched; partial results are kept and reported as partial.")
+        return 3
+
 
     allfx = json.loads((R.RUN / "base" / "fixtures.json").read_text())
     fixtures = next(f for f in allfx if f["task"] == task)   # THIS task's own fixture
@@ -103,8 +124,10 @@ def run_pair(scratch: Path, task: str, attempt: int, schedule: Path,
                                  "B" if policy == "A" else "A")
         key = f"{task}/{policy}/{attempt}"
 
-        # FATAL STOP, before every arm-run. B is not authorised by the pair's admission.
-        stop = L.fatal_stop(scratch)
+        # FATAL STOP, before every arm-run and asked again after A. Admission is a BUDGET
+        # decision taken once for the pair; this is a safety decision taken per arm-run, and
+        # an admitted pair does not authorise its second member.
+        stop = L.fatal_stop(scratch, registered)
         if stop:
             print(f"[{policy}] STOP before launch: {stop['reason']}", flush=True)
             return 3
@@ -165,6 +188,20 @@ def run_pair(scratch: Path, task: str, attempt: int, schedule: Path,
         (out / "arms" / ARM / "patch.diff").write_text(patch)
         rec["patch_bytes"] = len(patch)
         rec["scored"] = R.score(cwd, held, checks, R.PYTEST_PY, out / "scoring" / ARM)
+        # THE ARTIFACT THE REPORTER READS. `normalise` looks for `functional.json`; the
+        # production writer recorded the functional result only inside `record.json`, so
+        # every production row reached the decision table as `functional_pass: None` --
+        # unknown -- while the scorer had settled it. One canonical file, written by
+        # whichever producer ran, so there is no second place to look and no drift.
+        # `passed` may legitimately be None (a scorer timeout); that is unresolved, and it
+        # is written as None rather than coerced.
+        (out / "arms" / ARM / "functional.json").write_text(json.dumps(
+            {"passed": rec["scored"].get("passed"),
+             "summary": rec["scored"].get("summary"),
+             "failing_functions": rec["scored"].get("failing_functions"),
+             "timed_out": rec["scored"].get("timed_out"),
+             "scorer_version": rec["scored"].get("scorer_version"),
+             "task": task, "attempt": attempt, "policy": policy}, indent=1))
         res = rec.get("result") or {}
         u = res.get("usage", {})
         rec["terminal"] = R.classify(rec)
@@ -185,13 +222,13 @@ def run_pair(scratch: Path, task: str, attempt: int, schedule: Path,
 
     pair_dir = P.policy_run_dir(scratch, task, attempt, order[0]).parent
     (pair_dir / "records.json").write_text(json.dumps(
-        {"task": task, "attempt": attempt, "order": order, "seed": plan.seed,
-         "schedule_digest": plan.schedule_digest, "config": R.CFG.as_recorded(),
+        {"task": task, "attempt": attempt, "order": order, "seed": drawn.seed,
+         "schedule_digest": drawn.schedule_digest, "config": R.CFG.as_recorded(),
          "max_turns": R.MAX_TURNS, "wall_clock_s": R.WALL_CLOCK_S,
          "prompt_digests": {p: AP.digest(task, p) for p in ("A", "B")},
          "corpus_digest_registered": R.CFG.corpus_digest or None,
          "records": records}, indent=1))
-    led = L.read(scratch)
+    led = L.read(scratch, registered)
     print(f"\nledger: {len(led.started)} started, {led.tokens_known:,} tokens known, "
           f"{len(led.unresolved)} unresolved")
     return 0 if not led.unresolved else 3
