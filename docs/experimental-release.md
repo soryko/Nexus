@@ -302,6 +302,12 @@ Other MCP clients take the same stdio shape, but **only Claude Code has been tes
 The server exposes seven tools and this release adds none: `record`, `revise`, `forget`,
 `get`, `history`, `search`, `status`.
 
+A connected client is a setup milestone, not a result. The next step is
+[using Nexus during ordinary work](daily-use.md): what to capture, how briefly to consult it,
+how to check what comes back, and how to correct a memory once it is wrong. Reusing a fact in
+a later session is the first observation that says anything about whether this is useful to
+you -- and it is the one this release does **not** claim in advance.
+
 ## 4. Where the database lives
 
 Pass `--db /absolute/path/memory.sqlite3` and you always know. **This is the recommendation**,
