@@ -63,8 +63,11 @@ noticing, not a quota to fill.
 > put there. Verified `references` are different — they are checked against the repository bound
 > at launch with `--repo`, and establish that an object existed at that path in that commit.
 > That is a claim about the repository, not about whether your prose is true or current.
-> If your client has no `--repo`, you have no verified references; do not add one casually,
-> because it changes what a scope can attest to.
+> Without `--repo`, this server cannot **verify new** references, so a write carrying one is
+> refused. References **already recorded** stay readable in the same scope: `get` returns them
+> and the `search` reference filters still match on them, because both read evidence the
+> original write stored and neither re-verifies anything. Do not add `--repo` casually — it
+> changes what a scope can attest to.
 
 ## 2. Consult — briefly, and on purpose
 
@@ -157,13 +160,24 @@ is not secure erasure — the bytes remain in the database file and in any backu
 
 | What you see | What to do |
 | --- | --- |
-| Memories you wrote are missing | **Stop.** Check `status` and which database your client actually resolved. Do not write replacements over a scope problem — that destroys the evidence. |
+| Memories you wrote are missing | **Stop.** Compare three things in your client's configuration against the session that wrote them: the effective database path, `--namespace`, and `--actor`. Do not write replacements over a scope problem — that destroys the evidence. |
 | Results are irrelevant or obsolete | Look at your query terms and tag vocabulary first; check the cited basis before concluding retrieval is at fault. |
 | You never consult what you saved | That is a real finding. Report it rather than working around it. |
 | Consulting costs more than it returns | Tighten the budget, or stop consulting. Zero is a legitimate answer. |
 
+All three have to match, and **`status` reports none of them** — not the database path, not the
+namespace, not the actor. Read them from the client entry that launched the server.
+
 Which database a given launch resolves to is decided by `--db`, or by the platform default when
 `--db` is omitted — see [Where the database lives](experimental-release.md#4-where-the-database-lives).
+
+> [!IMPORTANT]
+> **`--actor` partitions the store; it does not label the writer.** Every read and write is keyed
+> on the pair `(namespace, actor)`, so changing either one opens the same database file onto a
+> different set of memories. A server launched with a different actor against your database
+> reports zero memories and finds nothing by exact id — not because anything was lost, but
+> because it is looking in a partition you never wrote to. Nothing in a memory records which
+> client or person wrote it.
 
 ## Reporting back
 
