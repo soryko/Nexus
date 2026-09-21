@@ -123,6 +123,23 @@ On Windows the installed command is `<environment>\Scripts\nexus-memory.exe`. Yo
 > [!TIP]
 > Point `command` at the environment whose SQLite check passed. A client launching an interpreter below the floor only sees the transport close, because the diagnosis (`startup_error: unsupported_runtime`) goes to the server's stderr where the client is not looking.
 
+## Using it day to day
+
+Connecting a client is not the same as getting anything out of it. Three milestones, worth
+keeping apart because only the last one is evidence the service is doing something for you:
+
+| Milestone | What it means | How you know |
+| --- | --- | --- |
+| **Installation verified** | the environment can serve MCP at all | `nexus-memory-check` passes |
+| **Client connected** | your agent reached that server | the client lists the seven tools |
+| **Fact reused** | a memory written in one session was found and used in a later one | you searched for it in a new session and it changed what you did |
+
+The first two are setup steps you do once. The third is a habit.
+[**Using Nexus during ordinary work**](docs/daily-use.md) is that habit written down -- what is
+worth capturing, how briefly to consult, why a search hit is a candidate and not an answer, and
+how to correct a memory that has gone stale. The canonical requests live in
+[`examples/daily-use/`](examples/daily-use/) and are executed as-written by the test suite.
+
 ## Tools
 
 | Tool | Purpose | Required fields |
