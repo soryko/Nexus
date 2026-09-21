@@ -189,3 +189,7 @@ used / unknown**.
 Record the failures and the abandoned attempts too. A log of only the times it worked answers
 no question worth asking. Missing measurements are **unknown**, not zero — and "it felt
 faster" is a self-report, not a measurement.
+
+[**The P1 usage pilot**](pilot-p1.md) is that log given a fixed shape and a stopping rule:
+templates for what to record, an offline reader for the records, and an explicit account of
+what such a log can and cannot establish.
