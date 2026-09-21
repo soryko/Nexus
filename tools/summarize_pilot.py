@@ -44,10 +44,11 @@ exits 2 with a sanitized message rather than a traceback -- a traceback is not a
 prints the source line and the offending value and reads as a broken tool rather than
 rejected input. That includes bytes that are not UTF-8, an integer too large to weigh, a
 `day_limit` with no reachable deadline, and the case worth naming on its own: **valid inputs
-whose total is not representable**. Two durations of 1e308 are each fine and sum to
-infinity, which this printed as `Infinity` -- a literal the same script rejects on input. The
-aggregate is checked, and the report is serialized in full to a string before a byte reaches
-stdout, so a late failure cannot leave a partial document behind.
+whose total is not representable**. Individually valid measurements can sum to infinity, can
+make `sum()` raise part-way through on an integer too large to convert, or can produce an
+exact integer no float can weigh -- see `observed_metric`. The aggregate is checked for all
+three, and the report is serialized in full to a string before a byte reaches stdout, so a
+late failure cannot leave a partial document behind.
 
     python3 tools/summarize_pilot.py --log-dir "$pilot_log_dir"
 
@@ -416,18 +417,39 @@ def observed_metric(rows: list[dict], field: str) -> dict:
     `observed_sum` is null when nothing was counted, so no reader can mistake an empty
     pilot, or an unmeasured one, for a measured zero.
 
-    The total is checked as well as the parts. Two individually valid durations of 1e308
-    sum to infinity, and this reported it as `Infinity` -- a literal this same script
-    refuses on input, so the reader was emitting what it would not accept.
+    The total is checked as well as the parts, because individually valid values need not
+    have a representable sum. There are three ways out of range and they do not look alike:
+
+      * Two durations of 1e308 sum to `inf`, which was reported as the literal `Infinity`
+        -- which this same script refuses on input.
+      * Two integers of 10**308 and one float make `sum()` itself raise `OverflowError`
+        converting its accumulated integer to float, part-way through.
+      * The same two integers without the float sum to an exact integer that no float can
+        hold, so `isfinite` raises rather than returning False. An earlier guard tested
+        `isinstance(total, float)` and this walked straight past it, printing a 309-digit
+        integer at exit 0.
+
+    One check covers all three: attempt the sum, attempt to weigh it, and treat a refusal
+    from either as out of range.
     """
     values = [row[field] for row in rows if row[field] is not None]
-    total = sum(values) if values else None
-    if isinstance(total, float) and not math.isfinite(total):
+    total: int | float | None = None
+    representable = True
+    try:
+        if values:
+            total = sum(values)
+            representable = math.isfinite(total)
+    except OverflowError:
+        representable = False
+    if not representable:
+        # Deliberately neutral. Every record that fed this was individually valid, and the
+        # tool has no basis for saying which of them is the wrong one -- or that any single
+        # one is, rather than the set being larger than this report can add up.
         _fail(
             "metric_coverage",
-            f"the recorded values for {field!r} sum beyond the range this report can "
-            f"represent; the individual records are each valid, so correct the measurement "
-            f"that is wrong rather than the total",
+            f"the recorded values for {field!r} sum beyond the numeric range this report "
+            f"can represent. Each record was individually valid, so this does not establish "
+            f"which of them is wrong",
         )
     return {
         "observed_sum": total,

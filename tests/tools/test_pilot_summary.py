@@ -751,12 +751,6 @@ class TestEveryRefusalIsAnExitTwo:
 class TestTheReportIsAlwaysRepresentable:
     """Finite inputs do not guarantee a finite total, and the total is what gets printed."""
 
-    def test_durations_summing_past_the_float_range_are_refused(self) -> None:
-        rows = [make_session("s01", consult_seconds=1e308),
-                make_session("s02", consult_seconds=1e308)]
-        with pytest.raises(PilotError, match="sum beyond the range"):
-            summarize(make_manifest(), rows)
-
     def test_that_refusal_reaches_the_command_line(self, tmp_path: Path) -> None:
         """It exited 0 and printed `"observed_sum": Infinity` -- which this same script
         refuses on input, so the reader was emitting what it would not accept."""
@@ -766,6 +760,50 @@ class TestTheReportIsAlwaysRepresentable:
         stderr = refused(run_cli(tmp_path))
         assert "Traceback" not in stderr
         assert "consult_seconds" in stderr
+
+    @pytest.mark.parametrize("durations,why", [
+        ([1e308, 1e308], "two floats summing to inf"),
+        ([10 ** 308, 10 ** 308, 1.0], "sum() raises converting its integer total to float"),
+        ([10 ** 308, 10 ** 308], "an exact integer total that no float can weigh"),
+    ])
+    def test_every_way_a_total_can_leave_the_representable_range(self, durations, why) -> None:
+        """Three shapes, one guard. The third walked past a check typed to float."""
+        rows = [make_session(f"s{n:02d}", consult_seconds=value)
+                for n, value in enumerate(durations)]
+        with pytest.raises(PilotError, match="beyond the numeric range"):
+            summarize(make_manifest(), rows)
+
+    @pytest.mark.parametrize("durations", [
+        [10 ** 308, 10 ** 308, 1.0],
+        [10 ** 308, 10 ** 308],
+    ])
+    def test_integer_accumulation_refuses_through_the_command_line(
+        self, tmp_path: Path, durations
+    ) -> None:
+        """One exited 1 with a traceback; the other exited 0 printing a 309-digit integer."""
+        write_pilot(tmp_path, make_manifest(),
+                    [make_session(f"s{n:02d}", consult_seconds=value)
+                     for n, value in enumerate(durations)])
+        stderr = refused(run_cli(tmp_path))
+        assert "Traceback" not in stderr
+        assert "consult_seconds" in stderr
+
+    def test_the_out_of_range_diagnostic_blames_no_particular_record(self) -> None:
+        """Exceeding the range does not establish which measurement is wrong, or that one is."""
+        rows = [make_session("s01", consult_seconds=1e308),
+                make_session("s02", consult_seconds=1e308)]
+        with pytest.raises(PilotError) as caught:
+            summarize(make_manifest(), rows)
+        message = str(caught.value)
+        assert "does not establish which of them is wrong" in message
+        assert "correct the measurement" not in message, "the diagnosis assigns blame"
+
+    def test_a_large_but_weighable_total_is_still_reported(self) -> None:
+        """The guard refuses the unrepresentable, not merely the big."""
+        rows = [make_session("s01", consult_seconds=10 ** 20),
+                make_session("s02", consult_seconds=10 ** 20)]
+        result = summarize(make_manifest(), rows)
+        assert result["metric_coverage"]["consult_seconds"]["observed_sum"] == 2 * 10 ** 20
 
     def test_a_successful_report_survives_a_strict_json_reader(self, tmp_path: Path) -> None:
         """The output has to satisfy the same strictness the input is held to."""
