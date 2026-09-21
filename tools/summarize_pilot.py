@@ -28,8 +28,26 @@ reads the one directory it is given and writes to stdout.
 Diagnostics name a **file and a field, never a value**. The log holds private paths, a
 namespace, an actor, memory identifiers and free prose; an error message that echoed the
 offending value would leak exactly the material the log is kept outside the repository to
-protect. Enumerations are reported as the allowed set, which is public and lives in the
-template beside this script.
+protect. Three rules keep that true, and each of them replaces something that leaked:
+
+  * A record is identified by the **file it came from**, or by its position when a caller
+    supplies records directly -- never by its own `session_id`, which is input like any
+    other field.
+  * A **key** read out of a record is echoed only when it is on `DOCUMENTED_NAMES`.
+    Duplicate-key detection runs before validation, so anything else is arbitrary content
+    and is counted rather than named.
+  * Enumerations are reported as the allowed set, which is public and lives in the template
+    beside this script.
+
+Refusal covers the whole path, not only the parsing of fields. Input that cannot be handled
+exits 2 with a sanitized message rather than a traceback -- a traceback is not a refusal, it
+prints the source line and the offending value and reads as a broken tool rather than
+rejected input. That includes bytes that are not UTF-8, an integer too large to weigh, a
+`day_limit` with no reachable deadline, and the case worth naming on its own: **valid inputs
+whose total is not representable**. Two durations of 1e308 are each fine and sum to
+infinity, which this printed as `Infinity` -- a literal the same script rejects on input. The
+aggregate is checked, and the report is serialized in full to a string before a byte reaches
+stdout, so a late failure cannot leave a partial document behind.
 
     python3 tools/summarize_pilot.py --log-dir "$pilot_log_dir"
 
@@ -86,6 +104,14 @@ REUSE_ENTRY_FIELDS = frozenset(
     ("memory_id", "revision_id", "capture_session_id", "basis_checked", "action_note")
 )
 
+# The only names a diagnostic may ever repeat back. A key read out of an input file is not
+# necessarily one of these -- a malformed record can carry any key at all, and echoing one
+# would put arbitrary file content into a message that gets pasted elsewhere. So a name is
+# echoed when it is on this list and counted when it is not.
+DOCUMENTED_NAMES = frozenset(
+    MANIFEST_FIELDS | SESSION_FIELDS | CAPTURE_ENTRY_FIELDS | REUSE_ENTRY_FIELDS
+)
+
 
 class PilotError(Exception):
     """An input this tool refuses to summarize. Carries a location, never a value."""
@@ -107,12 +133,14 @@ def _reject_constant(name: str):
 
 def _reject_duplicate_keys(pairs):
     # Python's default keeps the last of a repeated key, so `{"impact":"helped",
-    # "impact":"harmed"}` would parse cleanly as the second one. Key names are documented
-    # field names, so naming the offender here leaks nothing.
+    # "impact":"harmed"}` would parse cleanly as the second one. This runs BEFORE any
+    # validation, so the key is arbitrary file content until it is shown to be on the
+    # allowlist -- an earlier version named it unconditionally, which leaked.
     seen: set[str] = set()
     for key, _value in pairs:
         if key in seen:
-            raise ValueError(f"duplicate object key {key!r}")
+            named = repr(key) if key in DOCUMENTED_NAMES else "an undocumented key, not echoed"
+            raise ValueError(f"duplicate object key: {named}")
         seen.add(key)
     return dict(pairs)
 
@@ -120,6 +148,9 @@ def _reject_duplicate_keys(pairs):
 def _read_json(path: Path, location: str) -> dict:
     try:
         text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        # Deliberately says nothing about the offending bytes, and nothing about where.
+        _fail(location, "is not valid UTF-8 text")
     except OSError as exc:
         _fail(location, f"cannot be read ({exc.strerror or exc.__class__.__name__})")
     try:
@@ -131,6 +162,11 @@ def _read_json(path: Path, location: str) -> dict:
     if not isinstance(parsed, dict):
         _fail(location, "is not a JSON object")
     return parsed
+
+
+def _session_files(root: Path) -> list[Path]:
+    """The session records, in the order they are read. One definition, used twice."""
+    return sorted((root / "sessions").glob("*.json"))
 
 
 def load_pilot(root: Path) -> tuple[dict, list[dict]]:
@@ -156,7 +192,7 @@ def load_pilot(root: Path) -> tuple[dict, list[dict]]:
 
     sessions: list[dict] = []
     seen: dict[str, str] = {}
-    for path in sorted(sessions_dir.glob("*.json")):
+    for path in _session_files(root):
         location = f"sessions/{path.name}"
         record = _validate_session(_read_json(path, location), location)
         # Caught here as well as in `summarize` because only here are both filenames known,
@@ -180,7 +216,17 @@ def _exact_keys(record: dict, expected: frozenset[str], location: str) -> None:
     if missing:
         _fail(location, f"is missing required field(s): {', '.join(missing)}")
     if unknown:
-        _fail(location, f"carries field(s) this format does not define: {', '.join(unknown)}")
+        # A key that is documented somewhere else in this format is safe to name -- it is a
+        # field in the wrong file, which is the useful thing to say. Anything else is
+        # arbitrary content from the record and is only counted.
+        nameable = [key for key in unknown if key in DOCUMENTED_NAMES]
+        opaque = len(unknown) - len(nameable)
+        parts = []
+        if nameable:
+            parts.append(f"misplaced here: {', '.join(nameable)}")
+        if opaque:
+            parts.append(f"{opaque} undocumented key(s), not echoed")
+        _fail(location, f"carries field(s) this format does not define -- {'; '.join(parts)}")
 
 
 def _schema_version(record: dict, location: str) -> None:
@@ -236,8 +282,14 @@ def _duration(record: dict, field: str, location: str) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         _fail(location, f"field {field!r} must be a number of seconds, or null if not measured")
     # parse_constant catches the NaN/Infinity literals; a float overflowing from something
-    # like 1e400 arrives here as inf without ever passing through it.
-    if not math.isfinite(value):
+    # like 1e400 arrives here as inf without ever passing through it. An integer literal of
+    # a few hundred digits reaches math.isfinite and raises OverflowError converting to
+    # float, which is an input problem and has to read as one.
+    try:
+        finite = math.isfinite(value)
+    except OverflowError:
+        finite = False
+    if not finite:
         _fail(location, f"field {field!r} must be a finite number of seconds")
     if value < 0:
         _fail(location, f"field {field!r} cannot be negative")
@@ -330,7 +382,11 @@ def _validate_session(record: dict, location: str) -> dict:
         for field in ("memory_id", "revision_id", "action_note"):
             _text(entry, field, where)
         _optional_text(entry, "capture_session_id", where)
-        if entry["basis_checked"] not in (True, False, None):
+        # `x not in (True, False, None)` compares by equality, under which 1 == True and
+        # 0 == False, so every numeric 0/1 and 0.0/1.0 passed that test. The documented type
+        # is boolean-or-null and this is what actually requires it.
+        basis = entry["basis_checked"]
+        if basis is not None and not isinstance(basis, bool):
             _fail(where, "field 'basis_checked' must be true, false, or null")
 
     friction = record["friction_codes"]
@@ -359,10 +415,22 @@ def observed_metric(rows: list[dict], field: str) -> dict:
 
     `observed_sum` is null when nothing was counted, so no reader can mistake an empty
     pilot, or an unmeasured one, for a measured zero.
+
+    The total is checked as well as the parts. Two individually valid durations of 1e308
+    sum to infinity, and this reported it as `Infinity` -- a literal this same script
+    refuses on input, so the reader was emitting what it would not accept.
     """
     values = [row[field] for row in rows if row[field] is not None]
+    total = sum(values) if values else None
+    if isinstance(total, float) and not math.isfinite(total):
+        _fail(
+            "metric_coverage",
+            f"the recorded values for {field!r} sum beyond the range this report can "
+            f"represent; the individual records are each valid, so correct the measurement "
+            f"that is wrong rather than the total",
+        )
     return {
-        "observed_sum": sum(values) if values else None,
+        "observed_sum": total,
         "known_sessions": len(values),
         "unknown_sessions": len(rows) - len(values),
     }
@@ -375,7 +443,7 @@ def _tally(rows: list[dict], field: str, allowed: tuple[str, ...]) -> dict:
     return counts
 
 
-def _check_links(rows: list[dict], starts: dict[str, datetime]) -> None:
+def _check_links(rows: list[dict], starts: dict[str, datetime], labels: list[str]) -> None:
     """A claimed capture link has to survive being looked up. It is not proof of anything.
 
     All this establishes is that the cited source session exists, is a different and earlier
@@ -383,8 +451,7 @@ def _check_links(rows: list[dict], starts: dict[str, datetime]) -> None:
     judgement `docs/pilot-p1.md` reserves for a person reading the records.
     """
     by_id = {row["session_id"]: row for row in rows}
-    for row in rows:
-        where = f"session {row['session_id']}"
+    for where, row in zip(labels, rows):
         for index, entry in enumerate(row["reuse_evidence"] or []):
             source_id = entry["capture_session_id"]
             if source_id is None:
@@ -411,26 +478,34 @@ def _check_links(rows: list[dict], starts: dict[str, datetime]) -> None:
                 _fail(at, "cites a memory the named capture session does not record capturing")
 
 
-def summarize(manifest: dict, sessions: list[dict]) -> dict:
-    """Describe the records. Cross-record validation happens here, then counting."""
+def summarize(manifest: dict, sessions: list[dict], locations: list[str] | None = None) -> dict:
+    """Describe the records. Cross-record validation happens here, then counting.
+
+    `locations` labels each record for diagnostics -- the CLI passes filenames. A record is
+    never identified by its own `session_id`, because that value is arbitrary input and an
+    earlier version put it straight into stderr.
+    """
     if not isinstance(manifest, dict):
         _fail("manifest.json", "is not a JSON object")
     _validate_manifest(manifest)
     pilot_start = _timestamp(manifest["started_at"], "started_at", "manifest.json")
-    deadline = pilot_start + timedelta(days=manifest["day_limit"])
+    try:
+        deadline = pilot_start + timedelta(days=manifest["day_limit"])
+    except (OverflowError, OSError, ValueError):
+        # A day_limit large enough to push the deadline past the calendar. Absurd, but it
+        # arrives from a file, so it refuses like any other bad field.
+        _fail("manifest.json", "field 'day_limit' is too large to produce a deadline")
+
+    labels = (
+        list(locations)
+        if locations is not None and len(locations) == len(sessions)
+        else [f"session record {n}" for n in range(1, len(sessions) + 1)]
+    )
 
     starts: dict[str, datetime] = {}
-    for position, row in enumerate(sessions):
+    for where, row in zip(labels, sessions):
         if not isinstance(row, dict):
-            _fail(f"session record {position}", "is not an object")
-        # Named by id where there is one; a record too broken to identify is named by the
-        # position it was supplied in, which is still enough to find it.
-        identifier = row.get("session_id")
-        where = (
-            f"session {identifier}"
-            if isinstance(identifier, str) and identifier.strip()
-            else f"session record {position}"
-        )
+            _fail(where, "is not an object")
         _validate_session(row, where)
         if row["session_id"] in starts:
             _fail(where, "is recorded twice")
@@ -449,7 +524,7 @@ def summarize(manifest: dict, sessions: list[dict]) -> dict:
             _fail(where, "starts before the pilot's own start time in manifest.json")
         starts[row["session_id"]] = moment
 
-    _check_links(sessions, starts)
+    _check_links(sessions, starts, labels)
 
     # Deterministic, and in the order the sessions actually happened.
     ordered = sorted(sessions, key=lambda row: (starts[row["session_id"]], row["session_id"]))
@@ -531,15 +606,26 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         manifest, sessions = load_pilot(args.log_dir)
-        # Built in full before a byte is printed, so a failure late in aggregation cannot
-        # leave half a report on stdout looking like a whole one.
-        report = summarize(manifest, sessions)
+        report = summarize(
+            manifest, sessions,
+            [f"sessions/{path.name}" for path in _session_files(args.log_dir)],
+        )
+        # Serialized in full, to a string, before a byte is printed. Two separate reasons:
+        # a failure late in aggregation cannot leave half a report on stdout, and
+        # `json.dump` streams -- so allow_nan=False raising mid-write would emit a partial
+        # document and then fail. Nothing reaches stdout until the whole thing exists.
+        rendered = json.dumps(report, indent=2, allow_nan=False)
     except PilotError as exc:
         print(str(exc), file=sys.stderr)
         return 2
+    except ValueError:
+        # Belt and braces behind observed_metric's own check: whatever produced a value
+        # JSON cannot represent, the report is not written.
+        print("the summary contains a value that cannot be represented in JSON",
+              file=sys.stderr)
+        return 2
 
-    json.dump(report, sys.stdout, indent=2)
-    sys.stdout.write("\n")
+    sys.stdout.write(rendered + "\n")
     return 0
 
 

@@ -497,16 +497,79 @@ class TestTheSummaryKeepsPrivateMaterialOut:
         ]
 
 
+SENTINEL = "PRIVATE-SENTINEL-MUST-NOT-BE-ECHOED"
+
+
 class TestErrorsNameFieldsNotValues:
-    """A diagnosis is read and pasted. It must not carry what the log is kept private for."""
+    """A diagnosis is read and pasted. It must not carry what the log is kept private for.
+
+    The first version of this class tested one enum field, whose validator never echoed
+    anything, and passed while three other paths printed file content straight to stderr.
+    So these now cover every place a value could reach a message: a field value, a record's
+    own identifier, a duplicated key, and an undefined key.
+    """
 
     def test_a_refusal_does_not_echo_the_offending_value(self, tmp_path: Path) -> None:
-        secret = "a-private-value-that-must-not-be-echoed"
-        write_pilot(tmp_path, make_manifest(), [make_session("s01", state=secret)])
+        write_pilot(tmp_path, make_manifest(), [make_session("s01", state=SENTINEL)])
         stderr = refused(run_cli(tmp_path))
-        assert secret not in stderr, "the diagnosis echoed the record's own value"
+        assert SENTINEL not in stderr, "the diagnosis echoed the record's own value"
         assert "state" in stderr, "the diagnosis has to name the field to be actionable"
         assert "sessions/s01.json" in stderr, "the diagnosis has to name the file"
+
+    def test_a_record_is_identified_by_its_file_not_by_its_session_id(
+        self, tmp_path: Path
+    ) -> None:
+        """session_id is arbitrary input. Naming the file is both safe and more useful.
+
+        The record goes in a file whose name does NOT contain the sentinel, so that a
+        sentinel in stderr can only have come from the record's own `session_id` value --
+        echoing the filename is correct and is what makes the diagnosis actionable.
+        """
+        write_pilot(tmp_path, make_manifest(), [])
+        (tmp_path / "sessions" / "s01.json").write_text(
+            json.dumps(make_session(SENTINEL, routine_revision="0" * 40)), encoding="utf-8"
+        )
+        stderr = refused(run_cli(tmp_path))
+        assert SENTINEL not in stderr, "the record's session_id was echoed into stderr"
+        assert "sessions/s01.json" in stderr, "the file has to be named to be actionable"
+        assert "disagrees with manifest.json" in stderr
+
+    def test_a_duplicated_undocumented_key_is_not_echoed(self, tmp_path: Path) -> None:
+        """The duplicate-key hook runs before validation, so the key is untrusted content."""
+        write_pilot(tmp_path, make_manifest(), [make_session("s01")])
+        path = tmp_path / "sessions" / "s01.json"
+        body = json.dumps(make_session("s01"))[:-1]
+        path.write_text(f'{body}, "{SENTINEL}": 1, "{SENTINEL}": 2}}', encoding="utf-8")
+        stderr = refused(run_cli(tmp_path))
+        assert SENTINEL not in stderr
+        assert "duplicate object key" in stderr
+
+    def test_a_duplicated_documented_key_is_named(self, tmp_path: Path) -> None:
+        """A name on the allowlist is safe, and saying which field it was is the point."""
+        write_pilot(tmp_path, make_manifest(), [make_session("s01")])
+        path = tmp_path / "sessions" / "s01.json"
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(
+                '"impact": "unknown"', '"impact": "unknown",\n  "impact": "helped"', 1
+            ),
+            encoding="utf-8",
+        )
+        assert "impact" in refused(run_cli(tmp_path))
+
+    def test_an_undefined_key_is_counted_not_echoed(self, tmp_path: Path) -> None:
+        record = make_session("s01")
+        record[SENTINEL] = 1
+        write_pilot(tmp_path, make_manifest(), [record])
+        stderr = refused(run_cli(tmp_path))
+        assert SENTINEL not in stderr
+        assert "not echoed" in stderr and "does not define" in stderr
+
+    def test_a_field_of_this_format_in_the_wrong_file_is_named(self, tmp_path: Path) -> None:
+        """A manifest field inside a session record is a real mistake worth naming."""
+        record = make_session("s01")
+        record["day_limit"] = 14
+        write_pilot(tmp_path, make_manifest(), [record])
+        assert "day_limit" in refused(run_cli(tmp_path))
 
 
 class TestCommandLine:
@@ -648,3 +711,93 @@ class TestTheReporterStaysOffline:
             if line.startswith(("import ", "from "))
         }
         assert imported <= stdlib, f"unexpected import(s): {sorted(imported - stdlib)}"
+
+
+class TestEveryRefusalIsAnExitTwo:
+    """Input this tool cannot handle must refuse, not crash.
+
+    Each of these exited 1 with a traceback. A traceback is not a refusal: it carries the
+    source line and the offending value, and a caller reading exit status sees a tool that
+    broke rather than input that was rejected.
+    """
+
+    def _assert_clean_refusal(self, result: subprocess.CompletedProcess) -> str:
+        stderr = refused(result)
+        assert "Traceback" not in stderr, f"a crash, not a refusal:\n{stderr}"
+        return stderr
+
+    def test_a_record_that_is_not_utf8_is_refused(self, tmp_path: Path) -> None:
+        write_pilot(tmp_path, make_manifest(), [])
+        (tmp_path / "sessions" / "s01.json").write_bytes(b'{"session_id": "\xff\xfe"}')
+        assert "UTF-8" in self._assert_clean_refusal(run_cli(tmp_path))
+
+    def test_an_integer_too_large_to_weigh_is_refused(self, tmp_path: Path) -> None:
+        """A few hundred digits overflows converting to float inside the finite check."""
+        write_pilot(tmp_path, make_manifest(), [make_session("s01")])
+        path = tmp_path / "sessions" / "s01.json"
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(
+                '"consult_seconds": null', f'"consult_seconds": {"9" * 400}', 1
+            ),
+            encoding="utf-8",
+        )
+        assert "finite" in self._assert_clean_refusal(run_cli(tmp_path))
+
+    def test_a_day_limit_with_no_reachable_deadline_is_refused(self, tmp_path: Path) -> None:
+        write_pilot(tmp_path, make_manifest(day_limit=10 ** 12), [make_session("s01")])
+        assert "day_limit" in self._assert_clean_refusal(run_cli(tmp_path))
+
+
+class TestTheReportIsAlwaysRepresentable:
+    """Finite inputs do not guarantee a finite total, and the total is what gets printed."""
+
+    def test_durations_summing_past_the_float_range_are_refused(self) -> None:
+        rows = [make_session("s01", consult_seconds=1e308),
+                make_session("s02", consult_seconds=1e308)]
+        with pytest.raises(PilotError, match="sum beyond the range"):
+            summarize(make_manifest(), rows)
+
+    def test_that_refusal_reaches_the_command_line(self, tmp_path: Path) -> None:
+        """It exited 0 and printed `"observed_sum": Infinity` -- which this same script
+        refuses on input, so the reader was emitting what it would not accept."""
+        write_pilot(tmp_path, make_manifest(),
+                    [make_session("s01", consult_seconds=1e308),
+                     make_session("s02", consult_seconds=1e308)])
+        stderr = refused(run_cli(tmp_path))
+        assert "Traceback" not in stderr
+        assert "consult_seconds" in stderr
+
+    def test_a_successful_report_survives_a_strict_json_reader(self, tmp_path: Path) -> None:
+        """The output has to satisfy the same strictness the input is held to."""
+        write_pilot(tmp_path, make_manifest(),
+                    [make_session("s01", consult_seconds=1.5, search_calls=0),
+                     make_session("s02", logging_seconds=90)])
+        result = run_cli(tmp_path)
+        assert result.returncode == 0, result.stderr
+
+        def reject(name):
+            raise AssertionError(f"the report emitted the non-JSON literal {name}")
+
+        json.loads(result.stdout, parse_constant=reject)
+
+
+class TestBasisCheckedIsATrueBoolean:
+    """`x not in (True, False, None)` compares by equality: 1 == True and 0 == False."""
+
+    @pytest.mark.parametrize("value", [0, 1, 0.0, 1.0])
+    def test_a_number_is_not_a_boolean(self, value) -> None:
+        rows = [make_session("s01", reuse_evidence=[
+            _reuse(capture_session_id=None, basis_checked=value)])]
+        with pytest.raises(PilotError, match="basis_checked"):
+            summarize(make_manifest(), rows)
+
+    @pytest.mark.parametrize("value", [True, False, None])
+    def test_the_documented_values_are_accepted(self, value) -> None:
+        rows = [make_session("s01", reuse_evidence=[
+            _reuse(capture_session_id=None, basis_checked=value)])]
+        assert summarize(make_manifest(), rows)["reuse_evidence_entries"]["observed_entries"] == 1
+
+    def test_a_number_is_refused_through_the_command_line(self, tmp_path: Path) -> None:
+        write_pilot(tmp_path, make_manifest(), [make_session("s01", reuse_evidence=[
+            _reuse(capture_session_id=None, basis_checked=1)])])
+        assert "basis_checked" in refused(run_cli(tmp_path))
