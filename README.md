@@ -9,6 +9,11 @@
 
 An agent stores a fact once and reads it back in a later session, on a different process, with the same bytes it wrote. Everything runs locally against one SQLite file. No model call, network request or external service touches the write path.
 
+**License:** [PolyForm Noncommercial 1.0.0](LICENSE). Nexus is source-available.
+Commercial use outside the license's express permissions requires a separate written
+commercial license from Sory Kora. See [licensing and commercial requests](LICENSING.md),
+including the license's permissions for qualifying noncommercial organizations.
+
 > [!IMPORTANT]
 > **Search covers current revisions only.** A term that appears solely in a superseded revision will not find that memory — use `history` to browse a memory's revisions and `get` to read an older one. Ranking is BM25 lexical ordering, not relevance: there is no semantic similarity, no embeddings and no learned ranking. Repository-verified references are implemented and closed, and `search` filters on that recorded evidence by repository, path and commit. Nothing *ranks* by it: a reference filter narrows a result set and never reorders it, adds no evidence and never re-verifies on read. Symbol indexing, automatic extraction and context-budget packing are later milestones. **No retrieval-quality advantage over any other tool has been measured or is claimed.** The v2 evaluation set *is* now judged and this build is measured against it ([results](benchmarks/eval/results-v2.md)) — but that is one 17-query set scoring this build alone, with labels that are AI-assessed, AI-audited twice and human-authorised, with no human audit at label level. No comparison against another system has been run.
 > **Nor has any end-to-end benefit to an agent been shown.** The A1 held-out agent comparison
