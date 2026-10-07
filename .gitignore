@@ -15,6 +15,7 @@ pytest-of-*/
 .venv-sqlite/
 .venv*/
 .idea/
+.codex/config.toml
 
 # internal: unapproved planning draft and build metadata
 docs/plans/milestone-b.md

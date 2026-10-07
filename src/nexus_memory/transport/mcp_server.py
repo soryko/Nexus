@@ -228,7 +228,7 @@ def _run(call: Callable[[], Any], output: type[BaseModel]) -> BaseModel | CallTo
     return output.model_validate(asdict(value))
 
 
-def create_server(service: MemoryService) -> MCPServer:
+def create_server(service: MemoryService, *, codex_checkout: Path | None = None) -> MCPServer:
     validation = SafeToolValidation()
     server = MCPServer(
         name="nexus-memory",
@@ -416,6 +416,10 @@ def create_server(service: MemoryService) -> MCPServer:
     def status() -> StatusOutput:
         return _run(service.status, StatusOutput)
 
+    if codex_checkout is not None:
+        from nexus_memory.transport.codex import register_hooks
+
+        register_hooks(server, service, codex_checkout)
     return server
 
 
@@ -454,15 +458,25 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--db", type=Path, default=None, help="SQLite database path")
     parser.add_argument("--repo", type=Path, default=None, help="Local Git checkout to bind for reference verification")
     parser.add_argument("--repo-id", default=None, help="Associate the checkout with an existing repository identity (requires --repo)")
+    parser.add_argument("--codex-project-root", type=Path, default=None,
+                        help="Enable Codex hooks and bind the launch cwd, only within this Git repository/worktrees")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
-    if args.repo_id is not None and args.repo is None:
+    if args.codex_project_root is not None and args.repo is not None:
+        parser.error("--codex-project-root and --repo are mutually exclusive")
+    if args.repo_id is not None and args.repo is None and args.codex_project_root is None:
         parser.error("--repo-id requires --repo")
     try:
+        codex_checkout = None
+        if args.codex_project_root is not None:
+            from nexus_memory.transport.codex import resolve_checkout
+
+            codex_checkout = resolve_checkout(args.codex_project_root, Path.cwd())
+            args.repo = codex_checkout
         db_path = args.db if args.db is not None else _default_db()
         _prepare_new_storage(db_path)
         scope = Scope(args.namespace, args.actor)
@@ -488,7 +502,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:
         print("startup_error: internal_error: unable to initialize storage", file=sys.stderr)
         return 1
-    create_server(service).run()
+    create_server(service, codex_checkout=codex_checkout).run()
     return 0
 
 
