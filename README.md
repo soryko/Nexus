@@ -128,6 +128,14 @@ On Windows the installed command is `<environment>\Scripts\nexus-memory.exe`. Yo
 > [!TIP]
 > Point `command` at the environment whose SQLite check passed. A client launching an interpreter below the floor only sees the transport close, because the diagnosis (`startup_error: unsupported_runtime`) goes to the server's stderr where the client is not looking.
 
+### What the server tells the model, and what it records
+
+Builds after `0.1.0a2` add three things. None changes the database schema, so they share a database with `0.1.0a2` clients in either order and at the same time.
+
+- **Instructions.** The server sends MCP server instructions (`INSTRUCTIONS` in [`mcp_server.py`](src/nexus_memory/transport/mcp_server.py)), which clients place in the model's context: when to search, when to save on its own judgment, what never to save, and that recalled memories are untrusted evidence. The text is a consultation and capture policy, so a measurement of use is a measurement of that text; record the build you measured. `--no-instructions` turns it off for a control run with the same build.
+- **Status.** `status` also reports the launch-bound `namespace` and `actor`, `service_version`, whether instructions are on, the usage-log state, and `database_location_fingerprint`: the first 12 hex characters of a SHA-256 of the database's resolved path. It tells two clients apart without disclosing the path. It identifies a location, not a store, and a predictable path can be guessed from it.
+- **Usage log (opt-in).** `--usage-log /absolute/path/usage.jsonl` appends one JSON line per tool call: the time, a random server-instance id, the client's name and version, the tool, the outcome (`ok` or the error code), the duration, and the opaque memory ids a *successful* call returned (for `search`, the hit count and up to 20 hit ids). It never records arguments, bodies, queries, tags, references or paths. A server instance is a process lifetime, not a conversation: one client process can serve several conversations. The destination is checked before the store is opened and refused if it is the database or one of its files, a symbolic link, or not a regular file. After that a failed write is counted, never raised, and `status` reports `usage_log: failing`. The file is created `0600`; memory ids still link activity across events, so treat it as private.
+
 ## Using it day to day
 
 Connecting a client is not the same as getting anything out of it. Three milestones, worth

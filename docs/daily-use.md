@@ -165,8 +165,10 @@ is not secure erasure — the bytes remain in the database file and in any backu
 | You never consult what you saved | That is a real finding. Report it rather than working around it. |
 | Consulting costs more than it returns | Tighten the budget, or stop consulting. Zero is a legitimate answer. |
 
-All three have to match, and **`status` reports none of them** — not the database path, not the
-namespace, not the actor. Read them from the client entry that launched the server.
+All three have to match, and **`status` never reports the database path**. `0.1.0a2` reports none
+of the three; later builds report the namespace and the actor, plus a database location
+fingerprint — a digest that tells two clients' databases apart without naming either. Read all
+three from the client entry that launched the server.
 
 Which database a given launch resolves to is decided by `--db`, or by the platform default when
 `--db` is omitted — see [Where the database lives](experimental-release.md#4-where-the-database-lives).
