@@ -93,6 +93,27 @@ def test_the_negative_controls_produce_no_reuse(tmp_path: Path) -> None:
     assert report["health"]["retrievals_before_capture"] == 1
 
 
+def test_a_write_that_committed_after_the_client_cancelled_is_still_the_capture(tmp_path: Path) -> None:
+    log = Log()
+    log.event("A", 1, "start")
+    log.call("A", 2, "record", "cancelled", completed="ok", delivered=False, memory_id="M", operation_id="op1")
+    log.session("B", 3, 6, [(4, "record", {"memory_id": "M", "operation_id": "op1"}),  # B retries A's write
+                            (5, "get", {"memory_id": "M"})])
+    # A delivered-false fetch is not reuse: the model never saw it.
+    log.session("C", 7, 9, [(8, "get", "cancelled", {"completed": "ok", "delivered": False, "memory_id": "M"})])
+    report = _report(tmp_path, log)
+    assert (report["records"], report["instances_captured"]) == (1, 1)
+    assert [(c["captured_by"], c["reused_by"], c["via"]) for c in report["reuse_candidates"]] == [("A", "B", "get")]
+
+
+def test_a_replayed_revision_of_a_pre_window_write_is_not_a_pilot_revision(tmp_path: Path) -> None:
+    log = Log()
+    log.session("before", -10, -5, [(-8, "revise", {"memory_id": "M", "operation_id": "rev1"})])
+    log.session("inside", 1, 4, [(2, "revise", {"memory_id": "M", "operation_id": "rev1"}),
+                                 (3, "revise", {"memory_id": "M", "operation_id": "rev2"})])
+    assert _report(tmp_path, log)["revisions"] == 1  # only rev2 was created inside the window
+
+
 def test_a_retrieval_in_the_same_instant_as_the_capture_is_still_reuse(tmp_path: Path) -> None:
     log = Log()
     log.event("A", 1, "start")

@@ -94,6 +94,12 @@ def read(log: Path) -> tuple[dict[str, Instance], list[int]]:
     return instances, malformed
 
 
+def _committed(call: dict[str, Any]) -> bool:
+    """The write happened, whether or not the client stayed to receive the result."""
+    outcome = call.get("outcome")
+    return outcome == "ok" or (outcome == "cancelled" and call.get("completed") == "ok")
+
+
 def _gaps(seqs: list[int]) -> int:
     if not seqs:
         return 0
@@ -112,7 +118,6 @@ def summarize(log: Path, since: datetime, until: datetime | None = None) -> dict
         return [call for call in instance.calls if until is None or call["_when"] < until]
 
     outcomes: Counter = Counter()
-    revise_operations: set[str] = set()
     consulted = 0
     for instance in window:
         did_consult = False
@@ -121,33 +126,35 @@ def summarize(log: Path, since: datetime, until: datetime | None = None) -> dict
             outcomes[f"{tool}:{outcome}"] += 1
             if outcome == "ok" and tool in CONSULT_TOOLS:
                 did_consult = True
-            if outcome == "ok" and tool == "revise" and isinstance(call.get("operation_id"), str):
-                revise_operations.add(call["operation_id"])
         consulted += did_consult
 
-    # An operation's first appearance is its capture; every later appearance is a replay. That is
-    # decided over the whole log, in call order, before the window is applied: a replay inside the
-    # window of a write made before it must not count as a pilot capture, and a replaying instance
-    # may have started earlier than the one that wrote. Only first captures inside the window count.
-    first: dict[str, tuple[datetime, str, dict[str, Any]]] = {}
-    for when, key, call in sorted(
-            ((call["_when"], instance.key, call) for instance in instances.values() for call in instance.calls
-             if call.get("tool") == "record" and call.get("outcome") == "ok" and isinstance(call.get("operation_id"), str)),
-            key=lambda item: item[0]):
-        first.setdefault(call["operation_id"], (when, key, call))
     in_window = {instance.key for instance in window}
+
+    def first_in_window(tool: str) -> list[tuple[str, datetime, str, dict[str, Any]]]:
+        # An operation's first appearance is the write; every later appearance is a replay. That is
+        # decided over the whole log, in call order, before the window is applied: a replay inside the
+        # window of a write made before it is not a pilot write, and a replaying instance may have
+        # started earlier than the one that wrote. Only first appearances inside the window count.
+        first: dict[str, tuple[datetime, str, dict[str, Any]]] = {}
+        for when, key, call in sorted(
+                ((call["_when"], instance.key, call) for instance in instances.values() for call in instance.calls
+                 if call.get("tool") == tool and _committed(call) and isinstance(call.get("operation_id"), str)),
+                key=lambda item: item[0]):
+            first.setdefault(call["operation_id"], (when, key, call))
+        return [(operation, when, key, call) for operation, (when, key, call) in sorted(first.items(), key=lambda item: item[1][0])
+                if key in in_window and (until is None or when < until)]
+
     captures: dict[str, tuple[str, datetime]] = {}   # memory_id -> (instance, time) of its capture
     record_operations: set[str] = set()
     capturing: set[str] = set()
-    for operation, (when, key, call) in sorted(first.items(), key=lambda item: item[1][0]):
-        if key not in in_window or (until is not None and when >= until):
-            continue
+    for operation, when, key, call in first_in_window("record"):
         record_operations.add(operation)
         capturing.add(key)
         memory_id = call.get("memory_id")
         if isinstance(memory_id, str) and memory_id not in captures:
             captures[memory_id] = (key, when)
     captured = len(capturing)
+    revise_operations = {operation for operation, *_ in first_in_window("revise")}
 
     reuse: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
