@@ -207,7 +207,7 @@ class UsageLog:
     def _emit(self, event: Mapping[str, Any]) -> None:
         self.attempts += 1
         line = json.dumps(
-            {"v": FORMAT_VERSION, "ts": datetime.now(UTC).isoformat(timespec="milliseconds"),
+            {"v": FORMAT_VERSION, "ts": datetime.now(UTC).isoformat(timespec="microseconds"),
              "instance": self.instance, "seq": self.attempts, **self.common, **event},
             ensure_ascii=True,
             separators=(",", ":"),

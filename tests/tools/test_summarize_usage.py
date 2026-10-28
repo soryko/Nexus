@@ -89,6 +89,38 @@ def test_the_negative_controls_produce_no_reuse(tmp_path: Path) -> None:
     report = _report(tmp_path, log)
     assert report["reuse_candidates"] == []
     assert report["records"] == 3
+    # Fetching a memory before it exists is impossible, so it is surfaced as a fault, not dropped.
+    assert report["health"]["retrievals_before_capture"] == 1
+
+
+def test_a_retrieval_in_the_same_instant_as_the_capture_is_still_reuse(tmp_path: Path) -> None:
+    log = Log()
+    log.event("A", 1, "start")
+    log.event("B", 1, "start")
+    log.call("A", 2, "record", memory_id="M", operation_id="op1")
+    log.call("B", 2, "get", memory_id="M")  # same timestamp, different server
+    report = _report(tmp_path, log)
+    assert [(c["captured_by"], c["reused_by"]) for c in report["reuse_candidates"]] == [("A", "B")]
+    assert report["health"]["retrievals_before_capture"] == 0
+
+
+def test_a_replay_of_a_write_made_before_the_window_is_not_a_pilot_capture(tmp_path: Path) -> None:
+    log = Log()
+    log.session("before", -10, -5, [(-8, "record", {"memory_id": "M", "operation_id": "op1"})])
+    log.session("replayer", 1, 4, [(2, "record", {"memory_id": "M", "operation_id": "op1"})])
+    log.session("reader", 5, 8, [(6, "get", {"memory_id": "M"})])
+    report = _report(tmp_path, log)
+    assert (report["records"], report["instances_captured"], report["reuse_candidates"]) == (0, 0, [])
+
+
+def test_calls_after_the_window_end_are_excluded_even_in_a_session_opened_inside_it(tmp_path: Path) -> None:
+    log = Log()
+    log.session("A", 1, 5, [(2, "record", {"memory_id": "M", "operation_id": "op1"})])
+    log.session("B", 10, 90, [(20, "status", {}), (70, "get", {"memory_id": "M"})])
+    report = _report(tmp_path, log, until=T0 + timedelta(minutes=60))
+    assert report["instances"] == 2
+    assert report["reuse_candidates"] == [] and report["instances_consulted"] == 0
+    assert report["calls_by_tool_outcome"] == {"record:ok": 1, "status:ok": 1}
 
 
 def test_a_replay_by_an_earlier_started_session_is_neither_a_capture_nor_an_origin(tmp_path: Path) -> None:

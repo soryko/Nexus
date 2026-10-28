@@ -107,15 +107,16 @@ def summarize(log: Path, since: datetime, until: datetime | None = None) -> dict
               if instance.opened is not None and instance.opened >= since and (until is None or instance.opened < until)]
     window.sort(key=lambda instance: instance.opened)
 
+    def calls(instance: Instance) -> list[dict[str, Any]]:
+        # A session opened inside the window can run past its end; its later calls are outside it.
+        return [call for call in instance.calls if until is None or call["_when"] < until]
+
     outcomes: Counter = Counter()
-    captures: dict[str, tuple[str, datetime]] = {}   # memory_id -> (instance, time) of its first capture
-    record_operations: set[str] = set()
     revise_operations: set[str] = set()
-    capturing: set[str] = set()
     consulted = 0
     for instance in window:
         did_consult = False
-        for call in instance.calls:
+        for call in calls(instance):
             tool, outcome = call.get("tool"), call.get("outcome")
             outcomes[f"{tool}:{outcome}"] += 1
             if outcome == "ok" and tool in CONSULT_TOOLS:
@@ -124,18 +125,24 @@ def summarize(log: Path, since: datetime, until: datetime | None = None) -> dict
                 revise_operations.add(call["operation_id"])
         consulted += did_consult
 
-    # Captures are attributed in call order across all instances, not instance by instance: a
-    # replay repeats its operation_id, and the replaying instance may have started earlier than the
-    # one that wrote it. Only the first appearance of an operation is a capture.
-    records = sorted(
-        ((call["_when"], instance.key, call) for instance in window for call in instance.calls
-         if call.get("tool") == "record" and call.get("outcome") == "ok" and isinstance(call.get("operation_id"), str)),
-        key=lambda item: item[0],
-    )
-    for when, key, call in records:
-        if call["operation_id"] in record_operations:
+    # An operation's first appearance is its capture; every later appearance is a replay. That is
+    # decided over the whole log, in call order, before the window is applied: a replay inside the
+    # window of a write made before it must not count as a pilot capture, and a replaying instance
+    # may have started earlier than the one that wrote. Only first captures inside the window count.
+    first: dict[str, tuple[datetime, str, dict[str, Any]]] = {}
+    for when, key, call in sorted(
+            ((call["_when"], instance.key, call) for instance in instances.values() for call in instance.calls
+             if call.get("tool") == "record" and call.get("outcome") == "ok" and isinstance(call.get("operation_id"), str)),
+            key=lambda item: item[0]):
+        first.setdefault(call["operation_id"], (when, key, call))
+    in_window = {instance.key for instance in window}
+    captures: dict[str, tuple[str, datetime]] = {}   # memory_id -> (instance, time) of its capture
+    record_operations: set[str] = set()
+    capturing: set[str] = set()
+    for operation, (when, key, call) in sorted(first.items(), key=lambda item: item[1][0]):
+        if key not in in_window or (until is not None and when >= until):
             continue
-        record_operations.add(call["operation_id"])
+        record_operations.add(operation)
         capturing.add(key)
         memory_id = call.get("memory_id")
         if isinstance(memory_id, str) and memory_id not in captures:
@@ -144,8 +151,9 @@ def summarize(log: Path, since: datetime, until: datetime | None = None) -> dict
 
     reuse: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
+    retrieved_before_capture = 0
     for instance in window:
-        for call in instance.calls:
+        for call in calls(instance):
             if call.get("outcome") != "ok":
                 continue
             found = []
@@ -155,8 +163,13 @@ def summarize(log: Path, since: datetime, until: datetime | None = None) -> dict
                 found = [(memory_id, "search_hit") for memory_id in call["hit_ids"] if isinstance(memory_id, str)]
             for memory_id, via in found:
                 origin = captures.get(memory_id)
-                if origin is None or origin[0] == instance.key or call["_when"] <= origin[1]:
-                    continue  # same session, or not yet captured: not reuse
+                if origin is None or origin[0] == instance.key:
+                    continue  # not captured in the window, or the same session: not reuse
+                if call["_when"] < origin[1]:
+                    # A memory can only be fetched once it exists, so this is a clock or logging fault.
+                    # An equal timestamp is not: two servers can log in the same instant.
+                    retrieved_before_capture += 1
+                    continue
                 if (memory_id, instance.key) in seen:
                     continue
                 seen.add((memory_id, instance.key))
@@ -174,7 +187,7 @@ def summarize(log: Path, since: datetime, until: datetime | None = None) -> dict
     return {
         "window": {"since": since.isoformat(), "until": until.isoformat() if until else None},
         "instances": len(window),
-        "instances_with_any_call": sum(1 for instance in window if instance.calls),
+        "instances_with_any_call": sum(1 for instance in window if calls(instance)),
         "instances_consulted": consulted,
         "instances_captured": captured,
         "records": len(record_operations),
@@ -191,6 +204,7 @@ def summarize(log: Path, since: datetime, until: datetime | None = None) -> dict
             "seq_gaps": sum(_gaps(instance.seqs) for instance in window),
             "write_failures_reported_at_stop": sum(instance.stop_failures for instance in window),
             "reopens": sum(instance.reopens for instance in window),
+            "retrievals_before_capture": retrieved_before_capture,
             "mixed_treatments": len(treatments) > 1,
         },
     }
