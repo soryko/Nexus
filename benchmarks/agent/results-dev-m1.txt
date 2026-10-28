@@ -1,0 +1,72 @@
+================================================================================================
+corpus dev-m1 -- measured labels (model-free)
+================================================================================================
+
+memory        k1      k2      k3      k4   subject
+h01      unknown unknown    true unknown   k2, k3
+h02        false   false    true   false   k2, k3
+h03      unknown unknown unknown unknown   -
+h04      unknown unknown unknown unknown   -
+h05         true    true    true    true   k2, k3
+h06         true    true    true    true   -
+h07         true    true    true    true   k2, k3
+h08         true    true    true    true   k3
+h09        false   false    true   false   k3
+h10      unknown unknown unknown unknown   -
+h11         true    true    true    true   k3
+h12      unknown unknown unknown unknown   -
+h13         true    true    true    true   k2
+m01         true    true    true    true   k1
+m02         true    true    true    true   k4
+m03         true    true   false    true   k2, k3
+m04         true    true    true    true   -
+m05        false   false   false   false   k1
+m06        false   false   false   false   k4
+x01         true    true    true    true   -
+x02         true    true    true    true   -
+x03         true    true    true    true   -
+x04         true    true    true    true   -
+x05         true    true    true    true   -
+
+LABELS (derived from the table above, not asserted)
+  k1: useful+stale
+      useful ['m01']   stale ['m05']   unsettled -
+      ranks: useful {'m01': 2}  stale {'m05': 1}  distracting=True
+  k2: useful+stale
+      useful ['h05', 'h07', 'h13', 'm03']   stale ['h02']   unsettled ['h01']
+      ranks: useful {'h05': 7, 'h07': 12, 'h13': 2, 'm03': 8}  stale {'h02': 1}  distracting=True
+  k3: useful+stale
+      useful ['h01', 'h02', 'h05', 'h07', 'h08', 'h09', 'h11']   stale ['m03']   unsettled -
+      ranks: useful {'h01': 4, 'h02': 1, 'h05': 2, 'h07': 15, 'h08': 5, 'h09': 6, 'h11': 3}  stale {'m03': 13}  distracting=False
+  k4: useful+stale
+      useful ['m02']   stale ['m06']   unsettled -
+      ranks: useful {'m02': 1}  stale {'m06': 2}  distracting=True
+
+LEAKAGE
+  memories containing a token added only by the fix: none
+  memories naming a hidden check not visible in the tree: none
+
+REACHABILITY -- the arm's own search, over a store seeded from this corpus
+  k1: 16 hit(s)  top: ['m05', 'm01', 'm02', 'x05', 'h04', 'h08']
+  k2: 15 hit(s)  top: ['h02', 'h13', 'h09', 'h01', 'x02', 'x04']
+  k3: 16 hit(s)  top: ['h02', 'h05', 'h11', 'h01', 'h08', 'h09']
+  k4: 11 hit(s)  top: ['m02', 'm06', 'x02', 'h07', 'h01', 'h13']
+
+CONDITIONS -- one frozen corpus, four subsets per task
+  cell                     n  hits  digest            top 4 / useful ranks / stale
+  k1/useful                7     2  cd0321037880d862  ['m01', 'h04']  useful={'m01': 1}  stale={}
+  k1/unnecessary           6     1  933f66cd16b1d78d  ['h04']  useful={}  stale={}
+  k1/stale                 7     2  0d1d6640c911a762  ['m05', 'h04']  useful={}  stale={'m05': 1}
+  k1/distracting          24    16  004762cab5248613  ['m05', 'm01', 'm02', 'x05']  useful={'m01': 2}  stale={'m05': 1}
+  k2/useful               10     6  97a2377854037cf2  ['h13', 'h05', 'm03', 'h04']  useful={'h05': 2, 'h07': 5, 'h13': 1, 'm03': 3}  stale={}
+  k2/unnecessary           6     2  933f66cd16b1d78d  ['h04', 'h12']  useful={}  stale={}
+  k2/stale                 7     3  7a03f97c0ecb9d6b  ['h02', 'h04', 'h12']  useful={}  stale={'h02': 1}
+  k2/distracting          24    15  004762cab5248613  ['h02', 'h13', 'h09', 'h01']  useful={'h05': 7, 'h07': 12, 'h13': 2, 'm03': 8}  stale={'h02': 1}
+  k3/useful               13    10  d3471162711b5710  ['h11', 'h08', 'h02', 'h01']  useful={'h01': 4, 'h02': 3, 'h05': 5, 'h07': 9, 'h08': 2, 'h09': 6, 'h11': 1}  stale={}
+  k3/unnecessary           6     3  933f66cd16b1d78d  ['h04', 'h03', 'h10']  useful={}  stale={}
+  k3/stale                 7     4  d1c5b637d4e0b3fd  ['h04', 'm03', 'h03', 'h10']  useful={}  stale={'m03': 2}
+  k3/distracting          24    16  004762cab5248613  ['h02', 'h05', 'h11', 'h01']  useful={'h01': 4, 'h02': 1, 'h05': 2, 'h07': 15, 'h08': 5, 'h09': 6, 'h11': 3}  stale={'m03': 13}
+  k4/useful                7     2  5c5a212855c47cfb  ['m02', 'h04']  useful={'m02': 1}  stale={}
+  k4/unnecessary           6     1  933f66cd16b1d78d  ['h04']  useful={}  stale={}
+  k4/stale                 7     2  fe69d08e25aba9aa  ['m06', 'h04']  useful={}  stale={'m06': 1}
+  k4/distracting          24    11  004762cab5248613  ['m02', 'm06', 'x02', 'h07']  useful={'m02': 1}  stale={'m06': 2}

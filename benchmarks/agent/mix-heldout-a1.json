@@ -1,0 +1,69 @@
+{
+ "_comment": [
+  "The held-out task-corpus mix, declared under the rules settled in mix-declaration-a1.md.",
+  "Nothing in the corpus or the task set changed to produce it: the corpus digest below is",
+  "the one freeze_corpus.py computed from the capture store, and the task keys are exactly",
+  "the registered held-out set.",
+  "",
+  "THE RULE USED FOR CATEGORIES, stated so it can be argued with. A task's category reflects",
+  "TASK-SPECIFIC memory content. Five of the thirteen memories (h03, h04, h06, h10, h12) are",
+  "generic tooling and testing procedure -- how to run the suite in this sandbox, what the",
+  "CliRunner idiom is. They are support for any task in this repository. Counting them",
+  "towards a category would make every task 'useful' and empty the category of meaning, so",
+  "they are declared as support where they apply and do not set any task's category.",
+  "",
+  "h1 is 'outdated' on measured evidence, not judgement. h09 describes a reconciliation in",
+  "Option.__init__ ('if self.default is True and self.flag_value is not UNSET') that is",
+  "present in c1's checkout, where it was captured, and ABSENT from all four held-out",
+  "fixtures -- the comment citing issue 3024 survives there, the code does not. h02 describes",
+  "_flag_needs_value as derived from 'default is UNSET' alone, which is the pre-fix form; all",
+  "four held-out fixtures carry c1's own fix, 'flag_value is not UNSET or self.default is",
+  "UNSET'. Both were true when captured and both are wrong in the checkout an arm reads. Both",
+  "bear directly on h1, which is about arbitration between two flags and an explicit default.",
+  "Neither was authored, edited or selected for this property; it follows from the",
+  "chronological capture/held-out split.",
+  "",
+  "No memory is declared NECESSARY for any task. Nothing in the corpus supplies a fact a",
+  "held-out fix requires. Per section 7b that means this corpus can measure neither retrieval",
+  "efficiency nor retrieval necessity on a required fact, and freeze_corpus.py reports it."
+ ],
+ "declared_utc": "2026-09-12T13:05:00+00:00",
+ "declared_against_corpus_digest": "9ae2a9f268dd894d",
+ "declarer": {
+  "name": "Claude Opus 5, the session that built the harness and authored the prompts",
+  "read_heldout_prompts": true,
+  "authored_heldout_prompts": true,
+  "authored_harness": true,
+  "read_freeze_registration": true,
+  "note": "Permitted by freeze-heldout-a1.md section 2 as read in mix-declaration-a1.md: declaring is not selecting, provided the corpus is invariant across the declaration. The declarer did not author, edit or select any memory -- all thirteen were written by the capture sessions of attempt 3, whose traces are preserved at nexus-a1-fixtures/capture-attempt-3/. Independence between the prompt author and the mix declarer would strengthen a later evaluation and is not an A1 requirement."
+ },
+ "tasks": {
+  "h1": {
+   "memory": "outdated",
+   "relevance": {
+    "h09": "outdated", "h02": "outdated",
+    "h01": "support", "h05": "support", "h07": "support", "h11": "support", "h13": "support"
+   },
+   "discoverability": {},
+   "note": "Both outdated memories concern Option.__init__ flag/default handling, which is exactly this task's subject. The correct behaviour is to notice they no longer describe the checkout and not follow them."
+  },
+  "h2": {
+   "memory": "unnecessary",
+   "relevance": {"h06": "support", "h10": "support"},
+   "discoverability": {},
+   "note": "Nothing in the corpus concerns metavar or usage-line rendering. h06 and h10 are the generic tooling memories; they happen to name tests/test_basic.py, which is where this task's hidden checks live, but they describe a collection failure in the EXISTING suite and disclose nothing about the checks."
+  },
+  "h3": {
+   "memory": "unnecessary",
+   "relevance": {"h04": "support", "h12": "support"},
+   "discoverability": {},
+   "note": "Nothing in the corpus concerns the automatic help option or a parameter name colliding with it. Only the generic CliRunner testing procedure applies."
+  },
+  "h4": {
+   "memory": "useful",
+   "relevance": {"h01": "support", "h08": "support"},
+   "discoverability": {},
+   "note": "h01 names the sentinel type and states that it and its documented meaning live in src/click/_utils.py, which is the file this fix touches. That is retrieval efficiency -- it points at where to look -- not a fact the fix requires, so it is support rather than necessary."
+  }
+ }
+}

@@ -1,0 +1,13 @@
+(version 1)
+(allow default)
+
+; ---- network: deny everything, then re-admit only the local forwarder ----
+(deny network-outbound)
+(allow network-outbound (remote ip "localhost:*"))
+
+; ---- filesystem: the arm may not read the answers or its siblings ----
+(deny file-read* (subpath "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4iso/base/checks"))
+(deny file-read* (subpath "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4iso/arms/baseline"))
+(deny file-read* (subpath "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4iso/arms/nexus"))
+(deny file-read* (subpath "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4iso/scoring"))
+(deny file-read* (subpath "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/click"))

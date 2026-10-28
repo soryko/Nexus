@@ -1,0 +1,18 @@
+{
+ "source_clone": "/Users/soko/Cerebros/nexus-a1-fixtures/click",
+ "pytest_python": "/Users/soko/Cerebros/nexus-a1-fixtures/.venv-click/bin/python",
+ "venv_python": "/Users/soko/Cerebros/nexus-memory/.venv-sqlite/bin/python",
+ "nexus_server": "/Users/soko/Cerebros/nexus-memory/.venv-sqlite/bin/nexus-memory",
+ "forwarder_port": 8899,
+ "corpus_size": 24,
+ "max_turns": 45,
+ "wall_clock_s": 600,
+ "memory_probe_query": "click option parameter",
+ "capture_max_turns": 60,
+ "capture_wall_clock_s": 1200,
+ "store_master": "/Users/soko/Cerebros/nexus-a1-fixtures/dev-m1-corpus/nexus-dev-m1.db",
+ "corpus_digest": "ae03ede5f19a3c74",
+ "notes_file": "notes-dev-m1.md",
+ "prompts": "prompts-a3.json",
+ "config_version": "a3-v1"
+}

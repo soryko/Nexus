@@ -1,0 +1,28 @@
+### d4  (run-dev-d4-isolated)
+--- baseline ---
+    delivered any : 0/13     repeat deliveries: 0
+    full bodies   : 0  (0 bytes)
+    excerpt only  : 0  (0 bytes across all excerpts)
+    necessary        full=[] excerpt_only=[]
+    useful support   full=[] excerpt_only=[]
+    outdated         full=[] excerpt_only=[]
+    irrelevant       full=[] excerpt_only=[]
+    necessary-memory coverage: N/A (no necessary MEMORY declared; see the report on repository evidence)
+--- nexus ---
+    delivered any : 4/13     repeat deliveries: 8
+    full bodies   : 4  (813 bytes)
+    excerpt only  : 0  (385 bytes across all excerpts)
+    necessary        full=[] excerpt_only=[]
+    useful support   full=['c07', 'c08'] excerpt_only=[]
+    outdated         full=['c13'] excerpt_only=[]
+    irrelevant       full=['c12'] excerpt_only=[]
+    necessary-memory coverage: N/A (no necessary MEMORY declared; see the report on repository evidence)
+--- notes ---
+    delivered any : 13/13     repeat deliveries: 13
+    full bodies   : 13  (2776 bytes)
+    excerpt only  : 0  (0 bytes across all excerpts)
+    necessary        full=[] excerpt_only=[]
+    useful support   full=['c07', 'c08', 'c09'] excerpt_only=[]
+    outdated         full=['c13'] excerpt_only=[]
+    irrelevant       full=['c01', 'c02', 'c03', 'c04', 'c05', 'c06', 'c10', 'c11', 'c12'] excerpt_only=[]
+    necessary-memory coverage: N/A (no necessary MEMORY declared; see the report on repository evidence)

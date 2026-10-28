@@ -1,0 +1,114 @@
+{
+ "schedule_version": 1,
+ "seed": 20260919,
+ "tasks": [
+  "k1",
+  "k2",
+  "k3",
+  "k4"
+ ],
+ "attempts": 2,
+ "arms": [
+  "A",
+  "B"
+ ],
+ "frozen_utc": "2026-09-19T19:40:41.215444+00:00",
+ "schedule_digest": "de2821a294bddbc55a327b0d3b931ce9baf78239bbf0c8e777d1e0baff099c43",
+ "counterbalance": {
+  "pairs": 8,
+  "distinct_orders": 2,
+  "orders_used": [
+   "A->B",
+   "B->A"
+  ],
+  "times_each_arm_ran_first": {
+   "A": 4,
+   "B": 4
+  },
+  "position_counts": {
+   "A": [
+    4,
+    4
+   ],
+   "B": [
+    4,
+    4
+   ]
+  },
+  "every_arm_appears_once_per_pair": true
+ },
+ "rows": [
+  {
+   "index": 0,
+   "task": "k1",
+   "attempt": 1,
+   "order": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "index": 1,
+   "task": "k1",
+   "attempt": 2,
+   "order": [
+    "A",
+    "B"
+   ]
+  },
+  {
+   "index": 2,
+   "task": "k2",
+   "attempt": 1,
+   "order": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "index": 3,
+   "task": "k2",
+   "attempt": 2,
+   "order": [
+    "A",
+    "B"
+   ]
+  },
+  {
+   "index": 4,
+   "task": "k3",
+   "attempt": 1,
+   "order": [
+    "A",
+    "B"
+   ]
+  },
+  {
+   "index": 5,
+   "task": "k3",
+   "attempt": 2,
+   "order": [
+    "A",
+    "B"
+   ]
+  },
+  {
+   "index": 6,
+   "task": "k4",
+   "attempt": 1,
+   "order": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "index": 7,
+   "task": "k4",
+   "attempt": 2,
+   "order": [
+    "B",
+    "A"
+   ]
+  }
+ ]
+}

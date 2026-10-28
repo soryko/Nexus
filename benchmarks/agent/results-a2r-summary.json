@@ -1,0 +1,30 @@
+{
+ "scope": "A2-R development sweep",
+ "cap_tokens": 20000000,
+ "cap_is_soft": true,
+ "config_version": "calib-v3",
+ "tokens_known": 14942135,
+ "tokens_allowance": 0,
+ "tokens_budgeted": 14942135,
+ "allowance_arm_runs": [],
+ "allowance_superseded_arm_runs": [],
+ "allowance_rejected": [],
+ "arm_runs": 12,
+ "scored_arm_runs": 12,
+ "excluded_arm_runs": 0,
+ "rows_with_no_scored_arm_run": [],
+ "unresolved_arm_runs": [],
+ "usd_unprovenanced": 16.6543,
+ "row_reserve_used": {
+  "45": 4717053
+ },
+ "stopping_reason": "completed",
+ "stopped_at": null,
+ "budget_overshoot_tokens": 0,
+ "overshoot_tokens": 0,
+ "overshoot_certain": true,
+ "consumption_certain": true,
+ "schedule_digest": "0a352b82ced14f10e85d50d17989ac38e02d4d9582c032ed743a75554a6a5d97",
+ "seed": 20260914,
+ "written_utc": "2026-09-19T14:23:00+00:00"
+}

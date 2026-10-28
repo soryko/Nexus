@@ -1,0 +1,67 @@
+diff --git a/src/click/core.py b/src/click/core.py
+index d2db291..3d66627 100644
+--- a/src/click/core.py
++++ b/src/click/core.py
+@@ -3570,11 +3570,18 @@ class Argument(Parameter):
+             return self.metavar
+         var = self.type.get_metavar(param=self, ctx=ctx)
+         if not var:
++            # The type did not provide a metavar, so fall back to the argument
++            # name. Only this synthesized metavar needs the optional brackets
++            # added; types that render their own metavar (such as Choice or
++            # DateTime) already indicate whether they are optional, so wrapping
++            # them again would double the brackets.
+             var = self.name.upper()
+-        if self.deprecated:
++            if self.deprecated:
++                var += "!"
++            if not self.required:
++                var = f"[{var}]"
++        elif self.deprecated:
+             var += "!"
+-        if not self.required:
+-            var = f"[{var}]"
+         if self.nargs != 1:
+             var += "..."
+         return var
+diff --git a/tests/test_arguments.py b/tests/test_arguments.py
+index 6015282..4a71c36 100644
+--- a/tests/test_arguments.py
++++ b/tests/test_arguments.py
+@@ -332,6 +332,36 @@ def test_argument_metavar_marks_optional(runner, kwargs, expected):
+     assert result.output.splitlines()[0] == f"Usage: cli [OPTIONS] {expected}"
+ 
+ 
++@pytest.mark.parametrize(
++    ("type_", "kwargs", "expected"),
++    [
++        (click.Choice(["foo", "bar", "baz"]), {}, "{foo|bar|baz}"),
++        (click.Choice(["foo", "bar", "baz"]), {"required": False}, "[foo|bar|baz]"),
++        (click.Choice(["foo", "bar", "baz"]), {"nargs": -1}, "[foo|bar|baz]..."),
++        (click.DateTime(["%Y-%m-%d"]), {}, "[%Y-%m-%d]"),
++        (click.DateTime(["%Y-%m-%d"]), {"required": False}, "[%Y-%m-%d]"),
++        (click.DateTime(["%Y-%m-%d"]), {"nargs": -1}, "[%Y-%m-%d]..."),
++    ],
++)
++def test_argument_metavar_rendered_by_type_bracketed_once(
++    runner, type_, kwargs, expected
++):
++    """A type that renders its own metavar is not bracketed a second time.
++
++    Optional arguments whose type already includes brackets (``Choice`` or
++    ``DateTime``) used to render ``[[foo|bar|baz]]`` in the usage line.
++    """
++
++    @click.command()
++    @click.argument("method", type=type_, **kwargs)
++    def cli(method):
++        pass
++
++    result = runner.invoke(cli, ["--help"])
++    assert result.exit_code == 0, result.output
++    assert result.output.splitlines()[0] == f"Usage: cli [OPTIONS] {expected}"
++
++
+ @pytest.mark.parametrize("deprecated", [True, "USE B INSTEAD"])
+ def test_deprecated_warning(runner, deprecated):
+     @click.command()

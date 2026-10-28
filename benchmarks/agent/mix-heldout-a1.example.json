@@ -1,0 +1,51 @@
+{
+ "_comment": [
+  "Template for the held-out task-corpus mix. Copy to mix-heldout-a1.json, fill it in from",
+  "the FROZEN corpus, and pass it to freeze_corpus.py with --mix. What declaring may and may",
+  "not touch is settled in mix-declaration-a1.md; the short form is that it may change",
+  "nothing -- not a memory, not the task set.",
+  "",
+  "Four things are recorded before any held-out arm runs, and freeze_corpus.py refuses the",
+  "declaration if any is missing:",
+  "",
+  "  declared_against_corpus_digest   the frozen corpus's row digest. It must equal the one",
+  "                                   freeze_corpus.py computes, which is what ties the",
+  "                                   declaration to a corpus that did not change under it.",
+  "  tasks.<task>.memory              the category, per task: useful | unnecessary |",
+  "                                   outdated. All three must have an instance across the",
+  "                                   set; a category with none is reported UNMET and left",
+  "                                   that way. The task keys must be exactly the registered",
+  "                                   held-out set -- a declaration may not reselect tasks.",
+  "  tasks.<task>.relevance           the supporting memory references: corpus id ->",
+  "                                   necessary | support | outdated. A memory absent from a",
+  "                                   task's map is irrelevant to it, which is what gives the",
+  "                                   delivered-context figures a denominator.",
+  "  declarer                         prior exposure, stated rather than avoided. The",
+  "                                   registered rule lets the existing author declare the",
+  "                                   mix, so what makes it admissible is that the exposure",
+  "                                   is on the record.",
+  "",
+  "discoverability is required for every 'necessary' fact (protocol-a1 section 7b):",
+  "discoverable means the fixture contains the fact, absent means it does not. An advantage",
+  "on a discoverable fact measures retrieval efficiency, not supplied knowledge.",
+  "",
+  "Corpus ids (h01, h02 ...) are assigned by freeze_corpus.py in capture order."
+ ],
+ "declared_utc": "FILL IN -- must precede every arm-run",
+ "declared_against_corpus_digest": "FILL IN -- the row digest freeze_corpus.py reports",
+ "declarer": {
+  "name": "FILL IN",
+  "read_heldout_prompts": true,
+  "authored_heldout_prompts": true,
+  "authored_harness": true,
+  "read_freeze_registration": true,
+  "note": "Permitted by freeze-heldout-a1.md section 2 as read in mix-declaration-a1.md: declaring is not selecting, provided the corpus is invariant across the declaration. Independence would strengthen a later evaluation and is not an A1 requirement."
+ },
+ "tasks": {
+  "h1": {"memory": "useful", "relevance": {"h01": "necessary"},
+         "discoverability": {"h01": "absent"}},
+  "h2": {"memory": "useful", "relevance": {"h02": "support"}},
+  "h3": {"memory": "unnecessary", "relevance": {}},
+  "h4": {"memory": "outdated", "relevance": {"h03": "outdated"}}
+ }
+}

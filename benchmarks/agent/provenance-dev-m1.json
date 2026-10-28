@@ -1,0 +1,810 @@
+{
+ "corpus_version": "dev-m1",
+ "corpus_sha256": "2d2e6962a60f4633acc7044d0af097819669f3ef5bd1dcabd5da9cd4a8dd5df8",
+ "memories_reviewed": 24,
+ "memories_in_corpus": 24,
+ "fix_locality_state": "measured",
+ "fix_locality_rule": "identifiers the memory presents AS CODE (backticked, or underscore/CamelCase shaped) that also appear on a changed line of that task's fix. Weaker than the added-identifier scan and, unlike it, able to fire.",
+ "conclusion": "reviewed provenance with limited automated leakage checks",
+ "headline": "The one memory this review flags -- `m02`, which states both halves of k4's defect in the same two clauses as the fix's own rationale comment -- is a memory the fix-locality scan shows NOTHING for, on k4 or on any task. Every identifier in it predates the fix, and the four words it shares with k4's changed lines (`invocation`, `option`, `order`, `parameters`) are English prose from an added docstring, which is why they are excluded. Meanwhile the scan's own hits are `close`, `flag_value`, `is_flag`, `default`, `value`, `UNSET` and `click` -- the working vocabulary of every memory about option handling, on-subject and off. So on this task set the scan flags memories the reading clears and clears the memory the reading flags. That is the concrete form of the general claim that identifier scans cannot establish semantic leakage, and it is why the conclusion rests on reading.",
+ "not_established": [
+  "that no memory conveys a fix semantically -- reading is not measurement",
+  "that the derived memories' author did not read the fix diffs; no artifact records either way",
+  "that a `true` probe certifies every sentence of the prose it labels"
+ ],
+ "rows": [
+  {
+   "id": "h01",
+   "provenance": "captured",
+   "kind": "constraint",
+   "subject": [
+    "k2",
+    "k3"
+   ],
+   "source": "captured memory 69d96f6a-4a1b-4c71-8776-980b2c9ae317",
+   "exposure": "captured during A1's corpus capture, by a session that had not read A1's held-out tasks and for which k1-k4 DID NOT YET EXIST as a task set. That is a weaker claim than 'written blind to k1-k4' and is stated as the weaker one. Written against a Click revision NEWER than k1/k2/k4's checkouts.",
+   "register": "describes existing behaviour",
+   "suitable": true,
+   "flagged": false,
+   "note": "Two notions of 'used without a value'. k2's fix hoists a `flag_value` assignment out of a `type is None` branch; nothing here states that.",
+   "probe_file": "src/click/_utils.py",
+   "probe_patterns": [
+    "FLAG_NEEDS_VALUE"
+   ],
+   "probe_supports_n": 1,
+   "prose_claims_n": 4,
+   "truth": {
+    "k1": "unknown",
+    "k2": "unknown",
+    "k3": "true",
+    "k4": "unknown"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [
+     "flag_value",
+     "is_flag"
+    ],
+    "k3": [],
+    "k4": []
+   }
+  },
+  {
+   "id": "h02",
+   "provenance": "captured",
+   "kind": "decision",
+   "subject": [
+    "k2",
+    "k3"
+   ],
+   "source": "captured memory 72e74193-1089-4fa3-8569-4f6477f9c31f",
+   "exposure": "captured during A1's corpus capture, by a session that had not read A1's held-out tasks and for which k1-k4 DID NOT YET EXIST as a task set. That is a weaker claim than 'written blind to k1-k4' and is stated as the weaker one. Written against a Click revision NEWER than k1/k2/k4's checkouts.",
+   "register": "describes existing behaviour",
+   "suitable": true,
+   "flagged": false,
+   "note": "Auto-detection in `Option.__init__`. REFUTED at k2's checkout -- a version mismatch, not an observed rotting.",
+   "probe_file": "src/click/core.py",
+   "probe_patterns": [
+    "_flag_needs_value = self\\.default is UNSET"
+   ],
+   "probe_supports_n": 1,
+   "prose_claims_n": 3,
+   "truth": {
+    "k1": "false",
+    "k2": "false",
+    "k3": "true",
+    "k4": "false"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [
+     "default",
+     "flag_value",
+     "is_flag"
+    ],
+    "k3": [
+     "UNSET"
+    ],
+    "k4": []
+   }
+  },
+  {
+   "id": "h03",
+   "provenance": "captured",
+   "kind": "failure",
+   "subject": [],
+   "source": "captured memory d4d9627a-20d4-44fc-8fe6-2d584ec5cc24",
+   "exposure": "captured during A1's corpus capture, by a session that had not read A1's held-out tasks and for which k1-k4 DID NOT YET EXIST as a task set. That is a weaker claim than 'written blind to k1-k4' and is stated as the weaker one. Written against a Click revision NEWER than k1/k2/k4's checkouts.",
+   "register": "diagnostic guidance",
+   "suitable": true,
+   "flagged": false,
+   "note": "`uv run` fails in the sandbox. Environment, not mechanism.",
+   "probe_file": null,
+   "probe_patterns": [],
+   "probe_supports_n": 0,
+   "prose_claims_n": 4,
+   "truth": {
+    "k1": "unknown",
+    "k2": "unknown",
+    "k3": "unknown",
+    "k4": "unknown"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [],
+    "k3": [],
+    "k4": []
+   }
+  },
+  {
+   "id": "h04",
+   "provenance": "captured",
+   "kind": "procedure",
+   "subject": [],
+   "source": "captured memory 0f7a86dd-6127-4185-a52d-95e5d70653ed",
+   "exposure": "captured during A1's corpus capture, by a session that had not read A1's held-out tasks and for which k1-k4 DID NOT YET EXIST as a task set. That is a weaker claim than 'written blind to k1-k4' and is stated as the weaker one. Written against a Click revision NEWER than k1/k2/k4's checkouts.",
+   "register": "diagnostic guidance",
+   "suitable": true,
+   "flagged": false,
+   "note": "Parametrised option tests through CliRunner. Procedure.",
+   "probe_file": null,
+   "probe_patterns": [],
+   "probe_supports_n": 0,
+   "prose_claims_n": 2,
+   "truth": {
+    "k1": "unknown",
+    "k2": "unknown",
+    "k3": "unknown",
+    "k4": "unknown"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [
+     "flag_value"
+    ],
+    "k3": [
+     "value"
+    ],
+    "k4": [
+     "click",
+     "declaration",
+     "option"
+    ]
+   }
+  },
+  {
+   "id": "h05",
+   "provenance": "captured",
+   "kind": "constraint",
+   "subject": [
+    "k2",
+    "k3"
+   ],
+   "source": "captured memory 7ffea59b-7e95-4868-a48a-ad3a4353e5b9",
+   "exposure": "captured during A1's corpus capture, by a session that had not read A1's held-out tasks and for which k1-k4 DID NOT YET EXIST as a task set. That is a weaker claim than 'written blind to k1-k4' and is stated as the weaker one. Written against a Click revision NEWER than k1/k2/k4's checkouts.",
+   "register": "describes existing behaviour",
+   "suitable": true,
+   "flagged": false,
+   "note": "`default` and `flag_value` answer different questions. The k2 fix makes `flag_value` derive from `default` in one more case; this says the opposite of a rule, not the change.",
+   "probe_file": "src/click/core.py",
+   "probe_patterns": [
+    "flag_value",
+    "default"
+   ],
+   "probe_supports_n": 2,
+   "prose_claims_n": 2,
+   "truth": {
+    "k1": "true",
+    "k2": "true",
+    "k3": "true",
+    "k4": "true"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [
+     "default",
+     "flag_value"
+    ],
+    "k3": [],
+    "k4": []
+   }
+  },
+  {
+   "id": "h06",
+   "provenance": "captured",
+   "kind": "failure",
+   "subject": [],
+   "source": "captured memory 5d520c47-c578-4f1b-a7f6-6342c164c874",
+   "exposure": "captured during A1's corpus capture, by a session that had not read A1's held-out tasks and for which k1-k4 DID NOT YET EXIST as a task set. That is a weaker claim than 'written blind to k1-k4' and is stated as the weaker one. Written against a Click revision NEWER than k1/k2/k4's checkouts.",
+   "register": "diagnostic guidance",
+   "suitable": true,
+   "flagged": false,
+   "note": "`filterwarnings = error` aborts collection. Environment.",
+   "probe_file": "pyproject.toml",
+   "probe_patterns": [
+    "filterwarnings"
+   ],
+   "probe_supports_n": 1,
+   "prose_claims_n": 3,
+   "truth": {
+    "k1": "true",
+    "k2": "true",
+    "k3": "true",
+    "k4": "true"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [],
+    "k3": [],
+    "k4": []
+   }
+  },
+  {
+   "id": "h07",
+   "provenance": "captured",
+   "kind": "decision",
+   "subject": [
+    "k2",
+    "k3"
+   ],
+   "source": "captured memory a151d3c1-8c56-4109-b3cd-312c5d4d89e4",
+   "exposure": "captured during A1's corpus capture, by a session that had not read A1's held-out tasks and for which k1-k4 DID NOT YET EXIST as a task set. That is a weaker claim than 'written blind to k1-k4' and is stated as the weaker one. Written against a Click revision NEWER than k1/k2/k4's checkouts.",
+   "register": "describes existing behaviour",
+   "suitable": true,
+   "flagged": false,
+   "note": "Parser token consumption. Neither k2's nor k3's fix touches the parser.",
+   "probe_file": "src/click/parser.py",
+   "probe_patterns": [
+    "_get_value_from_state"
+   ],
+   "probe_supports_n": 1,
+   "prose_claims_n": 3,
+   "truth": {
+    "k1": "true",
+    "k2": "true",
+    "k3": "true",
+    "k4": "true"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [],
+    "k3": [],
+    "k4": []
+   }
+  },
+  {
+   "id": "h08",
+   "provenance": "captured",
+   "kind": "constraint",
+   "subject": [
+    "k3"
+   ],
+   "source": "captured memory d9392ff7-c7da-4c3a-994d-8c609f2fdc41",
+   "exposure": "captured during A1's corpus capture, by a session that had not read A1's held-out tasks and for which k1-k4 DID NOT YET EXIST as a task set. That is a weaker claim than 'written blind to k1-k4' and is stated as the weaker one. Written against a Click revision NEWER than k1/k2/k4's checkouts.",
+   "register": "describes existing behaviour",
+   "suitable": true,
+   "flagged": false,
+   "note": "Callable defaults. k3's fix is about WHEN `UNSET` becomes `None`, not about calling factories.",
+   "probe_file": "src/click/core.py",
+   "probe_patterns": [
+    "def get_default",
+    "call: bool"
+   ],
+   "probe_supports_n": 2,
+   "prose_claims_n": 5,
+   "truth": {
+    "k1": "true",
+    "k2": "true",
+    "k3": "true",
+    "k4": "true"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [],
+    "k3": [],
+    "k4": []
+   }
+  },
+  {
+   "id": "h09",
+   "provenance": "captured",
+   "kind": "decision",
+   "subject": [
+    "k3"
+   ],
+   "source": "captured memory 833f2840-e0bc-4d8b-b281-1d0e47361edc",
+   "exposure": "captured during A1's corpus capture, by a session that had not read A1's held-out tasks and for which k1-k4 DID NOT YET EXIST as a task set. That is a weaker claim than 'written blind to k1-k4' and is stated as the weaker one. Written against a Click revision NEWER than k1/k2/k4's checkouts.",
+   "register": "describes existing behaviour",
+   "suitable": true,
+   "flagged": false,
+   "note": "The issue-3024 reconciliation. k3's fix cites issues 3071/3079 and is a different mechanism; naming an issue number is not naming this one.",
+   "probe_file": "src/click/core.py",
+   "probe_patterns": [
+    "3024"
+   ],
+   "probe_supports_n": 1,
+   "prose_claims_n": 5,
+   "truth": {
+    "k1": "false",
+    "k2": "false",
+    "k3": "true",
+    "k4": "false"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [
+     "flag_value"
+    ],
+    "k3": [],
+    "k4": []
+   }
+  },
+  {
+   "id": "h10",
+   "provenance": "captured",
+   "kind": "failure",
+   "subject": [],
+   "source": "captured memory 8c354573-e68d-4f02-8a38-8935b8ffc61a",
+   "exposure": "captured during A1's corpus capture, by a session that had not read A1's held-out tasks and for which k1-k4 DID NOT YET EXIST as a task set. That is a weaker claim than 'written blind to k1-k4' and is stated as the weaker one. Written against a Click revision NEWER than k1/k2/k4's checkouts.",
+   "register": "diagnostic guidance",
+   "suitable": true,
+   "flagged": false,
+   "note": "Running the suite outside `uv`. Environment.",
+   "probe_file": null,
+   "probe_patterns": [],
+   "probe_supports_n": 0,
+   "prose_claims_n": 6,
+   "truth": {
+    "k1": "unknown",
+    "k2": "unknown",
+    "k3": "unknown",
+    "k4": "unknown"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [],
+    "k3": [],
+    "k4": []
+   }
+  },
+  {
+   "id": "h11",
+   "provenance": "captured",
+   "kind": "constraint",
+   "subject": [
+    "k3"
+   ],
+   "source": "captured memory 7ae7099b-48a6-4e6d-9bed-e9b63180f3db",
+   "exposure": "captured during A1's corpus capture, by a session that had not read A1's held-out tasks and for which k1-k4 DID NOT YET EXIST as a task set. That is a weaker claim than 'written blind to k1-k4' and is stated as the weaker one. Written against a Click revision NEWER than k1/k2/k4's checkouts.",
+   "register": "describes existing behaviour",
+   "suitable": true,
+   "flagged": false,
+   "note": "The `consume_value` precedence chain. k3's fix changes the same method, so this is the captured memory nearest a fix site -- but it states the precedence ORDER, and the fix changes the UNSET normalisation POINT. Nearest, and still not the repair.",
+   "probe_file": "src/click/core.py",
+   "probe_patterns": [
+    "def consume_value",
+    "default_map"
+   ],
+   "probe_supports_n": 2,
+   "prose_claims_n": 4,
+   "truth": {
+    "k1": "true",
+    "k2": "true",
+    "k3": "true",
+    "k4": "true"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [],
+    "k3": [],
+    "k4": []
+   }
+  },
+  {
+   "id": "h12",
+   "provenance": "captured",
+   "kind": "procedure",
+   "subject": [],
+   "source": "captured memory c2a4bd0d-53e8-417d-a15d-c6b04e28cbd0",
+   "exposure": "captured during A1's corpus capture, by a session that had not read A1's held-out tasks and for which k1-k4 DID NOT YET EXIST as a task set. That is a weaker claim than 'written blind to k1-k4' and is stated as the weaker one. Written against a Click revision NEWER than k1/k2/k4's checkouts.",
+   "register": "diagnostic guidance",
+   "suitable": true,
+   "flagged": false,
+   "note": "CliRunner as the exercise path. Procedure.",
+   "probe_file": null,
+   "probe_patterns": [],
+   "probe_supports_n": 0,
+   "prose_claims_n": 3,
+   "truth": {
+    "k1": "unknown",
+    "k2": "unknown",
+    "k3": "unknown",
+    "k4": "unknown"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [],
+    "k3": [],
+    "k4": []
+   }
+  },
+  {
+   "id": "h13",
+   "provenance": "captured",
+   "kind": "decision",
+   "subject": [
+    "k2"
+   ],
+   "source": "captured memory ee455fb1-3547-438f-8336-8a0d9852bb04",
+   "exposure": "captured during A1's corpus capture, by a session that had not read A1's held-out tasks and for which k1-k4 DID NOT YET EXIST as a task set. That is a weaker claim than 'written blind to k1-k4' and is stated as the weaker one. Written against a Click revision NEWER than k1/k2/k4's checkouts.",
+   "register": "describes existing behaviour",
+   "suitable": true,
+   "flagged": false,
+   "note": "`flag_value` as a value throughout, including type inference when no explicit type is given -- the PRE-fix coupling k2's fix breaks. It describes the state the fix changes, which is the opposite of conveying it.",
+   "probe_file": "src/click/core.py",
+   "probe_patterns": [
+    "convert_type\\(None, flag_value\\)"
+   ],
+   "probe_supports_n": 1,
+   "prose_claims_n": 5,
+   "truth": {
+    "k1": "true",
+    "k2": "true",
+    "k3": "true",
+    "k4": "true"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [
+     "flag_value"
+    ],
+    "k3": [],
+    "k4": []
+   }
+  },
+  {
+   "id": "m01",
+   "provenance": "derived",
+   "kind": "constraint",
+   "subject": [
+    "k1"
+   ],
+   "source": "src/click/core.py at each task's own checkout",
+   "exposure": "written during dev-m1's construction by an author who HAD seen k1-k4's subjects and their pre-fix trees. Whether that author also read the fix diffs is not established by any artifact, and is not assumed either way.",
+   "register": "describes existing behaviour",
+   "suitable": true,
+   "flagged": false,
+   "note": "Where cleanup callbacks are held and who runs them, ending on 'closing it is the caller's responsibility'. k1's fix makes `Context.exit()` call `self.close()`. This names the mechanism and the site WITHOUT naming `exit()` or stating that it should close -- the reader still has to find the path that bypasses `close()`. Closest of the k1 memories; not the repair.",
+   "probe_file": "src/click/core.py",
+   "probe_patterns": [
+    "_close_callbacks",
+    "def close\\(self\\)",
+    "with ctx\\.scope\\(cleanup=False\\)"
+   ],
+   "probe_supports_n": 3,
+   "prose_claims_n": 2,
+   "truth": {
+    "k1": "true",
+    "k2": "true",
+    "k3": "true",
+    "k4": "true"
+   },
+   "fix_locality": {
+    "k1": [
+     "close"
+    ],
+    "k2": [],
+    "k3": [],
+    "k4": []
+   }
+  },
+  {
+   "id": "m02",
+   "provenance": "derived",
+   "kind": "decision",
+   "subject": [
+    "k4"
+   ],
+   "source": "src/click/core.py at each task's own checkout",
+   "exposure": "written during dev-m1's construction by an author who HAD seen k1-k4's subjects and their pre-fix trees. Whether that author also read the fix diffs is not established by any artifact, and is not assumed either way.",
+   "register": "diagnostic guidance",
+   "suitable": true,
+   "flagged": true,
+   "note": "THE MATERIAL FINDING OF THIS REVIEW. It states both halves of k4's defect -- that `get_help_option` CONSTRUCTS an option each call, and that `iter_params_for_processing` compares the parameter OBJECTS -- and the fix's own in-code rationale reads 'avoid creating it multiple times. Not doing this will break the callback odering by iter_params_for_processing(), which relies on object comparison'. Same two clauses, minus the remedy (caching in `self._help_option`). Written by an author who had seen k4. No identifier scan could reach this: every name in it predates the fix. It is diagnosis, not repair, so it stays in the corpus -- but a k4 result under either policy may NOT be read as evidence that retrieval located the mechanism unaided.",
+   "probe_file": "src/click/core.py",
+   "probe_patterns": [
+    "def get_help_option",
+    "def get_params",
+    "def iter_params_for_processing"
+   ],
+   "probe_supports_n": 3,
+   "prose_claims_n": 2,
+   "truth": {
+    "k1": "true",
+    "k2": "true",
+    "k3": "true",
+    "k4": "true"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [],
+    "k3": [],
+    "k4": []
+   }
+  },
+  {
+   "id": "m03",
+   "provenance": "derived",
+   "kind": "constraint",
+   "subject": [
+    "k2",
+    "k3"
+   ],
+   "source": "src/click/core.py at the k1/k2/k4 revisions; REFUTED at k3's",
+   "exposure": "written during dev-m1's construction by an author who HAD seen k1-k4's subjects and their pre-fix trees. Whether that author also read the fix diffs is not established by any artifact, and is not assumed either way.",
+   "register": "describes existing behaviour",
+   "suitable": true,
+   "flagged": false,
+   "note": "`_flag_needs_value = flag_value is not None`. True at k1/k2/k4, REFUTED at k3 -- the older form presented to the newer checkout.",
+   "probe_file": "src/click/core.py",
+   "probe_patterns": [
+    "_flag_needs_value = flag_value is not None"
+   ],
+   "probe_supports_n": 1,
+   "prose_claims_n": 3,
+   "truth": {
+    "k1": "true",
+    "k2": "true",
+    "k3": "false",
+    "k4": "true"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [
+     "flag_value"
+    ],
+    "k3": [],
+    "k4": []
+   }
+  },
+  {
+   "id": "m04",
+   "provenance": "derived",
+   "kind": "procedure",
+   "subject": [],
+   "source": "prompts-calib-a2.json `environment`, and REPAIR-interpreter-consistency.md",
+   "exposure": "written from `prompts-calib-a2.json`'s `environment` block and REPAIR-interpreter-consistency.md. The author had seen the task ENVIRONMENT; no task's fix or checks bear on it.",
+   "register": "diagnostic guidance",
+   "suitable": true,
+   "flagged": false,
+   "note": "`PYTHONPATH=src` and a named interpreter. Environment.",
+   "probe_file": "pyproject.toml",
+   "probe_patterns": [
+    "\\[project\\]"
+   ],
+   "probe_supports_n": 1,
+   "prose_claims_n": 3,
+   "truth": {
+    "k1": "true",
+    "k2": "true",
+    "k3": "true",
+    "k4": "true"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [],
+    "k3": [],
+    "k4": []
+   }
+  },
+  {
+   "id": "m05",
+   "provenance": "derived",
+   "kind": "decision",
+   "subject": [
+    "k1"
+   ],
+   "source": "CONSTRUCTED CONTRADICTION. No revision of this repository is asserted. It is refuted by `Context.__init__`, which holds `_close_callbacks` and `_exit_stack` as separate attributes, and by `Context.close()`, which walks the list.",
+   "exposure": "written during dev-m1's construction by an author who HAD seen k1-k4's subjects and their pre-fix trees. Whether that author also read the fix diffs is not established by any artifact, and is not assumed either way.",
+   "register": "describes existing behaviour",
+   "suitable": true,
+   "flagged": false,
+   "note": "CONSTRUCTED CONTRADICTION for k1. Asserts no revision of this repository; refuted one read away at `Context.__init__`. Tests whether an agent notices a memory the checkout refutes.",
+   "probe_file": "src/click/core.py",
+   "probe_patterns": [
+    "NOT _close_callbacks"
+   ],
+   "probe_supports_n": 1,
+   "prose_claims_n": 3,
+   "truth": {
+    "k1": "false",
+    "k2": "false",
+    "k3": "false",
+    "k4": "false"
+   },
+   "fix_locality": {
+    "k1": [
+     "close"
+    ],
+    "k2": [],
+    "k3": [],
+    "k4": [
+     "callback"
+    ]
+   }
+  },
+  {
+   "id": "m06",
+   "provenance": "derived",
+   "kind": "decision",
+   "subject": [
+    "k4"
+   ],
+   "source": "CONSTRUCTED CONTRADICTION. No revision of this repository is asserted. It is refuted by the method's own body, which builds `set(ctx.help_option_names)` and returns `list(all_names)` -- an unordered set, so declaration order is not preserved.",
+   "exposure": "written during dev-m1's construction by an author who HAD seen k1-k4's subjects and their pre-fix trees. Whether that author also read the fix diffs is not established by any artifact, and is not assumed either way.",
+   "register": "describes existing behaviour",
+   "suitable": true,
+   "flagged": false,
+   "note": "CONSTRUCTED CONTRADICTION for k4. Asserts ordering is preserved and stable; k4's fix documents the opposite. Refuted at `Command.get_help_option_names`.",
+   "probe_file": "src/click/core.py",
+   "probe_patterns": [
+    "NOT all_names = set\\(ctx\\.help_option_names\\)"
+   ],
+   "probe_supports_n": 1,
+   "prose_claims_n": 1,
+   "truth": {
+    "k1": "false",
+    "k2": "false",
+    "k3": "false",
+    "k4": "false"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [],
+    "k3": [],
+    "k4": []
+   }
+  },
+  {
+   "id": "x01",
+   "provenance": "distractor",
+   "kind": "constraint",
+   "subject": [],
+   "source": "written for dev-m1; no source revision asserted",
+   "exposure": "written during dev-m1's construction by an author who had seen k1-k4, and chosen deliberately to bear on none of them.",
+   "register": "describes existing behaviour",
+   "suitable": true,
+   "flagged": false,
+   "note": "termui styling. No task's fix touches `src/click/termui.py`.",
+   "probe_file": "src/click/termui.py",
+   "probe_patterns": [
+    "def style",
+    "def secho"
+   ],
+   "probe_supports_n": 2,
+   "prose_claims_n": 3,
+   "truth": {
+    "k1": "true",
+    "k2": "true",
+    "k3": "true",
+    "k4": "true"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [],
+    "k3": [],
+    "k4": [
+     "click"
+    ]
+   }
+  },
+  {
+   "id": "x02",
+   "provenance": "distractor",
+   "kind": "constraint",
+   "subject": [],
+   "source": "written for dev-m1; no source revision asserted",
+   "exposure": "written during dev-m1's construction by an author who had seen k1-k4, and chosen deliberately to bear on none of them.",
+   "register": "describes existing behaviour",
+   "suitable": true,
+   "flagged": false,
+   "note": "shell completion. No task's fix touches it.",
+   "probe_file": "src/click/shell_completion.py",
+   "probe_patterns": [
+    "class CompletionItem",
+    "shell_complete"
+   ],
+   "probe_supports_n": 2,
+   "prose_claims_n": 1,
+   "truth": {
+    "k1": "true",
+    "k2": "true",
+    "k3": "true",
+    "k4": "true"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [],
+    "k3": [],
+    "k4": [
+     "click"
+    ]
+   }
+  },
+  {
+   "id": "x03",
+   "provenance": "distractor",
+   "kind": "decision",
+   "subject": [],
+   "source": "written for dev-m1; no source revision asserted",
+   "exposure": "written during dev-m1's construction by an author who had seen k1-k4, and chosen deliberately to bear on none of them.",
+   "register": "describes existing behaviour",
+   "suitable": true,
+   "flagged": false,
+   "note": "`UsageError`. No task's fix touches `src/click/exceptions.py`.",
+   "probe_file": "src/click/exceptions.py",
+   "probe_patterns": [
+    "class UsageError"
+   ],
+   "probe_supports_n": 1,
+   "prose_claims_n": 2,
+   "truth": {
+    "k1": "true",
+    "k2": "true",
+    "k3": "true",
+    "k4": "true"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [],
+    "k3": [],
+    "k4": []
+   }
+  },
+  {
+   "id": "x04",
+   "provenance": "distractor",
+   "kind": "procedure",
+   "subject": [],
+   "source": "written for dev-m1; no source revision asserted",
+   "exposure": "written during dev-m1's construction by an author who had seen k1-k4, and chosen deliberately to bear on none of them.",
+   "register": "describes existing behaviour",
+   "suitable": true,
+   "flagged": false,
+   "note": "the `Path` type. No task's fix touches `src/click/types.py`.",
+   "probe_file": "src/click/types.py",
+   "probe_patterns": [
+    "class Path",
+    "resolve_path"
+   ],
+   "probe_supports_n": 2,
+   "prose_claims_n": 1,
+   "truth": {
+    "k1": "true",
+    "k2": "true",
+    "k3": "true",
+    "k4": "true"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [],
+    "k3": [],
+    "k4": [
+     "click"
+    ]
+   }
+  },
+  {
+   "id": "x05",
+   "provenance": "distractor",
+   "kind": "constraint",
+   "subject": [],
+   "source": "written for dev-m1; no source revision asserted",
+   "exposure": "written during dev-m1's construction by an author who had seen k1-k4, and chosen deliberately to bear on none of them.",
+   "register": "describes existing behaviour",
+   "suitable": true,
+   "flagged": false,
+   "note": "`Group` dispatch. In `core.py`, which every fix touches, but on subcommand resolution, which none of them does.",
+   "probe_file": "src/click/core.py",
+   "probe_patterns": [
+    "def get_command",
+    "def list_commands",
+    "invoke_without_command"
+   ],
+   "probe_supports_n": 3,
+   "prose_claims_n": 2,
+   "truth": {
+    "k1": "true",
+    "k2": "true",
+    "k3": "true",
+    "k4": "true"
+   },
+   "fix_locality": {
+    "k1": [],
+    "k2": [],
+    "k3": [],
+    "k4": []
+   }
+  }
+ ]
+}

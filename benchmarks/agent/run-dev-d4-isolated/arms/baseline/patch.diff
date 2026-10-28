@@ -1,0 +1,44 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index 48670ba..0cdd0e5 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -85,6 +85,7 @@ filterwarnings = [
+ ]
+ markers = [
+     "stress: high-iteration stress tests for race conditions (deselect with '-m \"not stress\"')",
++    "integration: integration tests that exercise multiple components together",
+ ]
+ addopts = "-m 'not stress'"
+ 
+diff --git a/tests/test_integration.py b/tests/test_integration.py
+new file mode 100644
+index 0000000..8395c4c
+--- /dev/null
++++ b/tests/test_integration.py
+@@ -0,0 +1,26 @@
++from __future__ import annotations
++
++import pytest
++
++import click
++
++
++@pytest.mark.integration
++def test_group_with_option_and_subcommand(runner):
++    """A group, a shared option, and a subcommand work together."""
++
++    @click.group()
++    @click.option("--verbose", is_flag=True)
++    @click.pass_context
++    def cli(ctx, verbose):
++        ctx.obj = {"verbose": verbose}
++
++    @cli.command()
++    @click.argument("name")
++    @click.pass_context
++    def greet(ctx, name):
++        click.echo(f"hello {name}")
++
++    result = runner.invoke(cli, ["--verbose", "greet", "world"])
++    assert result.exit_code == 0
++    assert result.output == "hello world\n"

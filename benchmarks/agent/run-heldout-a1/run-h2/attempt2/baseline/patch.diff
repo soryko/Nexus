@@ -1,0 +1,55 @@
+diff --git a/_repro.py b/_repro.py
+new file mode 100644
+index 0000000..5ad033e
+--- /dev/null
++++ b/_repro.py
+@@ -0,0 +1,21 @@
++import click
++from click.testing import CliRunner
++
++@click.command(name="cli-variadic")
++@click.argument("method", type=click.Choice(["foo", "bar", "baz"]), nargs=-1)
++def variadic(method):
++    pass
++
++@click.command(name="cli-optional")
++@click.argument("method", type=click.Choice(["foo", "bar", "baz"]), required=False)
++def optional(method):
++    pass
++
++@click.command(name="cli-date")
++@click.argument("when", type=click.DateTime(), required=False)
++def date(when):
++    pass
++
++r = CliRunner()
++for c in (variadic, optional, date):
++    print(r.invoke(c, ["--help"]).output.splitlines()[0])
+diff --git a/src/click/core.py b/src/click/core.py
+index d2db291..8e7f1df 100644
+--- a/src/click/core.py
++++ b/src/click/core.py
+@@ -3569,12 +3569,18 @@ class Argument(Parameter):
+         if self.metavar is not None:
+             return self.metavar
+         var = self.type.get_metavar(param=self, ctx=ctx)
+-        if not var:
++        if var:
++            # The type rendered its own metavar, such as ``[foo|bar]`` for a
++            # Choice. It already uses brackets to show whether the value is
++            # required, so don't wrap it again.
++            if self.deprecated:
++                var += "!"
++        else:
+             var = self.name.upper()
+-        if self.deprecated:
+-            var += "!"
+-        if not self.required:
+-            var = f"[{var}]"
++            if self.deprecated:
++                var += "!"
++            if not self.required:
++                var = f"[{var}]"
+         if self.nargs != 1:
+             var += "..."
+         return var

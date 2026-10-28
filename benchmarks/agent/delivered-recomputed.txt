@@ -1,0 +1,116 @@
+### d1  (run-dev-a1-attempt4)
+--- baseline ---
+    delivered any : 0/13     repeat deliveries: 0
+    full bodies   : 0  (0 bytes)
+    excerpt only  : 0  (0 bytes across all excerpts)
+    necessary        full=[] excerpt_only=[]
+    useful support   full=[] excerpt_only=[]
+    outdated         full=[] excerpt_only=[]
+    irrelevant       full=[] excerpt_only=[]
+    necessary-memory coverage: 0/2 as full bodies  (0/2 counting excerpts)
+--- nexus ---
+    delivered any : 8/13     repeat deliveries: 18
+    full bodies   : 6  (1431 bytes)
+    excerpt only  : 2  (1204 bytes across all excerpts)
+    necessary        full=['c01', 'c03'] excerpt_only=[]
+    useful support   full=['c02', 'c07'] excerpt_only=['c09']
+    outdated         full=[] excerpt_only=[]
+    irrelevant       full=['c04', 'c05'] excerpt_only=['c06']
+    necessary-memory coverage: 2/2 as full bodies  (2/2 counting excerpts)
+--- notes ---
+    delivered any : 13/13     repeat deliveries: 13
+    full bodies   : 13  (2776 bytes)
+    excerpt only  : 0  (0 bytes across all excerpts)
+    necessary        full=['c01', 'c03'] excerpt_only=[]
+    useful support   full=['c02', 'c07', 'c08', 'c09'] excerpt_only=[]
+    outdated         full=['c13'] excerpt_only=[]
+    irrelevant       full=['c04', 'c05', 'c06', 'c10', 'c11', 'c12'] excerpt_only=[]
+    necessary-memory coverage: 2/2 as full bodies  (2/2 counting excerpts)
+
+### d2  (run-dev-d2)
+--- baseline ---
+    delivered any : 0/13     repeat deliveries: 0
+    full bodies   : 0  (0 bytes)
+    excerpt only  : 0  (0 bytes across all excerpts)
+    necessary        full=[] excerpt_only=[]
+    useful support   full=[] excerpt_only=[]
+    outdated         full=[] excerpt_only=[]
+    irrelevant       full=[] excerpt_only=[]
+    necessary-memory coverage: 0/1 as full bodies  (0/1 counting excerpts)
+--- nexus ---
+    delivered any : 6/13     repeat deliveries: 17
+    full bodies   : 6  (1342 bytes)
+    excerpt only  : 0  (1068 bytes across all excerpts)
+    necessary        full=['c04'] excerpt_only=[]
+    useful support   full=['c09', 'c10'] excerpt_only=[]
+    outdated         full=[] excerpt_only=[]
+    irrelevant       full=['c01', 'c02', 'c03'] excerpt_only=[]
+    necessary-memory coverage: 1/1 as full bodies  (1/1 counting excerpts)
+--- notes ---
+    delivered any : 13/13     repeat deliveries: 13
+    full bodies   : 13  (2776 bytes)
+    excerpt only  : 0  (0 bytes across all excerpts)
+    necessary        full=['c04'] excerpt_only=[]
+    useful support   full=['c07', 'c08', 'c09', 'c10'] excerpt_only=[]
+    outdated         full=['c13'] excerpt_only=[]
+    irrelevant       full=['c01', 'c02', 'c03', 'c05', 'c06', 'c11', 'c12'] excerpt_only=[]
+    necessary-memory coverage: 1/1 as full bodies  (1/1 counting excerpts)
+
+### d3  (run-dev-d3)
+--- baseline ---
+    delivered any : 0/13     repeat deliveries: 0
+    full bodies   : 0  (0 bytes)
+    excerpt only  : 0  (0 bytes across all excerpts)
+    necessary        full=[] excerpt_only=[]
+    useful support   full=[] excerpt_only=[]
+    outdated         full=[] excerpt_only=[]
+    irrelevant       full=[] excerpt_only=[]
+    necessary-memory coverage: 0/1 as full bodies  (0/1 counting excerpts)
+--- nexus ---
+    delivered any : 8/13     repeat deliveries: 24
+    full bodies   : 6  (1368 bytes)
+    excerpt only  : 2  (1724 bytes across all excerpts)
+    necessary        full=['c05'] excerpt_only=[]
+    useful support   full=['c02', 'c06', 'c07', 'c09'] excerpt_only=[]
+    outdated         full=[] excerpt_only=[]
+    irrelevant       full=['c01'] excerpt_only=['c03', 'c04']
+    necessary-memory coverage: 1/1 as full bodies  (1/1 counting excerpts)
+--- notes ---
+    delivered any : 13/13     repeat deliveries: 13
+    full bodies   : 13  (2776 bytes)
+    excerpt only  : 0  (0 bytes across all excerpts)
+    necessary        full=['c05'] excerpt_only=[]
+    useful support   full=['c02', 'c06', 'c07', 'c08', 'c09'] excerpt_only=[]
+    outdated         full=['c13'] excerpt_only=[]
+    irrelevant       full=['c01', 'c03', 'c04', 'c10', 'c11', 'c12'] excerpt_only=[]
+    necessary-memory coverage: 1/1 as full bodies  (1/1 counting excerpts)
+
+### d4  (run-dev-d4)
+--- baseline ---
+    delivered any : 0/13     repeat deliveries: 0
+    full bodies   : 0  (0 bytes)
+    excerpt only  : 0  (0 bytes across all excerpts)
+    necessary        full=[] excerpt_only=[]
+    useful support   full=[] excerpt_only=[]
+    outdated         full=[] excerpt_only=[]
+    irrelevant       full=[] excerpt_only=[]
+    necessary-memory coverage: N/A (no necessary MEMORY declared; see the report on repository evidence)
+--- nexus ---
+    delivered any : 4/13     repeat deliveries: 8
+    full bodies   : 4  (813 bytes)
+    excerpt only  : 0  (385 bytes across all excerpts)
+    necessary        full=[] excerpt_only=[]
+    useful support   full=['c07', 'c08'] excerpt_only=[]
+    outdated         full=['c13'] excerpt_only=[]
+    irrelevant       full=['c12'] excerpt_only=[]
+    necessary-memory coverage: N/A (no necessary MEMORY declared; see the report on repository evidence)
+--- notes ---
+    delivered any : 13/13     repeat deliveries: 13
+    full bodies   : 13  (2776 bytes)
+    excerpt only  : 0  (0 bytes across all excerpts)
+    necessary        full=[] excerpt_only=[]
+    useful support   full=['c07', 'c08', 'c09'] excerpt_only=[]
+    outdated         full=['c13'] excerpt_only=[]
+    irrelevant       full=['c01', 'c02', 'c03', 'c04', 'c05', 'c06', 'c10', 'c11', 'c12'] excerpt_only=[]
+    necessary-memory coverage: N/A (no necessary MEMORY declared; see the report on repository evidence)
+

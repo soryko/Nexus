@@ -17,12 +17,18 @@ including the license's permissions for qualifying noncommercial organizations.
 > [!IMPORTANT]
 > **Search covers current revisions only.** A term that appears solely in a superseded revision will not find that memory — use `history` to browse a memory's revisions and `get` to read an older one. Ranking is BM25 lexical ordering, not relevance: there is no semantic similarity, no embeddings and no learned ranking. Repository-verified references are implemented and closed, and `search` filters on that recorded evidence by repository, path and commit. Nothing *ranks* by it: a reference filter narrows a result set and never reorders it, adds no evidence and never re-verifies on read. Symbol indexing, automatic extraction and context-budget packing are later milestones. **No retrieval-quality advantage over any other tool has been measured or is claimed.** The v2 evaluation set *is* now judged and this build is measured against it ([results](benchmarks/eval/results-v2.md)) — but that is one 17-query set scoring this build alone, with labels that are AI-assessed, AI-audited twice and human-authorised, with no human audit at label level. No comparison against another system has been run.
 > **Nor has any end-to-end benefit to an agent been shown.** The A1 held-out agent comparison
-> is closed with a negative result ([closeout](https://github.com/soryko/Nexus/blob/f5e75cad6321640992fae87c49585e7ffb2b73b2/benchmarks/agent/CLOSEOUT-a1.md)): over
-> four tasks and 36 arm-runs the memory arm did not beat the no-memory baseline on any task,
-> lost on one, and consumed 1.56x the baseline's combined input tokens. A rendered-notes arm
-> tied on all four. **A working, durable memory service is what this release claims; improved
-> coding outcomes are not.** That evidence lives on the evaluation branch, linked above at an
-> immutable commit, and is not part of this release.
+> ran on 2026-09-12 and is closed ([closeout](benchmarks/agent/CLOSEOUT-a1.md),
+> [result](benchmarks/agent/results-heldout-a1.md)): over four tasks, three arms and 36
+> arm-runs, **the memory arm did not beat the no-memory baseline on any task and lost on one**,
+> while consuming 1.43x the baseline's `input_tokens` and 1.57x its `cache_read_input_tokens`
+> (1.56x combined). No dollar figure is quoted: the CLI's cost field has no established
+> provenance on this model. A rendered-notes arm tied on all four, so
+> the run supports "having the information helps" no better than it supports "Nexus's retrieval
+> helps". Two of the four tasks were solved by nobody and 29 of 36 arm-runs hit the turn
+> ceiling, so the comparison is heavily qualified — but it is not qualified in Nexus's favour,
+> and no positive agent result exists.
+> **A working, durable memory service is what this release claims; improved
+> coding outcomes are not.**
 
 ## What it gives you
 
@@ -62,6 +68,19 @@ retry without duplicating — exiting nonzero if any of it fails.
 
 **To work on it.** `uv sync` installs the project *editable*, linked to this checkout, with
 the development dependencies:
+
+```bash
+python3 tools/install.py
+.venv/bin/python tools/check_install.py
+```
+
+The first probes candidate interpreters, prints **both** version numbers for each, builds
+`.venv` from the first that satisfies the Python **and** SQLite floors, and re-checks the
+environment it built. The second drives the **installed** command over MCP in three separate
+processes — store, restart, read back byte-identical, search, retry without duplicating —
+and exits nonzero if any of it fails.
+
+Doing it by hand instead:
 
 ```bash
 uv sync --frozen
@@ -283,3 +302,18 @@ Retrieval work done since B1 is measured but **not shipped**: the [development c
 **B2** adds repository context, in two slices. **B2a** — [contract](docs/plans/milestone-b2a.md) implemented and closed at `79e0a0d`, with its fifteen acceptance tests and eight mutation controls passing, under the documented limitation that repository verification is not atomic with the write — is a launch-bound repository identity that no tool call can override, and commit and path verification against committed Git objects, recording the resolved commit, repository-relative path, object ID and entry type. A verified reference establishes that the object existed at that path in that commit: not that the memory's prose is true, not that the working tree matches, not that the advice is current. **B2b** adds reference filters over that recorded evidence — filtering by repository, path and commit, adding no new evidence and never re-verifying on read. Its [contract](docs/plans/milestone-b2b.md) is reviewed and frozen; implemented and closed at `cdf51e7`. Symbol-aware retrieval comes after both. Cross-revision search — finding a term that only ever appeared in a superseded revision — is a separate follow-up with distinct current and history modes, so outdated instructions are never mixed into ordinary results. Embeddings come after a lexical baseline has been measured, not before.
 
 **B3** — [contract](docs/plans/milestone-b3-candidate-ordering.md), implemented 2026-09-08 and merged at `b92c718` — orders browse candidate selection on the index rather than sorting every eligible row. Its measurements cover the browse shapes it measured and establish nothing about lexical search or about sparse reference filters.
+
+**A1** — the first agent-level evaluation — is **closed with a negative result**, recorded in
+[`CLOSEOUT-a1.md`](benchmarks/agent/CLOSEOUT-a1.md). Persistent memory did not improve task
+correctness on the held-out set and cost more to use; where the runs actually spent their
+effort is measured in [`diagnostics-heldout-a1.md`](benchmarks/agent/diagnostics-heldout-a1.md),
+which finds that on the two unsolved tasks **no source change was recorded at all** across 18
+arm-runs, and that retrieval is front-loaded (22 calls before the first source mutation and 1
+after, in the four nexus runs that reached one; the other eight spent 63 more and reached none). Every published table rebuilds from 2.9 MB of committed
+records with no model invoked.
+
+A1's four tasks are now **exposed** and can serve only labelled diagnostics and regression
+checks. **A2** is a bounded diagnostic milestone, not an expansion of retrieval: calibrate a
+turn budget on a separate development set, then test whether a *bounded consultation policy*
+preserves correctness at lower cost, before any change to the retrieval engine. Embeddings,
+symbol graphs and compression follow a demonstrated need, and A1 did not demonstrate one.

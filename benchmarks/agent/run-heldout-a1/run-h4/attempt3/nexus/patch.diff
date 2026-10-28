@@ -1,0 +1,57 @@
+diff --git a/src/click/_utils.py b/src/click/_utils.py
+index 05ee2e9..7c1d120 100644
+--- a/src/click/_utils.py
++++ b/src/click/_utils.py
+@@ -18,6 +18,14 @@ class Sentinel(enum.Enum):
+     def __repr__(self) -> str:
+         return f"{self.__class__.__name__}.{self.name}"
+ 
++    def __reduce_ex__(self, proto: int) -> tuple[t.Any, ...]:
++        # Enum's default pickling serializes the member's value and reconstructs
++        # the member by looking that value up. Sentinel member values are
++        # distinct ``object()`` instances, which do not survive that round trip,
++        # so unpickling raised ``ValueError: ... is not a valid Sentinel``.
++        # Pickle by member name instead, preserving singleton identity.
++        return getattr, (self.__class__, self._name_)
++
+ 
+ UNSET: t.Literal[Sentinel.UNSET] = Sentinel.UNSET
+ """Sentinel used to indicate that a value is not set."""
+diff --git a/tests/test_utils/test_sentinel.py b/tests/test_utils/test_sentinel.py
+index 1dd5b15..022e3f5 100644
+--- a/tests/test_utils/test_sentinel.py
++++ b/tests/test_utils/test_sentinel.py
+@@ -1,7 +1,11 @@
++import copy
++import pickle
+ from decimal import Decimal
+ from fractions import Fraction
+ 
+-from click._utils import UNSET
++import pytest
++
++from click._utils import FLAG_NEEDS_VALUE, UNSET, Sentinel
+ 
+ 
+ def test_unset_sentinel():
+@@ -50,3 +54,20 @@ def test_unset_sentinel():
+         assert value is not real_value
+ 
+     assert value not in real_values
++
++
++@pytest.mark.parametrize("member", list(Sentinel))
++def test_sentinel_pickle(member):
++    for protocol in range(pickle.HIGHEST_PROTOCOL + 1):
++        assert pickle.loads(pickle.dumps(member, protocol)) is member
++
++
++@pytest.mark.parametrize("member", list(Sentinel))
++def test_sentinel_copy(member):
++    assert copy.copy(member) is member
++    assert copy.deepcopy(member) is member
++
++
++@pytest.mark.parametrize("value", [UNSET, FLAG_NEEDS_VALUE])
++def test_sentinel_pickle_round_trip_identity(value):
++    assert pickle.loads(pickle.dumps(value)) is value

@@ -1,0 +1,52 @@
+diff --git a/CHANGES.rst b/CHANGES.rst
+index 191937d..bb734eb 100644
+--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@ -144,6 +144,10 @@ Released 2021-05-19
+     disable pattern expansion on Windows. There is no way to escape
+     patterns in CMD, so if the program needs to pass them on as-is then
+     expansion must be disabled. :issue:`1901`
++-   An empty value for a parameter's automatic environment variable,
++    such as from ``auto_envvar_prefix``, is ignored the same as an
++    explicit ``envvar``, so the parameter's default is used. This
++    extends the change introduced in 7.1. :issue:`1285`
+ 
+ 
+ Version 8.0.0
+diff --git a/src/click/core.py b/src/click/core.py
+index 939ad81..92f2f7a 100644
+--- a/src/click/core.py
++++ b/src/click/core.py
+@@ -2834,7 +2834,10 @@ class Option(Parameter):
+             envvar = f"{ctx.auto_envvar_prefix}_{self.name.upper()}"
+             rv = os.environ.get(envvar)
+ 
+-        return rv
++        if rv:
++            return rv
++
++        return None
+ 
+     def value_from_envvar(self, ctx: Context) -> t.Optional[t.Any]:
+         rv: t.Optional[t.Any] = self.resolve_envvar_value(ctx)
+diff --git a/tests/test_options.py b/tests/test_options.py
+index 3beff11..75ad5fb 100644
+--- a/tests/test_options.py
++++ b/tests/test_options.py
+@@ -153,13 +153,14 @@ def test_init_bad_default_list(runner, multiple, nargs, default):
+         click.Option(["-a"], type=type, multiple=multiple, nargs=nargs, default=default)
+ 
+ 
+-def test_empty_envvar(runner):
++@pytest.mark.parametrize("envvar", ["MYPATH", "AUTO_MYPATH"])
++def test_empty_envvar(runner, envvar):
+     @click.command()
+     @click.option("--mypath", type=click.Path(exists=True), envvar="MYPATH")
+     def cli(mypath):
+         click.echo(f"mypath: {mypath}")
+ 
+-    result = runner.invoke(cli, [], env={"MYPATH": ""})
++    result = runner.invoke(cli, [], auto_envvar_prefix="AUTO", env={envvar: ""})
+     assert result.exit_code == 0
+     assert result.output == "mypath: None\n"
+ 

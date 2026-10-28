@@ -1,0 +1,93 @@
+{
+ "_comment": [
+  "A3's PREDECLARED TASK-RELEVANT FACTS, frozen before launch, used by the production",
+  "pipeline. `a3_pipeline` loads this file; nothing computes it at scoring time.",
+  "",
+  "A fact is an EQUIVALENCE CLASS of memory ids: any member delivering it satisfies the",
+  "fact, so a bounded policy reaching a redundant memory carrying the same claim has lost",
+  "nothing. That repair exists because the first draft required the memory IDENTITY.",
+  "",
+  "MOST CLASSES HERE ARE SINGLETONS, and that is a property of the corpus rather than an",
+  "oversight. dev-m1 was built to vary TRUTH and SUBJECT, not to carry redundant statements",
+  "of one claim, so for most facts there is exactly one memory that makes the claim. Where",
+  "a class is a singleton, `redundant` is false and a bounded policy that misses that one",
+  "memory LOSES the fact -- which is a real property of this store and part of what A3",
+  "measures. Manufacturing equivalences to make the machinery look used would have been",
+  "tuning the instrument to flatter the candidate policy.",
+  "",
+  "Every member must appear in that task's `useful` set in results-dev-m1-r2.json: a fact",
+  "may not be declared over a memory the corpus does not support at that checkout.",
+  "`test_a3_facts.py` enforces that, and enforces that this file covers every task.",
+  "",
+  "These are TASK-RELEVANT facts declared in advance. Nothing here calls one NECESSARY:",
+  "that would need evidence the task cannot be completed without it, which this design does",
+  "not gather.",
+  "",
+  "k4 CARRIES THE m02 FLAG. PROVENANCE-dev-m1.md flags m02 as stating both halves of k4's",
+  "defect in the same clauses as k4's own fix rationale. The fact stays declared, because",
+  "removing it after the review would tune the corpus to the review -- but no k4 result",
+  "under either policy may be read as evidence that retrieval located that mechanism",
+  "unaided."
+ ],
+ "corpus_version": "dev-m1",
+ "declared_against": "results-dev-m1-r2.json",
+ "facts": {
+  "k1": {
+   "k1-cleanup-callbacks-are-held-and-run-by-close": {
+    "members": ["m01"],
+    "claim": "cleanup callbacks registered with ctx.call_on_close() are held in Context._close_callbacks and run by Context.close()",
+    "basis": "m01 is k1's only `useful` memory. No other memory in the corpus states where cleanup callbacks are held.",
+    "redundant": false
+   }
+  },
+  "k2": {
+   "k2-flag-value-and-default-are-independent": {
+    "members": ["h05"],
+    "claim": "a parameter's `default` is the value when the option is ABSENT and `flag_value` the value when it is PRESENT without an argument; the two are kept independent",
+    "basis": "h05 alone states the independence. h13 concerns what flag_value is USED for, which is a different claim and is declared separately.",
+    "redundant": false
+   },
+   "k2-flag-value-drives-type-inference": {
+    "members": ["h13"],
+    "claim": "when flag_value is set and no explicit type is given, the option's type is inferred from it via types.convert_type",
+    "basis": "h13 alone states the coupling between flag_value and type inference -- the coupling k2's fix breaks by hoisting the flag_value assignment out of the `type is None` branch.",
+    "redundant": false
+   },
+   "k2-flag-needs-value-is-derived-from-flag-value": {
+    "members": ["m03", "h07"],
+    "claim": "an option's `_flag_needs_value` is derived from whether a flag_value was supplied, and the parser consults it when deciding whether a following token is that option's value",
+    "basis": "GENUINELY REDUNDANT. m03 states the derivation (`_flag_needs_value = flag_value is not None`); h07 states the parser's use of the same attribute. Either delivers the claim that `_flag_needs_value` mediates between flag_value and parsing, which is what the fact asserts. They are not identical sentences and the fact is stated narrowly enough that both support it.",
+    "redundant": true
+   }
+  },
+  "k3": {
+   "k3-consume-value-is-the-resolution-point": {
+    "members": ["h11", "h01"],
+    "claim": "Parameter.consume_value is where a parameter's value is resolved -- by a fixed precedence, and including the resolution of a sentinel standing for `supplied without a value`",
+    "basis": "GENUINELY REDUNDANT. h11 states the precedence chain in consume_value; h01 states that Option.consume_value resolves the FLAG_NEEDS_VALUE sentinel. Either delivers the claim that consume_value is the resolution point, which is the site k3's fix changes.",
+    "redundant": true
+   },
+   "k3-unset-participates-in-default-handling": {
+    "members": ["h02"],
+    "claim": "UNSET is a sentinel the option machinery reads when deciding flag/value behaviour, rather than an ordinary value",
+    "basis": "h02 alone names UNSET. k3's fix defers the UNSET-to-None normalisation, so that UNSET is a sentinel with its own handling is the fact the task turns on.",
+    "redundant": false
+   },
+   "k3-defaults-may-be-callable-and-are-resolved-on-demand": {
+    "members": ["h08"],
+    "claim": "a default may be a callable factory, invoked when resolved with the call switch enabled and returned unchanged otherwise",
+    "basis": "h08 alone states it. h11 mentions callables only by reference to this same mechanism and does not state it independently.",
+    "redundant": false
+   }
+  },
+  "k4": {
+   "k4-help-option-is-constructed-per-call-and-compared-by-object": {
+    "members": ["m02"],
+    "claim": "Command.get_help_option constructs an option each time it is called, and iter_params_for_processing orders parameters by comparing the parameter objects it is given",
+    "basis": "m02 is k4's only `useful` memory. FLAGGED in PROVENANCE-dev-m1.md: it states both halves of k4's defect in the same two clauses as k4's own in-code fix rationale, minus the remedy, and was written by an author who had seen k4. No k4 result under either policy may be read as evidence that retrieval located that mechanism unaided.",
+    "redundant": false,
+    "flagged": "m02"
+   }
+  }
+ }
+}

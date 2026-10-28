@@ -1,0 +1,39 @@
+{
+ "baseline": {
+  "path": "/v1/messages?beta=true",
+  "model": "deepseek-flash",
+  "tools": [
+   "Bash",
+   "Edit",
+   "Read"
+  ]
+ },
+ "notes": {
+  "path": "/v1/messages?beta=true",
+  "model": "deepseek-flash",
+  "tools": [
+   "Bash",
+   "Edit",
+   "Read"
+  ]
+ },
+ "nexus": {
+  "path": "/v1/messages?beta=true",
+  "model": "deepseek-flash",
+  "tools": [
+   "Bash",
+   "Edit",
+   "ListMcpResourcesTool",
+   "Read",
+   "ReadMcpResourceDirTool",
+   "ReadMcpResourceTool",
+   "mcp__nexus__forget",
+   "mcp__nexus__get",
+   "mcp__nexus__history",
+   "mcp__nexus__record",
+   "mcp__nexus__revise",
+   "mcp__nexus__search",
+   "mcp__nexus__status"
+  ]
+ }
+}

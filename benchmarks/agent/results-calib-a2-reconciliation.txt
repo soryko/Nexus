@@ -1,0 +1,26 @@
+================================================================================================
+TRACE USAGE RECONCILIATION -- one usage per distinct message ID
+================================================================================================
+  The control below is what licenses the reconstruction: the same extraction, run against
+  arm-runs whose true total is already known from an envelope.
+  traces scanned                         72
+  vacuous (no messages, zero envelope)   36 -- excluded from the control, they compare nothing
+  reproduce their envelope exactly       34 (on input_tokens, cache_read_input_tokens)
+  short of their envelope                1
+      /Users/soko/Cerebros/nexus-a1-fixtures/calib-run/c45/run-k3/attempt1/arms/baseline/trace.jsonl
+      short by 39,770 tokens {'input_tokens': 346, 'cache_read_input_tokens': 39424}
+  with no envelope to compare against    1
+  messages sharing an ID but disagreeing 0
+  any message reporting output_tokens    False
+
+  /Users/soko/Cerebros/nexus-a1-fixtures/calib-run/c60/run-k1/attempt1/arms/baseline/trace.jsonl
+      assistant messages 81, distinct IDs 35
+      naive sum over every message     1,650,675   <- OVER-COUNTS
+      one usage per message ID           723,753
+      of which input_tokens               26,025
+      of which cache_read                697,728
+      output_tokens                      unobserved (the forwarder reports none per message)
+      NO TERMINAL ENVELOPE: this arm-run stays unresolved. The figure above is
+      a reconstruction and a lower bound, not a measurement, and it is not
+      written into any record.
+================================================================================================

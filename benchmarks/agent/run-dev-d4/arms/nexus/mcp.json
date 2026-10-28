@@ -1,0 +1,1 @@
+{"mcpServers": {"nexus": {"command": "/Users/soko/Cerebros/nexus-memory/.venv-sqlite/bin/nexus-memory", "args": ["--db", "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/3a1f29bd-bbe5-4757-8711-792724cbc000/scratchpad/run-d4/nexus-dev.db", "--namespace", "a1-dev", "--actor", "agent"]}}}

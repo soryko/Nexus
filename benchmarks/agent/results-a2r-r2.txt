@@ -1,0 +1,119 @@
+A2-R — the repaired toolchain at one ceiling
+==============================================
+
+A DEVELOPMENT measurement. It selects no ceiling, compares no arms, and makes no
+causal claim against the closed v2 calibration. No selection rule is applied here:
+freeze-calib-a2 §5 belongs to the calibration, which is closed with none selected.
+
+ceiling 45   |   12 of 12 arm-runs present   |   scratch /Users/soko/Cerebros/nexus-a1-fixtures/a2r-run
+
+1. Functional correctness (a1-functional-2)
+-------------------------------------------
+
+9 of 12 arm-runs pass. Per cell, no pooling across tasks:
+
+  task  arm       functional  terminal    turns  wall_s
+  k1    baseline  pass        completed      43   117.2
+  k1    notes     pass        completed      57   228.7
+  k1    nexus     pass        max_turns      46   164.5
+  k2    baseline  pass        completed      40   119.2
+  k2    nexus     pass        completed      49   128.7
+  k2    notes     pass        completed      38   126.6
+  k3    nexus     fail        max_turns      46   197.6
+  k3    baseline  pass        max_turns      46   196.4
+  k3    notes     pass        max_turns      46   159.6
+  k4    baseline  fail        max_turns      46   337.5
+  k4    nexus     pass        max_turns      46   314.4
+  k4    notes     fail        max_turns      46   385.3
+
+2. Requirement compliance — four independent observations
+---------------------------------------------------------
+
+The tail requires: fix the behaviour in src/, AND extend the existing test
+suite to cover it. A changed file under tests/ is not an extension: a comment
+or an unrelated edit satisfies the diff and not the requirement. `unknown` is
+used where the evidence is missing and nothing is inferred from edit counts.
+
+  task  arm       src diff  test add  executed  result   relevance  a1-scorer-5 
+  k1    baseline  yes       yes       unknown   unknown  unreviewed 4/5         
+  k1    notes     yes       yes       yes       passed   unreviewed 5/6         
+  k1    nexus     yes       no        unknown   unknown  unreviewed 2/6         
+  k2    baseline  yes       yes       unknown   unknown  unreviewed 4/5         
+  k2    nexus     yes       yes       unknown   unknown  unreviewed 5/6         
+  k2    notes     yes       yes       unknown   unknown  unreviewed 5/6         
+  k3    nexus     no        no        unknown   unknown  unreviewed 0/5 +1?     
+  k3    baseline  yes       yes       yes       passed   unreviewed 3/5         
+  k3    notes     yes       yes       unknown   unknown  unreviewed 5/6         
+  k4    baseline  no        no        unknown   unknown  unreviewed 0/5         
+  k4    nexus     yes       yes       unknown   unknown  unreviewed 5/6         
+  k4    notes     no        no        unknown   unknown  unreviewed 1/6         
+
+`a1-scorer-5` is the REGISTERED compliance scorer, reported under its own
+name and never merged with the four observations beside it. Its ratio is
+over the SETTLED checks only -- `tally()` excludes unknowns from both
+halves -- so it is shown with the unknown count beside it where the
+artifact carries one: `4/4 +2?` is four passes among four settled checks
+with two unsettled, not four of six. Where the artifact carries no unknown
+count, none is shown -- `+0?` would be a claim it does not make.
+    provenance: compliance artifact
+
+8 patch(es) add a test and need the evidence-linked review that fills in `relevance`:
+    k1/baseline: tests/test_context.py::test_call_on_close_runs_when_eager_option_exits, tests/test_context.py::test_call_on_close_skipped_after_eager_exit, tests/test_context.py::test_call_on_close_resets_state_after_eager_exit
+    k1/notes: tests/test_context.py::test_call_on_close_eager_exit, tests/test_context.py::test_call_on_close_eager_exit_does_not_leak_state
+    k2/baseline: tests/test_options.py::test_flag_with_explicit_type_toggles_default, tests/test_options.py::test_flag_with_explicit_non_bool_type_uses_flag_value
+    k2/nexus: tests/test_options.py::test_flag_value_inferred_with_explicit_type, tests/test_options.py::test_is_flag_with_explicit_type
+    k2/notes: tests/test_options.py::test_flag_with_explicit_type, tests/test_options.py::test_flag_value_is_set_with_explicit_type
+    k3/baseline: tests/test_options.py::test_flag_value_dual_options_default_selection
+    k3/notes: tests/test_options.py::test_dual_flag_options_default_order
+    k4/nexus: tests/test_basic.py::test_help_option_is_generated_once, tests/test_basic.py::test_help_option_eager
+
+3. Termination — reported separately from correctness
+-----------------------------------------------------
+
+   completed 5   max_turns 7
+   7 of 12 truncated. In v2, 11 of 16 PASSING arm-runs
+   ended at max_turns — which is why this is not folded into correctness.
+
+4. The repaired toolchain — five facts, never an absence
+--------------------------------------------------------
+
+An absent `No module named pytest` proves nothing in a run that never tried.
+
+   12  pinned_ran                   the documented command was invoked and ran
+
+  task  arm       gate       ident  pinned  ran  broke  other
+  k1    baseline  passed     yes        13   13      0      0
+  k1    notes     passed     yes        11   11      0      0
+  k1    nexus     passed     yes        10   10      0      0
+  k2    baseline  passed     yes        13   13      0      1
+  k2    nexus     passed     yes        10    9      0      1
+  k2    notes     passed     yes        12   12      0      0
+  k3    nexus     passed     yes         4    3      0      2
+  k3    baseline  passed     yes        12   12      0      3
+  k3    notes     passed     yes        13   12      0      0
+  k4    baseline  passed     yes        11   11      0      1
+  k4    nexus     passed     yes        11   11      0      0
+  k4    notes     passed     yes         7    7      0      2
+
+5. Total resource use — every arm-run, failures included
+--------------------------------------------------------
+
+   charged       14,942,135 tokens (14,942,135 measured + 0 allowance)
+   arm-runs              12
+   unresolved             0
+   consumption      CERTAIN
+
+The soft launch threshold is where this sweep stops STARTING rows. An arm-run
+cannot be interrupted part-way, so finishing above it by up to one row is
+possible by design, and a largest-observed-row reservation bounds nothing
+about the next row's consumption.
+
+The closed calibration is still not fully accounted for
+-------------------------------------------------------
+
+   c60/run-k1/attempt1/arms/baseline
+   one arm-run of the closed calibration has no usable usage record; its consumption is UNRESOLVED and the closed sweep's total is a lower bound.
+   Its charge exceeded the calibration cap by 560,844 tokens.
+   A2-R does not resolve it, does not cover it with a new allowance, and does
+   not treat it as zero. It is a separate ledger and stays outstanding.
+
