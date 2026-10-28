@@ -119,7 +119,7 @@ def test_usage_log_records_each_call_once_and_nothing_it_promised_not_to(tmp_pat
     assert [event["seq"] for event in events] == list(range(1, len(events) + 1))
     # Every line names the treatment, so a lost start line cannot orphan an instance's calls.
     assert {(event["instructions"], event["instructions_digest"]) for event in events} == {("on", INSTRUCTIONS_DIGEST)}
-    assert stop["event"] == "stop"
+    assert (stop["event"], stop["reason"]) == ("stop", "end_of_input")
     assert (stop["events_written"], stop["write_failures"], stop["reopens"]) == (len(events) - 1, 0, 0)
 
     assert [(event["tool"], event["outcome"]) for event in calls] == [
@@ -267,6 +267,34 @@ def test_unsafe_usage_log_destinations_are_refused_at_startup(tmp_path: Path, ca
     assert db.read_bytes() == before
     if destination == "case_alias":
         assert not target.exists()
+
+
+@pytest.mark.skipif(not hasattr(__import__("signal"), "SIGTERM") or sys.platform == "win32", reason="POSIX signals")
+def test_sigterm_still_writes_the_stop_event(tmp_path: Path) -> None:
+    import signal
+    import time
+
+    log = tmp_path / "usage.jsonl"
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
+    process = subprocess.Popen(
+        [sys.executable, "-m", "nexus_memory", "--namespace", "term-test", "--db", str(tmp_path / "memory.sqlite3"),
+         "--usage-log", str(log)],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env,
+    )
+    try:
+        deadline = time.monotonic() + 30
+        while not (log.exists() and log.read_text("ascii").strip()) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        time.sleep(0.3)  # let the server reach its read loop after writing the start event
+        process.send_signal(signal.SIGTERM)
+        process.wait(timeout=30)
+    finally:
+        if process.poll() is None:
+            process.kill()
+    events = _events(log)
+    assert [event["event"] for event in events] == ["start", "stop"]
+    assert events[-1]["reason"] == "sigterm"
 
 
 def test_a_fifo_destination_is_refused_without_hanging(tmp_path: Path) -> None:

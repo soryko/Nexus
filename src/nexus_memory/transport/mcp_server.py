@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import signal
 import sys
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import asdict
@@ -608,15 +609,38 @@ def main(argv: list[str] | None = None) -> int:
             "actor": scope.actor,
             "database_location_fingerprint": database_location_fingerprint(db_path),
         })
+        # Clients end a stdio server with SIGTERM as often as by closing stdin (Claude Code does),
+        # and the default action exits without writing a stop event. Unwinding normally is not an
+        # option either: shutdown waits for the stdin reader thread, which blocks until the client
+        # closes stdin. So the handler records the stop and then exits at once, as the default
+        # action would have. A missing stop event then means a crash or SIGKILL, not routine shutdown.
+        if hasattr(signal, "SIGTERM"):
+            signal.signal(signal.SIGTERM, lambda signum, frame: _stop_and_exit(usage))
     try:
         create_server(service, instructions=not args.no_instructions, usage=usage, database=db_path).run()
     finally:
-        if usage is not None:
-            # A clean shutdown says so; an instance with no stop event ended abnormally.
-            usage.write({"event": "stop", "events_written": usage.events_written,
-                         "write_failures": usage.write_failures, "reopens": usage.reopens})
+        _write_stop(usage, "end_of_input")
         _close(usage)
     return 0
+
+
+_stop_written = False
+
+
+def _write_stop(usage: UsageLog | None, reason: str) -> None:
+    global _stop_written
+    if usage is None or _stop_written:
+        return
+    _stop_written = True
+    usage.write({"event": "stop", "reason": reason, "events_written": usage.events_written,
+                 "write_failures": usage.write_failures, "reopens": usage.reopens})
+
+
+def _stop_and_exit(usage: UsageLog | None) -> None:
+    _write_stop(usage, "sigterm")
+    _close(usage)
+    # Committed writes are already durable (WAL, synchronous=FULL); an open transaction rolls back.
+    os._exit(0)
 
 
 def _close(usage: UsageLog | None) -> None:
