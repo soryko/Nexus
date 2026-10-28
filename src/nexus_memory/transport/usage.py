@@ -165,6 +165,8 @@ class UsageLog:
         self.events_written = 0
         self.write_failures = 0
         self.reopens = 0
+        #: A failed write left part of a line in the file and it was not terminated yet.
+        self._torn = False
 
     def _still_ours(self) -> bool:
         try:
@@ -186,6 +188,7 @@ class UsageLog:
         except OSError:
             pass
         self._descriptor = descriptor
+        self._torn = False  # any fragment belongs to the file that was moved away
         self.reopens += 1
         self._emit({"event": "reopened", "reopens": self.reopens})
         return True
@@ -207,20 +210,35 @@ class UsageLog:
             ensure_ascii=True,
             separators=(",", ":"),
         )
-        data = memoryview((line + "\n").encode("ascii"))
+        # A fragment left by an earlier failed write is ended first, so this event starts a line of
+        # its own instead of being glued to the fragment and lost with it.
+        data = memoryview((("\n" if self._torn else "") + line + "\n").encode("ascii"))
+        sent = 0
         try:
             # With O_APPEND each write lands at the current end of the file, so concurrent servers
             # sharing a log do not overwrite each other. A short write is finished rather than left
             # as a fragment that would swallow the next line.
-            while data:
-                written = os.write(self._descriptor, data)
+            while sent < len(data):
+                written = os.write(self._descriptor, data[sent:])
                 if written <= 0:
                     raise OSError("no progress")
-                data = data[written:]
+                sent += written
         except OSError:
             self.write_failures += 1
+            if sent:
+                # Part of this line is in the file. End it now if the disk allows; otherwise the
+                # next successful write ends it. The fragment stays one malformed line, which the
+                # reader counts; a line another server appended meanwhile can share its fate.
+                self._torn = not self._terminate()
         else:
             self.events_written += 1
+            self._torn = False
+
+    def _terminate(self) -> bool:
+        try:
+            return os.write(self._descriptor, b"\n") == 1
+        except OSError:
+            return False
 
     def close(self) -> None:
         try:

@@ -60,6 +60,8 @@ def read(log: Path) -> tuple[dict[str, Instance], list[int]]:
     malformed: list[int] = []
     with log.open("r", encoding="utf-8", errors="replace") as handle:
         for number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue  # the logger may end a torn fragment with a newline of its own
             try:
                 event = json.loads(line)
             except json.JSONDecodeError:
@@ -109,27 +111,36 @@ def summarize(log: Path, since: datetime, until: datetime | None = None) -> dict
     captures: dict[str, tuple[str, datetime]] = {}   # memory_id -> (instance, time) of its first capture
     record_operations: set[str] = set()
     revise_operations: set[str] = set()
-    consulted = captured = 0
+    capturing: set[str] = set()
+    consulted = 0
     for instance in window:
-        did_consult = did_capture = False
+        did_consult = False
         for call in instance.calls:
             tool, outcome = call.get("tool"), call.get("outcome")
             outcomes[f"{tool}:{outcome}"] += 1
-            if outcome != "ok":
-                continue
-            if tool in CONSULT_TOOLS:
+            if outcome == "ok" and tool in CONSULT_TOOLS:
                 did_consult = True
-            operation = call.get("operation_id")
-            if tool == "record" and isinstance(operation, str):
-                did_capture = True
-                record_operations.add(operation)  # a replay repeats the operation_id; count it once
-                memory_id = call.get("memory_id")
-                if isinstance(memory_id, str) and memory_id not in captures:
-                    captures[memory_id] = (instance.key, call["_when"])
-            elif tool == "revise" and isinstance(operation, str):
-                revise_operations.add(operation)
+            if outcome == "ok" and tool == "revise" and isinstance(call.get("operation_id"), str):
+                revise_operations.add(call["operation_id"])
         consulted += did_consult
-        captured += did_capture
+
+    # Captures are attributed in call order across all instances, not instance by instance: a
+    # replay repeats its operation_id, and the replaying instance may have started earlier than the
+    # one that wrote it. Only the first appearance of an operation is a capture.
+    records = sorted(
+        ((call["_when"], instance.key, call) for instance in window for call in instance.calls
+         if call.get("tool") == "record" and call.get("outcome") == "ok" and isinstance(call.get("operation_id"), str)),
+        key=lambda item: item[0],
+    )
+    for when, key, call in records:
+        if call["operation_id"] in record_operations:
+            continue
+        record_operations.add(call["operation_id"])
+        capturing.add(key)
+        memory_id = call.get("memory_id")
+        if isinstance(memory_id, str) and memory_id not in captures:
+            captures[memory_id] = (key, when)
+    captured = len(capturing)
 
     reuse: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()

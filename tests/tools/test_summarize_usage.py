@@ -91,6 +91,26 @@ def test_the_negative_controls_produce_no_reuse(tmp_path: Path) -> None:
     assert report["records"] == 3
 
 
+def test_a_replay_by_an_earlier_started_session_is_neither_a_capture_nor_an_origin(tmp_path: Path) -> None:
+    log = Log()
+    log.event("A", 1, "start")                      # A starts first...
+    log.session("B", 2, 6, [(3, "record", {"memory_id": "M", "operation_id": "op1"})])  # ...B captures M
+    log.call("A", 4, "record", memory_id="M", operation_id="op1")   # A replays B's operation
+    log.call("A", 5, "get", memory_id="M")                           # and then fetches M
+    log.event("A", 7, "stop")
+    report = _report(tmp_path, log)
+    assert (report["instances_captured"], report["records"]) == (1, 1)
+    assert [(c["memory_id"], c["captured_by"], c["reused_by"], c["via"]) for c in report["reuse_candidates"]] == [
+        ("M", "B", "A", "get")]
+
+
+def test_blank_lines_are_not_counted_as_malformed(tmp_path: Path) -> None:
+    log = Log()
+    log.session("A", 1, 2)
+    log.lines.insert(1, "")
+    assert _report(tmp_path, log)["health"]["malformed_lines"] == 0
+
+
 def test_the_window_excludes_sessions_opened_before_the_clock(tmp_path: Path) -> None:
     log = Log()
     log.session("early", -30, -20, [(-25, "record", {"memory_id": "M", "operation_id": "op1"})])

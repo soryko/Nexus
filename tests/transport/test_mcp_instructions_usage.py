@@ -358,6 +358,40 @@ def test_a_short_write_is_finished_so_the_next_line_survives(tmp_path: Path, mon
     assert (usage.events_written, usage.write_failures) == (2, 0)
 
 
+@pytest.mark.parametrize("disk_recovers_at_once", [True, False])
+def test_a_fragment_left_by_a_failed_write_never_swallows_the_next_event(
+        tmp_path: Path, monkeypatch, disk_recovers_at_once: bool) -> None:
+    import errno
+
+    log_path = tmp_path / "usage.jsonl"
+    usage = UsageLog(log_path, tmp_path / "memory.sqlite3")
+    real_write = os.write
+    script = iter(["partial", "enospc"] + ([] if disk_recovers_at_once else ["enospc"]))
+
+    def failing(descriptor, data):
+        step = next(script, "real")
+        if step == "partial":
+            return real_write(descriptor, bytes(data[:7]))
+        if step == "enospc":
+            raise OSError(errno.ENOSPC, "No space left on device")
+        return real_write(descriptor, data)
+
+    monkeypatch.setattr(usage_module.os, "write", failing)
+    usage.write({"event": "call", "tool": "status", "outcome": "ok"})  # torn: 7 bytes, then disk full
+    usage.write({"event": "call", "tool": "get", "outcome": "ok"})
+    usage.close()
+    lines = [line for line in log_path.read_text("ascii").splitlines() if line.strip()]
+    parsed = []
+    for line in lines:
+        try:
+            parsed.append(json.loads(line))
+        except json.JSONDecodeError:
+            parsed.append(None)
+    assert parsed[0] is None  # the fragment stays a malformed line of its own
+    assert [event["tool"] for event in parsed[1:]] == ["get"]
+    assert (usage.events_written, usage.write_failures) == (1, 1)
+
+
 def test_unsafe_destinations_raise_the_dedicated_error(tmp_path: Path) -> None:
     db = tmp_path / "memory.sqlite3"
     SQLiteRepository(db)
