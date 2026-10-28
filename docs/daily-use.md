@@ -5,7 +5,10 @@ actually *do* with it while programming?
 
 The routine is four parts — **capture**, **consult**, **verify**, **correct**. It is
 deliberately small and deliberately manual. Nothing here is enforced by the server; these are
-working habits, and the numbers in them are starting points, not tuned values.
+working habits, and the numbers in them are starting points, not tuned values. Builds after
+`0.1.0a2` do send the model a short form of it as server instructions, so with those builds the
+policy a session followed is that text, named by its `instructions_digest` — see the
+[README](../README.md#what-the-server-tells-the-model-and-what-it-records).
 
 > [!IMPORTANT]
 > Nexus reliably stores text and gives it back to you later. Whether that makes your work
