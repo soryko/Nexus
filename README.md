@@ -9,6 +9,11 @@
 
 An agent stores a fact once and reads it back in a later session, on a different process, with the same bytes it wrote. Everything runs locally against one SQLite file. No model call, network request or external service touches the write path.
 
+**License:** [PolyForm Noncommercial 1.0.0](LICENSE). Nexus is source-available.
+Commercial use outside the license's express permissions requires a separate written
+commercial license from Sory Kora. See [licensing and commercial requests](LICENSING.md),
+including the license's permissions for qualifying noncommercial organizations.
+
 > [!IMPORTANT]
 > **Search covers current revisions only.** A term that appears solely in a superseded revision will not find that memory — use `history` to browse a memory's revisions and `get` to read an older one. Ranking is BM25 lexical ordering, not relevance: there is no semantic similarity, no embeddings and no learned ranking. Repository-verified references are implemented and closed, and `search` filters on that recorded evidence by repository, path and commit. Nothing *ranks* by it: a reference filter narrows a result set and never reorders it, adds no evidence and never re-verifies on read. Symbol indexing, automatic extraction and context-budget packing are later milestones. **No retrieval-quality advantage over any other tool has been measured or is claimed.** The v2 evaluation set *is* now judged and this build is measured against it ([results](benchmarks/eval/results-v2.md)) — but that is one 17-query set scoring this build alone, with labels that are AI-assessed, AI-audited twice and human-authorised, with no human audit at label level. No comparison against another system has been run.
 > **Nor has any end-to-end benefit to an agent been shown.** The A1 held-out agent comparison
@@ -22,6 +27,8 @@ An agent stores a fact once and reads it back in a later session, on a different
 > helps". Two of the four tasks were solved by nobody and 29 of 36 arm-runs hit the turn
 > ceiling, so the comparison is heavily qualified — but it is not qualified in Nexus's favour,
 > and no positive agent result exists.
+> **A working, durable memory service is what this release claims; improved
+> coding outcomes are not.**
 
 ## What it gives you
 
@@ -40,9 +47,27 @@ An agent stores a fact once and reads it back in a later session, on a different
 Python 3.12+ and [uv](https://docs.astral.sh/uv/getting-started/installation/), with a Python whose **linked SQLite is 3.51.3 or newer**.
 
 > [!WARNING]
-> A Python that satisfies the version floor can still fail the SQLite one — the two are independent. uv's own managed CPython builds currently link SQLite 3.50.4 on macOS, so a plain `uv sync` can produce an environment that cannot start this server.
+> A Python that satisfies the version floor can still fail the SQLite one — the two are independent. Which SQLite an interpreter links is a property of that individual build, not of its Python version, its distributor or the `sqlite3` on your PATH, and builds from one distributor have been observed on both sides of the floor. So a plain `uv sync` can produce an environment that cannot start this server, and no distributor is assumed safe: `tools/install.py` probes each candidate and reports both numbers.
 
 ## Quickstart
+
+**To use it.** This builds a normal installation in its own environment, so the checkout is
+only needed to install and upgrade — not to run:
+
+```bash
+nexus_runtime="$HOME/.local/share/nexus-memory/venvs/0.1.0a2"
+python3 tools/install.py --venv "$nexus_runtime"
+"$nexus_runtime/bin/nexus-memory-check"
+```
+
+The first probes candidate interpreters, prints **both** version numbers for each, builds
+the environment from the first that satisfies the Python **and** SQLite floors, and
+re-checks the environment it built. The second is installed alongside the server and drives
+it over MCP in three separate processes — store, restart, read back byte-identical, search,
+retry without duplicating — exiting nonzero if any of it fails.
+
+**To work on it.** `uv sync` installs the project *editable*, linked to this checkout, with
+the development dependencies:
 
 ```bash
 python3 tools/install.py
@@ -68,6 +93,9 @@ Read that version before going further. If it is below 3.51.3, rebuild the envir
 uv venv --python /path/to/python3.12-or-newer   # one whose linked SQLite is 3.51.3+
 uv sync --frozen
 ```
+
+The two are not interchangeable: an editable environment stops working if this checkout
+moves, which is why it is the developer path and not the user one.
 
 **Installing to use it?** [`docs/experimental-release.md`](docs/experimental-release.md) is
 the short path: install, verify, connect Claude Code (tested), back up, and the known limits
@@ -107,17 +135,34 @@ Add a stdio server entry to your MCP client's configuration, substituting your a
 {
   "mcpServers": {
     "nexus-memory": {
-      "command": "/absolute/path/nexus-memory/.venv/bin/nexus-memory",
+      "command": "/absolute/path/.local/share/nexus-memory/venvs/0.1.0a2/bin/nexus-memory",
       "args": ["--namespace", "my-repo", "--actor", "local"]
     }
   }
 }
 ```
 
-On Windows the installed command is `.venv/Scripts/nexus-memory.exe`. Your client's configuration file location may differ; the JSON shape above is the common one.
+On Windows the installed command is `<environment>\Scripts\nexus-memory.exe`. Your client's configuration file location may differ; the JSON shape above is the common one.
 
 > [!TIP]
 > Point `command` at the environment whose SQLite check passed. A client launching an interpreter below the floor only sees the transport close, because the diagnosis (`startup_error: unsupported_runtime`) goes to the server's stderr where the client is not looking.
+
+## Using it day to day
+
+Connecting a client is not the same as getting anything out of it. Three milestones, worth
+keeping apart because only the last one is evidence the service is doing something for you:
+
+| Milestone | What it means | How you know |
+| --- | --- | --- |
+| **Installation verified** | the environment can serve MCP at all | `nexus-memory-check` passes |
+| **Client connected** | your agent reached that server | the client lists the seven tools |
+| **Fact reused** | a memory written in one session was found and used in a later one | you searched for it in a new session and it changed what you did |
+
+The first two are setup steps you do once. The third is a habit.
+[**Using Nexus during ordinary work**](docs/daily-use.md) is that habit written down -- what is
+worth capturing, how briefly to consult, why a search hit is a candidate and not an answer, and
+how to correct a memory that has gone stale. The canonical requests live in
+[`examples/daily-use/`](examples/daily-use/) and are executed as-written by the test suite.
 
 ## Tools
 
