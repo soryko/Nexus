@@ -340,6 +340,16 @@ def test_missing_log_directories_are_created_private_and_an_existing_log_is_tigh
     assert stat.S_IMODE(os.stat(loose).st_mode) == 0o600
 
 
+def test_a_platform_without_fchmod_still_opens_the_log(tmp_path: Path, monkeypatch) -> None:
+    # Windows on Python 3.12 has no os.fchmod and reports writable files with group/other bits.
+    loose = tmp_path / "loose.jsonl"
+    loose.touch()
+    loose.chmod(0o644)
+    monkeypatch.delattr(usage_module.os, "fchmod")
+    UsageLog(loose, tmp_path / "memory.sqlite3").close()
+    assert stat.S_IMODE(os.stat(loose).st_mode) == 0o644  # left alone, not a startup failure
+
+
 def test_a_short_write_is_finished_so_the_next_line_survives(tmp_path: Path, monkeypatch) -> None:
     log_path = tmp_path / "usage.jsonl"
     usage = UsageLog(log_path, tmp_path / "memory.sqlite3")

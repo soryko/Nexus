@@ -134,7 +134,9 @@ def _open_destination(path: Path, database: Path) -> int:
             raise UnsafeUsageLog("usage log file belongs to another user")
         if any(_identity(name) == (info.st_dev, info.st_ino) for name in database_files):
             raise UnsafeUsageLog("usage log path is a database file")
-        if stat.S_IMODE(info.st_mode) & 0o077:
+        # POSIX permission bits only. Windows reports writable files as 0o666 whatever their ACL says,
+        # and before Python 3.13 it has no os.fchmod at all, so tightening there is meaningless.
+        if os.name != "nt" and hasattr(os, "fchmod") and stat.S_IMODE(info.st_mode) & 0o077:
             os.fchmod(descriptor, 0o600)
         if fcntl is not None:
             fcntl.fcntl(descriptor, fcntl.F_SETFL, fcntl.fcntl(descriptor, fcntl.F_GETFL) & ~os.O_NONBLOCK)
