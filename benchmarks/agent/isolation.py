@@ -174,7 +174,8 @@ def default_allow_paths(arm_repo: Path, python: str | None = None) -> list[Path]
 
 def profile_for(arm_repo: Path, deny_paths: list[Path], allow_paths: list[Path] | None = None,
                 forwarder_port: int | None = None,
-                allow_entries: list[Path] | None = None) -> str:
+                allow_entries: list[Path] | None = None, *,
+                write_roots: list[Path] | None = None) -> str:
     """Deny-by-default reads. `deny_paths` are applied last and are NOT existence-filtered.
 
     `allow_paths` grants a whole subtree when the path is a directory, which is the right
@@ -188,6 +189,15 @@ def profile_for(arm_repo: Path, deny_paths: list[Path], allow_paths: list[Path] 
     entries = list(RUNNER_SCRATCH_ENTRIES if allow_entries is None else allow_entries)
     denies = [*(HOME / d for d in HOME_DENIES), *deny_paths]
     lines = [HEADER.format(net=net)]
+    if write_roots is not None:
+        lines += ["(deny file-write*)", '(allow file-write* (literal "/dev/null"))']
+        for root in write_roots:
+            # Sandbox paths are canonical on macOS. Resolve only system-owned aliases;
+            # resolving a link planted by an arm could turn it into a grant on its target.
+            path = Path(root).absolute()
+            if path.parts[1:2] in (("tmp",), ("var",), ("etc",)):
+                path = Path("/private", *path.parts[1:])
+            lines.append(f'(allow file-write* (subpath "{_q(path)}"))')
     for p in allows:
         lines.append(f'(allow file-read* (subpath "{_q(p)}"))'
                      if Path(p).is_dir() or not Path(p).exists()
@@ -208,13 +218,15 @@ def profile_for(arm_repo: Path, deny_paths: list[Path], allow_paths: list[Path] 
 def write_profile(path: Path, arm_repo: Path, deny_paths: list[Path],
                   allow_paths: list[Path] | None = None,
                   forwarder_port: int | None = None,
-                  allow_entries: list[Path] | None = None) -> Path:
+                  allow_entries: list[Path] | None = None, *,
+                  write_roots: list[Path] | None = None) -> Path:
     """Note what is NOT here: the `if p.exists()` filter the previous version applied to
     `deny_paths`. A path that does not exist yet is exactly the case that needs denying --
     the scoring directory is created part-way through the run."""
     resolved_denies = [Path(os.path.realpath(p)) for p in deny_paths]
     artifact_io.write_text(path, profile_for(Path(arm_repo).resolve(), resolved_denies,
-                                             allow_paths, forwarder_port, allow_entries),
+                                             allow_paths, forwarder_port, allow_entries,
+                                             write_roots=write_roots),
                            parents=True)
     return path
 

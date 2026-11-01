@@ -63,54 +63,59 @@ def parse(path) -> dict:
     positions on a trace-wide event counter, and — once joined — the `result` text that
     actually came back for THAT id, plus `is_error`.
     """
+    with _open(path) as fh:
+        return parse_lines(fh)
+
+
+def parse_lines(fh) -> dict:
+    """Parse the parent's captured stdout or a checked historical trace stream."""
     calls: list[dict] = []
     by_id: dict[str, dict] = {}
     envelope = None
     ev = 0                      # one monotonic counter over issues AND arrivals
-    with _open(path) as fh:
-        for line in fh:
-            line = line.strip()
-            if not line.startswith("{"):
-                continue
-            try:
-                d = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            kind = d.get("type")
-            if kind == "assistant":
-                for b in d["message"].get("content", []):
-                    if b.get("type") == "tool_use":
-                        c = {"id": b.get("id"), "index": len(calls), "name": b.get("name"),
-                             "input": b.get("input"), "result": None, "is_error": None,
-                             "issued_at": ev, "resolved_at": None}
-                        ev += 1
-                        calls.append(c)
-                        if c["id"]:
-                            by_id[c["id"]] = c
-            elif kind == "user":
-                content = d.get("message", {}).get("content", [])
-                if not isinstance(content, list):
-                    continue
-                for b in content:
-                    if b.get("type") != "tool_result":
-                        continue
-                    tid = b.get("tool_use_id")
-                    target = by_id.get(tid)
-                    if target is None:
-                        # An unmatched result is recorded, never silently reassigned to
-                        # whichever call happened to be pending.
-                        calls.append({"id": None, "index": len(calls), "name": "<orphan result>",
-                                      "input": None, "result": _text(b.get("content")),
-                                      "is_error": b.get("is_error"), "orphan_for": tid,
-                                      "issued_at": None, "resolved_at": ev})
-                        ev += 1
-                        continue
-                    target["result"] = _text(b.get("content"))
-                    target["is_error"] = b.get("is_error")
-                    target["resolved_at"] = ev
+    for line in fh:
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            d = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        kind = d.get("type")
+        if kind == "assistant":
+            for b in d["message"].get("content", []):
+                if b.get("type") == "tool_use":
+                    c = {"id": b.get("id"), "index": len(calls), "name": b.get("name"),
+                         "input": b.get("input"), "result": None, "is_error": None,
+                         "issued_at": ev, "resolved_at": None}
                     ev += 1
-            elif kind == "result":
-                envelope = d
+                    calls.append(c)
+                    if c["id"]:
+                        by_id[c["id"]] = c
+        elif kind == "user":
+            content = d.get("message", {}).get("content", [])
+            if not isinstance(content, list):
+                continue
+            for b in content:
+                if b.get("type") != "tool_result":
+                    continue
+                tid = b.get("tool_use_id")
+                target = by_id.get(tid)
+                if target is None:
+                    # An unmatched result is recorded, never silently reassigned to
+                    # whichever call happened to be pending.
+                    calls.append({"id": None, "index": len(calls), "name": "<orphan result>",
+                                  "input": None, "result": _text(b.get("content")),
+                                  "is_error": b.get("is_error"), "orphan_for": tid,
+                                  "issued_at": None, "resolved_at": ev})
+                    ev += 1
+                    continue
+                target["result"] = _text(b.get("content"))
+                target["is_error"] = b.get("is_error")
+                target["resolved_at"] = ev
+                ev += 1
+        elif kind == "result":
+            envelope = d
     return {"calls": calls, "result": envelope,
             "orphans": sum(1 for c in calls if c["name"] == "<orphan result>"),
             "unresolved": sum(1 for c in calls if c["result"] is None

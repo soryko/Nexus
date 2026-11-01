@@ -13,7 +13,7 @@ no benefit figure may be computed from a corpus authored by someone who had read
 What such a run shows is that the plumbing works and the arms differ in the intended way.
 """
 from __future__ import annotations
-import json, os, shutil, subprocess, sys, time
+import io, json, os, shutil, subprocess, sys, time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -30,7 +30,7 @@ sys.path.insert(0, str(BENCH))
 import a1_config
 from build_fixture import score  # the same scorer the controls used
 from scorer_sandbox import candidate_patch as patch_of
-from trace_parse import parse as parse_trace
+from trace_parse import parse_lines as parse_trace_lines
 from terminal_status import classify
 import isolation
 import identity as ident
@@ -42,6 +42,7 @@ import task_set
 # harness worked on exactly one host on exactly one day -- and a deny for a path that has
 # moved looks, in the artifact, exactly like a deny that works.
 CFG = a1_config.load().require()
+A3_ARM = CFG.config_version in {"a3-v1", "a3-v1-REHEARSAL"}
 REPO = Path(CFG.repo)
 PYTEST_PY = CFG.pytest_python
 FORWARDER_PORT = CFG.forwarder_port
@@ -223,8 +224,15 @@ def write_arm_profile(arm: str, cwd: Path) -> Path:
     cfg = OUT / "arms" / arm / "mcp.json"
     artifact_io.write_text(cfg, json.dumps(mcp_config(arm)), parents=True)
     allow, deny = boundary_paths(arm, cwd)
+    write_roots = None
+    if A3_ARM:
+        # All launch markers, transcripts, scores and the sweep ledger are operator-owned.
+        # The agent can edit its checkout and work in its two private scratch directories.
+        write_roots = [cwd, cfg.parent / "tmp", isolation.runner_scratch_for(cwd)]
+        if ARMS[arm]["memory"]:
+            write_roots.append(arm_store(arm).parent)  # private SQLite database and sidecars
     return isolation.write_profile(OUT / "arms" / arm / "sandbox.sb", cwd, deny, allow,
-                                   FORWARDER_PORT)
+                                   FORWARDER_PORT, write_roots=write_roots)
 
 
 def invoke(arm: str, cwd: Path) -> dict:
@@ -249,9 +257,11 @@ def invoke(arm: str, cwd: Path) -> dict:
     with artifact_io.directory_fd(heredoc_tmp, parents=True):
         pass
     # the sandbox denies every host but localhost; the forwarder is the only egress
+    temp_env = {"TMPPREFIX": str(heredoc_tmp / "zsh")}
+    if A3_ARM:
+        temp_env["TMPDIR"] = str(heredoc_tmp)
     env = a1_config.child_env(f"http://127.0.0.1:{FORWARDER_PORT}/anthropic",
-                              os.environ["DEEPSEEK_API_KEY"],
-                              {"TMPPREFIX": str(heredoc_tmp / "zsh")})
+                              os.environ["DEEPSEEK_API_KEY"], temp_env)
     # Gate THIS arm, with the profile and environment it is about to run under -- not a
     # representative one built elsewhere. A1's arms were measured in a sandbox where the
     # documented interpreter invocation and here-documents did not work; none of it reached
@@ -315,7 +325,7 @@ def invoke(arm: str, cwd: Path) -> dict:
     wall = time.monotonic() - t0
     artifact_io.create_text(OUT / "arms" / arm / "trace.jsonl", out)
     artifact_io.create_text(OUT / "arms" / arm / "stderr.txt", err)
-    return {"arm": arm, "started_utc": started.isoformat(), "wall_clock_s": round(wall, 1),
+    return {**_trace_record(out), "arm": arm, "started_utc": started.isoformat(), "wall_clock_s": round(wall, 1),
             "forced_verdict": verdict, "child_env": a1_config.env_record(env),
             # WHICH interpreter this arm-run was measured under, resolved inside the arm's own
             # boundary rather than read off a configuration path. v2 rows carry no such field,
@@ -323,9 +333,9 @@ def invoke(arm: str, cwd: Path) -> dict:
             "runtime_identity": runtime_identity}
 
 
-def read_trace(arm: str) -> dict:
-    """Tool trace and envelope, joined by tool_use_id (see trace_parse)."""
-    t = parse_trace(OUT / "arms" / arm / "trace.jsonl")
+def _trace_record(stdout: str) -> dict:
+    """The CLI envelope comes from the captured child pipe, never from a writable file."""
+    t = parse_trace_lines(io.StringIO(stdout))
     return {"tool_calls": [{"id": c["id"], "index": c["index"], "name": c["name"],
                             "input": c["input"], "result": (c["result"] or "")[:4000],
                             "is_error": c["is_error"]} for c in t["calls"]],
@@ -533,7 +543,6 @@ def main() -> int:
         rec = invoke(arm, cwd)
         rec["boundary"] = bound
         rec["memory_visibility"] = vis
-        rec.update(read_trace(arm))
         patch = patch_of(cwd)
         artifact_io.create_text(OUT / "arms" / arm / "patch.diff", patch)
         rec["patch_bytes"] = len(patch)

@@ -121,6 +121,12 @@ def _run_locked_pair(scratch: Path, output_root: Path, task: str, attempt: int,
     # and, until now, was called only by the rehearsal's driver: production reached both
     # invocations with the threshold never consulted. The launch unit is the pair, so this
     # is asked once, here, and never again inside the loop.
+    if not dry_run:
+        try:
+            L.check_execution_root(scratch)
+        except OSError as exc:
+            print(f"run_a3: refusing this sweep root: {exc}", flush=True)
+            return 3
     admit = L.may_admit_pair(scratch, task, attempt, registered)
     canonical_pair = L.pair_directory(scratch, task, attempt)
     print(f"pair admission [{admit['gate']}]: "
@@ -151,6 +157,9 @@ def _run_locked_pair(scratch: Path, output_root: Path, task: str, attempt: int,
     try:
         with artifact_io.directory_fd(pair_dir.parent, parents=True) as parent:
             artifact_io.require_staging_filesystem(parent)
+            if not dry_run:
+                L.start_epoch(scratch)
+                L.claim_pair(scratch, task, attempt)
             os.mkdir(pair_dir.name, mode=0o700, dir_fd=parent)
     except FileExistsError:
         print("run_a3: the pair output already exists; keeping its evidence.", flush=True)
@@ -231,7 +240,6 @@ def _run_locked_pair(scratch: Path, output_root: Path, task: str, attempt: int,
         rec["policy"] = policy
         rec["prompt_digest"] = digest
         rec["boundary"] = bound
-        rec.update(R.read_trace(ARM))
         patch = R.patch_of(cwd)
         artifact_io.create_text(out / "arms" / ARM / "patch.diff", patch)
         rec["patch_bytes"] = len(patch)
@@ -264,6 +272,9 @@ def _run_locked_pair(scratch: Path, output_root: Path, task: str, attempt: int,
             {"task": task, "attempt": attempt, "policy": policy, "arm": ARM,
              "prompt_digest": digest, "identity": R.run_identity(), "record": rec},
             indent=1))
+        # An occupied or failed ordinary evidence write above leaves ONLY the operator
+        # launch claim. A later attempt cannot recover consumption from a planted file.
+        L.record_outcome(scratch, task, attempt, policy, u)
         records.append(rec)
         print(f"  -> {rec['terminal']}  patch={rec['patch_bytes']}B  "
               f"checks: {rec['scored']['summary']}", flush=True)

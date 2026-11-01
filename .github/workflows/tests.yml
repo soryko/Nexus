@@ -138,6 +138,7 @@ jobs:
             benchmarks/agent/test_a3_pipeline.py \
             benchmarks/agent/test_provenance.py \
             benchmarks/agent/test_a3_production.py \
+            benchmarks/agent/test_a3_operator_receipts.py \
             benchmarks/agent/test_scorer_sandbox.py \
             benchmarks/agent/test_turn_accounting.py \
             --junitxml=artifacts/junit/bench.xml
@@ -267,9 +268,11 @@ jobs:
             2>&1 | tee "artifacts/distribution-${{ matrix.os }}.log"
           exit "${PIPESTATUS[0]}"
 
-      - name: Verify macOS scorer confinement on disposable fixtures
+      - name: Verify macOS arm and scorer confinement on disposable fixtures
         if: runner.os == 'macOS'
-        run: uv run --frozen pytest -q benchmarks/agent/test_scorer_sandbox.py
+        run: |
+          uv run --frozen pytest -q benchmarks/agent/test_scorer_sandbox.py \
+            benchmarks/agent/test_a3_arm_write_boundary.py
 
       - name: Fresh-install evidence
         if: always()

@@ -12,6 +12,12 @@ a fresh execution record, verified protection for the operator's ledger, and fou
 For a scratch directory on another volume, set `TMPDIR` to a private directory on that
 volume so the runner can publish staged files atomically.
 
+Start each new sweep in a fresh scratch root with its prepared fixtures. Existing sweeps
+remain readable for historical reports. For new sweeps, the runner records usage from
+the CLI output in an operator-owned directory outside the arm’s write permissions.
+A launch without a terminal receipt stops further admission, even if the arm directory
+contains a completed-looking record.
+
 > ## Unauthorised execution already happened against this design
 >
 > On **2026-09-20** a development rehearsal ran two A3-shaped arm-runs against the **real**

@@ -58,6 +58,80 @@ TERMINAL_RECORD = "record.json"
 REFUSAL = "refused.json"
 
 
+OPERATOR_DIR = ".a3-operator"
+FORMAT_FILE = "format.json"
+FORMAT = '{"schema":"a3-operator-accounting","version":1}\n'
+
+
+def _operator_format(root: Path) -> bool:
+    area = root / OPERATOR_DIR
+    if not os.path.lexists(area):
+        return False
+    try:
+        value = artifact_io.read_text(area / FORMAT_FILE)
+    except (OSError, ValueError) as exc:
+        raise OSError("unreadable or incomplete A3 operator ledger") from exc
+    if value != FORMAT:
+        raise OSError("unrecognized A3 operator ledger format")
+    return True
+
+
+def check_execution_root(root: Path) -> None:
+    """An epoch may start only on a fresh sweep. Legacy archives remain reportable."""
+    operator = _operator_format(root)
+    # Setup may pre-provision run-<task>/base. Any other entry in a task tree
+    # must belong to a pair claimed by this epoch, even if its first arm never ran.
+    with artifact_io.directory_fd(root) as fd, os.scandir(fd) as entries:
+        for entry in entries:
+            if entry.name.startswith("run-"):
+                with artifact_io.directory_fd(root / entry.name) as task_fd:
+                    attempts = set(os.listdir(task_fd)) - {"base"}
+                for name in attempts:
+                    task = entry.name.removeprefix("run-")
+                    claim = root / OPERATOR_DIR / "receipts" / task / name / "claim.json"
+                    if not operator or not (_present(claim) or any(
+                            _present(claim.parent / policy / REFUSAL) for policy in A3_PLAN.policies)):
+                        raise OSError("historical or unclaimed A3 attempt; use a fresh sweep root")
+            elif not operator:
+                if entry.is_dir(follow_symlinks=False) or entry.is_symlink():
+                    raise OSError(f"unexpected existing directory in fresh sweep: {entry.name}")
+                if entry.name in (*MARKERS, REFUSAL, TERMINAL_RECORD, "trace.jsonl", "records.json"):
+                    raise OSError(f"existing run artifact in fresh sweep: {entry.name}")
+
+
+def start_epoch(root: Path) -> None:
+    """Called under the sweep lock, after the non-dry execution guard and before pair claim."""
+    check_execution_root(root)
+    if not _operator_format(root):
+        artifact_io.create_text(root / OPERATOR_DIR / FORMAT_FILE, FORMAT, parents=True)
+
+
+def _operator_pair(root: Path, task: str, attempt: int) -> Path:
+    return root / OPERATOR_DIR / "receipts" / task / f"attempt{attempt}"
+
+
+def claim_pair(root: Path, task: str, attempt: int) -> None:
+    if not _operator_format(root):
+        raise OSError("cannot claim a pair outside an operator epoch")
+    artifact_io.create_text(_operator_pair(root, task, attempt) / "claim.json",
+                            json.dumps({"task": task, "attempt": attempt}), parents=True)
+
+
+def _operator_cell(root: Path, task: str, attempt: int, policy: str) -> Path:
+    return _operator_pair(root, task, attempt) / policy
+
+
+def record_outcome(root: Path, task: str, attempt: int, policy: str, usage: dict | None) -> None:
+    """Publish only the parent process's terminal envelope, after ordinary evidence succeeded."""
+    if not _operator_format(root):
+        raise OSError("A3 terminal accounting requires an initialized operator ledger")
+    cell = _operator_cell(root, task, attempt, policy)
+    if not _present(cell / A3_MARKER):
+        raise OSError("A3 terminal accounting has no operator launch claim")
+    artifact_io.create_text(cell / TERMINAL_RECORD, json.dumps(
+        {"task": task, "attempt": attempt, "policy": policy, "usage": usage}) + "\n")
+
+
 @contextmanager
 def sweep_lock(root: Path):
     """Serialize pair admission through terminal accounting; a process exit releases the lock."""
@@ -91,23 +165,31 @@ def mark_launch(root: Path, task: str, attempt: int, policy: str, *,
     says WHICH POLICY was launched, and an unresolved row whose policy is unknown cannot
     even be attributed to a cell.
     """
-    p = _dir(root, task, attempt, policy) / A3_MARKER
-    artifact_io.create_text(p, json.dumps({
+    evidence = json.dumps({
         "task": task, "attempt": attempt, "policy": policy,
         "launched_utc": datetime.now(timezone.utc).isoformat(),
         "max_turns": max_turns, "wall_clock_s_limit": wall_clock_s,
         "prompt_digest": prompt_digest, "identity": identity,
-    }, indent=1) + "\n", parents=True)
+    }, indent=1) + "\n"
+    if _operator_format(root):
+        artifact_io.create_text(_operator_cell(root, task, attempt, policy) / A3_MARKER,
+                                evidence, parents=True)
+    p = _dir(root, task, attempt, policy) / A3_MARKER
+    artifact_io.create_text(p, evidence, parents=True)
     return p
 
 
 def mark_refusal(root: Path, task: str, attempt: int, policy: str, reason: str,
                  detail: dict | None = None) -> Path:
     """Record that the runner REFUSED to launch this arm-run. A fatal stop, not a zero."""
+    evidence = json.dumps({"task": task, "attempt": attempt, "policy": policy,
+                           "refused_utc": datetime.now(timezone.utc).isoformat(),
+                           "reason": reason, "detail": detail or {}}, indent=1) + "\n"
+    if _operator_format(root):
+        artifact_io.create_text(_operator_cell(root, task, attempt, policy) / REFUSAL,
+                                evidence, parents=True)
     p = _dir(root, task, attempt, policy) / REFUSAL
-    artifact_io.create_text(p, json.dumps({"task": task, "attempt": attempt, "policy": policy,
-                            "refused_utc": datetime.now(timezone.utc).isoformat(),
-                            "reason": reason, "detail": detail or {}}, indent=1) + "\n", parents=True)
+    artifact_io.create_text(p, evidence, parents=True)
     return p
 
 
@@ -156,6 +238,7 @@ class Ledger:
     unresolved: list[str]
     refusals: dict[str, str]
     rejected_allowances: list[str]
+    accounting_source: str
 
     @property
     def tokens_known(self) -> int:
@@ -166,7 +249,7 @@ class Ledger:
         return not self.unresolved
 
     def as_dict(self) -> dict:
-        return {"arm_runs_started": len(self.started), "started": self.started,
+        return {"accounting_source": self.accounting_source, "arm_runs_started": len(self.started), "started": self.started,
                 "tokens_known": self.tokens_known, "measured": self.measured,
                 "unresolved_arm_runs": self.unresolved, "unresolved": len(self.unresolved),
                 "refusals": self.refusals,
@@ -178,8 +261,12 @@ class Ledger:
 def read(root: Path, plan: Plan = A3_PLAN) -> Ledger:
     """The ledger over every cell the plan registers. Keyed on the LAUNCH MARKER."""
     started, measured, refusals, rejected = [], {}, {}, []
+    try:
+        operator = _operator_format(root)
+    except OSError as exc:
+        return Ledger([], {}, [], {"sweep": str(exc)}, [], "unusable operator ledger")
     for task, attempt, policy in plan.cells():
-        d = _dir(root, task, attempt, policy)
+        d = (_operator_cell if operator else _dir)(root, task, attempt, policy)
         key = f"{task}/{policy}/{attempt}"
         try:
             if _present(d / REFUSAL):
@@ -188,10 +275,22 @@ def read(root: Path, plan: Plan = A3_PLAN) -> Ledger:
                     refusals[key] = refusal.get("reason", "?") if isinstance(refusal, dict) else "?"
                 except ValueError:
                     refusals[key] = "unreadable refusal record"
-            if not any(_present(d / marker) for marker in MARKERS):
+            if not any(_present(d / marker) for marker in ((A3_MARKER,) if operator else MARKERS)):
+                if operator and _present(d / TERMINAL_RECORD):
+                    refusals[key] = "operator outcome without a launch claim"
                 continue
             started.append(key)
-            tokens = _measured(d)
+            if operator:
+                tokens = None
+                try:
+                    receipt = json.loads(artifact_io.read_text(d / TERMINAL_RECORD))
+                except (FileNotFoundError, ValueError):
+                    receipt = None
+                if (isinstance(receipt, dict) and receipt.get("task") == task
+                        and receipt.get("attempt") == attempt and receipt.get("policy") == policy):
+                    tokens = usage_tokens(receipt.get("usage"))
+            else:
+                tokens = _measured(d)
             if tokens is not None:
                 measured[key] = tokens
             if _present(d / "resolution.json"):
@@ -200,7 +299,8 @@ def read(root: Path, plan: Plan = A3_PLAN) -> Ledger:
         except OSError:
             refusals[key] = "unsafe or unreadable ledger artifact"
     unresolved = sorted(set(started) - set(measured))
-    return Ledger(sorted(started), measured, unresolved, refusals, sorted(rejected))
+    return Ledger(sorted(started), measured, unresolved, refusals, sorted(rejected),
+                  "operator receipts" if operator else "historical arm artifacts")
 
 
 # ---------------------------------------------------------------------------------------
@@ -269,7 +369,8 @@ def may_admit_pair(root: Path, task: str, attempt: int, plan: Plan = A3_PLAN, *,
     if stop:
         return {"may_start": False, "task": task, "attempt": attempt,
                 "gate": "fatal", **stop}
-    if os.path.lexists(pair_directory(root, task, attempt)):
+    if (os.path.lexists(pair_directory(root, task, attempt))
+            or os.path.lexists(_operator_pair(root, task, attempt))):
         return {"may_start": False, "task": task, "attempt": attempt, "gate": "existing",
                 "stop": True, "stopping_reason": "pair_occupied",
                 "reason": "the pair already has an output directory; keeping its evidence"}
