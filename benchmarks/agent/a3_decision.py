@@ -583,9 +583,13 @@ def render(report: dict) -> str:
     for k in ("missing", "duplicate_identities", "unplanned"):
         if v[k]:
             L.append(f"    {k}: {', '.join(v[k])}")
+    if "tokens_known" in c:
+        gate = "clear" if c["further_launches_permitted"] else "blocked"
+        status = f"accounting gate {gate}, {c['tokens_known']:,} known provider tokens from {c['accounting_source']}"
+    else:
+        status = f"further launches {'permitted' if c['further_launches_permitted'] else 'STOPPED'}"
     L += [f"consumption: {c['state']}   {c['resolved_arm_runs']}/{report['validity']['records']}"
-          f" accounted; further launches "
-          f"{'permitted' if c['further_launches_permitted'] else 'STOPPED'}"
+          f" accounted; {status}"
           + (f" ({c['stopping_reason']})" if c["stopping_reason"] else ""), ""]
     for name, dim in report["dimensions"].items():
         L.append(f"{name:16} {dim['state']}"

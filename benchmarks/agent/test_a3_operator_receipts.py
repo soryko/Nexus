@@ -104,7 +104,7 @@ def test_missing_or_bad_operator_format_never_falls_back(tmp_path, shape):
 @pytest.mark.parametrize("terminal,artifacts", [(True, "forged"), (True, "moved"),
                                                 (False, "forged")])
 def test_report_and_cost_share_the_admission_receipt(tmp_path, terminal, artifacts):
-    from a3_decision import Plan
+    from a3_decision import Plan, render
     import shutil
 
     plan = Plan(tasks=("k1",), attempts=1)
@@ -136,3 +136,7 @@ def test_report_and_cost_share_the_admission_receipt(tmp_path, terminal, artifac
     assert report["consumption"]["unresolved_arm_runs"] == ([] if terminal else ["k1/A/1"])
     assert report["further_launches_permitted"] is terminal
     assert report["validity"]["distinct_identities"] == 1
+    shown = render(report)
+    assert f"accounting gate {'clear' if terminal else 'blocked'}" in shown
+    assert f"{charged:,} known provider tokens from operator receipts" in shown
+    assert "further launches permitted" not in shown
