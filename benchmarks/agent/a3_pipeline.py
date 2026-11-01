@@ -35,7 +35,7 @@ import ast
 import json
 import re
 import shlex
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import a3_ledger
@@ -539,7 +539,8 @@ class Normalised:
 def normalise(root: Path, task: str, attempt: int, policy: str, *,
               facts: dict[str, list[str]], bodies: dict[str, str],
               pristine: Path, python: str, notes_file: Path,
-              counting_method: str = DEFAULT_COUNTING_METHOD) -> Normalised:
+              counting_method: str = DEFAULT_COUNTING_METHOD,
+              accounting: a3_ledger.Ledger | None = None) -> Normalised:
     """One saved arm-run -> one `ArmRun`. Absent evidence becomes `None`, never a zero.
 
     Every field that cannot be read is unresolved. That is the whole point of the stage: a
@@ -565,17 +566,18 @@ def normalise(root: Path, task: str, attempt: int, policy: str, *,
     rn = d / "relevance.json"
     reviewed = json.loads(artifact_io.read_text(rn)).get("relevant") if rn.is_file() else None
 
-    rec = d / "record.json"
-    record = json.loads(artifact_io.read_text(rec)) if rec.is_file() else {}
-    usage = (record.get("record") or record).get("usage") or {}
-    # ONE rule for what a usage block accounts for, shared with `a3_ledger` and
-    # `run_calibration`. Reading `total_tokens` here while the ledger summed the four
-    # registered categories would let the decision's cost dimension and the launch gate
-    # disagree about the same arm-run -- and a usage block of four nulls, which the runner
-    # writes whenever the envelope carried no usage, would read as a measurement.
-    total = usage_tokens(usage)
-    # An accounting that is absent, or that the runner marked unreconciled, is unresolved.
-    resolved = bool(record.get("accounting_resolved", rec.is_file())) and total is not None
+    accounting = accounting if accounting is not None else a3_ledger.read(root)
+    if accounting.is_historical:
+        rec = d / "record.json"
+        record = json.loads(artifact_io.read_text(rec)) if rec.is_file() else {}
+        usage = (record.get("record") or record).get("usage") or {}
+        total = usage_tokens(usage)
+        resolved = bool(record.get("accounting_resolved", rec.is_file())) and total is not None
+        accounting_source = "record.json" if rec.is_file() else "absent -> unresolved"
+    else:
+        total = accounting.measured.get(f"{task}/{policy}/{attempt}")
+        resolved = total is not None
+        accounting_source = accounting.accounting_source
 
     nbytes, text = delivered_text(calls)
     method = COUNTING_METHODS.get(counting_method)
@@ -605,7 +607,7 @@ def normalise(root: Path, task: str, attempt: int, policy: str, *,
         "relevance_reviewed": reviewed,
         "facts_delivered": arm_run.facts_delivered,
         "functional_source": "functional.json" if fn.is_file() else "absent -> unresolved",
-        "accounting_source": "record.json" if rec.is_file() else "absent -> unresolved",
+        "accounting_source": accounting_source,
         "consultation_calls": arm_run.consultation_calls,
         "bound_respected": arm_run.bound_respected,
     })
@@ -630,7 +632,8 @@ def unresolved_arm_run(task: str, attempt: int, policy: str,
 
 
 def collect(root: Path, required_facts: dict[str, dict[str, list[str]]],
-            plan: Plan = A3_PLAN, **kw) -> tuple[list[ArmRun], list[dict]]:
+            plan: Plan = A3_PLAN, *, accounting: a3_ledger.Ledger | None = None,
+            **kw) -> tuple[list[ArmRun], list[dict]]:
     """Every arm-run the plan registers that has actually been saved.
 
     `required_facts` is indexed PER TASK here. Handing one task's equivalence classes to all
@@ -643,29 +646,39 @@ def collect(root: Path, required_facts: dict[str, dict[str, list[str]]],
     `validity` reports it as missing coverage. Inventing a row for it would turn "did not
     run" into "ran and told us nothing", which are different facts.
     """
+    accounting = accounting if accounting is not None else a3_ledger.read(root, plan)
     runs, sources = [], []
     for task, attempt, policy in plan.cells():
         d = arm_run_dir(root, task, attempt, policy)
-        # EITHER marker proves a launch: A3's own, written first by `run_a3`, and the
-        # runner's, written inside `invoke`. Checking only one of them made a cell that the
-        # ledger counts as started invisible to the reporter.
-        launched = any((d / m).is_file() for m in a3_ledger.MARKERS)
+        key = f"{task}/{policy}/{attempt}"
         usable = (d / "trace.jsonl").is_file() and (d / "patch.diff").is_file()
-        if not launched and not usable:
-            continue                        # never started: missing coverage, not a row
-        if not usable:
-            # LAUNCHED and nothing usable came back. It spent an unknown amount and it is a
-            # row. Keying on the trace made this case vanish.
-            runs.append(unresolved_arm_run(task, attempt, policy,
-                                           required_facts.get(task, {})))
-            sources.append({"dir": str(d), "state": "launched, no usable artifacts",
-                            "E1": None, "accounting_source": "launch marker only",
-                            "consumption": "UNRESOLVED"})
-            continue
-        n = normalise(root, task, attempt, policy,
-                      facts=required_facts.get(task, {}), **kw)
-        runs.append(n.arm_run)
-        sources.append(n.sources)
+        if accounting.is_historical:
+            if not usable and not any((d / m).is_file() for m in a3_ledger.MARKERS):
+                continue
+        elif key not in accounting.started:
+            continue  # ordinary artifacts alone cannot manufacture an operator launch
+        facts = required_facts.get(task, {})
+        detail = "launched, no usable artifacts"
+        if usable:
+            try:
+                n = normalise(root, task, attempt, policy, facts=facts, accounting=accounting, **kw)
+            except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+                if accounting.is_historical:
+                    raise
+                detail = f"ordinary artifacts unreadable ({type(exc).__name__})"
+            else:
+                runs.append(n.arm_run)
+                sources.append(n.sources)
+                continue
+        row = unresolved_arm_run(task, attempt, policy, facts)
+        source = "launch marker only"
+        if not accounting.is_historical:
+            known = accounting.measured.get(key)
+            row = replace(row, provider_total_tokens=known, accounting_resolved=known is not None)
+            source = accounting.accounting_source
+        runs.append(row)
+        sources.append({"dir": str(d), "state": detail, "E1": None, "accounting_source": source,
+                        "consumption": "MEASURED" if row.accounting_resolved else "UNRESOLVED"})
     return runs, sources
 
 
@@ -714,8 +727,26 @@ def may_start(runs: list[ArmRun], task: str, attempt: int) -> dict:
 def report(root: Path, required_facts: dict[str, dict[str, list[str]]],
            plan: Plan = A3_PLAN, **kw) -> dict:
     """The whole path, from the saved files to the decision."""
-    runs, sources = collect(root, required_facts, plan, **kw)
+    accounting = a3_ledger.read(root, plan)
+    runs, sources = collect(root, required_facts, plan, accounting=accounting, **kw)
     out = decide(runs, required_facts, plan=plan)
+    consumed = out["consumption"]
+    consumed["accounting_source"] = accounting.accounting_source
+    if not accounting.is_historical:
+        # The cost criterion still needs delivered-context measurements; missing ordinary
+        # outputs make it indeterminate. Provider consumption has its own authoritative
+        # receipts and remains known even when the worktree and its trace have moved.
+        stop = a3_ledger.ledger_stop(accounting)
+        consumed.update({"state": "indeterminate" if stop else "hold",
+                         "resolved_arm_runs": len(accounting.measured),
+                         "unresolved_arm_runs": accounting.unresolved,
+                         "tokens_known": accounting.tokens_known,
+                         "further_launches_permitted": stop is None,
+                         "stopping_reason": stop["stopping_reason"] if stop else None,
+                         "note": "Provider consumption in the reported plan. This gate covers "
+                                 "accounting and refusals; each new pair additionally requires "
+                                 "budget admission and live execution authorization."})
+        out["further_launches_permitted"] = stop is None
     out["normalisation"] = sources
     out["root"] = str(root)
     return out

@@ -241,6 +241,10 @@ class Ledger:
     accounting_source: str
 
     @property
+    def is_historical(self) -> bool:
+        return self.accounting_source == "historical arm artifacts"
+
+    @property
     def tokens_known(self) -> int:
         return sum(self.measured.values())
 
@@ -330,7 +334,11 @@ def fatal_stop(root: Path, plan: Plan = A3_PLAN) -> dict | None:
     B does not launch -- the sweep does not know what it has spent, and launching more is
     how a budget comes to say whatever one likes.
     """
-    led = read(root, plan)
+    return ledger_stop(read(root, plan))
+
+
+def ledger_stop(led: Ledger) -> dict | None:
+    """The same fatal-stop rule for the execution gate and the report's ledger snapshot."""
     if led.unresolved:
         return {"stop": True, "stopping_reason": "unresolved_accounting",
                 "detail": led.unresolved,

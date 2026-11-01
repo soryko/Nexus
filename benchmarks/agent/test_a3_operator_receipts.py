@@ -99,3 +99,40 @@ def test_missing_or_bad_operator_format_never_falls_back(tmp_path, shape):
         ledger.check_execution_root(tmp_path)
     assert ledger.read(tmp_path).tokens_known == 0
     assert ledger.fatal_stop(tmp_path)
+
+
+@pytest.mark.parametrize("terminal,artifacts", [(True, "forged"), (True, "moved"),
+                                                (False, "forged")])
+def test_report_and_cost_share_the_admission_receipt(tmp_path, terminal, artifacts):
+    from a3_decision import Plan
+    import shutil
+
+    plan = Plan(tasks=("k1",), attempts=1)
+    with ledger.sweep_lock(tmp_path) as acquired:
+        assert acquired
+        ledger.start_epoch(tmp_path)
+        ledger.claim_pair(tmp_path, "k1", 1)
+        marker = ledger.mark_launch(tmp_path, "k1", 1, "A", identity={}, max_turns=45,
+                                    wall_clock_s=600, prompt_digest="stub")
+        if terminal:
+            ledger.record_outcome(tmp_path, "k1", 1, "A", {"input_tokens": 175})
+    for policy in ("A", "B"):
+        # B was never launched by the operator; its synthetic directory must not count.
+        d = pipeline.arm_run_dir(tmp_path, "k1", 1, policy)
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "record.json").write_text('{"usage":{"input_tokens":2}}')
+        (d / "trace.jsonl").write_text('{"type":"result","usage":{"input_tokens":2}}\n')
+        (d / "patch.diff").write_text("")
+    if artifacts == "moved":
+        shutil.rmtree(marker.parent)
+    notes = tmp_path / "notes.md"
+    notes.write_text("")
+    report = pipeline.report(tmp_path, {"k1": {}}, plan, pristine=tmp_path,
+                             bodies={}, python="unused", notes_file=notes)
+    charged = 175 if terminal else 0
+    assert report["dimensions"]["cost"]["provider_total_tokens"] == {"A": charged, "B": 0}
+    assert report["consumption"]["tokens_known"] == charged
+    assert report["consumption"]["accounting_source"] == "operator receipts"
+    assert report["consumption"]["unresolved_arm_runs"] == ([] if terminal else ["k1/A/1"])
+    assert report["further_launches_permitted"] is terminal
+    assert report["validity"]["distinct_identities"] == 1
