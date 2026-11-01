@@ -48,7 +48,7 @@ class Log:
         if operation := ids.get("operation_id"):
             ids.setdefault("replayed", operation in self.operations)
             self.operations.add(operation)
-        self.event(instance, minutes, "call", tool=tool, outcome=outcome, ms=1,
+        self.event(instance, minutes, "call", tool=tool, outcome=outcome, ms=ids.pop("ms", 1),
                    client={"name": "claude-code", "version": "2.1"}, **ids)
 
     def session(self, instance: str, start: float, stop: float | None, calls=()) -> None:
@@ -116,6 +116,20 @@ def test_a_replayed_revision_of_a_pre_window_write_is_not_a_pilot_revision(tmp_p
     log.session("inside", 1, 4, [(2, "revise", {"memory_id": "M", "operation_id": "rev1"}),
                                  (3, "revise", {"memory_id": "M", "operation_id": "rev2"})])
     assert _report(tmp_path, log)["revisions"] == 1  # only rev2 was created inside the window
+
+
+def test_a_retrieval_logged_before_the_capture_line_but_after_the_call_began_is_reuse(tmp_path: Path) -> None:
+    # A commits M during a 30-second record call that is logged at minute 10. B's search, logged
+    # 15 seconds earlier, can still have read the commit; C's, logged before A's call began, cannot.
+    log = Log()
+    for name in ("A", "B", "C"):
+        log.event(name, 1, "start")
+    log.call("B", 9.75, "search", hits=1, hit_ids=["M"], hit_ids_truncated=False)
+    log.call("C", 9.0, "get", memory_id="M")
+    log.call("A", 10, "record", memory_id="M", operation_id="op1", ms=30_000)
+    report = _report(tmp_path, log)
+    assert [(c["captured_by"], c["reused_by"], c["via"]) for c in report["reuse_candidates"]] == [("A", "B", "search_hit")]
+    assert report["health"]["retrievals_before_capture"] == 1
 
 
 def test_a_retrieval_in_the_same_instant_as_the_capture_is_still_reuse(tmp_path: Path) -> None:

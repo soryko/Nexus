@@ -22,7 +22,7 @@ import json
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -164,7 +164,11 @@ def summarize(log: Path, since: datetime, until: datetime | None = None) -> dict
                 record_operations.add(operation)
                 capturing.add(instance.key)
                 if isinstance(memory_id := call.get("memory_id"), str):
-                    captures[memory_id] = (instance.key, call["_when"])
+                    # Log timestamps mark when a response was logged, not when it committed. The
+                    # commit happened during the call, so its earliest possible moment is the start:
+                    # the logged time minus the logged duration, less a millisecond for rounding.
+                    duration = call.get("ms") if isinstance(call.get("ms"), int) and call["ms"] >= 0 else 0
+                    captures[memory_id] = (instance.key, call["_when"] - timedelta(milliseconds=duration + 1))
             elif tool == "revise":
                 revise_operations.add(operation)
 
@@ -185,8 +189,10 @@ def summarize(log: Path, since: datetime, until: datetime | None = None) -> dict
                 if origin is None or origin[0] == instance.key:
                     continue  # not captured in the window, or the same session: not reuse
                 if call["_when"] < origin[1]:
-                    # A memory can only be fetched once it exists, so this is a clock or logging fault.
-                    # An equal timestamp is not: two servers can log in the same instant.
+                    # A memory can only be fetched once it exists, and it cannot exist before the call
+                    # that created it began. A retrieval that finished before that is a clock or
+                    # logging fault. One logged before the capture's own line is not: another server
+                    # can read the commit while the capturing call is still returning.
                     retrieved_before_capture += 1
                     continue
                 if (memory_id, instance.key) in seen:
