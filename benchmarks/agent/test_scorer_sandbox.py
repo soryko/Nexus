@@ -60,7 +60,12 @@ def test_candidate_runs_without_host_capabilities(tmp_path, stage, listening_por
 import os, pathlib, socket, subprocess, sys
 def test_permissions():
     import pytest
-    assert pathlib.Path.cwd().exists()
+    (pathlib.Path.cwd() / "candidate-output").write_text("ok")
+    (pathlib.Path(os.environ["TMPDIR"]) / "scratch-output").write_text("ok")
+    if sys.platform == "linux":
+        # The private root and /dev are separate tmpfs mounts. Neither is an output area.
+        for mount in ("/", "/dev"):
+            assert os.statvfs(mount).f_flag & os.ST_RDONLY
     assert "NEXUS_TEST_HOST_SECRET" not in os.environ
     # Darwin prohibits introducing a new subprocess. Linux children inherit the private
     # namespace. Neither may write a host sibling or signal a process in the host session.

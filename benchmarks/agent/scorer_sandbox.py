@@ -113,7 +113,10 @@ def _linux_command(work: Path, scratch: Path, extra: list[Path]) -> list[str]:
     for root in sorted(set(extra), key=str):
         if not any(root.is_relative_to(prefix) for prefix in ("/usr/bin", "/usr/lib", "/usr/lib64")):
             cmd += ["--ro-bind", str(root), str(root)]
+    # Freeze the directories bwrap created to reach each bind target, including /dev/shm
+    # on its separate tmpfs. --remount-ro preserves the writable work and scratch submounts.
     return [*cmd, "--bind", str(work), str(work), "--bind", str(scratch), str(scratch),
+            "--remount-ro", "/dev", "--remount-ro", "/",
             "--chdir", str(work), "--"]
 
 
