@@ -49,7 +49,7 @@ def _events(path: Path) -> list[dict]:
 
 def test_instructions_are_sent_and_the_flag_removes_only_them(tmp_path: Path) -> None:
     async def scenario() -> None:
-        async with Client(_server(tmp_path / "on.sqlite3")) as client:
+        async with Client(_server(tmp_path / "on.sqlite3", "--capture-policy", "autonomous")) as client:
             assert client.instructions == INSTRUCTIONS
             on_tools = sorted(tool.name for tool in (await client.list_tools()).tools)
             status = (await client.call_tool("status")).structured_content
@@ -89,7 +89,7 @@ def test_usage_log_records_each_call_once_and_nothing_it_promised_not_to(tmp_pat
     log = tmp_path / "usage.jsonl"
 
     async def scenario() -> dict:
-        async with Client(_server(db, "--usage-log", str(log))) as client:
+        async with Client(_server(db, "--capture-policy", "autonomous", "--usage-log", str(log))) as client:
             receipt = (await client.call_tool(
                 "record", {"content": BODY, "idempotency_key": KEY, "tags": [TAG], "kind": "decision"})).structured_content
             memory_id, revision_id = receipt["memory_id"], receipt["revision_id"]
@@ -498,3 +498,44 @@ raise SystemExit(main())
         assert connection.execute("SELECT count(*) FROM receipts").fetchone()[0] == 1
     stop = _events(log)[-1]
     assert (stop["event"], stop["reason"], stop["calls_in_flight"]) == ("stop", "sigterm", 1)
+
+
+@pytest.mark.parametrize(("flags", "expected"), [
+    ([], "explicit"),
+    (["--capture-policy", "autonomous"], "autonomous"),
+    (["--capture-policy", "explicit"], "explicit"),
+    (["--capture-policy", "explicit", "--no-instructions"], "off"),
+])
+def test_capture_treatment_matches_initialization_status_and_every_log_line(tmp_path: Path, flags, expected) -> None:
+    log = tmp_path / "log"
+
+    async def scenario() -> str | None:
+        async with Client(_server(tmp_path / "db", *flags, "--usage-log", str(log))) as client:
+            instructions = client.instructions
+            status = (await client.call_tool("status")).structured_content
+            digest = hashlib.sha256(instructions.encode()).hexdigest()[:12] if instructions else None
+            assert (status["capture_policy"], status["instructions_digest"]) == (expected, digest)
+            if expected == "autonomous":
+                assert digest == "e6733e856c06"
+            elif expected == "explicit":
+                assert "only when the user explicitly requests" in instructions
+                assert "Save on your own judgment" not in instructions
+                assert digest != "e6733e856c06"
+            else:
+                assert not instructions
+            return digest
+
+    digest = anyio.run(scenario)
+    assert {(e["capture_policy"], e["instructions_digest"]) for e in _events(log)} == {(expected, digest)}
+
+
+def test_codex_project_launch_selects_explicit_before_any_hook_is_available(tmp_path: Path) -> None:
+    from argparse import Namespace
+    from nexus_memory.transport import mcp_server
+
+    # The Codex adapter contributes this parser field. Exercise the same selector before
+    # there is any client identity, Git verification or hook registration to consult.
+    args = Namespace(codex_project_root=tmp_path, capture_policy="autonomous", no_instructions=False)
+    assert mcp_server._launch_policy(args).name == "explicit"
+    args.no_instructions = True
+    assert mcp_server._launch_policy(args).name == "off"

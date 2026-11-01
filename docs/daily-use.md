@@ -7,7 +7,8 @@ The routine is four parts — **capture**, **consult**, **verify**, **correct**.
 deliberately small and deliberately manual. Nothing here is enforced by the server; these are
 working habits, and the numbers in them are starting points, not tuned values. Builds after
 `0.1.0a2` do send the model a short form of it as server instructions, so with those builds the
-policy a session followed is that text, named by its `instructions_digest` — see the
+selected capture policy is reported in `status` along with the text’s `instructions_digest`.
+Under the explicit policy, capture or correct memories only on the user’s request. See the
 [README](../README.md#what-the-server-tells-the-model-and-what-it-records).
 
 > [!IMPORTANT]
