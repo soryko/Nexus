@@ -29,10 +29,13 @@ Two differences from `run_calibration.consumed`, which this follows otherwise:
 from __future__ import annotations
 
 import json
+import os
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+import artifact_io
 from a3_decision import A3_PLAN, Plan
 from run_calibration import usage_tokens
 
@@ -55,9 +58,27 @@ TERMINAL_RECORD = "record.json"
 REFUSAL = "refused.json"
 
 
+@contextmanager
+def sweep_lock(root: Path):
+    """Serialize pair admission through terminal accounting; a process exit releases the lock."""
+    import fcntl  # The production harness requires macOS; offline tests also run on Linux.
+    with artifact_io.directory_fd(root) as descriptor:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+        else:
+            yield True
+
+
 def _dir(root: Path, task: str, attempt: int, policy: str) -> Path:
     from a3_pipeline import arm_run_dir
     return arm_run_dir(root, task, attempt, policy)
+
+
+def pair_directory(root: Path, task: str, attempt: int) -> Path:
+    from a3_pipeline import policy_run_dir
+    return policy_run_dir(root, task, attempt, "A").parent
 
 
 def mark_launch(root: Path, task: str, attempt: int, policy: str, *,
@@ -70,27 +91,23 @@ def mark_launch(root: Path, task: str, attempt: int, policy: str, *,
     says WHICH POLICY was launched, and an unresolved row whose policy is unknown cannot
     even be attributed to a cell.
     """
-    d = _dir(root, task, attempt, policy)
-    d.mkdir(parents=True, exist_ok=True)
-    p = d / A3_MARKER
-    p.write_text(json.dumps({
+    p = _dir(root, task, attempt, policy) / A3_MARKER
+    artifact_io.create_text(p, json.dumps({
         "task": task, "attempt": attempt, "policy": policy,
         "launched_utc": datetime.now(timezone.utc).isoformat(),
         "max_turns": max_turns, "wall_clock_s_limit": wall_clock_s,
         "prompt_digest": prompt_digest, "identity": identity,
-    }, indent=1) + "\n")
+    }, indent=1) + "\n", parents=True)
     return p
 
 
 def mark_refusal(root: Path, task: str, attempt: int, policy: str, reason: str,
                  detail: dict | None = None) -> Path:
     """Record that the runner REFUSED to launch this arm-run. A fatal stop, not a zero."""
-    d = _dir(root, task, attempt, policy)
-    d.mkdir(parents=True, exist_ok=True)
-    p = d / REFUSAL
-    p.write_text(json.dumps({"task": task, "attempt": attempt, "policy": policy,
-                             "refused_utc": datetime.now(timezone.utc).isoformat(),
-                             "reason": reason, "detail": detail or {}}, indent=1) + "\n")
+    p = _dir(root, task, attempt, policy) / REFUSAL
+    artifact_io.create_text(p, json.dumps({"task": task, "attempt": attempt, "policy": policy,
+                            "refused_utc": datetime.now(timezone.utc).isoformat(),
+                            "reason": reason, "detail": detail or {}}, indent=1) + "\n", parents=True)
     return p
 
 
@@ -101,28 +118,35 @@ def _measured(d: Path) -> int | None:
     arm-run seen again, not another one. The first source with a usable usage block is the
     measurement.
     """
-    rec = d / TERMINAL_RECORD
-    if rec.is_file():
-        try:
-            body = json.loads(rec.read_text())
-        except ValueError:
-            body = {}
-        tokens = usage_tokens((body.get("record") or body).get("usage"))
+    try:
+        body = json.loads(artifact_io.read_text(d / TERMINAL_RECORD))
+    except (FileNotFoundError, ValueError):
+        body = {}
+    if isinstance(body, dict):
+        record = body.get("record") or body
+        tokens = usage_tokens(record.get("usage")) if isinstance(record, dict) else None
         if tokens is not None:
             return tokens
-    tr = d / "trace.jsonl"
-    if tr.is_file():
-        env = None
-        for line in tr.open(errors="replace"):
-            if '"type":"result"' in line[:40] or '"type": "result"' in line[:40]:
-                try:
-                    env = json.loads(line)
-                except ValueError:
-                    pass
-        tokens = usage_tokens((env or {}).get("usage"))
-        if tokens is not None:
-            return tokens
-    return None
+    env = {}
+    try:
+        with artifact_io.open_regular(d / "trace.jsonl") as trace:
+            for line in trace:
+                if b'"type":"result"' in line[:40] or b'"type": "result"' in line[:40]:
+                    try:
+                        env = json.loads(line)
+                    except ValueError:
+                        continue
+    except FileNotFoundError:
+        pass
+    return usage_tokens(env.get("usage")) if isinstance(env, dict) else None
+
+
+def _present(path: Path) -> bool:
+    try:
+        with artifact_io.open_regular(path):
+            return True
+    except FileNotFoundError:
+        return False
 
 
 @dataclass(frozen=True)
@@ -157,25 +181,24 @@ def read(root: Path, plan: Plan = A3_PLAN) -> Ledger:
     for task, attempt, policy in plan.cells():
         d = _dir(root, task, attempt, policy)
         key = f"{task}/{policy}/{attempt}"
-        if (d / REFUSAL).is_file():
-            try:
-                refusals[key] = json.loads((d / REFUSAL).read_text()).get("reason", "?")
-            except ValueError:
-                refusals[key] = "unreadable refusal record"
-        if not any((d / m).is_file() for m in MARKERS):
-            # NOT started. Absent, which `validity` reports as missing coverage -- a
-            # different fact from an unresolved row, and the only case this may skip.
-            continue
-        started.append(key)
-        tokens = _measured(d)
-        if tokens is not None:
-            measured[key] = tokens
-        # §7: an unresolved arm-run is never covered by an allowance written to unblock it.
-        # A2-R's ledger honours `resolution.json`; A3 refuses it and says so, so that writing
-        # one cannot clear a stop.
-        if (d / "resolution.json").is_file():
-            rejected.append(f"{key}: resolution.json present and REFUSED -- A3 registers no "
-                            f"allowances, and the row stays unresolved")
+        try:
+            if _present(d / REFUSAL):
+                try:
+                    refusal = json.loads(artifact_io.read_text(d / REFUSAL))
+                    refusals[key] = refusal.get("reason", "?") if isinstance(refusal, dict) else "?"
+                except ValueError:
+                    refusals[key] = "unreadable refusal record"
+            if not any(_present(d / marker) for marker in MARKERS):
+                continue
+            started.append(key)
+            tokens = _measured(d)
+            if tokens is not None:
+                measured[key] = tokens
+            if _present(d / "resolution.json"):
+                rejected.append(f"{key}: resolution.json present and REFUSED -- A3 registers no "
+                                f"allowances, and the row stays unresolved")
+        except OSError:
+            refusals[key] = "unsafe or unreadable ledger artifact"
     unresolved = sorted(set(started) - set(measured))
     return Ledger(sorted(started), measured, unresolved, refusals, sorted(rejected))
 
@@ -238,10 +261,18 @@ def may_admit_pair(root: Path, task: str, attempt: int, plan: Plan = A3_PLAN, *,
     A fatal stop is checked first and separately, because a pair that cannot be admitted for
     safety reasons is not a budget outcome and must not be reported as one.
     """
+    if (task, attempt) not in plan.pairs():
+        return {"may_start": False, "task": task, "attempt": attempt, "gate": "registration",
+                "stop": True, "stopping_reason": "unregistered_pair",
+                "reason": "the pair is outside the registered plan"}
     stop = fatal_stop(root, plan)
     if stop:
         return {"may_start": False, "task": task, "attempt": attempt,
                 "gate": "fatal", **stop}
+    if os.path.lexists(pair_directory(root, task, attempt)):
+        return {"may_start": False, "task": task, "attempt": attempt, "gate": "existing",
+                "stop": True, "stopping_reason": "pair_occupied",
+                "reason": "the pair already has an output directory; keeping its evidence"}
     led = read(root, plan)
     known = led.tokens_known
     if known + reservation > threshold:

@@ -17,6 +17,8 @@ import json, os, shutil, subprocess, sys, time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import artifact_io
+
 SP = Path(sys.argv[1])
 TASK = sys.argv[2]
 ATTEMPT = int(sys.argv[3]) if len(sys.argv) > 3 else 1
@@ -27,6 +29,7 @@ BENCH = Path(__file__).parent
 sys.path.insert(0, str(BENCH))
 import a1_config
 from build_fixture import score  # the same scorer the controls used
+from scorer_sandbox import candidate_patch as patch_of
 from trace_parse import parse as parse_trace
 from terminal_status import classify
 import isolation
@@ -139,32 +142,29 @@ def provision_store(arm: str) -> Path | None:
     if not ARMS[arm]["memory"]:
         return None
     store = arm_store(arm)
-    if store.parent.exists():
-        shutil.rmtree(store.parent)
-    store.parent.mkdir(parents=True, exist_ok=True)
-    for suffix in ("", "-wal", "-shm"):
-        source = Path(str(STORE_MASTER) + suffix)
-        if source.exists():
-            shutil.copy2(source, str(store) + suffix)
+    with artifact_io.staged_directory(store.parent) as stage:
+        stage.mkdir()
+        for suffix in ("", "-wal", "-shm"):
+            source = Path(str(STORE_MASTER) + suffix)
+            if source.exists():
+                shutil.copy2(source, stage / (store.name + suffix))
     return store
 
 
 def prepare(arm: str) -> Path:
     """A fresh, isolated checkout per attempt (protocol-a1 section 3)."""
     dst = OUT / "arms" / arm / "repo"
-    if dst.exists():
-        shutil.rmtree(dst)
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(RUN / "base" / TASK, dst, symlinks=True)
-    if ARMS[arm]["notes"]:
-        # capture-policy-a1 section 4: the same captured information, one readable file,
-        # mechanically rendered. Placed at the checkout root, and committed so that the
-        # agent's own patch is measured against a tree that already contains it.
-        shutil.copy2(CFG.bench_path("notes_file"), dst / "NOTES-FROM-EARLIER-WORK.md")
-        subprocess.run(["git", "-C", str(dst), "add", "NOTES-FROM-EARLIER-WORK.md"], check=True)
-        subprocess.run(["git", "-C", str(dst), "-c", "user.email=fixture@localhost",
-                        "-c", "user.name=A1 fixture", "commit", "--quiet", "-m", "notes"],
-                       check=True)
+    with artifact_io.staged_directory(dst) as stage:
+        shutil.copytree(RUN / "base" / TASK, stage, symlinks=True)
+        if ARMS[arm]["notes"]:
+            # capture-policy-a1 section 4: the same captured information, one readable file,
+            # mechanically rendered. Placed at the checkout root, and committed so that the
+            # agent's own patch is measured against a tree that already contains it.
+            shutil.copy2(CFG.bench_path("notes_file"), stage / "NOTES-FROM-EARLIER-WORK.md")
+            subprocess.run(["git", "-C", str(stage), "add", "NOTES-FROM-EARLIER-WORK.md"], check=True)
+            subprocess.run(["git", "-C", str(stage), "-c", "user.email=fixture@localhost",
+                            "-c", "user.name=A1 fixture", "commit", "--quiet", "-m", "notes"],
+                           check=True)
     return dst
 
 
@@ -221,8 +221,7 @@ def write_arm_profile(arm: str, cwd: Path) -> Path:
     and a sibling whose profile has not been written yet cannot be distinguished from a
     sibling that is correctly denying access."""
     cfg = OUT / "arms" / arm / "mcp.json"
-    cfg.parent.mkdir(parents=True, exist_ok=True)
-    cfg.write_text(json.dumps(mcp_config(arm)))
+    artifact_io.write_text(cfg, json.dumps(mcp_config(arm)), parents=True)
     allow, deny = boundary_paths(arm, cwd)
     return isolation.write_profile(OUT / "arms" / arm / "sandbox.sb", cwd, deny, allow,
                                    FORWARDER_PORT)
@@ -247,7 +246,8 @@ def invoke(arm: str, cwd: Path) -> dict:
     # and `deny` withholds every sibling's, so one arm's heredoc bodies are unreadable to the
     # others. A shared grant under /private/tmp would have been a channel between arms.
     heredoc_tmp = OUT / "arms" / arm / "tmp"
-    heredoc_tmp.mkdir(parents=True, exist_ok=True)
+    with artifact_io.directory_fd(heredoc_tmp, parents=True):
+        pass
     # the sandbox denies every host but localhost; the forwarder is the only egress
     env = a1_config.child_env(f"http://127.0.0.1:{FORWARDER_PORT}/anthropic",
                               os.environ["DEEPSEEK_API_KEY"],
@@ -271,7 +271,7 @@ def invoke(arm: str, cwd: Path) -> dict:
                   if a != arm and (OUT / "arms" / a / "sandbox.sb").exists()
                   and (OUT / "arms" / a / "repo").exists()]
         gate = VENV.run(OUT / "arms" / arm, env, other_arm=others[0] if others else None)
-        (OUT / "arms" / arm / "envcheck.json").write_text(json.dumps(gate, indent=1))
+        artifact_io.create_text(OUT / "arms" / arm / "envcheck.json", json.dumps(gate, indent=1))
         if not gate["all_passed"]:
             failed = [c["check"] for c in gate["checks"] if not c["passed"]]
             raise SystemExit(f"[{arm}] environment gate FAILED: {failed}\n"
@@ -297,7 +297,7 @@ def invoke(arm: str, cwd: Path) -> dict:
     # consumption was lost. This marker is what makes "launched" distinguishable from
     # "prepared but never started", and an arm that is launched and never accounted for stays
     # UNRESOLVED rather than disappearing.
-    (OUT / "arms" / arm / "launched.json").write_text(json.dumps({
+    artifact_io.create_text(OUT / "arms" / arm / "launched.json", json.dumps({
         "arm": arm, "task": TASK, "attempt": ATTEMPT,
         "launched_utc": started.isoformat(),
         "max_turns": MAX_TURNS, "wall_clock_s_limit": WALL_CLOCK_S,
@@ -313,8 +313,8 @@ def invoke(arm: str, cwd: Path) -> dict:
         err = (exc.stderr or b"").decode() if isinstance(exc.stderr, bytes) else (exc.stderr or "")
         verdict = "timeout"
     wall = time.monotonic() - t0
-    (OUT / "arms" / arm / "trace.jsonl").write_text(out)
-    (OUT / "arms" / arm / "stderr.txt").write_text(err)
+    artifact_io.create_text(OUT / "arms" / arm / "trace.jsonl", out)
+    artifact_io.create_text(OUT / "arms" / arm / "stderr.txt", err)
     return {"arm": arm, "started_utc": started.isoformat(), "wall_clock_s": round(wall, 1),
             "forced_verdict": verdict, "child_env": a1_config.env_record(env),
             # WHICH interpreter this arm-run was measured under, resolved inside the arm's own
@@ -332,12 +332,6 @@ def read_trace(arm: str) -> dict:
             "result": t["result"],
             "trace_health": {"orphan_results": t["orphans"],
                              "unresolved_calls": t["unresolved"]}}
-
-
-def patch_of(cwd: Path) -> str:
-    subprocess.run(["git", "-C", str(cwd), "add", "-A", "-N"], check=True)
-    return subprocess.run(["git", "-C", str(cwd), "diff"],
-                          capture_output=True, text=True, check=True).stdout
 
 
 def memory_visibility(arm: str, profile: Path, cwd: Path) -> dict:
@@ -361,7 +355,7 @@ def memory_visibility(arm: str, profile: Path, cwd: Path) -> dict:
     case is the one being tested rather than the checkpointed one that happens to work.
     """
     import sqlite3
-    cfg = json.loads((OUT / "arms" / arm / "mcp.json").read_text())
+    cfg = json.loads(artifact_io.read_text(OUT / "arms" / arm / "mcp.json"))
     server = cfg.get("mcpServers", {}).get("nexus")
     if not server:
         return {"applicable": False}
@@ -443,7 +437,7 @@ def run_identity() -> dict:
 
 
 def main() -> int:
-    allfx = json.loads((RUN / "base" / "fixtures.json").read_text())
+    allfx = json.loads(artifact_io.read_text(RUN / "base" / "fixtures.json"))
     fixtures = next(f for f in allfx if f["task"] == TASK)
     checks, held = fixtures["checks"], Path(fixtures["held_checks"])
 
@@ -455,7 +449,8 @@ def main() -> int:
         print("no schedule given; a scored run requires one frozen before execution\n"
               "usage: run_arms_isolated.py <scratch> <task> <attempt> <schedule.json>")
         return 2
-    OUT.mkdir(parents=True, exist_ok=True)
+    with artifact_io.directory_fd(OUT, parents=True):
+        pass
     plan = sched.load(SCHEDULE)
     order = plan.order_for(TASK, ATTEMPT)
     print(f"schedule {SCHEDULE.name} digest={plan.schedule_digest[:16]} seed={plan.seed}\n"
@@ -523,7 +518,7 @@ def main() -> int:
             return 1
         # the memory-reachability gate: the arm's own path to the store, inside the boundary
         cfg_path = OUT / "arms" / arm / "mcp.json"
-        cfg_path.write_text(json.dumps(mcp_config(arm)))
+        artifact_io.write_text(cfg_path, json.dumps(mcp_config(arm)))
         vis = memory_visibility(arm, profile, cwd)
         if vis["applicable"]:
             print(f"[{arm}] memory reachable inside the sandbox: scope=("
@@ -540,7 +535,7 @@ def main() -> int:
         rec["memory_visibility"] = vis
         rec.update(read_trace(arm))
         patch = patch_of(cwd)
-        (OUT / "arms" / arm / "patch.diff").write_text(patch)
+        artifact_io.create_text(OUT / "arms" / arm / "patch.diff", patch)
         rec["patch_bytes"] = len(patch)
         rec["patch_touches_src"] = "src/click/" in patch
         rec["scored"] = score(cwd, held, checks, PYTEST_PY, OUT / "scoring" / arm)
@@ -577,7 +572,7 @@ def main() -> int:
         # only after all three arms, so a row interrupted mid-way used to leave two completed
         # arm-runs with no record of their consumption at all -- spend that no budget could
         # count. One file per arm, written the moment it finishes.
-        (OUT / "arms" / arm / "record.json").write_text(json.dumps(
+        artifact_io.create_text(OUT / "arms" / arm / "record.json", json.dumps(
             {"task": TASK, "attempt": ATTEMPT, "arm": arm,
              "identity": run_identity(), "record": rec}, indent=1))
 
@@ -586,7 +581,7 @@ def main() -> int:
     mutated = [r["arm"] for r in records if not r.get("store", {}).get("unchanged", True)]
     if mutated:
         print(f"arm-runs whose private store changed: {', '.join(mutated)}")
-    (OUT / "records.json").write_text(json.dumps(
+    artifact_io.create_text(OUT / "records.json", json.dumps(
         {"task": TASK, "attempt": ATTEMPT, "seed": plan.seed, "order": order,
          "schedule": str(SCHEDULE), "schedule_digest": plan.schedule_digest,
          "config": CFG.as_recorded(), "scorer_version": __import__(

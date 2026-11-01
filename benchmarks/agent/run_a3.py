@@ -31,6 +31,9 @@ What it changes, and why each one is necessary:
 Fatal stops are checked before EVERY arm-run, including B after A. An admitted pair does not
 authorise its second member: if A's consumption cannot be accounted for, or the boundary
 refused, B does not launch.
+
+The frozen live configuration is stopped pending explicit authorization and a demonstrated
+write boundary around the operator's ledger. Only a dry run or the stub rehearsal can proceed.
 """
 from __future__ import annotations
 
@@ -39,6 +42,9 @@ import json
 import os
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
+
+import artifact_io
 
 BENCH = Path(__file__).parent
 sys.path.insert(0, str(BENCH))
@@ -73,23 +79,41 @@ def _load_runner(scratch: Path, task: str, attempt: int, schedule: Path):
 def run_pair(scratch: Path, task: str, attempt: int, schedule: Path,
              dry_run: bool = False) -> int:
     import a3_ledger as L
+    with L.sweep_lock(scratch) as acquired:
+        if not acquired:
+            print("run_a3: another pair owns this sweep; nothing was launched.", flush=True)
+            return 3
+        if dry_run:
+            with TemporaryDirectory(dir=scratch, prefix=".a3-dry-run-") as tmp:
+                return _run_locked_pair(scratch, Path(tmp), task, attempt, schedule, True)
+        return _run_locked_pair(scratch, scratch, task, attempt, schedule, False)
+
+
+def _run_locked_pair(scratch: Path, output_root: Path, task: str, attempt: int,
+                     schedule: Path, dry_run: bool) -> int:
+    import a3_ledger as L
     import a3_prompts as AP
     import a3_pipeline as P
     import isolation
     from a3_decision import A3_PLAN
     import schedule as sched
 
-    R = _load_runner(scratch, task, attempt, schedule)
     # TWO different objects, and naming them both `plan` cost a crash on the first run of
     # the pair-admission gate: `drawn` is the frozen SCHEDULE (which policy goes first),
     # `registered` is the registered PLAN (which cells exist at all, and therefore which
     # the ledger scans). The ledger takes the second.
     drawn = sched.load(schedule)
     registered = A3_PLAN
+    if (task, attempt) not in registered.pairs():
+        print("run_a3: pair is outside the registered plan; refusing.", flush=True)
+        return 3
     if sorted(drawn.arms) != ["A", "B"]:
         raise SystemExit(f"run_a3: schedule registers arms {drawn.arms}; A3's schedule is "
                          f"over POLICIES and must register exactly A,B")
     order = drawn.order_for(task, attempt)
+    if sorted(order) != sorted(registered.policies):
+        print("run_a3: schedule must assign each registered policy exactly once.", flush=True)
+        return 3
     print(f"schedule {schedule.name} digest={drawn.schedule_digest[:16]} seed={drawn.seed}\n"
           f"{task} attempt {attempt}: realised policy order {' -> '.join(order)}\n")
 
@@ -98,19 +122,42 @@ def run_pair(scratch: Path, task: str, attempt: int, schedule: Path,
     # invocations with the threshold never consulted. The launch unit is the pair, so this
     # is asked once, here, and never again inside the loop.
     admit = L.may_admit_pair(scratch, task, attempt, registered)
+    canonical_pair = L.pair_directory(scratch, task, attempt)
     print(f"pair admission [{admit['gate']}]: "
           f"{'START' if admit['may_start'] else 'REFUSED'} -- {admit['reason']}")
     if not admit["may_start"]:
-        for policy in order:
-            L.mark_refusal(scratch, task, attempt, policy,
-                           admit.get("stopping_reason") or "not_admitted", admit)
+        if not os.path.lexists(canonical_pair):
+            for policy in order:
+                L.mark_refusal(output_root, task, attempt, policy,
+                               admit.get("stopping_reason") or "not_admitted", admit)
         print("no arm-run was launched; partial results are kept and reported as partial.")
         return 3
-
-
-    allfx = json.loads((R.RUN / "base" / "fixtures.json").read_text())
+    R = _load_runner(scratch, task, attempt, schedule)
+    if not dry_run:
+        from rehearse_a3_production import FORWARDER_PORT, STUB_KEY
+        if (R.CFG.config_version != "a3-v1-REHEARSAL" or R.FORWARDER_PORT != FORWARDER_PORT
+                or os.environ.get("DEEPSEEK_API_KEY") != STUB_KEY):
+            print("run_a3: live execution is stopped pending approved launch identifiers "
+                  "and demonstrated write isolation for the operator's ledger. "
+                  "Use --dry-run or the loopback stub rehearsal.", flush=True)
+            return 3
+    allfx = json.loads(artifact_io.read_text(R.RUN / "base" / "fixtures.json"))
     fixtures = next(f for f in allfx if f["task"] == task)   # THIS task's own fixture
     checks, held = fixtures["checks"], Path(fixtures["held_checks"])
+
+    # Claim the entire pair before prepare() can replace a checkout or a store. Even an
+    # interruption before the first launch marker leaves the attempt occupied.
+    pair_dir = L.pair_directory(output_root, task, attempt)
+    try:
+        with artifact_io.directory_fd(pair_dir.parent, parents=True) as parent:
+            artifact_io.require_staging_filesystem(parent)
+            os.mkdir(pair_dir.name, mode=0o700, dir_fd=parent)
+    except FileExistsError:
+        print("run_a3: the pair output already exists; keeping its evidence.", flush=True)
+        return 3
+    except OSError as exc:
+        print(f"run_a3: could not claim the pair: {exc}", flush=True)
+        return 3
 
     # One arm, named once. `ARMS` drives tools, store provisioning and sibling denial; A3's
     # sibling is the other policy, handled below.
@@ -119,8 +166,8 @@ def run_pair(scratch: Path, task: str, attempt: int, schedule: Path,
     records = []
 
     for policy in order:
-        out = P.policy_run_dir(scratch, task, attempt, policy)
-        other = P.policy_run_dir(scratch, task, attempt,
+        out = P.policy_run_dir(output_root, task, attempt, policy)
+        other = P.policy_run_dir(output_root, task, attempt,
                                  "B" if policy == "A" else "A")
         key = f"{task}/{policy}/{attempt}"
 
@@ -133,7 +180,8 @@ def run_pair(scratch: Path, task: str, attempt: int, schedule: Path,
             return 3
 
         R.OUT = out
-        out.mkdir(parents=True, exist_ok=True)
+        with artifact_io.directory_fd(pair_dir) as parent:
+            os.mkdir(out.name, mode=0o700, dir_fd=parent)
         R.PROMPT = AP.assemble(task, policy)
         digest = AP.digest(task, policy)
 
@@ -157,7 +205,7 @@ def run_pair(scratch: Path, task: str, attempt: int, schedule: Path,
         print(f"[{policy}] boundary required: unresolved={bound['required_unresolved']} "
               f"failed={bound['required_failed']}", flush=True)
         if not bound["all_hold"]:
-            L.mark_refusal(scratch, task, attempt, policy, "boundary not demonstrated",
+            L.mark_refusal(output_root, task, attempt, policy, "boundary not demonstrated",
                            {"required_unresolved": bound["required_unresolved"],
                             "required_failed": bound["required_failed"],
                             "negative": bound["negative_controls"],
@@ -185,7 +233,7 @@ def run_pair(scratch: Path, task: str, attempt: int, schedule: Path,
         rec["boundary"] = bound
         rec.update(R.read_trace(ARM))
         patch = R.patch_of(cwd)
-        (out / "arms" / ARM / "patch.diff").write_text(patch)
+        artifact_io.create_text(out / "arms" / ARM / "patch.diff", patch)
         rec["patch_bytes"] = len(patch)
         rec["scored"] = R.score(cwd, held, checks, R.PYTEST_PY, out / "scoring" / ARM)
         # THE ARTIFACT THE REPORTER READS. `normalise` looks for `functional.json`; the
@@ -195,7 +243,7 @@ def run_pair(scratch: Path, task: str, attempt: int, schedule: Path,
         # whichever producer ran, so there is no second place to look and no drift.
         # `passed` may legitimately be None (a scorer timeout); that is unresolved, and it
         # is written as None rather than coerced.
-        (out / "arms" / ARM / "functional.json").write_text(json.dumps(
+        artifact_io.create_text(out / "arms" / ARM / "functional.json", json.dumps(
             {"passed": rec["scored"].get("passed"),
              "summary": rec["scored"].get("summary"),
              "failing_functions": rec["scored"].get("failing_functions"),
@@ -212,7 +260,7 @@ def run_pair(scratch: Path, task: str, attempt: int, schedule: Path,
         if store:
             rec["store"] = {"path": str(store), "digest_after": R.store_digest(store)}
         # Persisted the moment this arm-run finishes, before the next one starts.
-        (out / "arms" / ARM / "record.json").write_text(json.dumps(
+        artifact_io.create_text(out / "arms" / ARM / "record.json", json.dumps(
             {"task": task, "attempt": attempt, "policy": policy, "arm": ARM,
              "prompt_digest": digest, "identity": R.run_identity(), "record": rec},
             indent=1))
@@ -220,8 +268,7 @@ def run_pair(scratch: Path, task: str, attempt: int, schedule: Path,
         print(f"  -> {rec['terminal']}  patch={rec['patch_bytes']}B  "
               f"checks: {rec['scored']['summary']}", flush=True)
 
-    pair_dir = P.policy_run_dir(scratch, task, attempt, order[0]).parent
-    (pair_dir / "records.json").write_text(json.dumps(
+    artifact_io.create_text(pair_dir / "records.json", json.dumps(
         {"task": task, "attempt": attempt, "order": order, "seed": drawn.seed,
          "schedule_digest": drawn.schedule_digest, "config": R.CFG.as_recorded(),
          "max_turns": R.MAX_TURNS, "wall_clock_s": R.WALL_CLOCK_S,

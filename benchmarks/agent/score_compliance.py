@@ -57,14 +57,15 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import artifact_io
 from build_fixture import PYTEST_IGNORE
+import scorer_sandbox
 from trace_parse import parse
 
 BENCH = Path(__file__).parent
@@ -97,8 +98,9 @@ PASS, FAIL, UNKNOWN, NA = "pass", "fail", "unknown", "not_applicable"
 
 # Bumped whenever a check's meaning changes, so a saved record says which scorer produced it.
 # A ratio is not comparable across versions and the version is stored beside every one.
-SCORER_VERSION = "a1-scorer-5"
+SCORER_VERSION = "a1-scorer-6"
 SCORER_CHANGELOG = {
+    "a1-scorer-6": "candidate patch application and pytest run in a confined worker",
     "a1-scorer-2": "heuristics replaced; regression probe runs three trees",
     "a1-scorer-3": "delivery recognised by notes text; undetected edit is UNKNOWN",
     "a1-scorer-4": "every verdict carries a reason; instrument failures are separated from "
@@ -320,11 +322,11 @@ def _apply(hunks: str, work: Path) -> subprocess.CompletedProcess:
     # NOT --3way: the fixture is a fresh repository whose object database never held the
     # pre-image blobs the patch names, so a 3-way merge fails with "does not match index" on
     # every arm. Context application is what is wanted here anyway.
-    p = subprocess.run(["git", "apply", "--recount", "-"], cwd=work, input=hunks,
-                       text=True, capture_output=True)
+    p = scorer_sandbox.run([scorer_sandbox.git_binary(), "apply", "--recount", "-"],
+                           work, input_text=hunks)
     if p.returncode:
-        p = subprocess.run(["patch", "-p1", "--forward", "--batch"], cwd=work,
-                           input=hunks, text=True, capture_output=True)
+        p = scorer_sandbox.run(["/usr/bin/patch", "-p1", "--forward", "--batch"],
+                               work, input_text=hunks)
     return p
 
 
@@ -352,7 +354,13 @@ def _pytest(python: str, work: Path, targets: list[str]) -> dict:
     happen: the interpreter could not be launched, pytest reported an internal or usage
     error, or the report could not be read.
     """
-    xml = work.parent / f"{work.name}-junit.xml"
+    # The report directory is created by the harness, not chosen by the patch.
+    with tempfile.TemporaryDirectory(prefix="nexus-report-") as td:
+        return _pytest_report(python, work, targets, Path(td))
+
+
+def _pytest_report(python: str, work: Path, targets: list[str], scratch: Path) -> dict:
+    xml = scratch / "junit.xml"
     try:
         # `PYTEST_IGNORE` is the FUNCTIONAL scorer's registered demotion of one warning
         # class, adopted for `a1-functional-2` because Click turns warnings into errors and
@@ -362,10 +370,8 @@ def _pytest(python: str, work: Path, targets: list[str]) -> dict:
         # probe trees come back `rc=4, collection error` -- and E1 reported `fail`, which
         # says the test does not discriminate. It says nothing of the kind: the measurement
         # did not happen. Same flag, same reason, one source of truth.
-        run = subprocess.run([python, "-m", "pytest", *targets, "-q", "-p", "no:randomly",
-                              *PYTEST_IGNORE, f"--junit-xml={xml}"],
-                             cwd=work, capture_output=True, text=True,
-                             env={"PYTHONPATH": "src", "PATH": "/usr/bin:/bin"})
+        run = scorer_sandbox.run([python, "-m", "pytest", *targets, "-q", "-p", "no:randomly",
+                                  *PYTEST_IGNORE, f"--junit-xml={xml}"], work, scratch=scratch)
     except (OSError, subprocess.SubprocessError) as exc:
         return {"rc": None, "verdict": None, "cases": [], "report_text": "", "tail": "",
                 "instrument_error": _instrument_error(
@@ -374,7 +380,8 @@ def _pytest(python: str, work: Path, targets: list[str]) -> dict:
     full: list[str] = []
     if xml.exists():
         try:
-            for tc in ET.parse(xml).getroot().iter("testcase"):
+            report = ET.fromstring(artifact_io.read_text(xml))
+            for tc in report.iter("testcase"):
                 kind, msg = "passed", ""
                 for child in tc:
                     if child.tag in ("failure", "error", "skipped"):
@@ -402,7 +409,8 @@ def _pytest(python: str, work: Path, targets: list[str]) -> dict:
     # the absent case above, which is a legitimate baseline verdict. Only the residue is an
     # instrument failure. Getting this wrong turned every absent-baseline tree into an
     # instrument error on the first run of this code.
-    if not cases and (run.returncode == 3 or (run.returncode == 4 and not absent)):
+    if not cases and (run.returncode == 3 or (run.returncode == 4 and not absent)
+                      or (run.returncode and not run.stdout.strip() and not absent)):
         return {"rc": run.returncode, "verdict": None, "cases": [], "report_text": "",
                 "tail": (text.strip().splitlines() or [""])[-1],
                 "instrument_error": _instrument_error(
@@ -466,11 +474,11 @@ def regression_discriminates(patch: str, pristine: Path, python: str, task: str)
                  "instrument_error": None}
     with tempfile.TemporaryDirectory() as td:
         base = Path(td) / "baseline"
-        shutil.copytree(pristine, base, symlinks=True)
+        scorer_sandbox.copy_candidate(pristine, base)
         out["baseline"] = _pytest(python, base, ids)
 
         pre = Path(td) / "prefix"
-        shutil.copytree(pristine, pre, symlinks=True)
+        scorer_sandbox.copy_candidate(pristine, pre)
         ap = _apply(hunks, pre)
         if ap.returncode:
             return {**out, "applicable": False,
@@ -478,7 +486,7 @@ def regression_discriminates(patch: str, pristine: Path, python: str, task: str)
         out["prefix"] = _pytest(python, pre, ids)
 
         cand = Path(td) / "candidate"
-        shutil.copytree(pristine, cand, symlinks=True)
+        scorer_sandbox.copy_candidate(pristine, cand)
         ac = _apply(patch, cand)
         out["candidate"] = ({"verdict": "patch_did_not_apply", "instrument_error": None,
                              "tail": (ac.stderr or ac.stdout).strip()[:120]}
@@ -519,7 +527,7 @@ def score(run_dir: Path, task: str, arm: str, pristine: Path, python: str, *,
     """`notes_file` is the rendering THIS sweep seeded its notes arm with, and it is
     required: a default here is how P2 came to be evaluated against a corpus no arm in the
     A2/A2-R sweeps was ever given."""
-    patch = (run_dir / "arms" / arm / "patch.diff").read_text()
+    patch = artifact_io.read_text(run_dir / "arms" / arm / "patch.diff")
     t = parse(run_dir / "arms" / arm / "trace.jsonl")
     files = changed_files(patch)
     scope = ALLOWED.get(task, ALLOWED["default"])

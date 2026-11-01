@@ -25,10 +25,13 @@ Usage:  python build_fixture.py <source-clone> <task-json> <out-dir>
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+
+import artifact_io
+import scorer_sandbox
 
 
 #: Version of the FUNCTIONAL check runner -- `score` below -- recorded in every artifact it
@@ -43,7 +46,7 @@ from pathlib import Path
 # such a candidate is REJECTED with a recorded reason instead of stopping the run.
 SCORER_TIMEOUT_S = 300
 
-FUNCTIONAL_SCORER_VERSION = "a1-functional-2"
+FUNCTIONAL_SCORER_VERSION = "a1-functional-3"
 
 #: One warning class, demoted from error to ignored, for every task equally.
 #:
@@ -90,27 +93,32 @@ def fix_oracle(clone: Path, task: dict, checks: list[str], python: str, workdir:
     that cannot be solved, and the second is indistinguishable from the first in every figure
     the run reports.
     """
-    if workdir.exists():
-        shutil.rmtree(workdir)
-    workdir.mkdir(parents=True)
-    exported = subprocess.run(["git", "-C", str(clone), "archive", task["fix"]],
-                              capture_output=True, check=True)
-    subprocess.run(["tar", "-x", "-C", str(workdir)], input=exported.stdout, check=True)
     try:
-        done = subprocess.run([python, "-m", "pytest", *checks, "-q", "-p", "no:randomly",
-                               *PYTEST_IGNORE],
-                              cwd=workdir, capture_output=True, text=True,
-                              timeout=SCORER_TIMEOUT_S,
-                              env={"PYTHONPATH": "src", "PATH": "/usr/bin:/bin"})
+        with tempfile.TemporaryDirectory(prefix="nexus-oracle-") as td:
+            oracle = Path(td)
+            _export(clone, task["fix"], oracle)
+            done = scorer_sandbox.run([python, "-m", "pytest", *checks, "-q", "-p", "no:randomly",
+                                       *PYTEST_IGNORE], oracle, timeout=SCORER_TIMEOUT_S)
+    except OSError as exc:
+        return _unavailable(exc)
     except subprocess.TimeoutExpired:
         return {"exit": None, "summary": f"TIMEOUT after {SCORER_TIMEOUT_S}s",
                 "failing_instances": None, "failing_functions": None,
                 "scorer_version": FUNCTIONAL_SCORER_VERSION,
                 "passed": None, "timed_out": True}
+    if done.returncode and not done.stdout.strip():
+        return _unavailable(OSError(f"pytest exited {done.returncode} without a test "
+                                    f"summary: {done.stderr.strip()[:500]}"))
     tail = done.stdout.strip().splitlines()[-1] if done.stdout.strip() else ""
     return {"exit": done.returncode, "summary": tail, "passed": done.returncode == 0,
             "scorer_version": FUNCTIONAL_SCORER_VERSION,
             "detail": done.stdout.strip()[-1500:] if done.returncode else ""}
+
+
+def _export(clone: Path, revision: str, destination: Path, *paths: str) -> None:
+    exported = subprocess.run(["git", "-C", str(clone), "archive", revision, "--", *paths],
+                              capture_output=True, check=True)
+    subprocess.run(["tar", "-x", "-C", str(destination)], input=exported.stdout, check=True)
 
 
 def build(clone: Path, task: dict, out: Path) -> dict:
@@ -119,34 +127,21 @@ def build(clone: Path, task: dict, out: Path) -> dict:
     if not checks:
         raise RuntimeError(f"{task['task']}: no acceptance checks in the fix diff")
 
-    if out.exists():
-        shutil.rmtree(out)
-    out.mkdir(parents=True)
-
-    # Export the tree and re-init, rather than cloning. The §11.4 control caught a clone:
-    # `git clone` copies the whole object database, so the fix commit remained readable by
-    # `git cat-file -e` and listable by `git fsck --unreachable` even with every ref and
-    # remote removed. Isolation by pruning refs is not isolation. This builds a repository
-    # whose object database has never contained the fix -- one commit, no remote, no history.
-    exported = subprocess.run(["git", "-C", str(clone), "archive", pre_fix],
-                              capture_output=True, check=True)
-    subprocess.run(["tar", "-x", "-C", str(out)], input=exported.stdout, check=True)
-    git(out, "init", "--quiet", "--initial-branch", "main")
-    git(out, "add", "-A")
-    git(out, "-c", "user.email=fixture@localhost", "-c", "user.name=A1 fixture",
-        "commit", "--quiet", "-m", f"Fixture at {pre_fix}")
-
-    # The checks are stored BESIDE the fixture, never inside it. An earlier version staged
-    # them into the working tree, where `git diff` showed the agent the new tests -- and a
-    # test that asserts the corrected behaviour describes the fix. §6 step 4 says hidden;
-    # the agent's checkout must therefore not contain them at any point.
+    # A fresh repository cannot expose the fix object or prior remote configuration. Claim
+    # both destinations without following an existing directory, before publishing either.
+    if not task["task"] or task["task"] in (".", "..") or Path(task["task"]).name != task["task"]:
+        raise ValueError("fixture task must be one directory name")
     held = out.parent / "checks" / task["task"]
-    if held.exists():
-        shutil.rmtree(held)
-    held.mkdir(parents=True)
-    staged = subprocess.run(["git", "-C", str(clone), "archive", fix, *checks],
-                            capture_output=True, check=True)
-    subprocess.run(["tar", "-x", "-C", str(held)], input=staged.stdout, check=True)
+    with (artifact_io.staged_directory(out) as tree,
+          artifact_io.staged_directory(held) as staged_checks):
+        tree.mkdir()
+        staged_checks.mkdir()
+        _export(clone, pre_fix, tree)
+        git(tree, "init", "--quiet", "--initial-branch", "main")
+        git(tree, "add", "-A")
+        git(tree, "-c", "user.email=fixture@localhost", "-c", "user.name=A1 fixture",
+            "commit", "--quiet", "-m", f"Fixture at {pre_fix}")
+        _export(clone, fix, staged_checks, *checks)
 
     return {"task": task["task"], "fix": fix, "pre_fix": pre_fix,
             "checks": checks, "path": str(out), "held_checks": str(held)}
@@ -171,6 +166,12 @@ def oracle_reachability(fixture: Path, fix: str) -> dict:
             and len(dangling) == 0 and len(refs.splitlines()) == 1}
 
 
+def _unavailable(exc: OSError) -> dict:
+    return {"exit": None, "summary": str(exc), "instrument_error": str(exc),
+            "failing_instances": None, "failing_functions": None,
+            "scorer_version": FUNCTIONAL_SCORER_VERSION, "passed": None, "timed_out": False}
+
+
 def score(tree: Path, held: Path, checks: list[str], python: str, workdir: Path) -> dict:
     """Run the hidden checks against a candidate tree, without ever writing them into it.
 
@@ -178,24 +179,26 @@ def score(tree: Path, held: Path, checks: list[str], python: str, workdir: Path)
     agent's own checkout is left exactly as the agent produced it -- so a later run, or a
     diff of the agent's work, is not polluted by the scoring step.
     """
-    if workdir.exists():
-        shutil.rmtree(workdir)
-    shutil.copytree(tree, workdir, symlinks=True)
-    for relative in checks:
-        target = workdir / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(held / relative, target)
+    # The supplied output path may have been writable by the arm. Stage inside fresh
+    # private storage instead; even a symlink in a parent cannot redirect this overlay.
     try:
-        done = subprocess.run([python, "-m", "pytest", *checks, "-q", "-p", "no:randomly",
-                               *PYTEST_IGNORE],
-                              cwd=workdir, capture_output=True, text=True,
-                              timeout=SCORER_TIMEOUT_S,
-                              env={"PYTHONPATH": "src", "PATH": "/usr/bin:/bin"})
+        with tempfile.TemporaryDirectory(prefix="nexus-functional-") as td:
+            stage = Path(td) / "tree"
+            scorer_sandbox.copy_candidate(tree, stage)
+            for name in checks:
+                scorer_sandbox.overlay_check(held, name, stage)
+            done = scorer_sandbox.run([python, "-m", "pytest", *checks, "-q", "-p", "no:randomly",
+                                       *PYTEST_IGNORE], stage, timeout=SCORER_TIMEOUT_S)
+    except OSError as exc:
+        return _unavailable(exc)
     except subprocess.TimeoutExpired:
         return {"exit": None, "summary": f"TIMEOUT after {SCORER_TIMEOUT_S}s",
                 "failing_instances": None, "failing_functions": None,
                 "scorer_version": FUNCTIONAL_SCORER_VERSION,
                 "passed": None, "timed_out": True}
+    if done.returncode and not done.stdout.strip():
+        return _unavailable(OSError(f"pytest exited {done.returncode} without a test "
+                                    f"summary: {done.stderr.strip()[:500]}"))
     tail = done.stdout.strip().splitlines()[-1] if done.stdout.strip() else ""
     failed = [l for l in done.stdout.splitlines() if l.startswith("FAILED ")]
     # `passed` is the fact. What it *means* depends on the caller: on an unpatched tree
@@ -275,7 +278,7 @@ def main(argv: list[str]) -> int:
                   "reads as a task nobody solved.")
             for line in built["fix_oracle"]["detail"].splitlines()[-4:]:
                 print(f"         {line}")
-    Path(out / "fixtures.json").write_text(json.dumps(report, indent=1))
+    artifact_io.write_text(out / "fixtures.json", json.dumps(report, indent=1))
     return 0 if all(r["admitted"] for r in report) else 1
 
 

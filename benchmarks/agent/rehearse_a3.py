@@ -240,7 +240,8 @@ def _trace(task: str, policy: str, *, deliver: list[str], searches: int, fetches
     if ran_test:
         # §5.3 asks whether the ARM-RUN executed its test, which the offline probe cannot
         # say. A stub whose agent never runs pytest fails the criterion, correctly.
-        call("Bash", {"command": "PYTHONPATH=src python -m pytest tests/test_pkg.py -q"},
+        call("Edit", {"file_path": "tests/test_pkg.py", "new_string": TEST_ADDED}, "ok")
+        call("Bash", {"command": "PYTHONPATH=src python -m pytest tests/test_pkg.py::test_add_one_adds_one -q"},
              "1 passed")
     lines.append(json.dumps({"type": "result", "subtype": "success",
                              "result": "DONE. the behaviour is fixed and covered.",

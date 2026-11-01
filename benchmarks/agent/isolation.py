@@ -42,6 +42,8 @@ import uuid
 import sys
 from pathlib import Path
 
+import artifact_io
+
 HOME = Path(os.path.expanduser("~"))
 
 # Read roots the runtime genuinely needs. Deliberately NOT /private/tmp or /var: the run
@@ -210,10 +212,10 @@ def write_profile(path: Path, arm_repo: Path, deny_paths: list[Path],
     """Note what is NOT here: the `if p.exists()` filter the previous version applied to
     `deny_paths`. A path that does not exist yet is exactly the case that needs denying --
     the scoring directory is created part-way through the run."""
-    path.parent.mkdir(parents=True, exist_ok=True)
     resolved_denies = [Path(os.path.realpath(p)) for p in deny_paths]
-    path.write_text(profile_for(Path(arm_repo).resolve(), resolved_denies,
-                                allow_paths, forwarder_port, allow_entries))
+    artifact_io.write_text(path, profile_for(Path(arm_repo).resolve(), resolved_denies,
+                                             allow_paths, forwarder_port, allow_entries),
+                           parents=True)
     return path
 
 

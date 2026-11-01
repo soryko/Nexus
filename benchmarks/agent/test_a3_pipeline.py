@@ -642,6 +642,36 @@ def _bash(command, result="", is_error=False):
             "is_error": is_error, "resolved_at": 1, "issued_at": 0, "index": 0}
 
 
+def _test_write(path="tests/test_pkg.py", issued=0, resolved=1):
+    return {"name": "Write", "input": {"file_path": path}, "result": "ok",
+            "is_error": False, "issued_at": issued, "resolved_at": resolved}
+
+
+def _test_run(command="pytest tests/test_pkg.py::test_add_one_adds_one -q", result="1 passed"):
+    return {**_bash(command, result), "issued_at": 2, "resolved_at": 3}
+
+
+def test_suite_run_before_creation_is_never_execution_of_the_submitted_test():
+    run = _test_run("pytest tests -q")
+    write = _test_write(issued=4, resolved=5)
+    assert P.observed_test_execution([run, write], ADDED) is None
+
+
+def test_execution_requires_a_completed_edit_of_the_same_test_file():
+    assert P.observed_test_execution([_test_run()], ADDED) is None
+    assert P.observed_test_execution([_test_write("elsewhere/test_pkg.py"), _test_run()], ADDED) is None
+    assert P.observed_test_execution([_test_write(resolved=4), _test_run()], ADDED) is None
+    assert P.observed_test_execution([_test_write(), _test_run()], ADDED) is True
+    rewrite = _test_write(issued=4, resolved=5)
+    assert P.observed_test_execution([_test_write(), _test_run(), rewrite], ADDED) is None
+
+
+def test_aggregate_for_sibling_does_not_identify_the_added_test():
+    assert P.observed_test_execution([_test_write(), _test_run("pytest tests", "1 passed")], ADDED) is None
+    result = f"{ADDED[0]} PASSED [100%]\n1 passed"
+    assert P.observed_test_execution([_test_write(), _test_run("pytest tests -v", result)], ADDED) is True
+
+
 @pytest.mark.parametrize("command,result,expected", [
     # -- mentioned, never invoked ---------------------------------------------------
     ("echo pytest", "pytest", False),
@@ -655,20 +685,20 @@ def _bash(command, result="", is_error=False):
     ("pytest tests/test_pkg.py", "3 skipped in 0.01s", False),
     # -- invoked over something else -------------------------------------------------
     ("pytest tests/other_test.py -q", "5 passed in 0.02s", False),
-    # -- genuinely executed ----------------------------------------------------------
-    ("pytest tests/test_pkg.py -q", "3 failed, 24 passed in 0.06s", True),
-    ("PYTHONPATH=src python -m pytest tests -q", "1 passed in 0.03s", True),
-    ("cd repo && pytest tests -q", "2 passed in 0.01s", True),
-    ("pytest tests/test_pkg.py -q", "1 passed, 2 deselected in 0.02s", True),
+    # -- aggregate summaries do not identify the submitted node ----------------------------------------------------------
+    ("pytest tests/test_pkg.py -q", "3 failed, 24 passed in 0.06s", None),
+    ("PYTHONPATH=src python -m pytest tests -q", "1 passed in 0.03s", None),
+    ("cd repo && pytest tests -q", "2 passed in 0.01s", None),
+    ("pytest tests/test_pkg.py -q", "1 passed, 2 deselected in 0.02s", None),
     # -- invoked, outcome unreadable -------------------------------------------------
     ("pytest tests/test_pkg.py -q", "", None),
     ("pytest tests/test_pkg.py -q", "something unrecognisable", None),
     # -- the interpreter form the protocol PRESCRIBES --------------------------------
     # `$A2_PYTHON` is uppercase and usually quoted, and `pytest` sits after `-m` rather
     # than at a command position, so the prescribed command earned no credit at all.
-    ('PYTHONPATH=src "$A2_PYTHON" -m pytest tests/test_pkg.py -q', "1 passed in 0.03s", True),
-    ("PYTHONPATH=src $A2_PYTHON -m pytest tests/test_pkg.py -q", "1 passed in 0.03s", True),
-    ("PYTHONPATH=src ${A2_PYTHON} -m pytest tests/test_pkg.py -q", "1 passed in 0.03s", True),
+    ('PYTHONPATH=src "$A2_PYTHON" -m pytest tests/test_pkg.py -q', "1 passed in 0.03s", None),
+    ("PYTHONPATH=src $A2_PYTHON -m pytest tests/test_pkg.py -q", "1 passed in 0.03s", None),
+    ("PYTHONPATH=src ${A2_PYTHON} -m pytest tests/test_pkg.py -q", "1 passed in 0.03s", None),
     ('"$A2_PYTHON" -m pytest tests/test_pkg.py::test_add_one_adds_one', "1 passed", True),
     # -- invoked over the added test's FILE, but never over the added test ------------
     ("pytest tests/test_pkg.py::test_something_else -q", "1 passed in 0.02s", False),
@@ -698,10 +728,10 @@ def _bash(command, result="", is_error=False):
     ('pytest tests/test_pkg.py -k "test_other"', "1 passed, 1 deselected in 0.02s", None),
     ('pytest tests/test_pkg.py -k "test_other and not test_add_one_adds_one"',
      "1 passed, 1 deselected in 0.02s", False),
-    # -- `-k` that DOES select it still earns credit ---------------------------------
-    ('pytest tests/test_pkg.py -k "test_add_one_adds_one"', "1 passed in 0.02s", True),
+    # -- a matching `-k` still needs a verdict for the submitted node ---------------------------------
+    ('pytest tests/test_pkg.py -k "test_add_one_adds_one"', "1 passed in 0.02s", None),
     ('pytest tests/test_pkg.py -k "test_add_one_adds_one or test_other"',
-     "2 passed in 0.02s", True),
+     "2 passed in 0.02s", None),
     ('PYTHONPATH=src "$A2_PYTHON" -m pytest tests/test_pkg.py -k "not test_add_one_adds_one"',
      "1 passed, 1 deselected in 0.02s", False),
     # -- an expression this reader cannot settle earns nothing, and is not a denial ---
@@ -718,8 +748,8 @@ def _bash(command, result="", is_error=False):
     ('pytest tests/test_pkg.py -k "NOT test_add_one_adds_one"',
      "ERROR: Wrong expression passed to '-k': NOT test_add_one_adds_one: at column 5: "
      "expected end of input; got identifier", None),
-    ('pytest tests/test_pkg.py -k "TEST_ADD_ONE_ADDS_ONE"', "1 passed in 0.02s", True),
-    ('pytest tests/test_pkg.py -k "Test_Add_One"', "1 passed in 0.02s", True),
+    ('pytest tests/test_pkg.py -k "TEST_ADD_ONE_ADDS_ONE"', "1 passed in 0.02s", None),
+    ('pytest tests/test_pkg.py -k "Test_Add_One"', "1 passed in 0.02s", None),
     # -- selection that turns on metadata no artifact carries stays UNKNOWN -------------
     # pytest also matches markers, fixture names and names assigned to the function. If the
     # added test carries `@pytest.mark.flagged`, `-k "not flagged"` excludes it and the node
@@ -729,7 +759,7 @@ def _bash(command, result="", is_error=False):
     ('pytest tests/test_pkg.py -k "test_add_one_adds_one and not slow"',
      "1 passed in 0.02s", None),
     # -- but a term that IS present still decides, even beside an unknown one -----------
-    ('pytest tests/test_pkg.py -k "slow or test_add_one_adds_one"', "1 passed", True),
+    ('pytest tests/test_pkg.py -k "slow or test_add_one_adds_one"', "1 passed", None),
     ('pytest tests/test_pkg.py -k "slow and not test_add_one_adds_one"',
      "1 passed, 1 deselected in 0.02s", False),
     # -- the invocation's OWN summary outranks the reconstruction ----------------------
@@ -737,7 +767,7 @@ def _bash(command, result="", is_error=False):
     ('pytest tests/test_pkg.py -k "not flagged"', "2 deselected in 0.01s", False),
 ])
 def test_execution_credit(command, result, expected):
-    assert P.observed_test_execution([_bash(command, result)], ADDED) is expected
+    assert P.observed_test_execution([_test_write(), _test_run(command, result)], ADDED) is expected
 
 
 def test_an_errored_pytest_call_is_unresolved_not_absent():

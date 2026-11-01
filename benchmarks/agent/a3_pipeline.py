@@ -34,11 +34,14 @@ from __future__ import annotations
 import ast
 import json
 import re
+import shlex
 from dataclasses import dataclass
 from pathlib import Path
 
 import a3_ledger
+import artifact_io
 import score_compliance
+from assess_a2r import shell_writes
 from run_calibration import usage_tokens
 from a3_decision import CONSULT_TOOLS, A3_PLAN, ArmRun, Plan, decide
 from trace_parse import parse
@@ -380,6 +383,41 @@ def _covers_added(cmd: str, added_tests: list[str]) -> bool | None:
     return None if unsettled else False
 
 
+def _test_write_boundaries(calls: list[dict], nodes: list[str]) -> dict[str, int | float]:
+    """Latest possible completion of any observed write to each submitted file."""
+    boundaries = {}
+    for file in {node.partition("::")[0] for node in nodes}:
+        for call in calls:
+            name = call.get("name")
+            if name == "Bash":
+                writes = shell_writes(_command_text(call), file)
+            else:
+                path = (call.get("input") or {}).get("file_path") or ""
+                writes = name in score_compliance.EDIT_TOOLS and (path == file or path.endswith("/" + file))
+            if writes:
+                end = call.get("resolved_at")
+                # A pending or errored edit may have partially written the file.
+                time = end if isinstance(end, int) and not call.get("is_error") else float("inf")
+                boundaries[file] = max(boundaries.get(file, -1), time)
+    return boundaries
+
+
+def _identifies_executed_node(cmd: str, result: str, node: str) -> bool:
+    """A per-node verdict, or a simple invocation that ran only this named node."""
+    invocation = _PYTEST.search(cmd)
+    tail = cmd[invocation.end():]
+    if any(char in tail for char in "|;&\n`$<>"):
+        return False  # a compound command's summary may come from another process
+    if re.search(rf"^{re.escape(node)}(?:\[[^\n]*?\])?\s+(?:PASSED|FAILED|XFAIL|XPASS)\b",
+                 result, re.MULTILINE):
+        return True
+    try:
+        args = shlex.split(tail)
+    except ValueError:
+        return False
+    return node in args and all(arg == node or arg in {"-q", "-v", "-vv", "-x"} for arg in args)
+
+
 def observed_test_execution(calls: list[dict], added_tests: list[str]) -> bool | None:
     """Did the ARM-RUN actually run the test it submitted? Read from the trace.
 
@@ -389,9 +427,8 @@ def observed_test_execution(calls: list[dict], added_tests: list[str]) -> bool |
     executed it -- and §5.3 asks for both, because A2-R's k1/nexus passed the hidden checks
     having added no test at all. Retrospective verification is not an execution event.
 
-      True   pytest was INVOKED at a command position, not collection-only, on a target
-             that would collect the added test, and its own output says at least one test
-             reached a verdict
+      True   a completed write to the submitted file preceded a pytest call whose
+             command or verdict identifies the added node
       False  pytest was never invoked; or only on paths that exclude the added test; or it
              ran and nothing reached a verdict (everything deselected, nothing collected)
       None   pytest was invoked but its output does not settle whether tests ran -- the
@@ -410,8 +447,11 @@ def observed_test_execution(calls: list[dict], added_tests: list[str]) -> bool |
     """
     if not added_tests:
         return False
+    boundaries = _test_write_boundaries(calls, added_tests)
     saw_unsettled = False
     for c in calls:
+        if c.get("name") != "Bash":
+            continue
         cmd = _command_text(c)
         if not _PYTEST.search(cmd):
             continue                        # mentioned, not invoked
@@ -431,7 +471,12 @@ def observed_test_execution(calls: list[dict], added_tests: list[str]) -> bool |
         if covers is False:
             continue                        # ran, but demonstrably not over the added test
         if ran is True and covers is True:
-            return True
+            issued = c.get("issued_at")
+            for node in added_tests:
+                finished = boundaries.get(node.partition("::")[0])
+                if (finished is not None and isinstance(issued, int) and finished < issued
+                        and _identifies_executed_node(cmd, c["result"], node)):
+                    return True
         saw_unsettled = True                # outcome unreadable, or selection unknowable
     return None if saw_unsettled else False
 
@@ -512,16 +557,16 @@ def normalise(root: Path, task: str, attempt: int, policy: str, *,
     # functional and adoption are recorded by the runner and the trace reader; absent is
     # unresolved, and `.get` on a missing file must not become False.
     fn = d / "functional.json"
-    functional = json.loads(fn.read_text()).get("passed") if fn.is_file() else None
+    functional = json.loads(artifact_io.read_text(fn)).get("passed") if fn.is_file() else None
     on = d / "outcomes.json"
-    outcomes = json.loads(on.read_text()) if on.is_file() else {}
+    outcomes = json.loads(artifact_io.read_text(on)) if on.is_file() else {}
     # A HUMAN review of whether the added test covers the reported defect. Absent means not
     # reviewed, which blocks acceptance and never causes a failure. Nothing computes it.
     rn = d / "relevance.json"
-    reviewed = json.loads(rn.read_text()).get("relevant") if rn.is_file() else None
+    reviewed = json.loads(artifact_io.read_text(rn)).get("relevant") if rn.is_file() else None
 
     rec = d / "record.json"
-    record = json.loads(rec.read_text()) if rec.is_file() else {}
+    record = json.loads(artifact_io.read_text(rec)) if rec.is_file() else {}
     usage = (record.get("record") or record).get("usage") or {}
     # ONE rule for what a usage block accounts for, shared with `a3_ledger` and
     # `run_calibration`. Reading `total_tokens` here while the ledger summed the four

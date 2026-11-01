@@ -17,19 +17,37 @@ result ARRIVES after it delivered nothing the edit could have used.
 """
 from __future__ import annotations
 
+from contextlib import ExitStack, contextmanager
 import gzip
 import json
 from pathlib import Path
 
+from artifact_io import MAX_TEXT_BYTES, open_regular
 
+
+@contextmanager
 def _open(path: Path):
     p = Path(path)
-    if p.suffix == ".gz":
-        return gzip.open(p, "rt", errors="replace")
-    if p.exists():
-        return p.open(errors="replace")
-    gz = p.with_suffix(p.suffix + ".gz")
-    return gzip.open(gz, "rt", errors="replace")
+    with ExitStack() as stack:
+        try:
+            stream = stack.enter_context(open_regular(p))
+        except FileNotFoundError:
+            if p.suffix == ".gz":
+                raise
+            p = p.with_suffix(p.suffix + ".gz")
+            stream = stack.enter_context(open_regular(p))
+        if p.suffix == ".gz":
+            stream = stack.enter_context(gzip.GzipFile(fileobj=stream, mode="rb"))
+
+        def lines():
+            remaining = MAX_TEXT_BYTES
+            while raw := stream.readline(remaining + 1):
+                remaining -= len(raw)
+                if remaining < 0:
+                    raise OSError(f"uncompressed trace exceeds {MAX_TEXT_BYTES} bytes: {p}")
+                yield raw.decode("utf-8", errors="replace")
+
+        yield lines()
 
 
 def _text(content) -> str:

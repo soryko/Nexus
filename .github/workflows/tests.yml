@@ -98,7 +98,14 @@ jobs:
           uv run python benchmarks/agent/test_interpreter_pinning.py
           uv run python benchmarks/agent/test_a2r.py
 
-      # `testpaths = ["tests"]`, so these two pytest files under `benchmarks/agent` are NOT
+      # The pipeline rehearsal uses synthetic fixtures with real, confined Git and
+      # pytest processes. The isolation tests must fail if the backend cannot start.
+      - name: Install the Linux scorer sandbox
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+
+      # `testpaths = ["tests"]`, so the pytest files under `benchmarks/agent` are NOT
       # collected by the Suite step above and have to be named. They were written and then
       # would never have run here -- the same shape as the fix-leakage scan that reported
       # "none" on four tasks while gathering no evidence.
@@ -116,7 +123,7 @@ jobs:
       # because the synthetic decision-table checks cannot reach the join between them, and
       # the join is where the fix-leakage scan's defect lived. It writes 16 arm-runs to a
       # tmpdir and runs the real regression probe over them, so it is the slow one (~80s);
-      # it stubs every subprocess but pytest and never invokes `sandbox-exec`.
+      # it executes Git and pytest inside the scorer sandbox against synthetic fixtures.
       #
       # It needs `pyexpat` in the interpreter running pytest HERE, not merely in the one the
       # probe shells out to: `regression_discriminates` parses the JUnit report in its own
@@ -131,6 +138,8 @@ jobs:
             benchmarks/agent/test_a3_pipeline.py \
             benchmarks/agent/test_provenance.py \
             benchmarks/agent/test_a3_production.py \
+            benchmarks/agent/test_scorer_sandbox.py \
+            benchmarks/agent/test_turn_accounting.py \
             --junitxml=artifacts/junit/bench.xml
 
       # The INSTALLED package, not the source tree. `uv sync` has already built the
@@ -257,6 +266,10 @@ jobs:
             --artifacts "$(pwd -P)/artifacts" \
             2>&1 | tee "artifacts/distribution-${{ matrix.os }}.log"
           exit "${PIPESTATUS[0]}"
+
+      - name: Verify macOS scorer confinement on disposable fixtures
+        if: runner.os == 'macOS'
+        run: uv run --frozen pytest -q benchmarks/agent/test_scorer_sandbox.py
 
       - name: Fresh-install evidence
         if: always()

@@ -162,14 +162,14 @@ def test_the_adapter_denies_the_sibling_policy():
 
 def test_the_adapter_checks_a_fatal_stop_before_every_arm_run():
     """An admitted pair does not authorise its second member."""
-    src = inspect.getsource(__import__("run_a3").run_pair)
+    src = inspect.getsource(__import__("run_a3")._run_locked_pair)
     body = src[src.index("R.ARMS = {ARM"):]            # the execution half
     assert "L.fatal_stop(scratch, registered)" in body
     assert body.index("L.fatal_stop(") < body.index("R.invoke(")
 
 
 def test_the_adapter_marks_the_launch_before_invoking():
-    src = inspect.getsource(__import__("run_a3").run_pair)
+    src = inspect.getsource(__import__("run_a3")._run_locked_pair)
     assert src.index("L.mark_launch(") < src.index("R.invoke(")
 
 
@@ -221,18 +221,243 @@ def test_outbound_verification_passes_when_both_are_observed(tmp_path):
 # GAP 1 -- the budget gate was never reached from production.
 # ---------------------------------------------------------------------------------------
 
+@pytest.mark.parametrize("artifact", ["a3-launch.json", "record.json", "trace.jsonl",
+                                      "refused.json", "repo/local-change"])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_repeat_pair_refuses_before_loading_the_runner(tmp_path, monkeypatch, artifact, dry_run):
+    import run_a3
+    path = P.arm_run_dir(tmp_path, "k1", 1, "A") / artifact
+    path.parent.mkdir(parents=True)
+    path.write_text("previous evidence")
+    monkeypatch.setattr(run_a3, "_load_runner", lambda *_: pytest.fail("repeat reached runner"))
+    assert run_a3.run_pair(tmp_path, "k1", 1, BENCH / "schedule-a3.json", dry_run) == 3
+    assert path.read_text() == "previous evidence"
+    assert [p for p in tmp_path.rglob("*") if p.is_file()] == [path]
+
+
+def test_a_pair_holds_the_sweep_lock_and_a_crash_preserves_its_claim(tmp_path, monkeypatch):
+    import run_a3
+    schedule = BENCH / "schedule-a3.json"
+    fixture = tmp_path / "run-k1" / "base" / "fixtures.json"
+    fixture.parent.mkdir(parents=True)
+    fixture.write_text(json.dumps([{"task": "k1", "checks": [], "held_checks": "checks"}]))
+
+    def interrupted_prepare(_arm):
+        assert run_a3.run_pair(tmp_path, "k2", 1, schedule) == 3
+        raise RuntimeError("interrupted before preparation")
+
+    runner = types.SimpleNamespace(
+        CFG=types.SimpleNamespace(config_version="a3-v1-REHEARSAL"),
+        FORWARDER_PORT=RP.FORWARDER_PORT, RUN=fixture.parent.parent, ARMS={"nexus": {}},
+        boundary_paths=lambda *_: ([], []), prepare=interrupted_prepare)
+    def load(_scratch, task, _attempt, _schedule):
+        assert task == "k1", "second pair admitted during the first reservation"
+        return runner
+    monkeypatch.setenv("DEEPSEEK_API_KEY", RP.STUB_KEY)
+    monkeypatch.setattr(run_a3, "_load_runner", load)
+    with pytest.raises(RuntimeError, match="interrupted before preparation"):
+        run_a3.run_pair(tmp_path, "k1", 1, schedule)
+    monkeypatch.setattr(run_a3, "_load_runner", lambda *_: pytest.fail("retried a claimed pair"))
+    assert run_a3.run_pair(tmp_path, "k1", 1, schedule) == 3
+    assert not (tmp_path / "run-k2" / "attempt1").exists()
+
+
+@pytest.mark.parametrize("version,port,key", [
+    ("a3-v1", RP.FORWARDER_PORT, RP.STUB_KEY),
+    ("a3-v1-REHEARSAL", 8899, RP.STUB_KEY),
+    ("a3-v1-REHEARSAL", RP.FORWARDER_PORT, "other")])
+def test_frozen_or_misconfigured_live_path_stops_before_preparation(tmp_path, monkeypatch,
+                                                                    version, port, key):
+    import run_a3
+    runner = types.SimpleNamespace(CFG=types.SimpleNamespace(config_version=version),
+                                   FORWARDER_PORT=port)
+    monkeypatch.setattr(run_a3, "_load_runner", lambda *_: runner)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", key)
+    assert run_a3.run_pair(tmp_path, "k1", 1, BENCH / "schedule-a3.json") == 3
+    assert not (tmp_path / "run-k1" / "attempt1").exists()
+
+
+def test_launch_and_refusal_markers_cannot_replace_an_earlier_record(tmp_path):
+    params = dict(identity={}, max_turns=45, wall_clock_s=600, prompt_digest="original")
+    first = L.mark_launch(tmp_path, "k1", 1, "B", **params)
+    with pytest.raises(FileExistsError):
+        L.mark_launch(tmp_path, "k1", 1, "B", **{**params, "prompt_digest": "second"})
+    assert json.loads(first.read_text())["prompt_digest"] == "original"
+    refusal = L.mark_refusal(tmp_path, "k2", 1, "A", "original")
+    with pytest.raises(FileExistsError):
+        L.mark_refusal(tmp_path, "k2", 1, "A", "second")
+    assert json.loads(refusal.read_text())["reason"] == "original"
+
+
+def test_symlinked_arm_directory_cannot_redirect_a_claim(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    arm = P.arm_run_dir(tmp_path, "k1", 1, "A")
+    arm.parent.mkdir(parents=True)
+    arm.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(OSError):
+        L.mark_launch(tmp_path, "k1", 1, "A", identity={}, max_turns=1,
+                      wall_clock_s=10, prompt_digest="x")
+    with pytest.raises(OSError):
+        L.mark_refusal(tmp_path, "k1", 1, "A", "refused")
+    assert not list(outside.iterdir())
+
+
+def test_ledger_cannot_charge_an_unrelated_file_linked_as_terminal_evidence(tmp_path):
+    outside = tmp_path / "other-record.json"
+    outside.write_text('{"usage":{"input_tokens":1000000}}')
+    marker = L.mark_launch(tmp_path, "k1", 1, "B", identity={}, max_turns=1,
+                           wall_clock_s=10, prompt_digest="x")
+    (marker.parent / "record.json").symlink_to(outside)
+    led = L.read(tmp_path)
+    assert led.tokens_known == 0
+    assert led.unresolved == ["k1/B/1"]
+    assert L.fatal_stop(tmp_path)
+
+
+def test_a_preexisting_checkout_is_preserved_and_a_profile_cannot_follow_a_link(tmp_path):
+    import artifact_io
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "evidence").write_text("original")
+    # No runner, git or model is needed to exercise the destination used by prepare().
+    occupied = tmp_path / "repo"
+    with artifact_io.staged_directory(occupied) as stage:
+        stage.mkdir()
+        (stage / "evidence").write_text("old")
+    with pytest.raises(FileExistsError), artifact_io.staged_directory(occupied):
+        pytest.fail("existing checkout was admitted")
+    assert (occupied / "evidence").read_text() == "old"
+    linked = tmp_path / "redirect"
+    linked.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(OSError):
+        isolation.write_profile(linked / "sandbox.sb", tmp_path, [])
+    assert not (outside / "sandbox.sb").exists()
+
+
+def test_wrong_staging_filesystem_refuses_before_consuming_a_pair_or_checkout(tmp_path,
+                                                                             monkeypatch, capsys):
+    import artifact_io
+    import run_a3
+    import tempfile
+    if tmp_path.stat().st_dev == Path("/dev/null").stat().st_dev:
+        pytest.skip("test needs a different filesystem")
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: "/dev/null")
+    with pytest.raises(OSError, match="TMPDIR"), artifact_io.staged_directory(tmp_path / "repo"):
+        pytest.fail("cross-volume checkout was admitted")
+    assert not (tmp_path / "repo").exists()
+    fixture = tmp_path / "run-k1" / "base" / "fixtures.json"
+    fixture.parent.mkdir(parents=True)
+    fixture.write_text(json.dumps([{"task": "k1", "checks": [], "held_checks": "checks"}]))
+    runner = types.SimpleNamespace(RUN=fixture.parent.parent,
+                                   CFG=types.SimpleNamespace(config_version="a3-v1-REHEARSAL"),
+                                   FORWARDER_PORT=RP.FORWARDER_PORT)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", RP.STUB_KEY)
+    monkeypatch.setattr(run_a3, "_load_runner", lambda *_: runner)
+    assert run_a3.run_pair(tmp_path, "k1", 1, BENCH / "schedule-a3.json") == 3
+    assert not (tmp_path / "run-k1" / "attempt1").exists()
+    assert "TMPDIR" in capsys.readouterr().out
+
+
+def test_an_unregistered_pair_or_a_duplicate_policy_cannot_start(tmp_path, monkeypatch):
+    import run_a3
+    import schedule as sched
+    monkeypatch.setattr(run_a3, "_load_runner", lambda *_: pytest.fail("unregistered launch"))
+    drawn = sched.load(BENCH / "schedule-a3.json")
+    drawn.rows[0]["order"] = ["B", "B"]
+    drawn.schedule_digest = sched.digest(drawn.rows)
+    path = sched.save(drawn, tmp_path / "schedule.json")
+    assert run_a3.run_pair(tmp_path, "k1", 1, path) == 3
+    assert run_a3.run_pair(tmp_path, "k1", 3, path) == 3
+
+
+def test_dry_run_probes_use_disposable_outputs_even_when_boundary_refuses(tmp_path, monkeypatch):
+    import run_a3
+    fixture = tmp_path / "run-k1" / "base" / "fixtures.json"
+    fixture.parent.mkdir(parents=True)
+    fixture.write_text(json.dumps([{"task": "k1", "checks": [], "held_checks": "checks"}]))
+    runner = types.SimpleNamespace(
+        RUN=fixture.parent.parent, FIXTURE_BASE=fixture.parent, PYTEST_PY=sys.executable,
+        BENCH=BENCH, ARMS={"nexus": {}}, boundary_paths=lambda *_: ([], []),
+        provision_store=lambda *_: None, write_arm_profile=lambda *_: None,
+        prepare=lambda *_: runner.OUT)
+    monkeypatch.setattr(run_a3, "_load_runner", lambda *_: runner)
+    monkeypatch.setattr(isolation, "check_boundary", lambda *a, **kw: {
+        "all_hold": False, "required_unresolved": [], "required_failed": ["fixture"],
+        "negative_controls": {}, "positive_controls": {}})
+    assert run_a3.run_pair(tmp_path, "k1", 1, BENCH / "schedule-a3.json", dry_run=True) == 3
+    assert not (tmp_path / "run-k1" / "attempt1").exists()
+    assert L.fatal_stop(tmp_path) is None
+
+
+@pytest.mark.parametrize("poison", [None, "patch.diff", "functional.json", "record.json"])
+def test_completed_pair_is_charged_once_and_the_next_pair_sees_its_spend(tmp_path, monkeypatch, poison):
+    import run_a3
+    fixture = tmp_path / "run-k1" / "base" / "fixtures.json"
+    fixture.parent.mkdir(parents=True)
+    fixture.write_text(json.dumps([{"task": "k1", "checks": [], "held_checks": "checks"}]))
+    usage = {"input_tokens": 12_000_000, "output_tokens": 1_000_000,
+             "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
+    invocations = []
+    outside = tmp_path / "unrelated"
+    outside.write_text("preserve me")
+
+    def prepare(arm):
+        cwd = runner.OUT / "arms" / arm / "repo"
+        cwd.mkdir(parents=True)
+        return cwd
+
+    def invoke(_arm, cwd):
+        assert (cwd.parent / L.A3_MARKER).is_file()
+        invocations.append(cwd)
+        if poison:
+            (cwd.parent / poison).symlink_to(outside)
+        return {"result": {"usage": usage}}
+
+    runner = types.SimpleNamespace(
+        RUN=fixture.parent.parent, FIXTURE_BASE=fixture.parent, PYTEST_PY=sys.executable,
+        BENCH=BENCH, ARMS={"nexus": {}}, boundary_paths=lambda *_: ([], []),
+        CFG=types.SimpleNamespace(config_version="a3-v1-REHEARSAL", as_recorded=lambda: {},
+                                  corpus_digest=None),
+        FORWARDER_PORT=RP.FORWARDER_PORT, MAX_TURNS=45, WALL_CLOCK_S=600,
+        run_identity=lambda: {}, prepare=prepare, provision_store=lambda *_: None,
+        write_arm_profile=lambda *_: None, invoke=invoke, read_trace=lambda *_: {},
+        patch_of=lambda *_: "", score=lambda *_: {"passed": True, "summary": "passed"},
+        classify=lambda *_: "completed")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", RP.STUB_KEY)
+    monkeypatch.setattr(run_a3, "_load_runner", lambda *_: runner)
+    monkeypatch.setattr(isolation, "check_boundary", lambda *a, **kw: {
+        "all_hold": True, "required_unresolved": [], "required_failed": [],
+        "negative_controls": {}, "positive_controls": {}})
+    schedule = BENCH / "schedule-a3.json"
+    if poison:
+        with pytest.raises(OSError):
+            run_a3.run_pair(tmp_path, "k1", 1, schedule)
+        assert outside.read_text() == "preserve me"
+        assert len(invocations) == 1
+        return
+    assert run_a3.run_pair(tmp_path, "k1", 1, schedule) == 0
+    files = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    assert L.may_admit_pair(tmp_path, "k1", 1)["may_start"] is False
+    assert run_a3.run_pair(tmp_path, "k1", 1, schedule) == 3
+    assert files == {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    assert run_a3.run_pair(tmp_path, "k2", 1, schedule) == 3
+    assert L.read(tmp_path).tokens_known == 26_000_000
+    assert len(invocations) == 2
+
+
 def test_the_adapter_admits_the_pair_on_BUDGET_before_launching():
     """`may_admit_pair` lives in `a3_ledger` and was called only by the rehearsal's driver.
     Production checked `fatal_stop` alone, so the threshold was never consulted and both
     invocations were reached at any level of consumption."""
-    src = inspect.getsource(__import__("run_a3").run_pair)
+    src = inspect.getsource(__import__("run_a3")._run_locked_pair)
     assert "L.may_admit_pair(" in src
     assert src.index("L.may_admit_pair(") < src.index("for policy in order:")
 
 
 def test_admission_is_asked_once_and_the_fatal_stop_per_arm_run():
     """They are different questions. Budget once for the pair; safety before each member."""
-    src = inspect.getsource(__import__("run_a3").run_pair)
+    src = inspect.getsource(__import__("run_a3")._run_locked_pair)
     body = src[src.index("R.ARMS = {ARM"):]            # the execution half
     assert "L.may_admit_pair(" not in body          # not re-asked per arm-run
     assert "L.fatal_stop(" in body
@@ -242,7 +467,7 @@ def test_admission_is_asked_once_and_the_fatal_stop_per_arm_run():
 def test_a_refused_pair_records_a_refusal_for_both_policies():
     """A pair the budget refuses is recorded as refused for BOTH policies, and nothing is
     launched -- a refusal is not an arm-run that spent nothing."""
-    src = inspect.getsource(__import__("run_a3").run_pair)
+    src = inspect.getsource(__import__("run_a3")._run_locked_pair)
     head = src[:src.index("R.ARMS = {ARM")]            # everything before execution
     assert "L.mark_refusal(" in head
     assert head.index("L.mark_refusal(") > head.index("L.may_admit_pair(")
@@ -252,7 +477,7 @@ def test_a_refused_pair_records_a_refusal_for_both_policies():
 def test_the_adapter_passes_the_registered_plan_not_the_schedule():
     """The first version passed the Schedule to the ledger, which wants the registered Plan.
     Two objects, one name `plan`, and it crashed on the gate's first production run."""
-    src = inspect.getsource(__import__("run_a3").run_pair)
+    src = inspect.getsource(__import__("run_a3")._run_locked_pair)
     assert "registered = A3_PLAN" in src
     assert "L.may_admit_pair(scratch, task, attempt, registered)" in src
     assert "L.fatal_stop(scratch, registered)" in src
@@ -282,7 +507,7 @@ def test_the_adapter_writes_the_artifact_the_reporter_reads():
     """The production writer recorded the functional result inside `record.json` while
     `normalise` looked for `functional.json`, so every production row arrived as unknown
     with the scorer having settled it. An artifact-presence check cannot see that."""
-    src = inspect.getsource(__import__("run_a3").run_pair)
+    src = inspect.getsource(__import__("run_a3")._run_locked_pair)
     assert 'functional.json' in src
     assert src.index("R.score(") < src.index('"functional.json"')
     pipeline = (BENCH / "a3_pipeline.py").read_text()
@@ -300,10 +525,12 @@ def test_a_record_without_the_artifact_is_unknown_not_a_pass(tmp_path):
                                                           "output_tokens": 1,
                                                           "cache_read_input_tokens": 0,
                                                           "cache_creation_input_tokens": 0}}}))
-    assert not (d / "functional.json").exists()
-    # `normalise` reads functional.json and nothing else for this field
-    assert 'functional = json.loads(fn.read_text()).get("passed") if fn.is_file() else None' \
-        in (BENCH / "a3_pipeline.py").read_text()
+    (d / "patch.diff").touch()
+    (d / "trace.jsonl").touch()
+    notes = tmp_path / "notes.md"
+    notes.touch()
+    assert P.normalise(tmp_path, "k1", 1, "A", facts={}, bodies={}, pristine=tmp_path,
+                       python=sys.executable, notes_file=notes).arm_run.functional_pass is None
 
 
 # -- the rehearsal's own exit status -------------------------------------------------

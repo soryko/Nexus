@@ -5,6 +5,13 @@ and [`preflight-a3.py`](preflight-a3.py) asserts every one of them — but a gre
 is not an authorisation. No budget is approved, no arm-run has been executed, and **paid
 execution remains stopped** until the founder approves this record.
 
+**Runner status, 2026-11-01.** The current runner permits dry runs and the loopback
+rehearsal with its dummy credential. Live execution is blocked. The scorer and admission
+code have changed since the identifiers below were frozen. Any future paid run requires
+a fresh execution record, verified protection for the operator's ledger, and founder approval.
+For a scratch directory on another volume, set `TMPDIR` to a private directory on that
+volume so the runner can publish staged files atomically.
+
 > ## Unauthorised execution already happened against this design
 >
 > On **2026-09-20** a development rehearsal ran two A3-shaped arm-runs against the **real**

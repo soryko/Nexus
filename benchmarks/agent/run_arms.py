@@ -25,6 +25,8 @@ import json, os, random, shutil, subprocess, sys, time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import artifact_io
+
 SP = Path(sys.argv[1])
 TASK = sys.argv[2]
 RUN = SP / f"run-{TASK}"
@@ -33,6 +35,7 @@ BENCH = REPO / "benchmarks" / "agent"
 PYTEST_PY = "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/215651df-6e30-4d49-a919-8b24f46175e8/scratchpad/.venv-click/bin/python"
 sys.path.insert(0, str(BENCH))
 from build_fixture import score  # the same scorer the controls used
+from scorer_sandbox import candidate_patch as patch_of
 import task_set
 
 # Before anything else: before the stale interpreter path above is used, before a fixture is
@@ -134,25 +137,23 @@ ARMS = {
 def prepare(arm: str) -> Path:
     """A fresh, isolated checkout per attempt (protocol-a1 section 3)."""
     dst = RUN / "arms" / arm / "repo"
-    if dst.exists():
-        shutil.rmtree(dst)
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(RUN / "base" / TASK, dst, symlinks=True)
-    if ARMS[arm]["notes"]:
-        # capture-policy-a1 section 4: the same captured information, one readable file,
-        # mechanically rendered. Placed at the checkout root, and committed so that the
-        # agent's own patch is measured against a tree that already contains it.
-        shutil.copy2(BENCH / "notes-dev-a1.md", dst / "NOTES-FROM-EARLIER-WORK.md")
-        subprocess.run(["git", "-C", str(dst), "add", "NOTES-FROM-EARLIER-WORK.md"], check=True)
-        subprocess.run(["git", "-C", str(dst), "-c", "user.email=fixture@localhost",
-                        "-c", "user.name=A1 fixture", "commit", "--quiet", "-m", "notes"],
-                       check=True)
+    with artifact_io.staged_directory(dst) as stage:
+        shutil.copytree(RUN / "base" / TASK, stage, symlinks=True)
+        if ARMS[arm]["notes"]:
+            # capture-policy-a1 section 4: the same captured information, one readable file,
+            # mechanically rendered. Placed at the checkout root, and committed so that the
+            # agent's own patch is measured against a tree that already contains it.
+            shutil.copy2(BENCH / "notes-dev-a1.md", stage / "NOTES-FROM-EARLIER-WORK.md")
+            subprocess.run(["git", "-C", str(stage), "add", "NOTES-FROM-EARLIER-WORK.md"], check=True)
+            subprocess.run(["git", "-C", str(stage), "-c", "user.email=fixture@localhost",
+                            "-c", "user.name=A1 fixture", "commit", "--quiet", "-m", "notes"],
+                           check=True)
     return dst
 
 
 def invoke(arm: str, cwd: Path) -> dict:
     cfg = RUN / "arms" / arm / "mcp.json"
-    cfg.write_text(json.dumps(ARMS[arm]["mcp"]))
+    artifact_io.write_text(cfg, json.dumps(ARMS[arm]["mcp"]))
     cmd = ["claude", "--bare", "-p", PROMPT, "--model", "deepseek-flash",
            "--mcp-config", str(cfg), "--strict-mcp-config",
            "--allowedTools", ARMS[arm]["tools"],
@@ -177,8 +178,8 @@ def invoke(arm: str, cwd: Path) -> dict:
         err = (exc.stderr or b"").decode() if isinstance(exc.stderr, bytes) else (exc.stderr or "")
         verdict = "timeout"
     wall = time.monotonic() - t0
-    (RUN / "arms" / arm / "trace.jsonl").write_text(out)
-    (RUN / "arms" / arm / "stderr.txt").write_text(err)
+    artifact_io.create_text(RUN / "arms" / arm / "trace.jsonl", out)
+    artifact_io.create_text(RUN / "arms" / arm / "stderr.txt", err)
     return {"arm": arm, "started_utc": started.isoformat(), "wall_clock_s": round(wall, 1),
             "forced_verdict": verdict}
 
@@ -186,7 +187,7 @@ def invoke(arm: str, cwd: Path) -> dict:
 def read_trace(arm: str) -> dict:
     """Tool trace, terminal status and provider-reported usage."""
     calls, result = [], None
-    for line in (RUN / "arms" / arm / "trace.jsonl").read_text().splitlines():
+    for line in artifact_io.read_text(RUN / "arms" / arm / "trace.jsonl").splitlines():
         line = line.strip()
         if not line.startswith("{"):
             continue
@@ -215,12 +216,6 @@ def read_trace(arm: str) -> dict:
     return {"tool_calls": calls, "result": result}
 
 
-def patch_of(cwd: Path) -> str:
-    subprocess.run(["git", "-C", str(cwd), "add", "-A", "-N"], check=True)
-    return subprocess.run(["git", "-C", str(cwd), "diff"],
-                          capture_output=True, text=True, check=True).stdout
-
-
 def memory_visibility(arm: str) -> dict:
     """Assert the agent will actually SEE the corpus, reading the config the run will use.
 
@@ -231,7 +226,7 @@ def memory_visibility(arm: str) -> dict:
     This reads the config as written by the harness itself, immediately before the arm runs.
     """
     import sqlite3
-    cfg = json.loads((RUN / "arms" / arm / "mcp.json").read_text())
+    cfg = json.loads(artifact_io.read_text(RUN / "arms" / arm / "mcp.json"))
     server = cfg.get("mcpServers", {}).get("nexus")
     if not server:
         return {"applicable": False}
@@ -266,7 +261,7 @@ def store_digest() -> str:
 
 
 def main() -> int:
-    allfx = json.loads((RUN / "base" / "fixtures.json").read_text())
+    allfx = json.loads(artifact_io.read_text(RUN / "base" / "fixtures.json"))
     fixtures = next(f for f in allfx if f["task"] == TASK)
     checks, held = fixtures["checks"], Path(fixtures["held_checks"])
 
@@ -295,7 +290,7 @@ def main() -> int:
                   f"(pip exit={egress.returncode}, fetched={fetched})", flush=True)
             return 1
         cfg_path = RUN / "arms" / arm / "mcp.json"
-        cfg_path.write_text(json.dumps(ARMS[arm]["mcp"]))   # write it BEFORE checking it
+        artifact_io.write_text(cfg_path, json.dumps(ARMS[arm]["mcp"]))   # write it BEFORE checking it
         vis = memory_visibility(arm)
         if vis["applicable"]:
             print(f"[{arm}] memory visibility control: scope=({vis['namespace']},{vis['actor']}) "
@@ -311,7 +306,7 @@ def main() -> int:
         rec["egress_probe_stderr_tail"] = (egress.stderr or egress.stdout or "").strip().splitlines()[-1:] 
         rec.update(read_trace(arm))
         patch = patch_of(cwd)
-        (RUN / "arms" / arm / "patch.diff").write_text(patch)
+        artifact_io.create_text(RUN / "arms" / arm / "patch.diff", patch)
         rec["patch_bytes"] = len(patch)
         rec["patch_touches_src"] = "src/click/" in patch
         rec["scored"] = score(cwd, held, checks, PYTEST_PY, RUN / "scoring" / arm)
@@ -336,7 +331,7 @@ def main() -> int:
 
     after = store_digest()
     print(f"\nfrozen store digest after all arms: {after}  unchanged={before == after}")
-    (RUN / "records.json").write_text(json.dumps(
+    artifact_io.create_text(RUN / "records.json", json.dumps(
         {"task": TASK, "seed": SEED, "order": order, "max_turns": MAX_TURNS,
          "wall_clock_s": WALL_CLOCK_S, "prompt": PROMPT,
          "store_digest_before": before, "store_digest_after": after,
