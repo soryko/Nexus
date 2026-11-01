@@ -174,7 +174,7 @@ Keep the returned `memory_id` and `revision_id`. Read with `get`, and pass the l
 
 ## Finding a memory
 
-`search` returns bounded excerpts and the reason each hit matched, never whole bodies — fetch those with `get`. The workflow the milestone is built around:
+`search` returns up to 240 Unicode characters of each body and the reason it matched. Use `get` for the complete stored text.
 
 ```text
 search "retry policy"      -> a hit, with has_earlier_revisions: true

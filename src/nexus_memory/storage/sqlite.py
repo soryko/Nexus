@@ -7,6 +7,7 @@ import json
 import math
 import sqlite3
 import time
+import unicodedata
 import uuid
 from contextlib import closing, contextmanager
 from datetime import UTC, datetime
@@ -46,8 +47,7 @@ from nexus_memory.domain.models import (
 )
 
 
-_TOKEN = re.compile(r"\w+", re.UNICODE)
-
+_MARKS_AND_PRIVATE_USE = frozenset(("Mn", "Mc", "Me", "Co"))
 _SEPARATORS = ("_", "/", "\\", ".")
 _CAMEL = re.compile(r"[a-z0-9][A-Z]")
 _ALNUM_MIX = re.compile(r"(?:[A-Za-z][0-9])|(?:[0-9][A-Za-z])")
@@ -443,6 +443,29 @@ class SQLiteRepository:
                 raise StorageIntegrityError("storage initialization failed")
             time.sleep(cls.WAL_SWITCH_RETRY_SECONDS)
 
+    def _repair_legacy_recency(self, db: sqlite3.Connection) -> None:
+        """Restore sequence numbers lost by the original v1 head-index backfill.
+
+        The index shape is unchanged. A transactional marker keeps existing schema-4
+        executables compatible and makes subsequent opens skip the historical scan.
+        """
+        db.execute("CREATE TABLE IF NOT EXISTS data_repairs (name TEXT PRIMARY KEY) WITHOUT ROWID")
+        marker = db.execute("INSERT OR IGNORE INTO data_repairs VALUES ('v1-head-recency')")
+        if not marker.rowcount:
+            return
+        legacy_heads = db.execute("SELECT count(*) FROM head_index WHERE durable_seq=0").fetchone()[0]
+        if not legacy_heads:
+            return
+        updated = db.execute(
+            "UPDATE head_index AS h SET durable_seq=r.durable_seq FROM receipts AS r"
+            " WHERE h.durable_seq=0 AND r.namespace=h.namespace AND r.actor=h.actor"
+            " AND r.memory_id=h.memory_id AND r.revision_id=h.revision_id"
+            " AND r.operation IN ('record','revise')"
+        )
+        if updated.rowcount != legacy_heads:
+            raise StorageIntegrityError("a migrated head has no matching write receipt")
+        self._bump_generation(db)
+
     def _migrate(self) -> None:
         connection = None
         try:
@@ -474,6 +497,7 @@ class SQLiteRepository:
                         connection.execute(statement)
                 version = 4
             connection.execute(f"PRAGMA user_version = {version}")
+            self._repair_legacy_recency(connection)
             self._apply_profile(connection)
             self._apply_history_profile(connection)
             connection.commit()
@@ -889,6 +913,10 @@ class SQLiteRepository:
             "reference_path_prefix": query.reference_path_prefix,
             "reference_commits": list(query.reference_commits or ()),
         }
+        # Schema-4 servers may share a store across this tokenizer correction.
+        # Older literal cursors page across a different match set for these terms.
+        if not query.advanced and any(unicodedata.category(ch) in _MARKS_AND_PRIVATE_USE for ch in query.query or ""):
+            payload["literal_tokenization"] = 2
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         return hashlib.sha256(encoded).hexdigest()
 
@@ -1083,6 +1111,17 @@ class SQLiteRepository:
         return " ".join(clauses), parameters
 
     @staticmethod
+    def _literal_expression(text: str) -> str | None:
+        # Preserve combining marks with their base, so SQLite gets the same spelling
+        # on lookup that its tokenizer saw on insert. unicode61 also indexes private
+        # use characters. Separators keep independent query terms disjunctive.
+        words = "".join(
+            char if char.isalnum() or char == "_" or unicodedata.category(char) in _MARKS_AND_PRIVATE_USE else " "
+            for char in text
+        ).split()
+        return " OR ".join(f'"{word}"' for word in words) or None
+
+    @staticmethod
     def _match_expression(query: SearchQuery) -> str | None:
         """Literal mode means FTS operators are inert, not that the text must appear verbatim.
 
@@ -1094,10 +1133,7 @@ class SQLiteRepository:
         """
         if query.advanced:
             return query.query or ""
-        tokens = _TOKEN.findall(query.query or "")
-        if not tokens:
-            return None
-        return " OR ".join('"' + token.replace('"', '""') + '"' for token in tokens)
+        return SQLiteRepository._literal_expression(query.query or "")
 
     def _match_legs(self, query: SearchQuery, expression: str) -> list[tuple[str, str]]:
         """Which index or indexes this profile matches against, and with what expression.
@@ -1116,10 +1152,9 @@ class SQLiteRepository:
         legs = [("head_fts", expression)]
         if query.advanced:
             return legs
-        prose = [chunk for chunk in (query.query or "").split() if not _is_code_shaped(chunk)]
-        tokens = _TOKEN.findall(" ".join(prose))
-        if tokens:
-            legs.append(("head_fts_prose", " OR ".join('"' + token.replace('"', '""') + '"' for token in tokens)))
+        prose = self._literal_expression(_prose_text(query.query or ""))
+        if prose:
+            legs.append(("head_fts_prose", prose))
         return legs
 
     @staticmethod
@@ -1216,6 +1251,15 @@ class SQLiteRepository:
             [after[0], after[0], after[1]],
         )
 
+    @classmethod
+    def _excerpt_sql(cls, table: str) -> str:
+        # FTS5 limits snippets in tokens. A single token can fill the entire body.
+        # If the context is too long, start again at the match before clipping.
+        context = f"snippet({table},0,'','','…',16)"
+        match = f"snippet({table},0,'','','…',1)"
+        return (f"substr(CASE WHEN length({context}) <= {cls.EXCERPT_LIMIT} THEN {context}"
+                f" ELSE {match} END,1,{cls.EXCERPT_LIMIT})")
+
     def search(self, scope: Scope, query: SearchQuery, repository_id: str | None = None) -> SearchPage:
         """``repository_id`` is the identity the *service* resolved for ``repository: "bound"``.
 
@@ -1258,7 +1302,7 @@ class SQLiteRepository:
                         leg_sql.append(
                             "SELECT h.seq AS seq,h.memory_id,h.revision_id,h.kind,h.tags_json,h.created_at,"
                             f"h.has_parent,bm25({table}) AS rank,"
-                            f"snippet({table},0,'','','…',16) AS excerpt"
+                            f"{self._excerpt_sql(table)} AS excerpt"
                             f" FROM {table} JOIN head_index h ON h.seq={table}.rowid"
                             + authority + f"AND {table} MATCH ? " + filters
                         )
@@ -1344,7 +1388,7 @@ class SQLiteRepository:
                 rows = db.execute(
                     "SELECT x.memory_id,x.revision_id,m.current_revision_id,x.kind,x.tags_json,"
                     "x.created_at,bm25(revision_fts) AS rank,"
-                    f"snippet(revision_fts,0,'','','…',16) AS excerpt"
+                    f"{self._excerpt_sql('revision_fts')} AS excerpt"
                     " FROM revision_fts JOIN revision_index x ON x.seq=revision_fts.rowid"
                     " JOIN memories m ON m.namespace=x.namespace AND m.actor=x.actor"
                     "   AND m.memory_id=x.memory_id"
