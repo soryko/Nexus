@@ -103,7 +103,13 @@ jobs:
       - name: Install the Linux scorer sandbox
         run: |
           sudo apt-get update
-          sudo apt-get install -y bubblewrap
+          sudo apt-get install -y --no-install-recommends bubblewrap apparmor-profiles
+          # Noble ships this as an optional profile. Its child profile drops the namespace
+          # capabilities that /usr/bin/bwrap needs to bring up private loopback.
+          sudo apparmor_parser --replace --base /etc/apparmor.d /usr/share/apparmor/extra-profiles/bwrap-userns-restrict
+
+      - name: Verify the Linux scorer boundary as the runner user
+        run: uv run pytest -q benchmarks/agent/test_scorer_sandbox.py::test_candidate_runs_without_host_capabilities
 
       # `testpaths = ["tests"]`, so the pytest files under `benchmarks/agent` are NOT
       # collected by the Suite step above and have to be named. They were written and then

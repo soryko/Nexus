@@ -143,6 +143,29 @@ A preflight that computes prompt digests establishes nothing about what reaches 
 This is the observation that closes that gap: the digests were read from what the stub
 actually received, and compared against digests computed from the registration.
 
+### Offline scorer setup on Ubuntu 24.04
+
+The synthetic harness tests run candidate Git and pytest under Bubblewrap. Ubuntu can
+allow a user namespace to start while denying the capability needed to configure its
+private loopback interface. A scorer reporting `bwrap: loopback: Failed RTM_NEWADDR:
+Operation not permitted` has failed before any candidate check executes.
+[Ubuntu 24.04 release notes](https://documentation.ubuntu.com/release-notes/24.04/)
+
+On a dedicated test runner with Noble updates enabled, load the packaged profile for
+`/usr/bin/bwrap`. It lets Bubblewrap set up the namespace and denies capabilities to
+the programs it launches. Run the two positive controls as the ordinary runner user.
+[Ubuntu package file list](https://packages.ubuntu.com/noble-updates/all/apparmor-profiles/filelist)
+
+```sh
+sudo apt-get update
+sudo apt-get install -y --no-install-recommends bubblewrap apparmor-profiles
+sudo apparmor_parser --replace --base /etc/apparmor.d /usr/share/apparmor/extra-profiles/bwrap-userns-restrict
+uv run pytest -q benchmarks/agent/test_scorer_sandbox.py::test_candidate_runs_without_host_capabilities
+```
+
+The profile load lasts until reboot on a disposable runner. The controls use synthetic
+fixtures and require no credentials or model calls.
+
 ## Design
 
 | | |
