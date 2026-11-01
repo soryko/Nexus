@@ -633,7 +633,8 @@ def _write_stop(usage: UsageLog | None, reason: str) -> None:
         return
     _stop_written = True
     usage.write({"event": "stop", "reason": reason, "events_written": usage.events_written,
-                 "write_failures": usage.write_failures, "reopens": usage.reopens})
+                 "write_failures": usage.write_failures, "reopens": usage.reopens,
+                 "calls_in_flight": usage.calls_in_flight})
 
 
 def _stop_and_exit(usage: UsageLog | None) -> None:

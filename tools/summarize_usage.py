@@ -9,7 +9,9 @@ usefulness; reading the session that reused it is what settles that.
 
 Instrument health is reported beside the counts, never folded into them: malformed lines, gaps
 in ``seq`` (lost lines), instances with no ``stop`` event (killed, or still running), failed
-writes, reopened logs. A zero means something only when the health section is clean.
+writes, reopened logs, truncated search IDs, and calls outstanding at shutdown. Record and
+revision counts include only confirmed new writes. Older logs without a receipt disposition
+are reported as uncertain.
 
     python3 tools/summarize_usage.py --log usage.jsonl --since 2026-10-28T12:00:00+00:00
 """
@@ -48,6 +50,8 @@ class Instance:
     clients: Counter = field(default_factory=Counter)
     treatments: set = field(default_factory=set)
     stop_failures: int = 0
+    calls_in_flight_at_stop: int = 0
+    unmeasured_sigterm: bool = False
     reopens: int = 0
 
     @property
@@ -82,6 +86,8 @@ def read(log: Path) -> tuple[dict[str, Instance], list[int]]:
                 instance.started = when
             elif kind == "stop":
                 instance.stopped = True
+                instance.calls_in_flight_at_stop = int(event.get("calls_in_flight") or 0)
+                instance.unmeasured_sigterm = event.get("reason") == "sigterm" and "calls_in_flight" not in event
                 instance.stop_failures = int(event.get("write_failures") or 0)
             elif kind == "reopened":
                 instance.reopens += 1
@@ -128,33 +134,39 @@ def summarize(log: Path, since: datetime, until: datetime | None = None) -> dict
                 did_consult = True
         consulted += did_consult
 
-    in_window = {instance.key for instance in window}
-
-    def first_in_window(tool: str) -> list[tuple[str, datetime, str, dict[str, Any]]]:
-        # An operation's first appearance is the write; every later appearance is a replay. That is
-        # decided over the whole log, in call order, before the window is applied: a replay inside the
-        # window of a write made before it is not a pilot write, and a replaying instance may have
-        # started earlier than the one that wrote. Only first appearances inside the window count.
-        first: dict[str, tuple[datetime, str, dict[str, Any]]] = {}
-        for when, key, call in sorted(
-                ((call["_when"], instance.key, call) for instance in instances.values() for call in instance.calls
-                 if call.get("tool") == tool and _committed(call) and isinstance(call.get("operation_id"), str)),
-                key=lambda item: item[0]):
-            first.setdefault(call["operation_id"], (when, key, call))
-        return [(operation, when, key, call) for operation, (when, key, call) in sorted(first.items(), key=lambda item: item[1][0])
-                if key in in_window and (until is None or when < until)]
-
-    captures: dict[str, tuple[str, datetime]] = {}   # memory_id -> (instance, time) of its capture
-    record_operations: set[str] = set()
+    captures: dict[str, tuple[str, datetime]] = {}
     capturing: set[str] = set()
-    for operation, when, key, call in first_in_window("record"):
-        record_operations.add(operation)
-        capturing.add(key)
-        memory_id = call.get("memory_id")
-        if isinstance(memory_id, str) and memory_id not in captures:
-            captures[memory_id] = (key, when)
-    captured = len(capturing)
-    revise_operations = {operation for operation, *_ in first_in_window("revise")}
+    record_operations: set[str] = set()
+    revise_operations: set[str] = set()
+    writes_without_disposition = 0
+    writes_without_outcome = 0
+    truncated_searches = 0
+    for instance in window:
+        for call in calls(instance):
+            tool = call.get("tool")
+            if tool == "search" and call.get("outcome") == "ok" and call.get("hit_ids_truncated"):
+                truncated_searches += 1
+            if tool not in {"record", "revise", "forget"}:
+                continue
+            if call.get("outcome") == "cancelled" and "completed" not in call:
+                writes_without_outcome += 1
+            if not _committed(call):
+                continue
+            # v1 receipts do not say which invocation created the operation. Its first
+            # appearance can be a retry of an unlogged write, even with no missing lines.
+            if not isinstance(call.get("replayed"), bool):
+                writes_without_disposition += 1
+                continue
+            operation = call.get("operation_id")
+            if call["replayed"] or not isinstance(operation, str):
+                continue
+            if tool == "record":
+                record_operations.add(operation)
+                capturing.add(instance.key)
+                if isinstance(memory_id := call.get("memory_id"), str):
+                    captures[memory_id] = (instance.key, call["_when"])
+            elif tool == "revise":
+                revise_operations.add(operation)
 
     reuse: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
@@ -196,7 +208,7 @@ def summarize(log: Path, since: datetime, until: datetime | None = None) -> dict
         "instances": len(window),
         "instances_with_any_call": sum(1 for instance in window if calls(instance)),
         "instances_consulted": consulted,
-        "instances_captured": captured,
+        "instances_captured": len(capturing),
         "records": len(record_operations),
         "revisions": len(revise_operations),
         "reuse_candidates": reuse,
@@ -211,6 +223,11 @@ def summarize(log: Path, since: datetime, until: datetime | None = None) -> dict
             "seq_gaps": sum(_gaps(instance.seqs) for instance in window),
             "write_failures_reported_at_stop": sum(instance.stop_failures for instance in window),
             "reopens": sum(instance.reopens for instance in window),
+            "calls_in_flight_at_stop": sum(instance.calls_in_flight_at_stop for instance in window),
+            "sigterm_stops_without_inflight_count": sum(instance.unmeasured_sigterm for instance in window),
+            "writes_without_disposition": writes_without_disposition,
+            "writes_without_outcome": writes_without_outcome,
+            "truncated_searches": truncated_searches,
             "retrievals_before_capture": retrieved_before_capture,
             "mixed_treatments": len(treatments) > 1,
         },

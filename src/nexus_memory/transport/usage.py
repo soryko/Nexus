@@ -25,6 +25,7 @@ import time
 import unicodedata
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,7 @@ from mcp.types import CallToolResult, TextContent
 from pydantic import BaseModel
 
 from nexus_memory.domain.errors import NexusError
+from nexus_memory.storage.repository import observe_write
 
 try:  # POSIX only; on Windows a FIFO cannot be named as a file path anyway.
     import fcntl
@@ -47,7 +49,7 @@ try:  # Newer protocol versions carry client info per request, in params._meta, 
 except ImportError:  # pragma: no cover - older SDKs have no per-request envelope
     CLIENT_INFO_META_KEY = None
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 #: The tools this build serves. Any other name is logged as "unknown", so a caller cannot write
 #: arbitrary text into the log through the tool name.
 KNOWN_TOOLS = frozenset({"record", "get", "revise", "forget", "search", "history", "status"})
@@ -166,6 +168,7 @@ class UsageLog:
         self.attempts = 0
         self.events_written = 0
         self.write_failures = 0
+        self.calls_in_flight = 0
         self.reopens = 0
         #: A failed write left part of a line in the file and it was not terminated yet.
         self._torn = False
@@ -308,8 +311,6 @@ def _identifiers(tool: str, content: Mapping[str, Any]) -> dict[str, Any]:
         ids = [hit.get("memory_id") for hit in hits if isinstance(hit, Mapping) and isinstance(hit.get("memory_id"), str)]
         return {"hits": len(hits), "hit_ids": ids[:MAX_HIT_IDS], "hit_ids_truncated": len(ids) > MAX_HIT_IDS}
     if tool in _WRITE_TOOLS:
-        # A retry with the same idempotency key replays the original receipt, so the same
-        # operation_id marks a replay and a new operation_id marks a new write.
         found = {name: _opaque(content.get(name)) for name in ("memory_id", "revision_id", "operation_id")}
         return {name: value for name, value in found.items() if value is not None}
     if tool in {"get", "history"}:
@@ -357,9 +358,21 @@ class UsageMiddleware:
         params = ctx.params
         name = params.get("name") if isinstance(params, Mapping) else None
         tool = name if isinstance(name, str) and name in KNOWN_TOOLS else "unknown"
+        # SIGTERM can arrive after SQLite commits but before we append a call event.
+        self.log.calls_in_flight += 1
+        try:
+            return await self._observe(ctx, call_next, tool)
+        finally:
+            self.log.calls_in_flight -= 1
+
+    async def _observe(
+        self, ctx: ServerRequestContext[Any, Any],
+        call_next: Callable[[ServerRequestContext[Any, Any]], Awaitable[Any]], tool: str,
+    ) -> Any:
         started = time.monotonic()
         try:
-            result = await call_next(ctx)
+            with observe_write() if tool in _WRITE_TOOLS else nullcontext(None) as observation:
+                result = await call_next(ctx)
         except anyio.get_cancelled_exc_class():
             self._call(ctx, tool, "cancelled", started, {})
             raise
@@ -371,6 +384,8 @@ class UsageMiddleware:
         outcome = _outcome(result)
         content = _structured(result) if outcome == "ok" else None
         ids = _identifiers(tool, content) if content is not None else {}
+        if content is not None and observation is not None and observation.replayed is not None:
+            ids["replayed"] = observation.replayed
         try:
             # Synchronous tools run to completion in a worker thread even when the client cancels,
             # and the response is then dropped. Without this check such a call would be logged as

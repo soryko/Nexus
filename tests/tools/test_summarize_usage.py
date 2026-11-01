@@ -36,14 +36,18 @@ class Log:
     def __init__(self) -> None:
         self.lines: list[str] = []
         self.seq: dict[str, int] = {}
+        self.operations: set[str] = set()
 
     def event(self, instance: str, minutes: float, kind: str, **fields) -> None:
         self.seq[instance] = self.seq.get(instance, 0) + 1
         self.lines.append(json.dumps({
-            "v": 1, "ts": (T0 + timedelta(minutes=minutes)).isoformat(), "instance": instance,
+            "v": 2, "ts": (T0 + timedelta(minutes=minutes)).isoformat(), "instance": instance,
             "seq": self.seq[instance], "instructions": "on", "instructions_digest": "d1", "event": kind, **fields}))
 
     def call(self, instance: str, minutes: float, tool: str, outcome: str = "ok", **ids) -> None:
+        if operation := ids.get("operation_id"):
+            ids.setdefault("replayed", operation in self.operations)
+            self.operations.add(operation)
         self.event(instance, minutes, "call", tool=tool, outcome=outcome, ms=1,
                    client={"name": "claude-code", "version": "2.1"}, **ids)
 
@@ -224,3 +228,38 @@ def test_the_real_server_and_reporter_find_a_cross_session_reuse(tmp_path: Path)
     health = report["health"]
     assert (health["malformed_lines"], health["seq_gaps"], health["instances_without_start"],
             health["instances_without_stop"], health["mixed_treatments"]) == (0, 0, 0, 0, False)
+
+
+def test_only_an_observed_new_write_is_a_capture(tmp_path: Path) -> None:
+    log = Log()
+    log.session("replay", 1, 4, [
+        (2, "record", {"memory_id": "old", "operation_id": "old-record", "replayed": True}),
+        (3, "revise", {"memory_id": "old", "operation_id": "old-revision", "replayed": True}),
+    ])
+    # A replay can finish logging before the transaction winner.
+    log.session("reader", 4, 8, [
+        (5, "record", {"memory_id": "M", "operation_id": "one", "replayed": True}),
+        (7, "get", {"memory_id": "M"}),
+    ])
+    log.session("writer", 4, 8, [(6, "record", {"memory_id": "M", "operation_id": "one", "replayed": False})])
+    report = _report(tmp_path, log)
+    assert (report["records"], report["revisions"], report["instances_captured"]) == (1, 0, 1)
+    assert [(r["captured_by"], r["reused_by"]) for r in report["reuse_candidates"]] == [("writer", "reader")]
+
+
+def test_legacy_writes_and_incomplete_search_and_shutdown_are_flagged(tmp_path: Path) -> None:
+    log = Log()
+    log.event("legacy", 1, "start", v=1)
+    log.event("legacy", 2, "call", v=1, tool="record", outcome="ok", memory_id="M", operation_id="unknown")
+    log.event("legacy", 3, "call", v=1, tool="search", outcome="ok", hit_ids=["x"], hits=21, hit_ids_truncated=True)
+    log.event("legacy", 4, "stop", v=1, reason="sigterm")
+    log.event("busy", 5, "start", v=2)
+    log.call("busy", 5.5, "revise", "cancelled")
+    log.event("busy", 6, "stop", v=2, reason="sigterm", calls_in_flight=2)
+    report = _report(tmp_path, log)
+    assert (report["records"], report["instances_captured"]) == (0, 0)
+    assert report["health"]["writes_without_disposition"] == 1
+    assert report["health"]["writes_without_outcome"] == 1
+    assert report["health"]["truncated_searches"] == 1
+    assert report["health"]["calls_in_flight_at_stop"] == 2
+    assert report["health"]["sigterm_stops_without_inflight_count"] == 1

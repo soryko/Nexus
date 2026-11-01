@@ -19,6 +19,7 @@ import subprocess
 import anyio
 import pytest
 from mcp import Client, StdioServerParameters
+from mcp.shared.exceptions import MCPError
 from nexus_memory.storage import SQLiteRepository
 from nexus_memory.transport import usage as usage_module
 from nexus_memory.transport.mcp_server import INSTRUCTIONS, INSTRUCTIONS_DIGEST, main
@@ -294,7 +295,7 @@ def test_sigterm_still_writes_the_stop_event(tmp_path: Path) -> None:
             process.kill()
     events = _events(log)
     assert [event["event"] for event in events] == ["start", "stop"]
-    assert events[-1]["reason"] == "sigterm"
+    assert (events[-1]["reason"], events[-1]["calls_in_flight"]) == ("sigterm", 0)
 
 
 def test_a_fifo_destination_is_refused_without_hanging(tmp_path: Path) -> None:
@@ -428,3 +429,72 @@ def test_a_failing_log_counts_failures_and_never_raises(tmp_path: Path) -> None:
     usage.write({"event": "call", "tool": "get", "outcome": "ok"})
     usage.close()
     assert [(event["event"], event["seq"]) for event in _events(folder / "usage.jsonl")] == [("reopened", 3), ("call", 4)]
+
+
+def test_first_logged_call_can_replay_an_unlogged_write(tmp_path: Path) -> None:
+    db, log = tmp_path / "db", tmp_path / "log"
+    args = {"content": "stored before logging", "idempotency_key": "same"}
+
+    async def scenario() -> None:
+        async with Client(_server(db)) as client:
+            first = (await client.call_tool("record", args)).structured_content
+        async with Client(_server(db, "--usage-log", str(log))) as client:
+            second = (await client.call_tool("record", args)).structured_content
+            assert first == second
+            assert set(second) == {"memory_id", "revision_id", "operation_id", "operation", "durable_seq"}
+            revised = {"memory_id": first["memory_id"], "expected_revision_id": first["revision_id"],
+                       "content": "revised", "idempotency_key": "rev"}
+            fresh = (await client.call_tool("revise", revised)).structured_content
+            assert fresh == (await client.call_tool("revise", revised)).structured_content
+            forget = {"memory_id": first["memory_id"], "expected_revision_id": fresh["revision_id"],
+                      "idempotency_key": "forgot"}
+            removed = (await client.call_tool("forget", forget)).structured_content
+            assert removed == (await client.call_tool("forget", forget)).structured_content
+
+    anyio.run(scenario)
+    assert [event["replayed"] for event in _events(log) if event["event"] == "call"] == [
+        True, False, True, False, True]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX process signals")
+def test_sigterm_after_commit_reports_a_call_still_in_flight(tmp_path: Path) -> None:
+    import signal
+    import sqlite3
+
+    db, log, marker = tmp_path / "db", tmp_path / "log", tmp_path / "committed"
+    server = _server(db, "--usage-log", str(log))
+    server.env["COMMIT_MARKER"] = str(marker)
+    # Make the real commit-to-response window deterministic without changing the transaction.
+    server.args[:2] = ["-c", """
+import os, threading
+from pathlib import Path
+from nexus_memory.storage import SQLiteRepository
+from nexus_memory.transport.mcp_server import main
+record = SQLiteRepository.record
+def pause_after_commit(*args, **kwargs):
+    receipt = record(*args, **kwargs)
+    Path(os.environ["COMMIT_MARKER"]).write_text(str(os.getpid()))
+    threading.Event().wait(10)
+    return receipt
+SQLiteRepository.record = pause_after_commit
+raise SystemExit(main())
+"""]
+
+    async def scenario() -> None:
+        async with Client(server) as client:
+            async def call() -> None:
+                with pytest.raises(MCPError, match="Connection closed"):
+                    await client.call_tool("record", {"content": "persisted", "idempotency_key": "one"})
+
+            async with anyio.create_task_group() as group:
+                group.start_soon(call)
+                with anyio.fail_after(8):
+                    while not marker.exists() or not marker.read_text():
+                        await anyio.sleep(0.01)
+                os.kill(int(marker.read_text()), signal.SIGTERM)
+
+    anyio.run(scenario)
+    with sqlite3.connect(db) as connection:
+        assert connection.execute("SELECT count(*) FROM receipts").fetchone()[0] == 1
+    stop = _events(log)[-1]
+    assert (stop["event"], stop["reason"], stop["calls_in_flight"]) == ("stop", "sigterm", 1)

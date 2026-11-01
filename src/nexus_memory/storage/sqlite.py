@@ -45,6 +45,8 @@ from nexus_memory.domain.models import (
     WriteReceipt,
 )
 
+from .repository import write_observation
+
 
 _TOKEN = re.compile(r"\w+", re.UNICODE)
 
@@ -530,6 +532,10 @@ class SQLiteRepository:
             "SELECT memory_id,revision_id,operation_id,durable_seq,operation,request_digest FROM receipts WHERE namespace=? AND actor=? AND idempotency_key=?",
             (scope.namespace, scope.actor, key),
         ).fetchone()
+        # Includes reference retries satisfied by the read-only receipt lookup. If the
+        # precheck misses, the subsequent lookup under BEGIN IMMEDIATE decides the race.
+        if observation := write_observation.get():
+            observation.replayed = row is not None
         if row is None:
             return None
         if row[5] != digest:
