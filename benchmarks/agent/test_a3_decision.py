@@ -217,6 +217,35 @@ def test_unresolved_adoption_is_indeterminate():
     assert decide(runs, FACTS)["states"]["stale_advice"] == "indeterminate"
 
 
+def test_an_unresolved_A_adoption_that_could_equal_B_is_not_a_failure():
+    """One confirmed B adoption against one unresolved A run: resolved as an adoption, A
+    would equal B. Comparing confirmed counts alone called that harm."""
+    runs = [r for r in clean_sweep() if not (r.task == "k1" and r.attempt == 1)]
+    runs += [run("k1", "A", 1, adopted=None, consult=1000, total=100_000),
+             run("k1", "B", 1, adopted=True, consult=500, total=85_000)]
+    sa = decide(runs, FACTS)["dimensions"]["stale_advice"]
+    assert sa["state"] == "indeterminate"
+    assert "overlap" in sa["reason"]
+
+
+def test_B_adopting_beyond_A_maximum_still_fails_with_an_unresolved_A():
+    """The control: two B adoptions exceed one unresolved A run, whichever way it went."""
+    runs = [r for r in clean_sweep() if r.task != "k1"]
+    runs += [run("k1", "A", 1, adopted=None, consult=1000, total=100_000),
+             run("k1", "A", 2, adopted=False, consult=1000, total=100_000),
+             run("k1", "B", 1, adopted=True, consult=500, total=85_000),
+             run("k1", "B", 2, adopted=True, consult=500, total=85_000)]
+    assert decide(runs, FACTS)["states"]["stale_advice"] == "fail"
+
+
+def test_an_unresolved_A_adoption_that_cannot_change_the_verdict_holds():
+    """B adopted nothing. However A's unresolved run went, B did not adopt more."""
+    runs = [r for r in clean_sweep() if not (r.task == "k1" and r.policy == "A"
+                                             and r.attempt == 1)]
+    runs.append(run("k1", "A", 1, adopted=None, consult=1000, total=100_000))
+    assert decide(runs, FACTS)["states"]["stale_advice"] == "hold"
+
+
 # --------------------------------------------------------------------------------------
 # Defect 5: failing the cost criterion meant reject in one paragraph and indeterminate in
 # another. Defect 6: an outcome-dependent spread exception.
@@ -478,6 +507,47 @@ def test_a_partial_sweep_still_rejects_an_established_failure():
     d = decide(half, FACTS)
     assert d["decision"] == "reject"
     assert "correctness" in d["failed"]
+
+
+def test_an_attempt_without_its_counterpart_is_not_compared():
+    """Attempt 2 completed under A; B refused before launching. Two A passes against one B
+    pass read as a correctness loss and rejected a policy whose every complete pair agreed.
+    §8: an arm-run with no counterpart contributes to no dimension."""
+    runs = [r for r in clean_sweep() if not (r.task == "k1" and r.attempt == 2
+                                             and r.policy == "B")]
+    d = decide(runs, FACTS)
+    for dim in ("correctness", "required_work"):
+        assert d["dimensions"][dim]["per_task"]["k1"]["state"] == "hold", dim
+        assert d["dimensions"][dim]["unpaired_excluded"] == ["k1/A/2"]
+    assert d["states"]["stale_advice"] == "hold"
+    assert d["dimensions"]["cost"]["unpaired_excluded"] == ["k1/A/2"]
+    assert d["failed"] == []
+    assert d["decision"] == "indeterminate"            # partial coverage, not a rejection
+    assert d["validity"]["partial"] is True
+
+
+def test_an_unmatched_B_run_does_not_inflate_B_cost():
+    """The same defect in the other direction: an extra B run's tokens counted against B
+    with nothing on A's side, failing cost on bookkeeping."""
+    runs = [r for r in clean_sweep() if not (r.task == "k1" and r.attempt == 2
+                                             and r.policy == "A")]
+    d = decide(runs, FACTS)
+    assert d["states"]["cost"] == "hold"
+    c = d["dimensions"]["cost"]
+    assert c["compared_over_complete_pairs"]["provider_total_tokens"] == {"A": 700_000,
+                                                                          "B": 595_000}
+    assert c["provider_total_tokens"] == {"A": 700_000, "B": 680_000}   # spent, unfiltered
+
+
+def test_a_complete_pair_loss_still_rejects_beside_an_unmatched_attempt():
+    """The control: excluding the unmatched attempt must not hide a loss in a pair that ran."""
+    runs = [r for r in clean_sweep() if not (r.task == "k1" and r.attempt == 2
+                                             and r.policy == "B")]
+    runs = [run("k1", "B", 1, ok=False, consult=500, total=85_000)
+            if (r.task, r.policy, r.attempt) == ("k1", "B", 1) else r for r in runs]
+    d = decide(runs, FACTS)
+    assert d["dimensions"]["correctness"]["per_task"]["k1"]["state"] == "fail"
+    assert d["decision"] == "reject"
 
 
 def test_a_duplicate_identity_is_invalid_and_no_criterion_is_applied():

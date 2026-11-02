@@ -123,6 +123,22 @@ def _by_cell(runs: list[ArmRun]) -> dict[tuple[str, str], list[ArmRun]]:
     return cells
 
 
+def _complete_pairs(runs: list[ArmRun]) -> tuple[list[ArmRun], list[str]]:
+    """-> (arm-runs whose A/B pair is complete, the identities of those whose pair is not).
+
+    Registration §8: an arm-run with no counterpart at the same task and attempt contributes
+    to no §6 dimension. Counting it anyway compared two A passes against one B pass when B's
+    second attempt refused before launching, and rejected the policy although every pair that
+    ran agreed. Partial coverage is `validity`'s to report; it is not a loss."""
+    policies: dict[tuple[str, int], set[str]] = {}
+    for r in runs:
+        policies.setdefault((r.task, r.attempt), set()).add(r.policy)
+    whole = {k for k, ps in policies.items() if {"A", "B"} <= ps}
+    return ([r for r in runs if (r.task, r.attempt) in whole],
+            sorted(f"{r.task}/{r.policy}/{r.attempt}" for r in runs
+                   if (r.task, r.attempt) not in whole))
+
+
 #: What the bounds below are, said once, and carried in every row that reports them.
 BOUNDS_KIND = ("possible-count bounds: the smallest and largest count each policy could have "
                "had, given that an unresolved arm-run is neither a pass nor a failure. NOT a "
@@ -293,11 +309,12 @@ def consumption(runs: list[ArmRun]) -> dict:
 def correctness(runs: list[ArmRun]) -> dict:
     """PER TASK. A loss on one task is not offset by a gain on another, so no pooled total
     decides anything -- it is reported beside the per-task rows and marked as not deciding."""
-    cells, per_task = _by_cell(runs), {}
+    paired, unpaired = _complete_pairs(runs)
+    cells, per_task = _by_cell(paired), {}
     for task in sorted({r.task for r in runs}):
         a, b = cells.get((task, "A"), []), cells.get((task, "B"), [])
         if not a or not b:
-            per_task[task] = {"state": INDETERMINATE, "reason": "a cell has no arm-run"}
+            per_task[task] = {"state": INDETERMINATE, "reason": "no complete A/B pair"}
             continue
         per_task[task] = _possible_count_bounds(
             sum(1 for r in a if r.functional_pass is True),
@@ -306,9 +323,10 @@ def correctness(runs: list[ArmRun]) -> dict:
             sum(1 for r in b if r.functional_pass is None),
             "functional passes")
     return {"state": _verdict([v["state"] for v in per_task.values()]), "per_task": per_task,
+            "unpaired_excluded": unpaired,
             "pooled_and_not_deciding": {
-                "A": sum(1 for r in runs if r.policy == "A" and r.functional_pass),
-                "B": sum(1 for r in runs if r.policy == "B" and r.functional_pass)}}
+                "A": sum(1 for r in paired if r.policy == "A" and r.functional_pass),
+                "B": sum(1 for r in paired if r.policy == "B" and r.functional_pass)}}
 
 
 def required_work(runs: list[ArmRun]) -> dict:
@@ -317,11 +335,12 @@ def required_work(runs: list[ArmRun]) -> dict:
     `unresolved` stays unresolved: it is not compliance, and it is not a loss either. A task
     whose only evidence is unresolved is indeterminate, not passed -- which is the defect
     that let a hidden-check pass with no test count as a finished task."""
-    cells, per_task = _by_cell(runs), {}
+    paired, unpaired = _complete_pairs(runs)
+    cells, per_task = _by_cell(paired), {}
     for task in sorted({r.task for r in runs}):
         a, b = cells.get((task, "A"), []), cells.get((task, "B"), [])
         if not a or not b:
-            per_task[task] = {"state": INDETERMINATE, "reason": "a cell has no arm-run"}
+            per_task[task] = {"state": INDETERMINATE, "reason": "no complete A/B pair"}
             continue
         per_task[task] = _possible_count_bounds(
             sum(1 for r in a if r.required_test_work == "pass"),
@@ -329,7 +348,8 @@ def required_work(runs: list[ArmRun]) -> dict:
             sum(1 for r in b if r.required_test_work == "pass"),
             sum(1 for r in b if r.required_test_work == "unresolved"),
             "verified regression-test compliance")
-    return {"state": _verdict([v["state"] for v in per_task.values()]), "per_task": per_task}
+    return {"state": _verdict([v["state"] for v in per_task.values()]), "per_task": per_task,
+            "unpaired_excluded": unpaired}
 
 
 def information(runs: list[ArmRun], required_facts: dict[str, dict[str, list[str]]]) -> dict:
@@ -343,7 +363,7 @@ def information(runs: list[ArmRun], required_facts: dict[str, dict[str, list[str
     These are facts declared task-relevant in advance. Nothing here calls them NECESSARY: that
     would need evidence that the task cannot be completed without them, which this design does
     not gather."""
-    cells, per_task = _by_cell(runs), {}
+    cells, per_task = _by_cell(_complete_pairs(runs)[0]), {}
     for task in sorted({r.task for r in runs}):
         facts = required_facts.get(task, {})
         a, b = cells.get((task, "A"), []), cells.get((task, "B"), [])
@@ -379,21 +399,36 @@ def stale_advice(runs: list[ArmRun]) -> dict:
     Only ADOPTION is a guardrail. Reading a refuted memory and rejecting it is the behaviour
     the consult block asks for -- "treat prior notes as potentially outdated and verify" --
     so counting delivery as harm would penalise compliance. Exposure is reported because it
-    is the quantity the bound acts on, and it decides nothing on its own."""
+    is the quantity the bound acts on, and it decides nothing on its own.
+
+    Adoption is harm, so the possible-count rule runs the other way round from correctness:
+    fail only if B adopted more than A could have even with every unresolved A run counted
+    as an adoption, hold only if B adopted no more even with every unresolved B run counted.
+    Comparing confirmed counts alone failed one confirmed B adoption against one unresolved
+    A run that, resolved, would have made them equal."""
+    paired, unpaired = _complete_pairs(runs)
+
     def count(policy, attr):
-        vals = [getattr(r, attr) for r in runs if r.policy == policy]
+        vals = [getattr(r, attr) for r in paired if r.policy == policy]
         return {"true": sum(1 for v in vals if v is True),
                 "unresolved": sum(1 for v in vals if v is None), "n": len(vals)}
     exp_a, exp_b = count("A", "stale_exposed"), count("B", "stale_exposed")
     ad_a, ad_b = count("A", "stale_adopted"), count("B", "stale_adopted")
-    if ad_b["true"] > ad_a["true"]:
+    a_max = ad_a["true"] + ad_a["unresolved"]
+    b_max = ad_b["true"] + ad_b["unresolved"]
+    if ad_b["true"] > a_max:
         state = FAIL
-        reason = f"stale advice adopted in {ad_b['true']} B arm-runs vs {ad_a['true']} under A"
-    elif ad_a["unresolved"] or ad_b["unresolved"]:
-        state, reason = INDETERMINATE, "adoption unresolved in at least one arm-run"
-    else:
+        reason = (f"stale advice adopted in {ad_b['true']} B arm-runs; A's maximum possible "
+                  f"count is {a_max}, so B adopts more even counting every unresolved A run "
+                  f"as an adoption")
+    elif b_max <= ad_a["true"]:
         state, reason = HOLD, ""
-    return {"state": state, "reason": reason,
+    else:
+        state = INDETERMINATE
+        reason = (f"adoption: the possible-count bounds overlap (B {ad_b['true']}-{b_max} vs "
+                  f"A {ad_a['true']}-{a_max}), so the comparison is not settled either way")
+    return {"state": state, "reason": reason, "unpaired_excluded": unpaired,
+            "bounds_kind": BOUNDS_KIND,
             "adoption": {"A": ad_a, "B": ad_b},
             "exposure_reported_not_judged": {"A": exp_a, "B": exp_b}}
 
@@ -408,20 +443,32 @@ def cost(runs: list[ArmRun], thresholds: Thresholds = Thresholds()) -> dict:
     `delivered_text_tokens` is a measure of delivered context volume under a named counting
     method, NOT attributable provider spend; `provider_total_tokens` is the envelope's own
     categories. Both are required, and a run that does not name its counting method cannot be
-    counted."""
+    counted.
+
+    The drops compare every arm-run in a complete A/B pair (§8): an unmatched attempt added
+    a whole run's tokens to one policy's total and none to the other's. The per-policy
+    totals still report EVERY arm-run, because they are what was spent and must agree with
+    `consumption`; the totals the drops are taken from are reported beside them."""
+    spent = runs
+    runs, unpaired = _complete_pairs(runs)
     unresolved = _consumption_unresolved(runs)
     methods = sorted({r.token_counting_method for r in runs if r.token_counting_method})
 
-    def total(policy, attr):
-        return sum(getattr(r, attr) or 0 for r in runs if r.policy == policy)
+    def total(policy, attr, over):
+        return sum(getattr(r, attr) or 0 for r in over if r.policy == policy)
 
-    ca, cb = total("A", "delivered_text_tokens"), total("B", "delivered_text_tokens")
-    ta, tb = total("A", "provider_total_tokens"), total("B", "provider_total_tokens")
+    ca, cb = total("A", "delivered_text_tokens", runs), total("B", "delivered_text_tokens", runs)
+    ta, tb = total("A", "provider_total_tokens", runs), total("B", "provider_total_tokens", runs)
     consult_drop = (ca - cb) / ca if ca else None
     total_drop = (ta - tb) / ta if ta else None
     out = {"consultation_drop": consult_drop, "total_drop": total_drop,
-           "delivered_text_tokens": {"A": ca, "B": cb},
-           "provider_total_tokens": {"A": ta, "B": tb},
+           "delivered_text_tokens": {p: total(p, "delivered_text_tokens", spent)
+                                     for p in ("A", "B")},
+           "provider_total_tokens": {p: total(p, "provider_total_tokens", spent)
+                                     for p in ("A", "B")},
+           "compared_over_complete_pairs": {
+               "delivered_text_tokens": {"A": ca, "B": cb},
+               "provider_total_tokens": {"A": ta, "B": tb}},
            "counting_methods": methods,
            "calls": {p: {t: sum(r.consultation_calls.get(t, 0)
                                 for r in runs if r.policy == p) for t in CONSULT_TOOLS}
@@ -433,7 +480,8 @@ def cost(runs: list[ArmRun], thresholds: Thresholds = Thresholds()) -> dict:
            "threshold_basis": "engineering preference, registered in advance; two attempts "
                               "per cell cannot establish that it exceeds stochastic variation "
                               "and no such claim is made",
-           "unresolved_arm_runs": unresolved}
+           "unresolved_arm_runs": unresolved,
+           "unpaired_excluded": unpaired}
     if len(methods) > 1:
         out["state"] = INDETERMINATE
         out["reason"] = f"arm-runs counted tokens by different methods: {methods}"

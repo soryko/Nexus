@@ -291,6 +291,10 @@ def added_test_ids(hunks: str) -> tuple[list[str], list[str]]:
 
     for line in hunks.splitlines():
         if line.startswith("+++ b/"):
+            # The previous file's last hunk is still pending. Resetting without recording it
+            # dropped every extended test but the one in the patch's final file.
+            if context and added_here and not context_used:
+                remember(f"{current}::{context}")
             current = line[6:].strip()
             context, context_used, added_here = None, False, False
             continue

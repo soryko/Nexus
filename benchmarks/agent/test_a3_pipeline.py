@@ -824,3 +824,18 @@ def test_the_review_artifact_is_read_from_disk(clean):
     assert clean["relevance"]["reviewed"] == 16
     assert clean["relevance"]["blocks_acceptance"] is False
     assert all(n.get("relevance_reviewed") is True for n in clean["normalisation"])
+
+
+def test_an_extended_test_in_every_file_reaches_the_probe():
+    """Extending `test_one` in one file and `test_two` in another returned only `test_two`:
+    the next file's header reset the pending hunk before it was recorded. If `test_one` is
+    the regression test, `regression_discriminates` never probed it."""
+    from score_compliance import added_test_ids
+    patch = "".join(
+        f"diff --git a/tests/test_{n}.py b/tests/test_{n}.py\n"
+        f"--- a/tests/test_{n}.py\n+++ b/tests/test_{n}.py\n"
+        f"@@ -1,2 +1,3 @@ def test_{n}():\n     x = 1\n+    assert x\n"
+        for n in ("one", "two"))
+    ids, skipped = added_test_ids(patch)
+    assert ids == ["tests/test_one.py::test_one", "tests/test_two.py::test_two"]
+    assert skipped == []
