@@ -108,7 +108,7 @@ the field to be trustworthy.
 
 ## 4. Host behaviour probes
 
-Scripts: `tools/probes/probe_server.py` (synthetic MCP server that logs process start, serving
+Scripts: `tools/probes/claude_mcp_tool_hooks.sh`, `tools/probes/probe_server.py` (synthetic MCP server that logs process start, serving
 and each call with timestamps; optional start delay via `PROBE_DELAY`) and
 `tools/probes/claude_plugin_naming.sh`. All use `mktemp` directories, a disposable
 `CLAUDE_CONFIG_DIR`, synthetic data, and never open the real store or the real Claude profile.
@@ -134,23 +134,37 @@ plugin name is not decided and a loose pattern (`plugin_*`) would also gate othe
 Also observed: the run ended at the init message with "Not logged in" (disposable profile has no
 credentials), so no model call was made and nothing was spent.
 
-### 4b. Claude Code: `mcp_tool` hook at SessionStart on a not-yet-connected server (unverified)
+### 4b. Claude Code: `mcp_tool` hooks (observed, authenticated run, 2.1.316)
 
-Attempted with a server that sleeps 3 s before serving. Claude started the server process, but
-the disposable profile has no login, so the session aborted at ~85 ms with "Not logged in"
-before any SessionStart hook ran; the hook's `ping` was never called, so the result is
-**inconclusive, not negative**. Running it for real needs an authenticated profile (the
-credential lives in the user's keychain, so `CLAUDE_CONFIG_DIR` alone cannot supply it) and one
-trivial model call. Procedure, for the owner to run or authorise:
+Ran with the real login in a disposable project (`tools/probes/claude_mcp_tool_hooks.sh`; one
+haiku call per run, `--no-session-persistence`, synthetic server only). The user's own plugin
+hooks also fired in these runs; they are unrelated to the results.
 
-1. Disposable git project with `.mcp.json` pointing at `tools/probes/probe_server.py`
-   (`PROBE_DELAY=3`, `PROBE_LOG=<tmp>/log.jsonl`) and `.claude/settings.json` with
-   `hooks.SessionStart[].hooks[] = {"type":"mcp_tool","server":"probe","tool":"ping",...}`.
-2. `claude -p "hi" --debug hooks,mcp --debug-file <tmp>/debug.log`.
-3. Read `log.jsonl`: does `ping` appear, and after `serving`? Does the model context contain
-   `PROBE-CONTEXT-OK`? If the hook is skipped or errors, SessionStart cannot be the only
-   delivery path and the engine must tolerate a lost session start (it already does:
-   `nexus_recall` creates session state on demand, and `nexus_session_start` only resets it).
+- **SessionStart: `mcp_tool` is not available.** Claude logged `mcp_tool hook skipped — mcp_tool
+  hooks are not available for the 'SessionStart' hook event (no MCP client context)` and the
+  hook failed with status 1. The probe server was only started afterwards, so the question
+  "does it work on a not-yet-connected server" has the answer **no, it never runs at
+  SessionStart at all**. The SessionStart delivery on Claude must be a `command` hook.
+- **UserPromptSubmit and PreToolUse: `mcp_tool` works.** The hook calls the tool with
+  `${session_id}`, `${cwd}`, `${prompt}`, `${tool_name}` substituted. With a server that took
+  ~4 s to connect (`PROBE_DELAY=3`), the UserPromptSubmit hook logged `waiting up to 30000ms …
+  for MCP server 'probe' to finish connecting` and then ran; the first prompt is therefore not
+  lost to a slow server start, up to that 30 s limit. With no delay it ran immediately.
+- **The returned `hookEventName` is checked.** My probe returned `SessionStart` from every
+  event and Claude rejected it: `Hook returned incorrect event name: expected 'UserPromptSubmit'
+  but got 'SessionStart'`. The engine already emits the right name per event
+  (`output("UserPromptSubmit", …)`); `nexus_session_start` must only be wired where its
+  `SessionStart` name is valid.
+- **Only the listed inputs arrive.** A PreToolUse hook that lists just `tool_name` gets
+  `session_id: null` and `cwd: null`; `nexus_pre_tool` denies without both, so the hook input
+  must list `session_id`, `cwd`, `tool_name` and `tool_input`.
+
+Consequences for Phase 1: (1) on Claude, SessionStart is a `command` hook carrying the fixed
+cue text (the text `nexus_session_start` returns is static); (2) it cannot call
+`nexus_session_start` to reset the session table, which is acceptable because `nexus_recall`
+resets the per-prompt grants itself and creates the session on demand, but dedupe memory
+(`seen`) then persists across `/clear` for the same `session_id` — worth a decision;
+(3) recall and the PreToolUse guard use `mcp_tool` as planned.
 
 ### 4c. Codex: re-trust after the hook hash changes (unverified)
 
@@ -206,4 +220,5 @@ and were not re-measured here; recompute them with the pilot's reporter before f
 - Apply the launcher change (section 2) on the PR #17 branch, and the usage patch (section 3) on
   the cue branch.
 - Widen the `nexus_pre_tool` server match for the plugin name (section 4a) and drop the `xfail`.
-- Run 4b and 4c with an authenticated profile / the trust UI.
+- Run 4c in the Codex trust UI (interactive; not scriptable).
+- Decide how Claude resets recall dedupe on `/clear` now that SessionStart cannot call the engine.
