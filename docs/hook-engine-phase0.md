@@ -145,6 +145,10 @@ hooks also fired in these runs; they are unrelated to the results.
   hook failed with status 1. The probe server was only started afterwards, so the question
   "does it work on a not-yet-connected server" has the answer **no, it never runs at
   SessionStart at all**. The SessionStart delivery on Claude must be a `command` hook.
+  Recorded answers to the three questions, from the first run (`claude -p`, delay 3 s): the
+  SessionStart `ping` **did not run** (so it did not run after `serving`, which was logged ~3.9 s
+  later), and `PROBE-CONTEXT-OK` **did not reach the model**: asked for the token, the model
+  answered `NONE`. The `mcp_tool` hooks in the same runs were the only `ping`s that ran.
 - **UserPromptSubmit and PreToolUse: `mcp_tool` works.** The hook calls the tool with
   `${session_id}`, `${cwd}`, `${prompt}`, `${tool_name}` substituted. With a server that took
   ~4 s to connect (`PROBE_DELAY=3`), the UserPromptSubmit hook logged `waiting up to 30000ms …
