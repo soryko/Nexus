@@ -130,7 +130,7 @@ export function createConnections({ get, onOpen }) {
   }
 
   function expandFile(node) {
-    if (!hubs.has(node.id)) hubs.set(node.id, { label: node.path, filter: "", cursors: [null], index: 0, items: [], page: null });
+    if (!hubs.has(node.id)) hubs.set(node.id, { label: node.path, filter: "", cursors: [null], index: 0, items: [], page: null, node });
     return loadHub(node);
   }
 
@@ -185,10 +185,39 @@ export function createConnections({ get, onOpen }) {
   wire();
 
   return {
-    async show(memoryId, revisionId, label) {
+    snapshot() {
+      if (!graph) return null;
+      return {
+        memoryId: focus.memoryId, revisionId: focus.revisionId, label: graph.nodes.get(graph.focusId).label,
+        camera: { ...camera }, selectedId, neighborLimit,
+        hubs: [...hubs.values()].map((h) => ({ node: h.node, filter: h.filter, cursors: [...h.cursors], index: h.index })),
+      };
+    },
+    hide() {
+      token += 1;
+      graph = null; relations = []; hubs.clear(); selectedId = null;
+      $("graph-canvas").replaceChildren();
+      $("graph-lists").replaceChildren();
+      $("graph-limits").textContent = "";
+      $("graph").hidden = true;
+    },
+    // Rebuilds a saved view from fresh data. Anything that is no longer visible simply is not drawn.
+    async restore(snap) {
+      const mine = await this.show(snap.memoryId, snap.revisionId, snap.label, snap.neighborLimit);
+      for (const saved of snap.hubs) {
+        hubs.set(saved.node.id, { label: saved.node.path, filter: saved.filter, cursors: saved.cursors, index: saved.index,
+                                  items: [], page: null, node: saved.node });
+        await loadHub(saved.node);
+      }
+      if (token !== mine) return;
+      camera = { ...snap.camera };
+      selectedId = graph.nodes.has(snap.selectedId) ? snap.selectedId : graph.focusId;
+      draw();
+    },
+    async show(memoryId, revisionId, label, limit) {
       const mine = ++token;
       focus = { memoryId, revisionId };
-      neighborLimit = LIMITS.initial;
+      neighborLimit = limit || LIMITS.initial;
       hubs.clear();
       relations = [];
       graph = new Graph({ id: `r:${revisionId}`, type: "revision", label: label || "this revision", memoryId, revisionId });
@@ -197,6 +226,7 @@ export function createConnections({ get, onOpen }) {
       $("graph").hidden = false;
       draw();
       await loadRelations(mine);
+      return mine;
     },
   };
 }

@@ -7,8 +7,9 @@ const PAGE = 20;
 const state = {
   q: "", tag: "", kinds: new Set(),
   cursors: [null], index: 0, nextCursor: null,
-  group: null, token: 0, selected: null,
+  group: null, searchToken: 0, openToken: 0, selected: null,   // selected: {memoryId, revisionId} or null
 };
+const trail = [];   // earlier views, newest last; Back restores the top one
 
 function el(tag, options = {}, ...children) {
   const node = document.createElement(tag);
@@ -19,7 +20,7 @@ function el(tag, options = {}, ...children) {
   return node;
 }
 
-const connections = createConnections({ get: (path, params) => get(path, params), onOpen: (memoryId, revisionId) => openMemory(memoryId, revisionId) });
+const connections = createConnections({ get: (path, params) => get(path, params), onOpen: (memoryId, revisionId) => openMemory(memoryId, revisionId).catch(sessionLost) });
 
 async function get(path, params = []) {
   const url = new URL(path, location.origin);
@@ -104,7 +105,7 @@ function renderResults(page) {
     const button = el("button", { attrs: { type: "button" } },
       el("span", { text: meta, className: "meta" }),
       el("span", { text: firstLine(hit.excerpt), className: "excerpt" }));
-    button.addEventListener("click", () => openMemory(hit.memory_id, hit.revision_id));
+    button.addEventListener("click", () => openMemory(hit.memory_id, hit.revision_id).catch(sessionLost));
     list.append(el("li", {}, button));
   }
   const shown = state.index * PAGE + page.items.length;
@@ -120,10 +121,10 @@ function renderResults(page) {
 
 async function runSearch(fresh) {
   if (fresh) { state.cursors = [null]; state.index = 0; }
-  const token = ++state.token;
+  const token = ++state.searchToken;
   renderFilters();
   const { status, body } = await get("/api/search", queryParams());
-  if (token !== state.token) return;                // a newer request owns the page
+  if (token !== state.searchToken) return;           // a newer request owns the page
   if (status !== 200) { $("notice").textContent = "That search was not accepted."; return; }
   if (body.restarted) {
     state.cursors = [null]; state.index = 0;
@@ -134,21 +135,48 @@ async function runSearch(fresh) {
   renderResults(body);
 }
 
-async function openMemory(memoryId, revisionId) {
-  const token = ++state.token;
-  state.selected = memoryId;
+function clearInspector(message) {
+  for (const id of ["memory-title", "memory-flag", "memory-body", "memory-diff"]) $(id).textContent = "";
+  for (const id of ["memory-meta", "memory-refs", "memory-history"]) $(id).replaceChildren();
+  $("memory").hidden = true;
+  $("inspect-empty").textContent = message;
+  $("inspect-empty").hidden = false;
+  connections.hide();
+}
+
+function currentView() {
+  if (!state.selected) return null;
+  return {
+    search: { q: state.q, tag: state.tag, kinds: [...state.kinds], group: state.group, cursors: [...state.cursors], index: state.index },
+    focus: connections.snapshot(),
+    selected: { ...state.selected },
+  };
+}
+
+function pushTrail() {
+  const view = currentView();
+  if (!view || !view.focus) return;
+  trail.push(view);
+  history.pushState({ depth: trail.length }, "");
+  $("back").disabled = false;
+}
+
+// `viaTrail` is true when Back is replaying a saved view, so nothing is pushed on top of it.
+async function openMemory(memoryId, revisionId, options = {}) {
+  const token = ++state.openToken;
+  if (!options.viaTrail && state.selected && (state.selected.memoryId !== memoryId || state.selected.revisionId !== revisionId)) pushTrail();
+  state.selected = { memoryId, revisionId };
   const [meta, text, diff, past] = await Promise.all([
     get("/api/inspect", [["id", memoryId], ["rev", revisionId]]),
     get("/api/body", [["id", memoryId], ["rev", revisionId]]),
     get("/api/compare", [["id", memoryId], ["rev", revisionId]]),
     get("/api/history", [["id", memoryId], ["limit", "100"]]),
   ]);
-  if (token !== state.token) return;
+  if (token !== state.openToken) return false;       // a later choice owns the inspector
   if (meta.status !== 200 || text.status !== 200) {
-    $("memory").hidden = true;
-    $("inspect-empty").textContent = "That memory is no longer available.";
-    $("inspect-empty").hidden = false;
-    return;
+    state.selected = null;
+    clearInspector("That memory is no longer available.");
+    return false;
   }
   const m = meta.body;
   $("inspect-empty").hidden = true;
@@ -167,8 +195,8 @@ async function openMemory(memoryId, revisionId) {
   renderReferences(m.references);
   renderDiff(diff);
   renderHistory(memoryId, past, m.revision_id);
-  $("inspector").focus();
-  connections.show(memoryId, revisionId, m.title.slice(0, 40));
+  if (!options.viaTrail) { $("inspector").focus(); await connections.show(memoryId, revisionId, m.title.slice(0, 40)); }
+  return true;
 }
 
 function renderReferences(references) {
@@ -236,14 +264,54 @@ async function refreshOverview() {
   return body;
 }
 
+// Replays a saved view against fresh data: lists are re-queried (an expired cursor restarts and says so),
+// the memory and its connections are re-read, and a selection that is gone is dropped, never redrawn.
+async function goBack() {
+  const view = trail.pop();
+  $("back").disabled = trail.length === 0;
+  if (!view) return;
+  state.q = view.search.q; state.tag = view.search.tag; state.kinds = new Set(view.search.kinds);
+  state.group = view.search.group; state.cursors = view.search.cursors; state.index = view.search.index;
+  $("q").value = state.q; $("tag").value = state.tag;
+  for (const box of document.querySelectorAll("#kinds input")) box.checked = state.kinds.has(box.value);
+  await refreshOverview();
+  await runSearch(false);
+  const { memoryId, revisionId } = view.selected;
+  state.selected = { memoryId, revisionId };
+  if (await openMemory(memoryId, revisionId, { viaTrail: true })) {
+    $("inspector").focus();
+    await connections.restore(view.focus);
+  }
+}
+
+// Explicit refresh and a page restored from the browser's back/forward cache both land here.
+async function revalidate() {
+  await refreshOverview();
+  await runSearch(false);
+  if (state.selected) {
+    const { memoryId, revisionId } = state.selected;
+    const view = connections.snapshot();                 // taken first: a vanished memory clears the panel
+    if (await openMemory(memoryId, revisionId, { viaTrail: true })) await connections.restore(view);
+  }
+}
+
 async function main() {
   await signIn();
   const overview = await refreshOverview();
   renderKinds(overview);
   wire();
+  $("back").addEventListener("click", () => history.back());
+  $("refresh").addEventListener("click", () => revalidate().catch(sessionLost));
+  window.addEventListener("popstate", () => { if (trail.length) goBack().catch(sessionLost); });
+  window.addEventListener("pageshow", (event) => { if (event.persisted) revalidate().catch(sessionLost); });
   await runSearch(true);
 }
 
-main().catch(() => {
+function sessionLost() {
+  state.selected = null;
+  for (const id of ["results", "groups"]) $(id).replaceChildren();
+  clearInspector("Not signed in or the project binding changed.");
   $("status").textContent = "Not signed in or the project binding changed. Relaunch Atlas.";
-});
+}
+
+main().catch(sessionLost);

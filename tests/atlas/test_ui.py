@@ -448,3 +448,144 @@ def test_a_dense_relation_cannot_hide_another_in_the_connections_panel(enrolled,
         shown_revisions, shown_files = int(revisions_h3.split()[0]), int(files_h3.split()[0])
         assert revisions_h3.endswith("of 30 other revisions") and files_h3.endswith("of 60 files cited")
         assert shown_revisions >= 10 and shown_files >= 10 and shown_revisions + shown_files == 25
+
+
+# ---- 5e: Back, revalidation and stale responses ------------------------------------------------------
+
+def _citer_view(page, server):
+    """Search 'Citer', go to page 2, open a result and expand its hub; returns that result's memory id."""
+    _open(page, server)
+    page.locator("#q").fill("Citer")
+    page.get_by_role("button", name="Search").click()
+    expect(page.locator("#count")).to_contain_text("of 120 matching")
+    page.get_by_role("button", name="Next page").click()
+    expect(page.locator("#page")).to_have_text("Page 2")
+    page.locator("#results li button").nth(2).click()
+    expect(page.locator("#memory")).to_be_visible()
+    expect(page.locator("[data-node-id]").nth(1)).to_be_visible()
+    first = page.locator(".node.focus").get_attribute("data-node-id")
+    page.locator("#graph-lists li", has_text="src/hub.py").get_by_role("button", name="Expand").click()
+    expect(page.locator("#graph-lists h3", has_text="citing memories of src/hub.py")).to_be_visible()
+    return first
+
+
+def _move_away(page):
+    """Next hub page, zoom, then open another citing memory (which pushes the view we want to return to)."""
+    page.get_by_role("button", name="Next citing memories").click()
+    expect(page.locator("#graph-lists h3", has_text="Showing 26–50")).to_be_visible()
+    page.get_by_role("button", name="Zoom in").click()
+    page.locator("#graph-lists section", has_text="citing memories of src/hub.py").get_by_role("button", name="Open").first.click()
+
+
+def test_back_restores_search_page_filters_selection_camera_and_expansion(enrolled, browser_page) -> None:
+    _dense(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        first = _citer_view(page, server)
+        k_before = page.locator("#world").get_attribute("data-k")
+        _move_away(page)
+        expect(page.locator(".node.focus")).not_to_have_attribute("data-node-id", first)
+        page.locator("#q").fill("unique-m-token")                      # a different search is applied while away
+        page.get_by_role("button", name="Search").click()
+        expect(page.locator("#count")).to_contain_text("1 matching")
+        page.get_by_role("button", name="Back", exact=True).click()
+        expect(page.locator(".node.focus")).to_have_attribute("data-node-id", first)
+        expect(page.locator("#page")).to_have_text("Page 2")
+        assert page.locator("#q").input_value() == "Citer"
+        expect(page.locator("#graph-lists h3", has_text="citing memories of src/hub.py")).to_have_text(
+            "Showing 26–50 of 121 citing memories of src/hub.py")
+        assert page.locator("#world").get_attribute("data-k") != k_before             # the zoomed camera came back
+        assert float(page.locator("#world").get_attribute("data-k")) == 1.25
+        assert page.locator("[data-node-id]").count() <= 100
+        assert page.get_by_role("button", name="Back", exact=True).is_disabled()
+
+
+def test_back_after_a_forget_never_redisplays_the_forgotten_memory(enrolled, browser_page) -> None:
+    _dense(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        first = _citer_view(page, server)
+        text = page.locator("#memory-body").inner_text()
+        assert text.startswith("Citer ")
+        memory_id = page.locator("#memory-meta dd").nth(5).inner_text()
+        revision = page.locator("#memory-meta dd").nth(6).inner_text()
+        _move_away(page)
+        enrolled.writer().forget(memory_id, revision, "k-forget-focus")
+        page.get_by_role("button", name="Back", exact=True).click()
+        expect(page.locator("#inspect-empty")).to_have_text("That memory is no longer available.")
+        assert page.locator("#memory").is_hidden() and page.locator("#graph").is_hidden()
+        html = page.content()
+        assert text not in html and memory_id not in html                              # not in any hidden node either
+        assert page.locator("[data-node-id]").count() == 0
+        expect(page.locator("#count")).to_contain_text("of 119 matching")              # counts were re-read, not replayed
+
+
+def test_an_unrelated_write_expires_the_page_cursor_and_the_list_restarts_with_a_notice(enrolled, browser_page) -> None:
+    _dense(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open(page, server)
+        page.locator("#q").fill("Citer")
+        page.get_by_role("button", name="Search").click()
+        page.get_by_role("button", name="Next page").click()
+        expect(page.locator("#page")).to_have_text("Page 2")
+        enrolled.record("A write elsewhere in the project", "k-elsewhere", kind="observation")
+        page.get_by_role("button", name="Next page").click()
+        expect(page.locator("#notice")).to_contain_text("restarted from the first page")
+        expect(page.locator("#page")).to_have_text("Page 1")
+
+
+def test_a_late_response_for_an_earlier_choice_is_ignored(enrolled, browser_page) -> None:
+    _dense(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open(page, server)
+        page.locator("#q").fill("Citer")
+        page.get_by_role("button", name="Search").click()
+        expect(page.locator("#count")).to_contain_text("of 120 matching")
+        buttons = page.locator("#results li button")
+        slow_text = buttons.nth(0).locator(".excerpt").inner_text()
+        held = []
+
+        def hold_first(route):
+            if held:
+                route.continue_()
+            else:
+                held.append(route)                    # answered only when the test releases it
+
+        page.route("**/api/body*", hold_first)
+        buttons.nth(0).click()                        # its body request is held
+        page.wait_for_timeout(200)
+        buttons.nth(1).click()                        # a later choice completes first
+        expect(page.locator("#memory")).to_be_visible()
+        shown = page.locator("#memory-body").inner_text()
+        assert shown != slow_text
+        held[0].continue_()                           # the earlier answer arrives late
+        page.wait_for_timeout(500)
+        assert page.locator("#memory-body").inner_text() == shown
+        assert page.locator(".node.focus").count() == 1
+
+
+def test_a_page_restored_from_the_browser_cache_is_revalidated(enrolled, browser_page) -> None:
+    _dense(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        first = _citer_view(page, server)
+        text = page.locator("#memory-body").inner_text()
+        memory_id = page.locator("#memory-meta dd").nth(5).inner_text()
+        revision = page.locator("#memory-meta dd").nth(6).inner_text()
+        enrolled.writer().forget(memory_id, revision, "k-forget-cache")
+        page.evaluate("window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))")
+        expect(page.locator("#inspect-empty")).to_have_text("That memory is no longer available.")
+        assert text not in page.content()
+
+
+def test_explicit_refresh_rereads_counts_and_lists(enrolled, browser_page) -> None:
+    ids = _dense(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open(page, server)
+        before = page.locator("#status").inner_text()
+        enrolled.record("Added after the page loaded", "k-added", kind="observation")
+        page.get_by_role("button", name="Refresh").click()
+        expect(page.locator("#status")).not_to_have_text(before)
