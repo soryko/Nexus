@@ -54,3 +54,63 @@ def test_session_start_cue_is_the_engines_fixed_text() -> None:
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
     assert module.CUE == SESSION_CUE
+
+
+FAKE_SCOPE = '''
+from pathlib import Path
+class ScopeError(ValueError): pass
+CALLS = Path(__file__).with_name("calls.log")
+def resolve(workspace):
+    CALLS.write_text(CALLS.read_text() + "resolve\\n" if CALLS.exists() else "resolve\\n")
+    if str(workspace).endswith("enrolled"): return object()
+    if str(workspace).endswith("broken"): raise OSError("boom")
+    raise ScopeError("no")
+def enroll(workspace): raise AssertionError("a hook must never enrol")
+'''
+
+
+def fake_bin(tmp_path: Path) -> Path:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "project_scope.py").write_text(FAKE_SCOPE)
+    return bin_dir
+
+
+def run_script(name: str, tmp_path: Path, cwd: str, bin_dir: Path | None) -> str:
+    import os
+    env = {k: v for k, v in os.environ.items() if k != "NEXUS_SCOPE_BIN"}
+    env["NEXUS_SCOPE_BIN"] = str(bin_dir or tmp_path / "missing")
+    env["CLAUDE_PROJECT_DIR"] = cwd
+    return subprocess.run([sys.executable, "-I", str(PLUGIN / "hooks" / name)],
+                          input=json.dumps({"cwd": cwd}), capture_output=True, text=True, check=True,
+                          env=env, timeout=10).stdout
+
+
+def test_session_start_prints_the_cue_only_for_an_enrolled_project(tmp_path: Path) -> None:
+    bin_dir = fake_bin(tmp_path)
+    out = json.loads(run_script("session_start.py", tmp_path, "/x/enrolled", bin_dir))
+    assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert out["hookSpecificOutput"]["additionalContext"] == SESSION_CUE
+    for cwd in ("/x/other", "/x/broken"):
+        assert run_script("session_start.py", tmp_path, cwd, bin_dir) == ""
+    assert run_script("session_start.py", tmp_path, "/x/enrolled", None) == ""  # resolver absent: unknown, silent
+    assert run_script("session_start.py", tmp_path, "relative", bin_dir) == ""
+
+
+def test_status_reports_three_states_and_never_enrols(tmp_path: Path) -> None:
+    bin_dir = fake_bin(tmp_path)
+    assert "ENROLLED" in run_script("status.py", tmp_path, "/x/enrolled", bin_dir) and "NOT" not in run_script("status.py", tmp_path, "/x/enrolled", bin_dir)
+    assert "NOT ENROLLED" in run_script("status.py", tmp_path, "/x/other", bin_dir)
+    assert "UNKNOWN" in run_script("status.py", tmp_path, "/x/broken", bin_dir)
+    assert "UNKNOWN" in run_script("status.py", tmp_path, "/x/enrolled", None)
+    for script in (PLUGIN / "hooks").glob("*.py"):
+        assert "enroll(" not in script.read_text().replace("never enrol", "")
+
+
+def test_skill_and_command_carry_the_policy_and_cannot_enrol() -> None:
+    skill = (PLUGIN / "skills" / "nexus-memory" / "SKILL.md").read_text()
+    for needle in ("IDs only", "Fetch only admitted IDs", "Nexus explore:", "untrusted", "Save only when the user asks"):
+        assert needle in skill
+    command = (PLUGIN / "commands" / "status.md").read_text()
+    assert "allowed-tools: Bash(python3 -I:*)" in command
+    assert "mcp__" not in command and "launcher" not in command
