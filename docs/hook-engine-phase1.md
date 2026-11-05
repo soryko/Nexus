@@ -10,7 +10,7 @@ Labels: **measured** / **observed** = I ran it; **tested** = covered by a test i
 
 ## What was built
 
-`integrations/claude-plugin/` (plugin name `nexus`; hooks only; no bundled server, no launcher copy):
+`integrations/claude-plugin/` (plugin name `nexus-memory`; hooks only; no bundled server, no launcher copy):
 
 | Event | Hook | Does |
 |---|---|---|
@@ -21,12 +21,11 @@ Labels: **measured** / **observed** = I ran it; **tested** = covered by a test i
 All hooks have `timeout: 2`. Also: `skills/nexus-memory/SKILL.md` (consultation policy) and
 `commands/status.md`, print-only.
 
-**The command is `/nexus:status`.** Claude namespaces plugin commands and skills by plugin name (observed in the init
-`slash_commands`, with the earlier name `nexus-memory:status`). The plugin is named `nexus` on your instruction. This
-name is the plugin's only; the MCP server entry the hooks address is still `nexus-memory`, and so are the tool names
-`mcp__nexus-memory__*`. The skill keeps its directory name, so it is `nexus:nexus-memory`.
+**The command is `/nexus-memory:status`, not `/nexus:status`.** Claude namespaces plugin commands by
+plugin name (observed in the init `slash_commands`: `nexus-memory:status`). Getting `/nexus:status`
+means naming the plugin `nexus`; I kept `nexus-memory` as instructed.
 
-`/nexus:status` replies with one of three lines. "Hooks not trusted" is inferred, not
+`/nexus-memory:status` replies with one of three lines. "Hooks not trusted" is inferred, not
 detected: enrolled by the resolver but the SessionStart cue is absent from the model's context.
 Claude exposes no API for plugin-hook trust to a command, so that inference is the only evidence
 available. It never enrols (a test asserts no script calls `enroll(`).
@@ -169,7 +168,7 @@ Measured, 25 prompts in one session (A), client-observed `hook_started` → `hoo
   per-prompt hook errors in the store-unavailable case are shown to the user, is unverified (no TUI).
 - **`/clear`**: not exercised. Per the decision, recall dedupe is not reset on `/clear`; SessionStart `clear` re-sends the cue only.
 - **Codex re-trust (4c)** remains unverified (interactive trust UI).
-- Whether `/nexus:status` shows "hooks not trusted" correctly when a plugin is disabled was not run; its logic is an inference (above).
+- Whether `/nexus-memory:status` shows "hooks not trusted" correctly when a plugin is disabled was not run; its logic is an inference (above).
 - Hook trust for the plugin itself (user approval of plugin hooks) was not observed: `--plugin-dir` sessions ran them without a prompt.
 
 ## Decisions needed
@@ -179,5 +178,5 @@ Measured, 25 prompts in one session (A), client-observed `hook_started` → `hoo
    "Nexus: memory could not start for this project, so its memory hooks are off here." once per session, and is silent after. A launch
    without `--hook-project-root` still exits 1. Side effect: an enrolled project still gets the SessionStart cue in that state (the
    cue is decided by enrolment, not by store health); the cue already says to continue if Nexus is unavailable.
-2. ~~Plugin name / command~~ **Done on your instruction**: the plugin is `nexus` (`/nexus:status`).
+2. **Plugin name / command**: keep `nexus-memory` (`/nexus-memory:status`) or rename the plugin to `nexus` (`/nexus:status`)?
 3. **Who applies** `docs/patches/launcher-hook-root.patch` on PR #17, and when the user-scope entry moves to a runtime with the new flags.

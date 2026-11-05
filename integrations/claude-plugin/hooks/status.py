@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Print-only status for /nexus:status. Reads; never enrols, writes or starts a server."""
+"""Print-only status for /nexus-memory:status. Reads; never enrols, writes or starts a server."""
 import os
 import sys
 
