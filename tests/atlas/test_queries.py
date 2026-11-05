@@ -237,3 +237,54 @@ def test_hub_probes_the_reference_key_instead_of_scanning_references(corpus) -> 
         plan = [row[3] for row in db.execute("EXPLAIN QUERY PLAN SELECT count(*) FROM (" + inner + ")", parameters)]
     assert any(line.startswith("SEARCH r EXISTS USING INDEX sqlite_autoindex_revision_references_1") for line in plan)
     assert not any(line.startswith("SCAN r") for line in plan)
+
+
+def _cite_many(corpus, memory_id: str, revision_id: str, count: int) -> None:
+    for n in range(count):
+        _cite(corpus.e.database, corpus.e.scope, memory_id, revision_id, REPO_ONE, COMMIT_A, f"src/file_{n:02d}.py")
+
+
+def test_neighbors_share_the_allowance_so_a_dense_type_cannot_hide_another(corpus) -> None:
+    target, revision = corpus.ids["dec1"], corpus.revs["dec1"]
+    for n in range(6):
+        revision = corpus.service.revise(target, revision, MemoryInput(f"Decision 1, revision {n}", kind="decision"),
+                                         f"k-chain-{n}").revision_id
+    _cite_many(corpus, target, revision, 30)
+    hood = corpus.queries().neighbors(target)
+    relations = {r.kind: r for r in hood.relations}
+    assert (relations["revision-of"].total, relations["cites"].total) == (6, 30)
+    assert len(relations["revision-of"].items) == 6 and len(relations["cites"].items) == 19
+    assert sum(len(r.items) for r in hood.relations) == 25
+    assert (relations["revision-of"].omitted, relations["cites"].omitted) == (0, 11)
+    assert hood.revision_id == revision
+    # newest revision first, selected revision excluded, then stable order
+    created = [item["created_at"] for item in relations["revision-of"].items]
+    assert created == sorted(created, reverse=True)
+    assert revision not in {item["revision_id"] for item in relations["revision-of"].items}
+
+
+def test_neighbors_of_an_isolated_memory_are_empty_and_the_limit_is_honoured(corpus) -> None:
+    hood = corpus.queries().neighbors(corpus.ids["orphan"])
+    assert [(r.kind, r.total, r.items) for r in hood.relations] == [("revision-of", 0, ()), ("cites", 0, ())]
+    target = corpus.ids["dec2"]
+    _cite_many(corpus, target, corpus.revs["dec2"], 10)
+    small = corpus.queries().neighbors(target, limit=4)
+    assert sum(len(r.items) for r in small.relations) == 4
+    assert {r.kind: r.omitted for r in small.relations} == {"revision-of": 0, "cites": 6}
+    again = corpus.queries().neighbors(target, limit=4)
+    assert small == again       # deterministic
+
+
+def test_neighbors_of_an_older_revision_use_that_revisions_own_citations(corpus) -> None:
+    target, first = corpus.ids["dec3"], corpus.revs["dec3"]
+    _cite_many(corpus, target, first, 2)
+    second = corpus.service.revise(target, first, MemoryInput("Decision 3, revised", kind="decision"), "k-n2").revision_id
+    _cite_many(corpus, target, second, 5)
+    atlas = corpus.queries()
+    assert {r.kind: r.total for r in atlas.neighbors(target, first).relations} == {"revision-of": 1, "cites": 2}
+    assert {r.kind: r.total for r in atlas.neighbors(target).relations} == {"revision-of": 1, "cites": 5}
+
+
+def test_neighbors_refuse_a_forgotten_memory(corpus) -> None:
+    with pytest.raises(MemoryNotFound):
+        corpus.queries().neighbors(corpus.ids["gone"])

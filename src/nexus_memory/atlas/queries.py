@@ -67,9 +67,48 @@ class Comparison:
 
 
 @dataclass(frozen=True, slots=True)
+class Relation:
+    """One relation type around a focus, with its true total and what was left out."""
+    kind: str                       # "revision-of" or "cites"
+    total: int
+    items: tuple[dict, ...]
+    omitted: int
+
+
+@dataclass(frozen=True, slots=True)
+class Neighborhood:
+    memory_id: str
+    revision_id: str
+    relations: tuple[Relation, ...]
+    generation: int
+
+
+@dataclass(frozen=True, slots=True)
 class Related:
     reason: str
     page: Page
+
+
+def _allocate(totals: list[int], limit: int) -> list[int]:
+    """Split ``limit`` across relation types so that no type can crowd out another."""
+    given = [0] * len(totals)
+    remaining = limit
+    open_types = [i for i, total in enumerate(totals) if total > 0]
+    while remaining > 0 and open_types:
+        share = max(1, remaining // len(open_types))
+        progressed = False
+        for i in list(open_types):
+            take = min(share, totals[i] - given[i], remaining)
+            given[i] += take
+            remaining -= take
+            progressed = progressed or take > 0
+            if given[i] >= totals[i]:
+                open_types.remove(i)
+            if remaining == 0:
+                break
+        if not progressed:
+            break
+    return given
 
 
 def _title(text: str) -> str:
@@ -156,6 +195,31 @@ class AtlasQueries:
                 view.revision_id != view.current_revision_id, _title(view.content), view.kind, view.tags,
                 view.source_uri, view.created_at, root[0][0] if root else view.created_at,
                 view.parent_revision_id, view.references, self._generation(repository))
+
+    def neighbors(self, memory_id: str, revision_id: str | None = None, limit: int = 25) -> Neighborhood:
+        """The recorded connections of one revision: its sibling revisions and the files it cites."""
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise InvalidInput("limit must be a positive integer")
+        with self._request() as repository:
+            scope = self._scope
+            view = repository.get(scope, memory_id, revision_id)   # refuses a forgotten memory
+            revisions = self._rows(
+                repository,
+                "SELECT revision_id,parent_revision_id,created_at FROM revisions"
+                " WHERE namespace=? AND actor=? AND memory_id=? AND revision_id<>?"
+                " ORDER BY created_at DESC, revision_id", (scope.namespace, scope.actor, memory_id, view.revision_id))
+            cites = sorted(view.references, key=lambda r: (r.checked_at, r.repository_id, r.path, r.commit_oid),
+                           reverse=True)
+            given = _allocate([len(revisions), len(cites)], limit)
+            relations = (
+                Relation("revision-of", len(revisions),
+                         tuple({"revision_id": r[0], "parent_revision_id": r[1], "created_at": r[2]}
+                               for r in revisions[:given[0]]), len(revisions) - given[0]),
+                Relation("cites", len(cites),
+                         tuple({"repository_id": r.repository_id, "path": r.path, "commit_oid": r.commit_oid,
+                                "checked_at": r.checked_at} for r in cites[:given[1]]), len(cites) - given[1]),
+            )
+            return Neighborhood(memory_id, view.revision_id, relations, self._generation(repository))
 
     def body(self, memory_id: str, revision_id: str) -> str:
         with self._request() as repository:
