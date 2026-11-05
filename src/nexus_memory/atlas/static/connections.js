@@ -59,7 +59,20 @@ export function createConnections({ get, onOpen }) {
     }
     for (const [id, hub] of hubs) {
       const section = el("section");
-      section.append(el("h3", `${hub.shown} of ${hub.matched} citing memories of ${hub.label}`));
+      const page = hub.page;
+      const start = page.items.length ? hub.index * STEP + 1 : 0, end = hub.index * STEP + page.items.length;
+      section.append(el("h3", hub.filter
+        ? `${page.matched} matching of ${page.total} citing memories of ${hub.label}`
+        : `Showing ${start}–${end} of ${page.total} citing memories of ${hub.label}`));
+      const form = el("form");
+      const label = el("label", `Filter citing memories of ${hub.label}`);
+      const input = el("input");
+      input.type = "search"; input.value = hub.filter; input.maxLength = 1024;
+      label.append(" ", input);
+      const submit = el("button", "Filter"); submit.type = "submit";
+      form.append(label, " ", submit);
+      form.addEventListener("submit", (event) => { event.preventDefault(); hub.filter = input.value.trim(); hub.cursors = [null]; hub.index = 0; loadHub(graph.nodes.get(id)); });
+      section.append(form);
       const list = el("ul");
       for (const item of hub.items) {
         const row = el("li");
@@ -70,19 +83,18 @@ export function createConnections({ get, onOpen }) {
         list.append(row);
       }
       section.append(list);
-      if (hub.cursor && !graph.full) {
-        const more = el("button", `Show more citing memories of ${hub.label}`);
-        more.type = "button";
-        more.addEventListener("click", () => expandFile(graph.nodes.get(id), true));
-        section.append(more);
-      }
+      const prev = el("button", "Previous citing memories"); prev.type = "button"; prev.disabled = hub.index === 0;
+      prev.addEventListener("click", () => { hub.index -= 1; loadHub(graph.nodes.get(id)); });
+      const next = el("button", "Next citing memories"); next.type = "button"; next.disabled = !page.cursor;
+      next.addEventListener("click", () => { hub.cursors = hub.cursors.slice(0, hub.index + 1); hub.cursors.push(page.cursor); hub.index += 1; loadHub(graph.nodes.get(id)); });
+      section.append(prev, " ", el("span", `Page ${hub.index + 1}`), " ", next);
       box.append(section);
     }
   }
 
   function select(node) {
     selectedId = node.id;
-    if (node.type === "file") { expandFile(node, false); return; }
+    if (node.type === "file") { expandFile(node); return; }
     if (node.id !== graph.focusId) { onOpen(node.memoryId, node.revisionId); return; }
     draw();
   }
@@ -117,24 +129,28 @@ export function createConnections({ get, onOpen }) {
     await loadRelations(token);
   }
 
-  async function expandFile(node, more) {
+  function expandFile(node) {
+    if (!hubs.has(node.id)) hubs.set(node.id, { label: node.path, filter: "", cursors: [null], index: 0, items: [], page: null });
+    return loadHub(node);
+  }
+
+  async function loadHub(node) {
     const mine = token;
-    const hub = hubs.get(node.id) || { label: node.path, matched: 0, shown: 0, cursor: null, items: [] };
+    const hub = hubs.get(node.id);
     const params = [["repo", node.repositoryId], ["path", node.path], ["commit", node.commit], ["limit", String(STEP)]];
-    if (more && hub.cursor) params.push(["cursor", hub.cursor]);
+    if (hub.filter) params.push(["q", hub.filter]);
+    if (hub.cursors[hub.index]) params.push(["cursor", hub.cursors[hub.index]]);
     const { status, body } = await get("/api/citations", params);
     if (mine !== token || status !== 200) return;
+    if (body.restarted) { hub.cursors = [null]; hub.index = 0; }
+    hub.items = [];
     for (const hit of body.items) {
-      if (hit.revision_id === focus.revisionId) continue;
       const member = { id: `r:${hit.revision_id}`, type: "revision", label: revisionLabel(hit.excerpt),
                        memoryId: hit.memory_id, revisionId: hit.revision_id };
-      const outcome = graph.link(node.id, member, "cited-by", `hub:${node.id}`);
-      if (outcome !== "full") hub.items.push({ node: member, text: revisionLabel(hit.excerpt) });
+      if (member.id !== graph.focusId) graph.link(node.id, member, "cited-by", `hub:${node.id}`);
+      hub.items.push({ node: member, text: revisionLabel(hit.excerpt) });
     }
-    hub.matched = body.matched;
-    hub.shown = hub.items.length;
-    hub.cursor = body.cursor;
-    hubs.set(node.id, hub);
+    hub.page = body;
     draw();
   }
 

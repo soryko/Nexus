@@ -275,15 +275,16 @@ def test_a_dense_file_hub_fills_the_budget_and_choosing_an_item_still_recenters(
         page.locator("#graph-lists li", has_text="src/hub.py").get_by_role("button", name="Expand").click()
         expect(page.locator("#graph-lists h3", has_text="citing memories of src/hub.py")).to_contain_text("of 121")
         for _ in range(6):
-            more = page.get_by_role("button", name="Show more citing memories")
-            if more.count() == 0:
+            more = page.get_by_role("button", name="Next citing memories")
+            if more.count() == 0 or not more.is_enabled():
                 break
             more.click()
             page.wait_for_timeout(150)
             assert page.locator("[data-node-id]").count() <= 100
         assert page.locator("[data-node-id]").count() == 100
         before = page.locator(".node.focus").get_attribute("data-node-id")
-        page.locator("#graph-lists section", has_text="citing memories of src/hub.py").get_by_role("button", name="Open").last.click()
+        opens = page.locator("#graph-lists section", has_text="citing memories of src/hub.py").get_by_role("button", name="Open")
+        opens.nth(opens.count() - 2).click()          # the very last row is the focus itself, the oldest memory
         expect(page.locator("#memory-body")).to_contain_text("Citer")
         expect(page.locator(".node.focus")).not_to_have_attribute("data-node-id", before)
         assert page.locator("[data-node-id]").count() <= 100 and page.locator("[data-edge]").count() <= 150
@@ -326,3 +327,124 @@ def test_graph_labels_are_text_and_hostile_names_stay_inert(enrolled, browser_pa
         assert page.locator("#graph svg img, #graph svg script, #graph-lists img, #graph-lists script").count() == 0
         labels = " ".join(page.locator(".node text").all_text_contents())
         assert "<img" in labels
+
+
+# ---- 5d: hubs and the revision inspector ------------------------------------------------------------
+
+def test_hub_pages_to_the_last_result_and_the_filter_reports_matching_of_total(enrolled, browser_page) -> None:
+    _dense(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open_focus(page, server)
+        page.locator("#graph-lists li", has_text="src/hub.py").get_by_role("button", name="Expand").click()
+        section = page.locator("#graph-lists section", has_text="citing memories of src/hub.py")
+        expect(section.locator("h3")).to_have_text("Showing 1–25 of 121 citing memories of src/hub.py")
+        first_page = section.locator("li span").all_text_contents()
+        page.get_by_role("button", name="Next citing memories").click()
+        expect(section.locator("h3")).to_have_text("Showing 26–50 of 121 citing memories of src/hub.py")
+        second_page = section.locator("li span").all_text_contents()
+        assert len(first_page) == len(second_page) == 25 and not set(first_page) & set(second_page)
+        while page.get_by_role("button", name="Next citing memories").is_enabled():
+            page.get_by_role("button", name="Next citing memories").click()
+            page.wait_for_timeout(120)
+        expect(section.locator("h3")).to_have_text("Showing 101–121 of 121 citing memories of src/hub.py")
+        assert page.locator("[data-node-id]").count() <= 100
+        page.get_by_role("button", name="Previous citing memories").click()
+        expect(section.locator("h3")).to_have_text("Showing 76–100 of 121 citing memories of src/hub.py")
+        # the hub's own filter, labelled and initially empty
+        box = page.get_by_label("Filter citing memories of src/hub.py")
+        assert box.input_value() == ""
+        box.fill(" ".join(f"{n:03d}" for n in range(1, 13)))
+        page.get_by_role("button", name="Filter", exact=True).click()
+        expect(section.locator("h3")).to_have_text("12 matching of 121 citing memories of src/hub.py")
+        assert section.locator("li").count() == 12
+        box.fill("")
+        page.get_by_role("button", name="Filter", exact=True).click()
+        expect(section.locator("h3")).to_have_text("Showing 1–25 of 121 citing memories of src/hub.py")
+
+
+def _chain(enrolled, revisions: int, big: bool = False) -> tuple[str, list[str]]:
+    service = enrolled.writer()
+    first = service.record(__import__("nexus_memory.domain.models", fromlist=["MemoryInput"]).MemoryInput(
+        "chain-token line one\nshared line\nold line", kind="decision"), "k-chain")
+    ids, current = [first.revision_id], first.revision_id
+    from nexus_memory.domain.models import MemoryInput
+    for n in range(1, revisions):
+        text = ("x" * 40_000) if big and n == revisions - 1 else f"chain-token line one\nshared line\nnew line {n}"
+        current = service.revise(first.memory_id, current, MemoryInput(text, kind="decision"), f"k-chain-{n}").revision_id
+        ids.append(current)
+    return first.memory_id, ids
+
+
+def _cite_revision(enrolled, memory_id: str, revision_id: str, path: str) -> None:
+    with _sqlite3.connect(enrolled.database) as db:
+        db.execute("INSERT OR IGNORE INTO repositories VALUES(?,?,?,?,?,?)",
+                   (enrolled.project_id, "local", _REPO, "sha1", None, "2026-11-05T00:00:00Z"))
+        db.execute("INSERT INTO revision_references VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                   (enrolled.project_id, "local", memory_id, revision_id, _REPO, _COMMIT, path, "c" * 40, "blob",
+                    "100644", "2026-11-05T00:00:00Z"))
+
+
+def test_revision_inspector_compares_with_the_parent_and_marks_history(enrolled, browser_page) -> None:
+    memory_id, revisions = _chain(enrolled, 3)
+    _cite_revision(enrolled, memory_id, revisions[0], "src/old_only.py")
+    _cite_revision(enrolled, memory_id, revisions[2], "src/current_only.py")
+    with _served(enrolled) as server:
+        page = browser_page
+        _open(page, server)
+        page.locator("#q").fill("chain-token")
+        page.get_by_role("button", name="Search").click()
+        page.locator("#results li button").first.click()
+        expect(page.locator("#memory")).to_be_visible()
+        assert page.locator("#memory-flag").inner_text() == ""
+        diff = page.locator("#memory-diff").inner_text()
+        assert "-new line 1" in diff and "+new line 2" in diff
+        expect(page.locator("#memory-refs")).to_contain_text("src/current_only.py")
+        assert "old_only" not in page.locator("#memory-refs").inner_text()
+        assert page.locator("#memory-history li").count() == 3
+        # the oldest revision: historical, its own references, nothing to compare
+        page.locator("#memory-history li").last.get_by_role("button", name="Open revision").click()
+        expect(page.locator("#memory-flag")).to_have_text("Historical revision: not the current text.")
+        expect(page.locator("#memory-refs")).to_contain_text("src/old_only.py")
+        assert "current_only" not in page.locator("#memory-refs").inner_text()
+        expect(page.locator("#memory-diff")).to_have_text("First revision: there is nothing to compare it with.")
+        assert page.locator("#memory-body").inner_text().endswith("old line")
+        # the middle one: historical, compared with its own parent
+        page.locator("#memory-history li").nth(1).get_by_role("button", name="Open revision").click()
+        expect(page.locator("#memory-diff")).to_contain_text("+new line 1")
+        # and back to the current text, no longer marked
+        page.locator("#memory-history li").first.get_by_role("button", name="Open revision").click()
+        expect(page.locator("#memory-flag")).to_have_text("")
+
+
+def test_oversize_revision_is_reported_not_compared(enrolled, browser_page) -> None:
+    memory_id, revisions = _chain(enrolled, 3, big=True)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open(page, server)
+        page.locator("#q").fill("chain-token")
+        page.get_by_role("button", name="Search").click()
+        expect(page.locator("#count")).to_contain_text("matching")
+        page.get_by_role("button", name="Reset filters").click()
+        page.locator("#results li button").first.click()
+        expect(page.locator("#memory")).to_be_visible()
+        expect(page.locator("#memory-diff")).to_have_text("This revision and its parent are too large to compare here.")
+
+
+def test_a_dense_relation_cannot_hide_another_in_the_connections_panel(enrolled, browser_page) -> None:
+    memory_id, revisions = _chain(enrolled, 31)
+    for n in range(60):
+        _cite_revision(enrolled, memory_id, revisions[-1], f"src/f{n:03d}.py")
+    with _served(enrolled) as server:
+        page = browser_page
+        _open(page, server)
+        page.locator("#q").fill("chain-token")
+        page.get_by_role("button", name="Search").click()
+        expect(page.locator("#count")).to_contain_text("matching")
+        page.locator("#results li button").first.click()
+        expect(page.locator("#graph-lists h3", has_text="files cited")).to_be_visible()
+        revisions_h3 = page.locator("#graph-lists h3", has_text="other revisions").inner_text()
+        files_h3 = page.locator("#graph-lists h3", has_text="files cited").inner_text()
+        shown_revisions, shown_files = int(revisions_h3.split()[0]), int(files_h3.split()[0])
+        assert revisions_h3.endswith("of 30 other revisions") and files_h3.endswith("of 60 files cited")
+        assert shown_revisions >= 10 and shown_files >= 10 and shown_revisions + shown_files == 25

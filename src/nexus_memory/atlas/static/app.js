@@ -137,9 +137,11 @@ async function runSearch(fresh) {
 async function openMemory(memoryId, revisionId) {
   const token = ++state.token;
   state.selected = memoryId;
-  const [meta, text] = await Promise.all([
+  const [meta, text, diff, past] = await Promise.all([
     get("/api/inspect", [["id", memoryId], ["rev", revisionId]]),
     get("/api/body", [["id", memoryId], ["rev", revisionId]]),
+    get("/api/compare", [["id", memoryId], ["rev", revisionId]]),
+    get("/api/history", [["id", memoryId], ["limit", "100"]]),
   ]);
   if (token !== state.token) return;
   if (meta.status !== 200 || text.status !== 200) {
@@ -162,8 +164,39 @@ async function openMemory(memoryId, revisionId) {
   dl.replaceChildren();
   for (const [name, value] of rows) dl.append(el("dt", { text: name }), el("dd", { text: value }));
   $("memory-body").textContent = text.body.content;
+  renderReferences(m.references);
+  renderDiff(diff);
+  renderHistory(memoryId, past, m.revision_id);
   $("inspector").focus();
   connections.show(memoryId, revisionId, m.title.slice(0, 40));
+}
+
+function renderReferences(references) {
+  const list = $("memory-refs");
+  list.replaceChildren();
+  if (!references.length) { list.append(el("li", { text: "none recorded" })); return; }
+  for (const r of references) list.append(el("li", { text: `${r.path} @ ${r.commit_oid.slice(0, 8)} (${r.repository_id})` }));
+}
+
+function renderDiff(reply) {
+  const box = $("memory-diff");
+  if (reply.status !== 200) { box.textContent = "The comparison is not available."; return; }
+  const c = reply.body;
+  if (c.state === "root") box.textContent = "First revision: there is nothing to compare it with.";
+  else if (c.state === "too_large") box.textContent = "This revision and its parent are too large to compare here.";
+  else box.textContent = c.lines.join("\n") + (c.truncated ? "\n… (comparison truncated)" : "");
+}
+
+function renderHistory(memoryId, reply, selectedRevision) {
+  const list = $("memory-history");
+  list.replaceChildren();
+  if (reply.status !== 200) { list.append(el("li", { text: "The revision list is not available." })); return; }
+  for (const entry of reply.body.entries) {
+    const label = `${entry.created_at.slice(0, 19)} · ${entry.is_current ? "current" : "older"}${entry.revision_id === selectedRevision ? " · shown" : ""}`;
+    const button = el("button", { text: "Open revision", attrs: { type: "button" } });
+    button.addEventListener("click", () => openMemory(memoryId, entry.revision_id));
+    list.append(el("li", {}, button, ` ${label}`));
+  }
 }
 
 function wire() {
