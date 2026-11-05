@@ -93,6 +93,35 @@ _SQLITE_INTEGER_MIN = -2 ** 63
 _SQLITE_INTEGER_MAX = 2 ** 63 - 1
 
 
+class _SnapshotConnection:
+    """One connection shared by every read made inside ``read_snapshot``.
+
+    The core read methods each open a connection, ``BEGIN`` and commit. Inside a snapshot
+    those calls are absorbed so that they all see the same committed state, and the
+    connection is released only when the snapshot ends.
+    """
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self._connection = connection
+
+    def execute(self, sql, *arguments):
+        if sql.strip().upper() == "BEGIN":
+            return self._connection.execute("SELECT 1")
+        return self._connection.execute(sql, *arguments)
+
+    def commit(self) -> None:
+        pass
+
+    def rollback(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+    def __getattr__(self, name):
+        return getattr(self._connection, name)
+
+
 class SQLiteRepository:
     SCHEMA_VERSION = 4
     MINIMUM_SQLITE = (3, 51, 3)
@@ -186,7 +215,38 @@ class SQLiteRepository:
                 connection.close()
             raise
 
+    _pinned: "_SnapshotConnection | None" = None
+
+    @contextmanager
+    def read_snapshot(self) -> Iterator["SQLiteRepository"]:
+        """Run several reads against one consistent view of a read-only store.
+
+        A forget that commits while the block runs is invisible to every read inside it,
+        so a response assembled from several calls is either all before or all after it.
+        """
+        if not self._read_only:
+            raise UnsupportedRuntime("snapshots are only available on a read-only repository")
+        if self._pinned is not None:
+            yield self
+            return
+        connection = self._connect_read_only()
+        try:
+            connection.execute("BEGIN")
+            connection.execute("SELECT generation FROM index_state WHERE id=1").fetchone()  # fixes the snapshot
+            self._pinned = _SnapshotConnection(connection)
+            yield self
+        except sqlite3.Error as error:
+            raise StorageIntegrityError("storage operation failed") from error
+        finally:
+            self._pinned = None
+            try:
+                connection.rollback()
+            finally:
+                connection.close()
+
     def _connect(self) -> sqlite3.Connection:
+        if self._pinned is not None:
+            return self._pinned
         if self._read_only:
             return self._connect_read_only()
         connection = None
@@ -1231,7 +1291,79 @@ class SQLiteRepository:
             [after[0], after[0], after[1]],
         )
 
-    def search(self, scope: Scope, query: SearchQuery, repository_id: str | None = None) -> SearchPage:
+    def _candidates(self, scope: Scope, query: SearchQuery, repository_id: str | None,
+                    exclude_memory_id: str | None = None) -> "tuple[str, list, bool] | None":
+        """The unordered, unpaged candidate statement for a query, or None if it matches nothing."""
+        filters, filter_parameters = self._filters(query, repository_id)
+        if exclude_memory_id is not None:
+            filters += " AND h.memory_id <> ?"
+            filter_parameters = [*filter_parameters, exclude_memory_id]
+        # The authoritative join is mandatory: external content does not self-synchronise,
+        # and every eligibility filter is applied before the limit, never after.
+        authority = (
+            " JOIN memories m ON m.namespace=h.namespace AND m.actor=h.actor AND m.memory_id=h.memory_id"
+            " WHERE h.namespace=? AND h.actor=? AND m.tombstoned=0 AND m.current_revision_id=h.revision_id "
+        )
+        if query.query:
+            expression = self._match_expression(query)
+            if expression is None:
+                return None
+            self._validate_match_expression(expression)
+            legs = self._match_legs(query, expression)
+            leg_sql = []
+            parameters: list = []
+            for table, leg_expression in legs:
+                leg_sql.append(
+                    "SELECT h.seq AS seq,h.memory_id,h.revision_id,h.kind,h.tags_json,h.created_at,"
+                    f"h.has_parent,bm25({table}) AS rank,"
+                    f"snippet({table},0,'','','…',16) AS excerpt"
+                    f" FROM {table} JOIN head_index h ON h.seq={table}.rowid"
+                    + authority + f"AND {table} MATCH ? " + filters
+                )
+                parameters.extend([scope.namespace, scope.actor, leg_expression, *filter_parameters])
+            if len(leg_sql) == 1:
+                inner = leg_sql[0]
+            else:
+                # One row per memory, keeping its best leg. BM25 scores from two indexes
+                # are computed over different corpus statistics, so best-of is a stated
+                # heuristic, not a principled combination — it is recorded as such.
+                inner = (
+                    "SELECT seq,memory_id,revision_id,kind,tags_json,created_at,has_parent,"
+                    "MIN(rank) AS rank,excerpt FROM (" + " UNION ALL ".join(leg_sql) + ") GROUP BY seq"
+                )
+            return inner, parameters, False
+        inner = (
+            "SELECT h.seq AS seq,h.memory_id,h.revision_id,h.kind,h.tags_json,h.created_at,"
+            "h.has_parent,-h.durable_seq AS rank,"
+            f"substr(CAST(b.body AS TEXT),1,{self.EXCERPT_LIMIT}) AS excerpt"
+            " FROM head_index h JOIN blobs b ON b.id=h.blob_id"
+            + authority + filters
+        )
+        return inner, [scope.namespace, scope.actor, *filter_parameters], True
+
+    def count_matches(self, scope: Scope, query: SearchQuery, repository_id: str | None = None,
+                      exclude_memory_id: str | None = None) -> int:
+        """How many memories a search would return across every page, cursor ignored."""
+        db = None
+        try:
+            db = self._connect()
+            with closing(db):
+                db.execute("BEGIN")
+                plan = self._candidates(scope, query, repository_id, exclude_memory_id)
+                if plan is None:
+                    db.commit()
+                    return 0
+                inner, parameters, _ = plan
+                total = db.execute(f"SELECT count(*) FROM ({inner})", parameters).fetchone()[0]
+                db.commit()
+                return total
+        except NexusError:
+            raise
+        except (sqlite3.Error, UnicodeError, ValueError) as error:
+            raise StorageIntegrityError("storage operation failed") from error
+
+    def search(self, scope: Scope, query: SearchQuery, repository_id: str | None = None,
+               exclude_memory_id: str | None = None) -> SearchPage:
         """``repository_id`` is the identity the *service* resolved for ``repository: "bound"``.
 
         Storage never reads a binding and never learns one from a tool call: it is handed the
@@ -1245,6 +1377,8 @@ class SQLiteRepository:
                 db.execute("BEGIN")  # one read snapshot for generation, index and authority
                 generation = self._generation(db)
                 fingerprint = self._fingerprint(scope, query, repository_id)
+                if exclude_memory_id is not None:  # unchanged for every existing caller
+                    fingerprint = hashlib.sha256(f"{fingerprint}|exclude|{exclude_memory_id}".encode()).hexdigest()
                 after: tuple[float, int] | None = None
                 browse = False  # the recency branch orders on head_index_recent directly
                 if query.cursor is not None:
@@ -1253,51 +1387,11 @@ class SQLiteRepository:
                         raise CursorExpired("cursor is not valid for this search")
                     after = self._cursor_position(payload, "cursor is not valid for this search")
 
-                filters, filter_parameters = self._filters(query, repository_id)
-                # The authoritative join is mandatory: external content does not self-synchronise,
-                # and every eligibility filter is applied before the limit, never after.
-                authority = (
-                    " JOIN memories m ON m.namespace=h.namespace AND m.actor=h.actor AND m.memory_id=h.memory_id"
-                    " WHERE h.namespace=? AND h.actor=? AND m.tombstoned=0 AND m.current_revision_id=h.revision_id "
-                )
-                if query.query:
-                    expression = self._match_expression(query)
-                    if expression is None:  # no indexable token: match nothing, never everything
-                        db.commit()
-                        return SearchPage(hits=(), cursor=None, generation=generation)
-                    self._validate_match_expression(expression)
-                    legs = self._match_legs(query, expression)
-                    leg_sql = []
-                    parameters = []
-                    for table, leg_expression in legs:
-                        leg_sql.append(
-                            "SELECT h.seq AS seq,h.memory_id,h.revision_id,h.kind,h.tags_json,h.created_at,"
-                            f"h.has_parent,bm25({table}) AS rank,"
-                            f"snippet({table},0,'','','…',16) AS excerpt"
-                            f" FROM {table} JOIN head_index h ON h.seq={table}.rowid"
-                            + authority + f"AND {table} MATCH ? " + filters
-                        )
-                        parameters.extend([scope.namespace, scope.actor, leg_expression, *filter_parameters])
-                    if len(leg_sql) == 1:
-                        inner = leg_sql[0]
-                    else:
-                        # One row per memory, keeping its best leg. BM25 scores from two indexes
-                        # are computed over different corpus statistics, so best-of is a stated
-                        # heuristic, not a principled combination — it is recorded as such.
-                        inner = (
-                            "SELECT seq,memory_id,revision_id,kind,tags_json,created_at,has_parent,"
-                            "MIN(rank) AS rank,excerpt FROM (" + " UNION ALL ".join(leg_sql) + ") GROUP BY seq"
-                        )
-                else:
-                    browse = True
-                    inner = (
-                        "SELECT h.seq AS seq,h.memory_id,h.revision_id,h.kind,h.tags_json,h.created_at,"
-                        "h.has_parent,-h.durable_seq AS rank,"
-                        f"substr(CAST(b.body AS TEXT),1,{self.EXCERPT_LIMIT}) AS excerpt"
-                        " FROM head_index h JOIN blobs b ON b.id=h.blob_id"
-                        + authority + filters
-                    )
-                    parameters = [scope.namespace, scope.actor, *filter_parameters]
+                plan = self._candidates(scope, query, repository_id, exclude_memory_id)
+                if plan is None:  # no indexable token: match nothing, never everything
+                    db.commit()
+                    return SearchPage(hits=(), cursor=None, generation=generation)
+                inner, parameters, browse = plan
 
                 order = self._browse_statement if browse else self._ranked_statement
                 statement, cursor_parameters = order(inner, after)
