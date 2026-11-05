@@ -10,10 +10,36 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # support isolated (-I
 from project_scope import ScopeError, enroll, host_project, resolve
 
 
+def run_atlas(checkout, open_browser):
+    """Serve the viewer. Needs the installed Nexus interpreter; never enrolls or writes."""
+    if not checkout.is_absolute():
+        print('Atlas needs an absolute checkout path.', file=sys.stderr)
+        return 1
+    try:
+        from nexus_memory.atlas.binding import open_binding
+        from nexus_memory.atlas.server import serve
+        from nexus_memory.domain.errors import NexusError
+    except ImportError:
+        print('Atlas needs the installed Nexus interpreter (run this launcher with its python).', file=sys.stderr)
+        return 1
+    try:
+        serve(open_binding(checkout, resolve), open_browser)
+    except NexusError as error:
+        print(f'Atlas unavailable: {error}', file=sys.stderr)
+        return 1
+    except OSError:
+        print('Atlas could not start its local server.', file=sys.stderr)
+        return 1
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('enroll').add_argument('checkout', type=Path)
+    atlas = commands.add_parser('atlas', help='open the read-only Memory Atlas viewer for an enrolled checkout')
+    atlas.add_argument('checkout', type=Path)
+    atlas.add_argument('--no-browser', action='store_true')
     for name in ('codex', 'claude', 'antigravity'):
         host = commands.add_parser(name)
         host.add_argument('runtime', type=Path)
@@ -24,6 +50,8 @@ def main():
         if args.command == 'enroll':
             print(enroll(args.checkout))
             return 0
+        if args.command == 'atlas':
+            return run_atlas(args.checkout, not args.no_browser)
         if not args.runtime.is_absolute():
             raise ScopeError('runtime path must be absolute')
         plugin = Path.home().resolve(strict=True) / '.gemini/config/plugins/nexus-memory'

@@ -178,9 +178,11 @@ class AtlasQueries:
             total = repository.count_matches(scope, unfiltered, repository_id, exclude)
         return Page(found.hits, matched, total, found.cursor, found.generation, restarted)
 
-    def search(self, query: SearchQuery) -> Page:
+    def search(self, query: SearchQuery, repository_id: str | None = None) -> Page:
+        if repository_id is not None:
+            query = replace(query, repository="bound")
         with self._request() as repository:
-            return self._page(repository, query)
+            return self._page(repository, query, repository_id=repository_id)
 
     def inspect(self, memory_id: str, revision_id: str | None = None) -> Inspection:
         with self._request() as repository:
