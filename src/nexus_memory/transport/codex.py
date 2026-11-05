@@ -334,7 +334,10 @@ def register_hooks(server: MCPServer, service: MemoryService, checkout: Path) ->
 UNENROLLED_LINE = "Nexus: this project is not enrolled, so its memory hooks are off here."
 
 
-def register_unenrolled(server: MCPServer) -> None:
+UNAVAILABLE_LINE = "Nexus: memory could not start for this project, so its memory hooks are off here."
+
+
+def register_unenrolled(server: MCPServer, line: str = UNENROLLED_LINE) -> None:
     """Hook tools for a project that is not enrolled (or is ambiguous): no store, no memory tools.
 
     The first recall of each session returns one visible line; every later call returns nothing.
@@ -357,7 +360,7 @@ def register_unenrolled(server: MCPServer) -> None:
             told[key] = None
             while len(told) > 128:
                 told.popitem(last=False)
-        return {"systemMessage": UNENROLLED_LINE}
+        return {"systemMessage": line}
 
     def nexus_pre_tool(cwd: str | None = None, session_id: str | None = None,
                        tool_name: str | None = None, tool_input: Any = None) -> dict[str, Any]:

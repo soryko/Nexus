@@ -129,8 +129,8 @@ patch. **Pass criterion: zero wrong-project disclosures. Result: 0.** Foreign ma
 | resume (`--resume`) | server connected; cue delivered again at resume |
 | compaction (`/compact`) | `SessionStart:compact` fired and the cue was delivered again |
 | unenrolled C, 3 prompts | **exactly 1** visible Nexus line, no cue, 0 hook errors, 3 prompts completed, no store created |
-| store unavailable (db file mode 0) | server `failed`; the hook errors `MCP server 'nexus-memory' not connected` on each prompt (non-blocking, prompts complete); no disclosure. **Not** one-line-silent: see decisions |
-| write-denied (store dir 0500, files 0400) | server `failed` to start (SQLite cannot open its WAL), same behaviour as above |
+| store unavailable (db file mode 0) | first run: server `failed`, hook error `not connected` on every prompt. After the follow-up commit (`--hook-project-root` falls back to the hook-only server with its own line): server connected, **1** visible line over 2 prompts, 0 hook errors, prompts complete, no disclosure |
+| write-denied (store dir 0500, files 0400) | first run: server `failed` (SQLite cannot open its WAL). After the follow-up: server connected, 0 hook errors, no IDs, no disclosure |
 | wrong-project, direct to A's server | cwd of B, of unenrolled C, `/` and home: all `{}`; guard decision for a foreign cwd: deny |
 
 Notes:
@@ -173,8 +173,10 @@ Measured, 25 prompts in one session (A), client-observed `hook_started` → `hoo
 
 ## Decisions needed
 
-1. **Store-unavailable noise.** An unavailable store makes the server fail to start, so the hook errors on every prompt.
-   Making that one-line-silent needs the launcher (or runtime) to fall back to `--hook-unenrolled` when the database cannot be opened.
-   Want that, with a different message ("store unavailable")?
+1. ~~Store-unavailable noise~~ **Done on your instruction** (runtime-side, no further launcher change): when a hook-enabled launch
+   cannot start its store (or the checkout check fails) the runtime still serves the three hook tools, says
+   "Nexus: memory could not start for this project, so its memory hooks are off here." once per session, and is silent after. A launch
+   without `--hook-project-root` still exits 1. Side effect: an enrolled project still gets the SessionStart cue in that state (the
+   cue is decided by enrolment, not by store health); the cue already says to continue if Nexus is unavailable.
 2. **Plugin name / command**: keep `nexus-memory` (`/nexus-memory:status`) or rename the plugin to `nexus` (`/nexus:status`)?
 3. **Who applies** `docs/patches/launcher-hook-root.patch` on PR #17, and when the user-scope entry moves to a runtime with the new flags.

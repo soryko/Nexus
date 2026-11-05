@@ -469,6 +469,22 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _degraded(args: argparse.Namespace) -> int:
+    """A hook-enabled launch whose store could not start still answers its hooks: one line, then silence.
+
+    Without it the host's mcp_tool hooks fail with "not connected" on every prompt. No store is open
+    and no memory tool exists, so nothing can be disclosed. Other launches keep the plain failure.
+    """
+    if args.hook_project_root is None:
+        return 1
+    from nexus_memory.transport.codex import UNAVAILABLE_LINE, register_unenrolled
+
+    server = MCPServer(name="nexus-memory", description="Nexus hooks while the store is unavailable.")
+    register_unenrolled(server, UNAVAILABLE_LINE)
+    server.run()
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
@@ -507,16 +523,16 @@ def main(argv: list[str] | None = None) -> int:
         service = MemoryService(store, scope, binding, verifier)
     except NexusError as error:
         print(f"startup_error: {error.code}: {error}", file=sys.stderr)
-        return 1
+        return _degraded(args)
     except OSError:
         print(
             "startup_error: storage_unavailable: cannot create or open the database file",
             file=sys.stderr,
         )
-        return 1
+        return _degraded(args)
     except Exception:
         print("startup_error: internal_error: unable to initialize storage", file=sys.stderr)
-        return 1
+        return _degraded(args)
     create_server(service, codex_checkout=codex_checkout).run()
     return 0
 
