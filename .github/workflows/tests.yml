@@ -79,3 +79,47 @@ jobs:
           path: artifacts/
           retention-days: 14
           if-no-files-found: warn
+
+  # Browser tests for the Atlas viewer. Kept out of the suite so the suite needs no browser; a
+  # separate job instead of a skip guard, because a skipped browser test passes without testing
+  # anything. The last step fails the job if nothing ran or anything was skipped.
+  atlas-ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Install uv ${{ env.UV_VERSION }}
+        run: |
+          curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install the pinned interpreter, the frozen dependencies and Chromium
+        run: |
+          uv python install "$UV_PYTHON"
+          uv sync --frozen --group atlas-ui
+          uv run playwright install --with-deps chromium
+
+      - name: Browser tests
+        run: |
+          mkdir -p artifacts/junit
+          uv run pytest -q -m ui tests/atlas/test_ui.py --junitxml=artifacts/junit/atlas-ui.xml
+
+      - name: Fail if no browser test ran or any was skipped
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          suite = ET.parse("artifacts/junit/atlas-ui.xml").getroot()
+          suite = suite if suite.tag == "testsuite" else suite[0]
+          ran, skipped = int(suite.get("tests")), int(suite.get("skipped"))
+          assert ran > 0 and skipped == 0, f"browser tests: ran={ran} skipped={skipped}"
+          PY
+
+      - name: Collect failure evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: atlas-ui-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/
+          retention-days: 14
+          if-no-files-found: warn
