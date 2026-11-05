@@ -272,9 +272,9 @@ def test_old_lookup_cannot_reopen_task_access_after_a_new_prompt(tmp_path: Path,
     calls = {}
 
     class LocalHandlers:
-        def tool(self, **_):
+        def tool(self, name=None, **_):
             def register(fn):
-                calls[fn.__name__] = fn
+                calls[name or fn.__name__] = fn
                 return fn
             return register
 
