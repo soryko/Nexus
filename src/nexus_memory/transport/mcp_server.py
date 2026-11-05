@@ -458,24 +458,27 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--db", type=Path, default=None, help="SQLite database path")
     parser.add_argument("--repo", type=Path, default=None, help="Local Git checkout to bind for reference verification")
     parser.add_argument("--repo-id", default=None, help="Associate the checkout with an existing repository identity (requires --repo)")
-    parser.add_argument("--codex-project-root", type=Path, default=None,
-                        help="Enable Codex hooks and bind the launch cwd, only within this Git repository/worktrees")
+    parser.add_argument("--hook-project-root", "--codex-project-root", dest="hook_project_root",
+                        type=Path, default=None,
+                        help="Enable host lifecycle hooks (Claude Code, Codex) and bind the launch cwd, "
+                             "only within this Git repository/worktrees. Also binds that checkout for "
+                             "reference verification, as --repo does. --codex-project-root is the older spelling.")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
-    if args.codex_project_root is not None and args.repo is not None:
-        parser.error("--codex-project-root and --repo are mutually exclusive")
-    if args.repo_id is not None and args.repo is None and args.codex_project_root is None:
+    if args.hook_project_root is not None and args.repo is not None:
+        parser.error("--hook-project-root (--codex-project-root) and --repo are mutually exclusive")
+    if args.repo_id is not None and args.repo is None and args.hook_project_root is None:
         parser.error("--repo-id requires --repo")
     try:
         codex_checkout = None
-        if args.codex_project_root is not None:
+        if args.hook_project_root is not None:
             from nexus_memory.transport.codex import resolve_checkout
 
-            codex_checkout = resolve_checkout(args.codex_project_root, Path.cwd())
+            codex_checkout = resolve_checkout(args.hook_project_root, Path.cwd())
             args.repo = codex_checkout
         db_path = args.db if args.db is not None else _default_db()
         _prepare_new_storage(db_path)
