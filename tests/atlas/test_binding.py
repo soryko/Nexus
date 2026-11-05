@@ -179,8 +179,12 @@ def _drop_from_registry(e):
 
 
 def _replace_marker(e):
-    shutil.rmtree(e.checkout / ".git")
+    # The old directory stays alive while the new one is made, so the two cannot share an inode.
+    # Without a birth time (Linux), an immediate inode reuse is indistinguishable; see the plan's known limits.
+    old, parked = e.checkout / ".git", e.checkout / ".git-parked"
+    old.rename(parked)
     git(e.checkout, "init", "-q")
+    shutil.rmtree(parked)
 
 
 def _move_checkout(e):

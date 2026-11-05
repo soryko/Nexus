@@ -39,6 +39,10 @@
 
 The ordinary `SQLiteRepository` constructor calls `_migrate()`; the viewer needs a separate open path.
 
+## Known limits
+
+- **Replaced checkout without a birth time.** The binding pins the Git common directory by device, inode and birth time, the same identity the project-scope registry records. Linux filesystems expose no birth time through `os.stat`, so a checkout deleted and recreated so that the new directory reuses the old inode is not detected there; on macOS it is. The binding tests create the replacement while the old directory still exists, which proves the property that can be proved. Closing the gap needs `statx` birth times or a content-based identity, in the project-scope integration rather than in Atlas.
+
 ## Task 0 · Commit the prerequisites
 
 The project-scope integration (`integrations/`, `tests/tools/test_project_scope.py`, `tests/transport/test_project_isolation_e2e.py`, `tools/retire_legacy_store.py` and its test) is untracked. Atlas depends on it.
