@@ -1,0 +1,183 @@
+{
+ "forgery": {
+  "A": true,
+  "A/sub": true,
+  "A-worktree": false,
+  "B_cwd_on_A_server": {},
+  "C_cwd_on_A_server": {},
+  "root_cwd": {},
+  "home_cwd": {},
+  "pre_tool_foreign_cwd_decision": "deny"
+ },
+ "cold_A": {
+  "mcp": [
+   [
+    "nexus-memory",
+    "connected"
+   ]
+  ],
+  "cue": true,
+  "recall_outcomes": [
+   "success"
+  ],
+  "recall_has_ids": true,
+  "recall_has_stored_prose": false,
+  "pre_tool_decisions": [
+   "deny",
+   "deny",
+   "deny",
+   "deny",
+   "allow",
+   "allow",
+   "allow"
+  ],
+  "leak_B": []
+ },
+ "B": {
+  "mcp": [
+   [
+    "nexus-memory",
+    "connected"
+   ]
+  ],
+  "cue": true,
+  "leak_A": [],
+  "recall_has_ids": true,
+  "recall_outcomes": [
+   "success"
+  ]
+ },
+ "worktree": {
+  "mcp": [
+   [
+    "nexus-memory",
+    "connected"
+   ]
+  ],
+  "cue": true,
+  "recall_has_ids": true,
+  "leak_B": []
+ },
+ "unenrolled_C": {
+  "mcp": [
+   [
+    "nexus-memory",
+    "connected"
+   ]
+  ],
+  "cue": false,
+  "visible_nexus_lines": 1,
+  "prompts_completed": 3,
+  "hook_errors": [],
+  "leak": []
+ },
+ "store_unavailable": {
+  "mcp": [
+   [
+    "nexus-memory",
+    "failed"
+   ]
+  ],
+  "prompts_completed": 2,
+  "hook_errors": [
+   "MCP server 'nexus-memory' not connected",
+   "MCP server 'nexus-memory' not connected"
+  ],
+  "cue": true,
+  "leak": []
+ },
+ "write_denied": {
+  "mcp": [
+   [
+    "nexus-memory",
+    "failed"
+   ]
+  ],
+  "recall_has_ids": false,
+  "recall_outcomes": [
+   "error"
+  ],
+  "errors": [
+   "MCP server 'nexus-memory' not connected"
+  ],
+  "leak_AB": []
+ },
+ "resume": {
+  "first_cue": true,
+  "resume_cue": true,
+  "resume_mcp": [
+   [
+    "nexus-memory",
+    "connected"
+   ]
+  ]
+ },
+ "compact": {
+  "session_start_hooks": [
+   "SessionStart:startup",
+   "SessionStart:startup",
+   "SessionStart:startup",
+   "SessionStart:startup",
+   "SessionStart:startup",
+   "SessionStart:compact",
+   "SessionStart:compact",
+   "SessionStart:compact",
+   "SessionStart:compact",
+   "SessionStart:compact"
+  ],
+  "cue_events": 2,
+  "results": [
+   "ok",
+   ""
+  ]
+ },
+ "latency": {
+  "prompts": 25,
+  "completed": 25,
+  "nexus_hook_calls": 25,
+  "prompts_with_ids": 15,
+  "nexus_ms_p50": 11,
+  "nexus_ms_p95": 35,
+  "nexus_ms_max": 69,
+  "other_hooks_calls": 25,
+  "other_ms_p50": 400,
+  "other_ms_p95": 3228,
+  "injected_chars_per_prompt": [
+   380,
+   0,
+   380,
+   0,
+   380,
+   380,
+   0,
+   380,
+   0,
+   380,
+   380,
+   0,
+   380,
+   0,
+   380,
+   380,
+   0,
+   380,
+   0,
+   380,
+   380,
+   0,
+   380,
+   0,
+   380
+  ],
+  "injected_chars_total": 5700,
+  "session_start_ms": [
+   93
+  ]
+ },
+ "wrong_project_disclosures": 0,
+ "_provenance": {
+  "measured": "2026-11-05 on Claude Code 2.1.316, haiku, disposable HOME, synthetic data; launcher = PR #17 branch 5bd3a97 + docs/patches/launcher-hook-root.patch",
+  "harness": "tools/probes/claude_matrix.py",
+  "latency_note": "hook latency is hook_started to hook_response as seen by the harness reading the event stream; Nexus vs other hooks are told apart by output content"
+ }
+}

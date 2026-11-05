@@ -8,12 +8,13 @@ import os
 import sys
 from pathlib import Path
 
-DEFAULT_BIN = Path.home() / ".local/share/nexus-memory/project-scopes-v1/bin"
-
 
 def enrollment(cwd):
     """Return "enrolled", "not-enrolled" or "unknown"."""
-    bin_dir = Path(os.environ.get("NEXUS_SCOPE_BIN") or DEFAULT_BIN)
+    # NEXUS_SCOPE_BIN / NEXUS_SCOPE_HOME are test knobs for disposable profiles; unset in normal use.
+    if os.environ.get("NEXUS_SCOPE_HOME"):
+        os.environ["HOME"] = os.environ["NEXUS_SCOPE_HOME"]
+    bin_dir = Path(os.environ.get("NEXUS_SCOPE_BIN") or Path("~/.local/share/nexus-memory/project-scopes-v1/bin").expanduser())
     if not (bin_dir / "project_scope.py").is_file() or not cwd or not os.path.isabs(cwd):
         return "unknown"
     sys.path.insert(0, str(bin_dir))
