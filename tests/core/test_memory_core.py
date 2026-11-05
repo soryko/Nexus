@@ -6,6 +6,7 @@ import os
 import queue
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -381,6 +382,44 @@ def test_simultaneous_process_initialization_is_safe(tmp_path: Path) -> None:
         # failure must survive a diagnostics directory that cannot be written to.
         report = json.dumps(diagnosis, indent=2, default=str)
         pytest.fail(f"simultaneous initialization failed; {preserve('initialization', diagnosis)}\n{report}")
+
+
+def test_initialization_waits_out_a_contended_journal_switch(tmp_path: Path) -> None:
+    """Converting a fresh database to WAL must outlast a rival's write transaction.
+
+    This is the deterministic form of the race that
+    ``test_simultaneous_process_initialization_is_safe`` hit about one run in fifteen. The
+    contended lock state is specifically RESERVED: against a rollback-mode database a rival
+    holding EXCLUSIVE or SHARED is waited out by the busy handler, but a rival holding
+    RESERVED makes SQLite return ``SQLITE_BUSY`` immediately without consulting the handler,
+    to avoid a deadlock. That is what the first opener holds while it runs its own
+    migrations. Here the rival is arranged rather than raced for, so the retry is exercised
+    on every run instead of occasionally.
+    """
+    import threading
+    import time
+
+    path = tmp_path / "contended.db"
+    rival = sqlite3.connect(str(path), isolation_level=None, check_same_thread=False)
+    rival.execute("PRAGMA journal_mode = DELETE")
+    rival.execute("CREATE TABLE rival(x)")
+    rival.execute("BEGIN IMMEDIATE")              # RESERVED: refused instantly, not waited on
+    rival.execute("INSERT INTO rival VALUES(1)")
+
+    def release() -> None:
+        time.sleep(0.5)
+        rival.execute("COMMIT")
+        rival.close()
+
+    releaser = threading.Thread(target=release)
+    releaser.start()
+    try:
+        service(path).record(MemoryInput("written after the rival let go"), "contended")
+    finally:
+        releaser.join(10)
+
+    with closing(sqlite3.connect(str(path))) as check:
+        assert check.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
 
 
 class LifecycleMachine(RuleBasedStateMachine):

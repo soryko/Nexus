@@ -7,6 +7,8 @@ import json
 import math
 import os
 import sqlite3
+import time
+import unicodedata
 import uuid
 from urllib.parse import quote
 from contextlib import closing, contextmanager
@@ -46,9 +48,10 @@ from nexus_memory.domain.models import (
     WriteReceipt,
 )
 
+from .repository import write_observation
 
-_TOKEN = re.compile(r"\w+", re.UNICODE)
 
+_MARKS_AND_PRIVATE_USE = frozenset(("Mn", "Mc", "Me", "Co"))
 _SEPARATORS = ("_", "/", "\\", ".")
 _CAMEL = re.compile(r"[a-z0-9][A-Z]")
 _ALNUM_MIX = re.compile(r"(?:[A-Za-z][0-9])|(?:[0-9][A-Za-z])")
@@ -516,14 +519,81 @@ class SQLiteRepository:
             db.execute("INSERT INTO revision_fts(revision_fts,rowid,body) VALUES('delete',?,?)", (seq, body))
             db.execute("DELETE FROM revision_index WHERE seq=?", (seq,))
 
+    # The journal-mode switch is the one statement in initialization that a busy handler
+    # does not protect, so its budget is spelled out here rather than left to ``timeout``.
+    WAL_SWITCH_BUDGET_SECONDS = 5.0
+    WAL_SWITCH_RETRY_SECONDS = 0.05
+
+    @classmethod
+    def _establish_wal(cls, connection: sqlite3.Connection) -> None:
+        """Put the database in WAL, tolerating a concurrent opener doing the same.
+
+        Eight processes opening one fresh store at once raced: seven switched the journal
+        and the eighth got ``SQLITE_BUSY``, about one run in fifteen. (Observed in
+        ``artifacts/diagnostics/initialization-20260912T104251Z-3648-c88c59d0.json``.)
+
+        The busy handler is not the blanket protection it looks like here. Measured against
+        a rollback-mode database, a rival holding EXCLUSIVE or SHARED *is* waited out --
+        ``PRAGMA busy_timeout`` covers those, and the switch only fails if the rival
+        outlasts the whole budget. A rival holding RESERVED is different: SQLite returns
+        ``SQLITE_BUSY`` immediately, without consulting the busy handler at all, because
+        waiting for a write transaction to finish while it may be waiting on us is the
+        deadlock it refuses to enter. That is the case that fired -- the first opener takes
+        RESERVED for its own migrations the moment it finishes converting, and an opener
+        that read the old journal mode just before then walks straight into it.
+
+        So the budget here is ours, not SQLite's: retry the switch, re-reading the mode
+        each time, until either it takes or the budget runs out. Reading first is also what
+        makes the common case free -- a store that is already WAL is left alone. (That read
+        is an optimisation only; setting WAL on a WAL database is already a no-op that
+        takes no lock.)
+        """
+        deadline = time.monotonic() + cls.WAL_SWITCH_BUDGET_SECONDS
+        while True:
+            if connection.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal":
+                return
+            try:
+                journal_mode = connection.execute("PRAGMA journal_mode = WAL").fetchone()[0]
+            except sqlite3.OperationalError:
+                # Someone else holds the database. Fall through to the budget check: either
+                # they finish the switch and the next read sees WAL, or we run out of time
+                # and the caller reports a failed initialization as before.
+                journal_mode = ""
+            if journal_mode.lower() == "wal":
+                return
+            if time.monotonic() >= deadline:
+                raise StorageIntegrityError("storage initialization failed")
+            time.sleep(cls.WAL_SWITCH_RETRY_SECONDS)
+
+    def _repair_legacy_recency(self, db: sqlite3.Connection) -> None:
+        """Restore sequence numbers lost by the original v1 head-index backfill.
+
+        The index shape is unchanged. A transactional marker keeps existing schema-4
+        executables compatible and makes subsequent opens skip the historical scan.
+        """
+        db.execute("CREATE TABLE IF NOT EXISTS data_repairs (name TEXT PRIMARY KEY) WITHOUT ROWID")
+        marker = db.execute("INSERT OR IGNORE INTO data_repairs VALUES ('v1-head-recency')")
+        if not marker.rowcount:
+            return
+        legacy_heads = db.execute("SELECT count(*) FROM head_index WHERE durable_seq=0").fetchone()[0]
+        if not legacy_heads:
+            return
+        updated = db.execute(
+            "UPDATE head_index AS h SET durable_seq=r.durable_seq FROM receipts AS r"
+            " WHERE h.durable_seq=0 AND r.namespace=h.namespace AND r.actor=h.actor"
+            " AND r.memory_id=h.memory_id AND r.revision_id=h.revision_id"
+            " AND r.operation IN ('record','revise')"
+        )
+        if updated.rowcount != legacy_heads:
+            raise StorageIntegrityError("a migrated head has no matching write receipt")
+        self._bump_generation(db)
+
     def _migrate(self) -> None:
         connection = None
         try:
             self._probe_fts5()
             connection = self._connect()
-            journal_mode = connection.execute("PRAGMA journal_mode = WAL").fetchone()[0]
-            if journal_mode.lower() != "wal":
-                raise StorageIntegrityError("storage initialization failed")
+            self._establish_wal(connection)
             connection.execute("BEGIN IMMEDIATE")
             version = connection.execute("PRAGMA user_version").fetchone()[0]
             if version > self.SCHEMA_VERSION:
@@ -549,6 +619,7 @@ class SQLiteRepository:
                         connection.execute(statement)
                 version = 4
             connection.execute(f"PRAGMA user_version = {version}")
+            self._repair_legacy_recency(connection)
             self._apply_profile(connection)
             self._apply_history_profile(connection)
             connection.commit()
@@ -605,6 +676,10 @@ class SQLiteRepository:
             "SELECT memory_id,revision_id,operation_id,durable_seq,operation,request_digest FROM receipts WHERE namespace=? AND actor=? AND idempotency_key=?",
             (scope.namespace, scope.actor, key),
         ).fetchone()
+        # Includes reference retries satisfied by the read-only receipt lookup. If the
+        # precheck misses, the subsequent lookup under BEGIN IMMEDIATE decides the race.
+        if observation := write_observation.get():
+            observation.replayed = row is not None
         if row is None:
             return None
         if row[5] != digest:
@@ -964,6 +1039,10 @@ class SQLiteRepository:
             "reference_path_prefix": query.reference_path_prefix,
             "reference_commits": list(query.reference_commits or ()),
         }
+        # Schema-4 servers may share a store across this tokenizer correction.
+        # Older literal cursors page across a different match set for these terms.
+        if not query.advanced and any(unicodedata.category(ch) in _MARKS_AND_PRIVATE_USE for ch in query.query or ""):
+            payload["literal_tokenization"] = 2
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         return hashlib.sha256(encoded).hexdigest()
 
@@ -1158,6 +1237,17 @@ class SQLiteRepository:
         return " ".join(clauses), parameters
 
     @staticmethod
+    def _literal_expression(text: str) -> str | None:
+        # Preserve combining marks with their base, so SQLite gets the same spelling
+        # on lookup that its tokenizer saw on insert. unicode61 also indexes private
+        # use characters. Separators keep independent query terms disjunctive.
+        words = "".join(
+            char if char.isalnum() or char == "_" or unicodedata.category(char) in _MARKS_AND_PRIVATE_USE else " "
+            for char in text
+        ).split()
+        return " OR ".join(f'"{word}"' for word in words) or None
+
+    @staticmethod
     def _match_expression(query: SearchQuery) -> str | None:
         """Literal mode means FTS operators are inert, not that the text must appear verbatim.
 
@@ -1169,10 +1259,7 @@ class SQLiteRepository:
         """
         if query.advanced:
             return query.query or ""
-        tokens = _TOKEN.findall(query.query or "")
-        if not tokens:
-            return None
-        return " OR ".join('"' + token.replace('"', '""') + '"' for token in tokens)
+        return SQLiteRepository._literal_expression(query.query or "")
 
     def _match_legs(self, query: SearchQuery, expression: str) -> list[tuple[str, str]]:
         """Which index or indexes this profile matches against, and with what expression.
@@ -1191,10 +1278,9 @@ class SQLiteRepository:
         legs = [("head_fts", expression)]
         if query.advanced:
             return legs
-        prose = [chunk for chunk in (query.query or "").split() if not _is_code_shaped(chunk)]
-        tokens = _TOKEN.findall(" ".join(prose))
-        if tokens:
-            legs.append(("head_fts_prose", " OR ".join('"' + token.replace('"', '""') + '"' for token in tokens)))
+        prose = self._literal_expression(_prose_text(query.query or ""))
+        if prose:
+            legs.append(("head_fts_prose", prose))
         return legs
 
     @staticmethod
@@ -1291,6 +1377,15 @@ class SQLiteRepository:
             [after[0], after[0], after[1]],
         )
 
+    @classmethod
+    def _excerpt_sql(cls, table: str) -> str:
+        # FTS5 limits snippets in tokens. A single token can fill the entire body.
+        # If the context is too long, start again at the match before clipping.
+        context = f"snippet({table},0,'','','…',16)"
+        match = f"snippet({table},0,'','','…',1)"
+        return (f"substr(CASE WHEN length({context}) <= {cls.EXCERPT_LIMIT} THEN {context}"
+                f" ELSE {match} END,1,{cls.EXCERPT_LIMIT})")
+
     def _candidates(self, scope: Scope, query: SearchQuery, repository_id: str | None,
                     exclude_memory_id: str | None = None) -> "tuple[str, list, bool] | None":
         """The unordered, unpaged candidate statement for a query, or None if it matches nothing."""
@@ -1316,7 +1411,7 @@ class SQLiteRepository:
                 leg_sql.append(
                     "SELECT h.seq AS seq,h.memory_id,h.revision_id,h.kind,h.tags_json,h.created_at,"
                     f"h.has_parent,bm25({table}) AS rank,"
-                    f"snippet({table},0,'','','…',16) AS excerpt"
+                    f"{self._excerpt_sql(table)} AS excerpt"
                     f" FROM {table} JOIN head_index h ON h.seq={table}.rowid"
                     + authority + f"AND {table} MATCH ? " + filters
                 )
@@ -1453,7 +1548,7 @@ class SQLiteRepository:
                 rows = db.execute(
                     "SELECT x.memory_id,x.revision_id,m.current_revision_id,x.kind,x.tags_json,"
                     "x.created_at,bm25(revision_fts) AS rank,"
-                    f"snippet(revision_fts,0,'','','…',16) AS excerpt"
+                    f"{self._excerpt_sql('revision_fts')} AS excerpt"
                     " FROM revision_fts JOIN revision_index x ON x.seq=revision_fts.rowid"
                     " JOIN memories m ON m.namespace=x.namespace AND m.actor=x.actor"
                     "   AND m.memory_id=x.memory_id"

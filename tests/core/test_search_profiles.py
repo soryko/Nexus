@@ -117,3 +117,51 @@ def test_code_shape_classification() -> None:
         assert not _is_code_shaped(chunk), chunk
     assert "transcode_worker.py" not in _prose_text(CODE)
     assert "encode" in _prose_text(CODE)
+
+
+@pytest.mark.parametrize("profile", SQLiteRepository.SEARCH_PROFILES)
+def test_literal_search_finds_copied_decomposed_words(tmp_path: Path, profile: str) -> None:
+    service = _service(tmp_path / "memory.sqlite3", profile)
+    word = "de\u0301ploiement"
+    record = service.record(MemoryInput(word), "word")
+    service.record(MemoryInput("ploiement"), "fragment")
+
+    assert _found(service, word) == {record.memory_id}
+    assert service.get(record.memory_id).content == word
+
+
+@pytest.mark.parametrize("profile", SQLiteRepository.SEARCH_PROFILES)
+@pytest.mark.parametrize("prefix", ["", "head\x00"])
+def test_long_tokens_cannot_exhaust_the_excerpt_budget(tmp_path: Path, profile: str, prefix: str) -> None:
+    repository = SQLiteRepository(tmp_path / "memory.sqlite3", index_profile=profile, history_profile="all")
+    service = MemoryService(repository, Scope("dev", "local"))
+    content = prefix + "x" * (65536 - len(prefix) - len(" needle")) + " needle"
+    original = service.record(MemoryInput(content), "record")
+    query = SearchQuery(query="needle")
+    current, = service.search(query).hits
+    browsed, = service.search(SearchQuery()).hits
+    assert len(browsed.excerpt) <= SQLiteRepository.EXCERPT_LIMIT
+    service.revise(original.memory_id, original.revision_id, MemoryInput("superseded"), "revise")
+    historical, = service.search_history(query)
+
+    for hit in (current, historical):
+        assert "needle" in hit.excerpt
+        assert len(hit.excerpt) <= SQLiteRepository.EXCERPT_LIMIT
+    assert service.get(original.memory_id, original.revision_id).content == content
+
+
+def test_legacy_cursor_cannot_continue_a_different_literal_match(tmp_path: Path) -> None:
+    from nexus_memory.domain.errors import CursorExpired
+
+    service = _service(tmp_path / "memory.sqlite3")
+    for n in range(2):
+        service.record(MemoryInput("ploiement"), f"fragment-{n}")
+        service.record(MemoryInput("de\u0301ploiement"), f"word-{n}")
+
+    # Produced by the previous executable after those four writes. It pages over
+    # the two fragments, whereas the corrected literal query pages over the words.
+    old_cursor = ("eyJmaW5nZXJwcmludCI6ImNmMTNjYWI4YzdiYmYwNTM0MzBjMTE5MGYyZDU0ZGQ1ZTUz"
+                  "NjM0YTM4MDQ4NzM1NWYxNDBmZTdjMWNkYTFiOTEiLCJnZW5lcmF0aW9uIjo1LCJyYW5r"
+                  "IjotMWUtMDYsInNlcSI6MX0=")
+    with pytest.raises(CursorExpired):
+        service.search(SearchQuery(query="de\u0301ploiement", limit=1, cursor=old_cursor))

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "pilot_id": "p1-first-use",
+  "routine_revision": "89dc15785a23984febe20cd74824ba07bba8d939",
+  "service_version": "0.1.0a2",
+  "client_name": "Claude Code",
+  "client_version": null,
+  "project_alias": "project-a",
+  "server_command": null,
+  "database_path": null,
+  "namespace": null,
+  "actor": null,
+  "started_at": null,
+  "session_limit": 10,
+  "day_limit": 14
+}

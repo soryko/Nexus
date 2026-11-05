@@ -1,0 +1,6 @@
+{
+  "content": "For Nexus, use uv sync --frozen for a development checkout. Build a user runtime with tools/install.py and an external versioned --venv. Do not run a plain uv sync against a retained user runtime: it changes the installation back to editable.",
+  "kind": "procedure",
+  "tags": ["installation", "nexus", "runtime"],
+  "idempotency_key": "p1-tutorial-runtime-001"
+}

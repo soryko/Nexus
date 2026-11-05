@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
 from typing import Protocol
 
 from nexus_memory.domain.models import (
@@ -16,6 +20,27 @@ from nexus_memory.domain.models import (
     VerifiedReference,
     WriteReceipt,
 )
+
+
+@dataclass(slots=True)
+class WriteObservation:
+    """Request-local receipt disposition, separate from the immutable public receipt."""
+
+    replayed: bool | None = None
+
+
+# A worker thread inherits the request context, including this observation object.
+write_observation: ContextVar[WriteObservation | None] = ContextVar("write_observation", default=None)
+
+
+@contextmanager
+def observe_write() -> Iterator[WriteObservation]:
+    observation = WriteObservation()
+    token = write_observation.set(observation)
+    try:
+        yield observation
+    finally:
+        write_observation.reset(token)
 
 
 class MemoryRepository(Protocol):

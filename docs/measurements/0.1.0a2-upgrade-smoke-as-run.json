@@ -1,0 +1,65 @@
+{
+ "steps": [
+  {
+   "step": "installed old",
+   "passed": true,
+   "detail": "v0.1.0a1 -> 0.1.0a1"
+  },
+  {
+   "step": "installed new",
+   "passed": true,
+   "detail": "HEAD -> 0.1.0a2"
+  },
+  {
+   "step": "old server wrote and revised",
+   "passed": true,
+   "detail": "9049c6ad-702\u2026 rev1=08239b00\u2026 rev2=926263a1\u2026"
+  },
+  {
+   "step": "pre-upgrade backup taken",
+   "passed": true,
+   "detail": "143360 bytes"
+  },
+  {
+   "step": "candidate read the old database",
+   "passed": true,
+   "detail": "content identical (121 bytes), rev history 2, search hit, receipt replayed, active_memories=1"
+  },
+  {
+   "step": "rollback to the old environment",
+   "passed": true,
+   "detail": "same content, same ids"
+  },
+  {
+   "step": "pre-upgrade backup restores",
+   "passed": true,
+   "detail": "current revision 926263a1\u2026, active_memories=1"
+  }
+ ],
+ "passed": true,
+ "old_version": "0.1.0a1",
+ "old_ref": "v0.1.0a1",
+ "new_version": "0.1.0a2",
+ "new_ref": "HEAD",
+ "memory_id": "9049c6ad-702c-40b3-a608-b7ae22a0657e",
+ "revision_1": "08239b00-8400-4d2b-9d41-2149ee51ec42",
+ "revision_2": "926263a1-af36-4d18-a7b4-da431b2cf48d",
+ "revisions_in_history": [
+  "926263a1-af36-4d18-a7b4-da431b2cf48d",
+  "08239b00-8400-4d2b-9d41-2149ee51ec42"
+ ],
+ "receipt": {
+  "memory_id": "9049c6ad-702c-40b3-a608-b7ae22a0657e",
+  "revision_id": "08239b00-8400-4d2b-9d41-2149ee51ec42",
+  "operation_id": "9a949d9d-6dc8-4f74-8191-3f46f78e6d98",
+  "durable_seq": 1,
+  "operation": "record"
+ },
+ "replayed_receipt": {
+  "memory_id": "9049c6ad-702c-40b3-a608-b7ae22a0657e",
+  "revision_id": "08239b00-8400-4d2b-9d41-2149ee51ec42",
+  "operation_id": "9a949d9d-6dc8-4f74-8191-3f46f78e6d98",
+  "durable_seq": 1,
+  "operation": "record"
+ }
+}
