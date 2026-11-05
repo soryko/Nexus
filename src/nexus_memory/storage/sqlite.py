@@ -5,8 +5,10 @@ import binascii
 import hashlib
 import json
 import math
+import os
 import sqlite3
 import uuid
+from urllib.parse import quote
 from contextlib import closing, contextmanager
 from datetime import UTC, datetime
 from importlib.resources import files
@@ -128,7 +130,65 @@ class SQLiteRepository:
         self.history_profile = history_profile
         self._migrate()
 
+    #: Set only by ``open_readonly``. A read-only instance never migrates, repairs or
+    #: rebuilds anything, and every connection it makes refuses writes.
+    _read_only = False
+
+    @classmethod
+    def open_readonly(cls, path: str | Path) -> "SQLiteRepository":
+        """Open an existing, current-schema store for reading and nothing else.
+
+        The constructor migrates and may rebuild the search structures, which a viewer
+        must never do. This keeps the runtime-floor check and adopts the profiles the
+        database already carries, without creating the optional history-profile table.
+        A store at any other schema version, including a retired one, is refused.
+        """
+        if sqlite3.sqlite_version_info < cls.MINIMUM_SQLITE:
+            raise UnsupportedRuntime("SQLite 3.51.3 or newer is required")
+        repository = cls.__new__(cls)
+        repository.path = str(path)
+        repository._read_only = True
+        repository.index_profile = "exact"
+        repository.history_profile = "none"
+        connection = repository._connect()
+        try:
+            repository.index_profile = connection.execute(
+                "SELECT profile FROM search_profile WHERE id=1").fetchone()[0]
+            if connection.execute(
+                    "SELECT count(*) FROM sqlite_master WHERE name='history_profile'").fetchone()[0]:
+                repository.history_profile = connection.execute(
+                    "SELECT profile FROM history_profile WHERE id=1").fetchone()[0]
+        except (sqlite3.Error, TypeError) as error:
+            raise UnsupportedSchema("database schema is not supported for read-only access") from error
+        finally:
+            connection.close()
+        return repository
+
+    def _connect_read_only(self) -> sqlite3.Connection:
+        uri = "file:" + quote(os.path.abspath(self.path), safe="/") + "?mode=ro"
+        connection = None
+        try:
+            connection = sqlite3.connect(uri, uri=True, timeout=5, isolation_level=None)
+            connection.execute("PRAGMA query_only = ON")
+            connection.execute("PRAGMA busy_timeout = 5000")
+            connection.execute("PRAGMA foreign_keys = ON")
+            # A retired store keeps its inode and carries only a marker, so the version is
+            # checked on every connection rather than trusted from the last one.
+            if connection.execute("PRAGMA user_version").fetchone()[0] != self.SCHEMA_VERSION:
+                raise UnsupportedSchema("database schema is not supported for read-only access")
+            return connection
+        except sqlite3.Error as error:
+            if connection is not None:
+                connection.close()
+            raise StorageIntegrityError("storage unavailable") from error
+        except BaseException:
+            if connection is not None:
+                connection.close()
+            raise
+
     def _connect(self) -> sqlite3.Connection:
+        if self._read_only:
+            return self._connect_read_only()
         connection = None
         try:
             connection = sqlite3.connect(self.path, timeout=5, isolation_level=None)
