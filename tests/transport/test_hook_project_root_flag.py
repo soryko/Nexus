@@ -46,3 +46,42 @@ def test_flag_refuses_an_unrelated_launch_cwd_and_repo_combination(tmp_path) -> 
     wrong = subprocess.run([*base, "--hook-project-root", str(repo)], cwd=other, env=env,
                            capture_output=True, text=True, timeout=30)
     assert wrong.returncode == 1 and "startup_error" in wrong.stderr
+
+
+def test_unenrolled_mode_says_one_line_per_session_opens_no_store_and_has_no_memory_tools(tmp_path) -> None:
+    repo = repository(tmp_path / "repo")
+    db = tmp_path / "must-not-exist.sqlite3"
+    parameters = StdioServerParameters(command=sys.executable, args=[
+        "-m", "nexus_memory", "--namespace", "n", "--hook-unenrolled"], cwd=repo,
+        env={**os.environ, "PYTHONPATH": str(PROJECT / "src")})
+
+    async def run() -> None:
+        async with Client(parameters) as client:
+            names = {tool.name for tool in (await client.list_tools()).tools}
+            assert names == HOOKS  # no record/get/search: nothing to disclose
+            args = {"cwd": str(repo), "session_id": "a", "prompt": "Explain quasarflux"}
+            first = await client.call_tool("nexus_recall", args)
+            assert list(first.structured_content) == ["systemMessage"]
+            assert "not enrolled" in first.structured_content["systemMessage"]
+            for _ in range(3):
+                assert (await client.call_tool("nexus_recall", args)).structured_content == {}
+            other = await client.call_tool("nexus_recall", {**args, "session_id": "b"})
+            assert "systemMessage" in other.structured_content
+            pre = await client.call_tool("nexus_pre_tool", {"cwd": str(repo), "session_id": "a",
+                                                           "tool_name": "mcp__nexus-memory__search", "tool_input": {}})
+            assert pre.structured_content == {}
+            start = await client.call_tool("nexus_session_start", {"cwd": str(repo), "session_id": "a"})
+            assert start.structured_content == {}
+
+    anyio.run(run)
+    assert not db.exists()
+
+
+def test_unenrolled_mode_refuses_store_options(tmp_path) -> None:
+    repo = repository(tmp_path / "repo")
+    env = {**os.environ, "PYTHONPATH": str(PROJECT / "src")}
+    for extra in (["--db", str(tmp_path / "x.sqlite3")], ["--repo", str(repo)], ["--hook-project-root", str(repo)]):
+        r = subprocess.run([sys.executable, "-m", "nexus_memory", "--namespace", "n", "--hook-unenrolled", *extra],
+                           cwd=repo, env=env, capture_output=True, text=True, timeout=30)
+        assert r.returncode == 2 and "no store or repository option" in r.stderr
+    assert not (tmp_path / "x.sqlite3").exists()

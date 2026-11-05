@@ -463,12 +463,24 @@ def _parser() -> argparse.ArgumentParser:
                         help="Enable host lifecycle hooks (Claude Code, Codex) and bind the launch cwd, "
                              "only within this Git repository/worktrees. Also binds that checkout for "
                              "reference verification, as --repo does. --codex-project-root is the older spelling.")
+    parser.add_argument("--hook-unenrolled", action="store_true",
+                        help="Serve only no-op lifecycle hook tools for a project that is not enrolled: "
+                             "opens no store and exposes no memory tools. Exclusive with every other option except --namespace/--actor.")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
+    if args.hook_unenrolled:
+        if args.db is not None or args.repo is not None or args.repo_id is not None or args.hook_project_root is not None:
+            parser.error("--hook-unenrolled takes no store or repository option")
+        from nexus_memory.transport.codex import register_unenrolled
+
+        server = MCPServer(name="nexus-memory", description="Nexus hooks for a project that is not enrolled.")
+        register_unenrolled(server)
+        server.run()
+        return 0
     if args.hook_project_root is not None and args.repo is not None:
         parser.error("--hook-project-root (--codex-project-root) and --repo are mutually exclusive")
     if args.repo_id is not None and args.repo is None and args.hook_project_root is None:

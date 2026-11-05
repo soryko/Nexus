@@ -329,3 +329,41 @@ def register_hooks(server: MCPServer, service: MemoryService, checkout: Path) ->
         ("codex_recall", nexus_recall, "Alias of nexus_recall, kept for installed Codex hooks.", annotations),
     ):
         server.tool(name=alias, description=text, annotations=note, structured_output=True)(fn)
+
+
+UNENROLLED_LINE = "Nexus: this project is not enrolled, so its memory hooks are off here."
+
+
+def register_unenrolled(server: MCPServer) -> None:
+    """Hook tools for a project that is not enrolled (or is ambiguous): no store, no memory tools.
+
+    The first recall of each session returns one visible line; every later call returns nothing.
+    There is nothing to disclose because no store is opened and no memory tool exists.
+    """
+    told: OrderedDict[str, None] = OrderedDict()
+    lock = threading.Lock()
+    annotations = ToolAnnotations(read_only_hint=True, destructive_hint=False,
+                                  idempotent_hint=False, open_world_hint=False)
+
+    def nexus_session_start(cwd: str | None = None, session_id: str | None = None) -> dict[str, Any]:
+        return {}
+
+    def nexus_recall(prompt: str | None = None, cwd: str | None = None,
+                     session_id: str | None = None) -> dict[str, Any]:
+        key = session_id or ""
+        with lock:
+            if key in told:
+                return {}
+            told[key] = None
+            while len(told) > 128:
+                told.popitem(last=False)
+        return {"systemMessage": UNENROLLED_LINE}
+
+    def nexus_pre_tool(cwd: str | None = None, session_id: str | None = None,
+                       tool_name: str | None = None, tool_input: Any = None) -> dict[str, Any]:
+        return {}
+
+    for name, fn in (("nexus_session_start", nexus_session_start), ("nexus_recall", nexus_recall),
+                     ("nexus_pre_tool", nexus_pre_tool)):
+        server.tool(name=name, description="Hook for a project that is not enrolled; does nothing.",
+                    annotations=annotations, structured_output=True)(fn)
