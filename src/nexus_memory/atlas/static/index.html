@@ -50,6 +50,19 @@
       <pre id="memory-body"></pre>
     </article>
   </section>
+
+  <section id="graph" aria-labelledby="graph-title" hidden>
+    <h2 id="graph-title">Connections</h2>
+    <p id="graph-limits" role="status" aria-live="polite"></p>
+    <div class="controls" role="group" aria-label="Graph view">
+      <button type="button" id="zoom-in">Zoom in</button>
+      <button type="button" id="zoom-out">Zoom out</button>
+      <button type="button" id="fit">Fit</button>
+      <button type="button" id="back-to-selection">Back to selection</button>
+    </div>
+    <div id="graph-canvas" tabindex="0" aria-label="Graph canvas: arrow keys pan, plus and minus zoom, 0 fits"></div>
+    <div id="graph-lists"></div>
+  </section>
 </main>
 <script type="module" src="/app.js"></script>
 </body>

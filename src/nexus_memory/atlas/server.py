@@ -39,6 +39,7 @@ _STATIC = {
     "/atlas.css": ("atlas.css", "text/css; charset=utf-8"),
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/graph.js": ("graph.js", "text/javascript; charset=utf-8"),
+    "/connections.js": ("connections.js", "text/javascript; charset=utf-8"),
 }
 _CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; "
         "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")

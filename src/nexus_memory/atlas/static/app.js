@@ -1,4 +1,6 @@
 // Memory Atlas client. All stored text goes into the page through textContent only.
+import { createConnections } from "/connections.js";
+
 const $ = (id) => document.getElementById(id);
 const PAGE = 20;
 
@@ -16,6 +18,8 @@ function el(tag, options = {}, ...children) {
   node.append(...children);
   return node;
 }
+
+const connections = createConnections({ get: (path, params) => get(path, params), onOpen: (memoryId, revisionId) => openMemory(memoryId, revisionId) });
 
 async function get(path, params = []) {
   const url = new URL(path, location.origin);
@@ -159,6 +163,7 @@ async function openMemory(memoryId, revisionId) {
   for (const [name, value] of rows) dl.append(el("dt", { text: name }), el("dd", { text: value }));
   $("memory-body").textContent = text.body.content;
   $("inspector").focus();
+  connections.show(memoryId, revisionId, m.title.slice(0, 40));
 }
 
 function wire() {

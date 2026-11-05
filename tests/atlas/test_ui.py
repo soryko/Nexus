@@ -187,3 +187,142 @@ def test_filters_are_visible_and_one_reset_clears_them(enrolled, browser_page) -
         assert page.locator("#q").input_value() == "" and page.locator("#tag").input_value() == ""
         assert page.locator("#kinds input:checked").count() == 0
         assert "of 48 matching" in page.locator("#count").inner_text()
+
+
+# ---- 5c: graph, budgets and placement --------------------------------------------------------------
+
+import sqlite3 as _sqlite3
+
+_REPO, _COMMIT = "repo-one", "a" * 40
+
+
+def _cite(enrolled, memory_id: str, path: str) -> None:
+    with _sqlite3.connect(enrolled.database) as db:
+        revision = db.execute("SELECT current_revision_id FROM memories WHERE memory_id=?", (memory_id,)).fetchone()[0]
+        db.execute("INSERT OR IGNORE INTO repositories VALUES(?,?,?,?,?,?)",
+                   (enrolled.project_id, "local", _REPO, "sha1", None, "2026-11-05T00:00:00Z"))
+        db.execute("INSERT INTO revision_references VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                   (enrolled.project_id, "local", memory_id, revision, _REPO, _COMMIT, path, "c" * 40, "blob",
+                    "100644", "2026-11-05T00:00:00Z"))
+
+
+def _dense(enrolled) -> str:
+    """One memory citing 120 files, one of which (src/hub.py) is cited by 120 other memories."""
+    focus = enrolled.record("unique-m-token the memory under study", "k-m", kind="decision")
+    _cite(enrolled, focus, "src/hub.py")
+    for n in range(119):
+        _cite(enrolled, focus, f"src/f{n:03d}.py")
+    for n in range(120):
+        _cite(enrolled, enrolled.record(f"Citer {n:03d} of the hub file", f"k-c{n}", kind="observation"), "src/hub.py")
+    return focus
+
+
+def _positions(page) -> dict[str, tuple[str, str]]:
+    return {n.get_attribute("data-node-id"): (n.get_attribute("data-x"), n.get_attribute("data-y"))
+            for n in page.locator("[data-node-id]").all()}
+
+
+def _open_focus(page, server) -> None:
+    _open(page, server)
+    page.locator("#q").fill("unique-m-token")
+    page.get_by_role("button", name="Search").click()
+    expect(page.locator("#count")).to_contain_text("1 matching")
+    page.locator("#results li button").first.click()
+    expect(page.locator("#graph")).to_be_visible()
+    expect(page.locator("[data-node-id]").nth(1)).to_be_visible()
+
+
+def test_neighborhood_starts_small_and_labels_what_is_omitted(enrolled, browser_page) -> None:
+    _dense(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open_focus(page, server)
+        assert page.locator("[data-node-id]").count() == 26                      # the focus and 25 neighbors
+        expect(page.locator("#graph-lists h3", has_text="files cited")).to_have_text("25 of 120 files cited")
+        expect(page.locator("#graph-limits")).to_contain_text("Showing 26 of at most 100 nodes and 25 of 150 edges.")
+        assert page.locator("[data-edge]").count() == 25
+        assert page.locator(".node.focus").count() == 1
+
+
+def test_repeated_expansion_never_leaves_the_budget_and_never_moves_a_node(enrolled, browser_page) -> None:
+    _dense(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open_focus(page, server)
+        seen = _positions(page)
+        for _ in range(8):
+            button = page.get_by_role("button", name="Show more files cited")
+            if button.count() == 0:
+                break
+            button.click()
+            page.wait_for_timeout(150)
+            assert page.locator("[data-node-id]").count() <= 100 and page.locator("[data-edge]").count() <= 150
+            now = _positions(page)
+            assert all(now[i] == p for i, p in seen.items()), "an existing node moved"
+            seen = now
+        assert page.locator("[data-node-id]").count() == 100
+        expect(page.locator("#graph-limits")).to_contain_text("The graph limit is reached")
+        assert page.get_by_role("button", name="Show more files cited").count() == 0
+        # the lists still reach every item the graph could not draw
+        assert page.locator("#graph-lists li").count() >= 100
+
+
+def test_a_dense_file_hub_fills_the_budget_and_choosing_an_item_still_recenters(enrolled, browser_page) -> None:
+    _dense(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open_focus(page, server)
+        page.locator("#graph-lists li", has_text="src/hub.py").get_by_role("button", name="Expand").click()
+        expect(page.locator("#graph-lists h3", has_text="citing memories of src/hub.py")).to_contain_text("of 121")
+        for _ in range(6):
+            more = page.get_by_role("button", name="Show more citing memories")
+            if more.count() == 0:
+                break
+            more.click()
+            page.wait_for_timeout(150)
+            assert page.locator("[data-node-id]").count() <= 100
+        assert page.locator("[data-node-id]").count() == 100
+        before = page.locator(".node.focus").get_attribute("data-node-id")
+        page.locator("#graph-lists section", has_text="citing memories of src/hub.py").get_by_role("button", name="Open").last.click()
+        expect(page.locator("#memory-body")).to_contain_text("Citer")
+        expect(page.locator(".node.focus")).not_to_have_attribute("data-node-id", before)
+        assert page.locator("[data-node-id]").count() <= 100 and page.locator("[data-edge]").count() <= 150
+
+
+def test_pan_zoom_fit_and_progressive_labels(enrolled, browser_page) -> None:
+    _dense(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open_focus(page, server)
+        world = page.locator("#world")
+        other = page.locator(".node:not(.focus) text").first
+        assert other.evaluate("e => getComputedStyle(e).display") == "none"       # names wait for focus, hover or close zoom
+        for _ in range(3):
+            page.get_by_role("button", name="Zoom in").click()
+        assert float(world.get_attribute("data-k")) > 1.5
+        assert other.evaluate("e => getComputedStyle(e).display") != "none"
+        page.get_by_role("button", name="Fit").click()
+        assert float(world.get_attribute("data-k")) <= 2
+        start = world.get_attribute("transform")
+        page.locator("#graph-canvas").focus()
+        page.keyboard.press("ArrowLeft")
+        assert world.get_attribute("transform") != start
+        page.keyboard.press("0")
+        page.get_by_role("button", name="Back to selection").click()
+        assert page.locator("[data-node-id]").count() == 26                          # camera moves never change content
+
+
+def test_graph_labels_are_text_and_hostile_names_stay_inert(enrolled, browser_page) -> None:
+    focus = enrolled.record("unique-m-token study", "k-m", kind="decision")
+    hostile = enrolled.record("<img src=x onerror=window.pwned=1><script>window.pwned=1</script>", "k-h", kind="observation")
+    for memory in (focus, hostile):
+        _cite(enrolled, memory, "src/hub.py")
+    with _served(enrolled) as server:
+        page = browser_page
+        _open_focus(page, server)
+        page.locator("#graph-lists li", has_text="src/hub.py").get_by_role("button", name="Expand").click()
+        expect(page.locator("#graph-lists section", has_text="citing memories of src/hub.py")).to_contain_text("<img src=x")
+        assert page.evaluate("window.pwned") is None
+        assert page.locator("#graph svg img, #graph svg script, #graph-lists img, #graph-lists script").count() == 0
+        labels = " ".join(page.locator(".node text").all_text_contents())
+        assert "<img" in labels
