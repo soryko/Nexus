@@ -17,7 +17,7 @@ def hooks() -> dict:
 
 def test_manifest_names_the_plugin_and_bundles_no_server() -> None:
     manifest = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text())
-    assert manifest["name"] == "nexus-memory"
+    assert manifest["name"] == "nexus"
     assert "mcpServers" not in manifest
     assert not (PLUGIN / ".mcp.json").exists()
     # The launcher is never copied into the plugin.
