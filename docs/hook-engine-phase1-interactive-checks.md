@@ -6,7 +6,7 @@ Claude Code or Codex terminal. Everything runs in a disposable world: a throwawa
 `CLAUDE_CONFIG_DIR` / `CODEX_HOME`. Nothing here uses the installed launcher, `~/.claude.json`,
 `~/.claude/settings.json`, `~/.codex` config, or any real store.
 
-Two things from the earlier list are already settled and need no terminal: `/nexus:status` works
+Two things from the earlier list are already settled and need no terminal: `/nexus-memory:status` works
 (plugin renamed to `nexus`) and prints "hooks not trusted or not running" when the plugin's hooks are
 empty (observed with `bin/claude-nohooks-A.sh`, section 6).
 
@@ -20,7 +20,7 @@ empty (observed with `bin/claude-nohooks-A.sh`, section 6).
 | 3 | How the unenrolled `systemMessage` and per-prompt hook errors render | 4 | | [ ] |
 | 4 | `/clear`: recall dedupe persists, cue re-sent | 3 | | [ ] |
 | 5 | Plugin hook trust prompt (throwaway config dir, needs a login) | 6 | | [ ] |
-| 6 | Disabling the plugin: what happens to `/nexus:status` and the hooks | 2 | | [ ] |
+| 6 | Disabling the plugin: what happens to `/nexus-memory:status` and the hooks | 2 | | [ ] |
 | 7 | Codex re-trust after the hook definition changes (4c) | 8 | | [ ] |
 | 8 | Cleanup | 2 | | [ ] |
 
@@ -46,7 +46,7 @@ Helper: `grep-hooks.sh <script-name>` filters the debug log, e.g. `grep-hooks.sh
 Smoke test (one cheap model call, expect `Nexus: enrolled, hooks active.`):
 
 ```bash
-claude-A.sh -p "/nexus:status" --no-session-persistence </dev/null
+claude-A.sh -p "/nexus-memory:status" --no-session-persistence </dev/null
 ```
 
 If that prints anything else, stop and report it; the rest depends on it.
@@ -182,17 +182,17 @@ Result line: `5: <trust prompt "<text>" | no prompt, hooks active | hooks need a
 
 Continue in the throwaway config dir from section 5 (plugin installed):
 
-1. `claude-throwaway-A.sh`, then `/nexus:status` (expect `Nexus: enrolled, hooks active.`).
-2. `/plugin`, disable `nexus`, restart (`/exit`, rerun), then try `/nexus:status` and prompt `Explain quasarflux`.
+1. `claude-throwaway-A.sh`, then `/nexus-memory:status` (expect `Nexus: enrolled, hooks active.`).
+2. `/plugin`, disable `nexus` (the marketplace entry name in the disposable copy), restart (`/exit`, rerun), then try `/nexus-memory:status` and prompt `Explain quasarflux`.
 3. `grep-hooks.sh claude-throwaway-A.sh | grep -ci "nexus_recall"` after the second start: calls should stop.
 
 | You see | Meaning |
 |---|---|
-| `/nexus:status` is unknown and no `nexus_recall` calls | Disabled cleanly; the status command disappears with the hooks (so "hooks not trusted" can only be reported while the command exists). |
-| `/nexus:status` still runs and says `hooks not trusted or not running` | Command stays while hooks are off. |
-| `/nexus:status` still says `hooks active` after disable | **Wrong.** Report. |
+| `/nexus-memory:status` is unknown and no `nexus_recall` calls | Disabled cleanly; the status command disappears with the hooks (so "hooks not trusted" can only be reported while the command exists). |
+| `/nexus-memory:status` still runs and says `hooks not trusted or not running` | Command stays while hooks are off. |
+| `/nexus-memory:status` still says `hooks active` after disable | **Wrong.** Report. |
 
-The "hooks not trusted" wording itself is already observed: `claude-nohooks-A.sh -p "/nexus:status" --no-session-persistence </dev/null` prints it.
+The "hooks not trusted" wording itself is already observed: `claude-nohooks-A.sh -p "/nexus-memory:status" --no-session-persistence </dev/null` prints it.
 
 Result line: `6: after disable <command gone | command says not trusted | command says active>; hooks <stop | keep running>`
 
