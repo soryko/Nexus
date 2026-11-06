@@ -8,6 +8,7 @@ const state = {
   q: "", tag: "", kinds: new Set(),
   cursors: [null], index: 0, nextCursor: null,
   group: null, searchToken: 0, openToken: 0, selected: null,   // selected: {memoryId, revisionId} or null
+  related: { token: 0, how: null, cursor: null, shown: 0 },      // how: ["tag"|"term", value] of the open memory
 };
 const trail = [];   // earlier views, newest last; Back restores the top one
 
@@ -97,17 +98,19 @@ function renderKinds(overview) {
 
 function firstLine(text) { return (text || "").split("\n").find((line) => line.trim()) || "(empty)"; }
 
+function hitItem(hit) {
+  const meta = `${hit.kind}${hit.tags.length ? " · " + hit.tags.join(", ") : ""} · ${hit.created_at.slice(0, 10)}`;
+  const button = el("button", { attrs: { type: "button" } },
+    el("span", { text: meta, className: "meta" }),
+    el("span", { text: firstLine(hit.excerpt), className: "excerpt" }));
+  button.addEventListener("click", () => openMemory(hit.memory_id, hit.revision_id).catch(sessionLost));
+  return el("li", {}, button);
+}
+
 function renderResults(page) {
   const list = $("results");
   list.replaceChildren();
-  for (const hit of page.items) {
-    const meta = `${hit.kind}${hit.tags.length ? " · " + hit.tags.join(", ") : ""} · ${hit.created_at.slice(0, 10)}`;
-    const button = el("button", { attrs: { type: "button" } },
-      el("span", { text: meta, className: "meta" }),
-      el("span", { text: firstLine(hit.excerpt), className: "excerpt" }));
-    button.addEventListener("click", () => openMemory(hit.memory_id, hit.revision_id).catch(sessionLost));
-    list.append(el("li", {}, button));
-  }
+  for (const hit of page.items) list.append(hitItem(hit));
   const shown = state.index * PAGE + page.items.length;
   const start = page.items.length ? state.index * PAGE + 1 : 0;
   $("count").textContent = page.matched === 0
@@ -193,10 +196,51 @@ async function openMemory(memoryId, revisionId, options = {}) {
   for (const [name, value] of rows) dl.append(el("dt", { text: name }), el("dd", { text: value }));
   $("memory-body").textContent = text.body.content;
   renderReferences(m.references);
+  resetRelated(m.tags);
   renderDiff(diff);
   renderHistory(memoryId, past, m.revision_id);
   if (!options.viaTrail) { $("inspector").focus(); await connections.show(memoryId, revisionId, m.title.slice(0, 40)); }
   return true;
+}
+
+function resetRelated(tags) {
+  state.related = { token: state.related.token + 1, how: null, cursor: null, shown: 0 };
+  $("related-list").replaceChildren();
+  $("related-status").textContent = "";
+  $("related-more").disabled = true;
+  $("related-term").value = "";
+  const select = $("related-tag");
+  select.replaceChildren(...tags.map((tag) => el("option", { text: tag, attrs: { value: tag } })));
+  select.disabled = tags.length === 0;
+  $("related-by-tag").disabled = tags.length === 0;
+}
+
+// Pages through /api/related with the server's own cursor; `more` appends the next page to the list.
+async function findRelated(how, more) {
+  if (!state.selected) return;
+  const related = state.related;
+  const token = more ? related.token : ++related.token;
+  const memoryId = state.selected.memoryId;
+  const params = [["id", memoryId], ["limit", "10"], [(more ? related.how : how)[0], (more ? related.how : how)[1]]];
+  if (more && related.cursor) params.push(["cursor", related.cursor]);
+  const { status, body } = await get("/api/related", params);
+  if (token !== related.token || !state.selected || state.selected.memoryId !== memoryId) return;
+  if (status !== 200) {
+    $("related-list").replaceChildren();
+    $("related-more").disabled = true;
+    $("related-status").textContent = "That relation was not accepted: the tag or term must be on this memory.";
+    return;
+  }
+  const page = body.page;
+  if (!more || page.restarted) { $("related-list").replaceChildren(); related.shown = 0; }
+  for (const hit of page.items) $("related-list").append(hitItem(hit));
+  related.how = more ? related.how : how;
+  related.shown += page.items.length;
+  related.cursor = page.cursor;
+  $("related-more").disabled = !page.cursor;
+  $("related-status").textContent = page.matched === 0
+    ? `No other memory ${body.reason}.`
+    : `Showing 1–${related.shown} of ${page.matched} related memories, each of which ${body.reason}.`;
 }
 
 function renderReferences(references) {
@@ -228,6 +272,14 @@ function renderHistory(memoryId, reply, selectedRevision) {
 }
 
 function wire() {
+  $("related-by-tag").addEventListener("click", () => {
+    if ($("related-tag").value) findRelated(["tag", $("related-tag").value], false).catch(sessionLost);
+  });
+  $("related-by-term").addEventListener("click", () => {
+    const term = $("related-term").value.trim();
+    if (term) findRelated(["term", term], false).catch(sessionLost);
+  });
+  $("related-more").addEventListener("click", () => { findRelated(null, true).catch(sessionLost); });
   $("find").addEventListener("submit", (event) => {
     event.preventDefault();
     state.q = $("q").value.trim();

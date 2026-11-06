@@ -633,6 +633,15 @@ def test_find_hub_last_result_back_by_keyboard_alone(enrolled, browser_page, wid
         expect(page.locator("[data-node-id]").nth(1)).to_be_visible()
         first = page.locator(".node.focus").get_attribute("data-node-id")
         _no_sideways_scroll(page)
+        # related memories: term box, its button and the cursor button are all reachable and fit the screen
+        _tab_to(page, page.get_by_label("Term shared with this memory"))
+        page.keyboard.type("the")
+        _press(page, page.get_by_role("button", name="Find by term", exact=True))
+        expect(page.locator("#related-list li").first).to_be_visible()
+        expect(page.locator("#related-status")).to_contain_text("of 120 related memories")
+        _press(page, page.get_by_role("button", name="More related memories", exact=True))
+        expect(page.locator("#related-list li").nth(10)).to_be_visible()
+        _no_sideways_scroll(page)
         # hub: every graph node has a text entry with its own button, so no action needs the pointer
         for node in page.locator("[data-node-id]:not(.focus)").all():
             label = node.get_attribute("aria-label").split(": ", 1)[1]
@@ -717,3 +726,86 @@ def test_the_browsers_forward_button_does_not_act_as_back(enrolled, browser_page
         page.go_forward()
         page.wait_for_timeout(400)
         expect(page.locator("#memory-title")).to_contain_text("Citer 002")      # not Citer 001, the wrong view the old code showed
+
+
+# ---- follow-up: find related memories from the inspector ----------------------------------------------
+
+def _open_note(page, server, text: str) -> None:
+    _open(page, server)
+    page.locator("#q").fill(text)
+    page.get_by_role("button", name="Search", exact=True).click()
+    hit = page.locator("#results li button", has_text=text).first
+    expect(hit).to_be_visible()
+    hit.click()
+    expect(page.locator("#memory")).to_be_visible()
+
+
+def test_related_by_tag_pages_with_a_real_cursor_and_opening_one_feeds_the_trail(enrolled, browser_page) -> None:
+    _corpus(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open_note(page, server, "Caption note 00 about")
+        related = page.locator("#related")
+        expect(related).to_be_visible()
+        page.get_by_label("Tag shared with this memory").select_option("queue")
+        page.get_by_role("button", name="Find by tag", exact=True).click()
+        expect(page.locator("#related-status")).to_contain_text("shares the tag “queue”")
+        expect(page.locator("#related-status")).to_contain_text("Showing 1–10 of 22")
+        assert page.locator("#related-list li").count() == 10
+        first_page = page.locator("#related-list li .excerpt").all_text_contents()
+        assert not any("note 00 " in text for text in first_page)           # the open memory is not its own relative
+        page.get_by_role("button", name="More related memories", exact=True).click()
+        expect(page.locator("#related-status")).to_contain_text("Showing 1–20 of 22")
+        assert page.locator("#related-list li").count() == 20
+        page.get_by_role("button", name="More related memories", exact=True).click()
+        expect(page.locator("#related-status")).to_contain_text("Showing 1–22 of 22")
+        assert page.locator("#related-list li").count() == 22
+        assert page.get_by_role("button", name="More related memories", exact=True).is_disabled()
+        chosen = page.locator("#related-list li .excerpt").last.inner_text()
+        page.locator("#related-list li button").last.click()
+        expect(page.locator("#memory-body")).to_have_text(chosen)
+        assert page.get_by_role("button", name="Back", exact=True).is_enabled()
+        page.get_by_role("button", name="Back", exact=True).click()
+        expect(page.locator("#memory-body")).to_have_text("Caption note 00 about retention")
+
+
+def test_related_by_term_rejects_a_term_the_memory_does_not_contain_and_is_inert(enrolled, browser_page) -> None:
+    ids = _corpus(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open_note(page, server, "Caption note 01 about")
+        assert page.get_by_label("Tag shared with this memory").is_disabled()      # note 01 has no tag
+        page.get_by_label("Term shared with this memory").fill("absentterm")
+        page.get_by_role("button", name="Find by term", exact=True).click()
+        expect(page.locator("#related-status")).to_contain_text("not accepted")
+        assert page.locator("#related-list li").count() == 0
+        page.get_by_label("Term shared with this memory").fill("retention")
+        page.get_by_role("button", name="Find by term", exact=True).click()
+        expect(page.locator("#related-status")).to_contain_text("matches the term “retention”")
+        expect(page.locator("#related-status")).to_contain_text("of 44")
+
+
+def test_related_text_is_text_only(enrolled, browser_page) -> None:
+    enrolled.record("hostile <img src=x onerror=window.pwned=1> marker", "k-h1", kind="decision", tags=["t"])
+    enrolled.record("sibling <script>window.pwned=1</script> marker", "k-h2", kind="decision", tags=["t"])
+    with _served(enrolled) as server:
+        page = browser_page
+        _open_note(page, server, "hostile")
+        page.get_by_role("button", name="Find by tag", exact=True).click()
+        expect(page.locator("#related-list")).to_contain_text("<script>")
+        assert page.evaluate("window.pwned") is None
+        assert page.locator("#related img, #related script").count() == 0
+
+
+def test_related_is_reachable_and_usable_by_keyboard_alone(enrolled, browser_page) -> None:
+    _corpus(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open_note(page, server, "Caption note 00 about")
+        _press(page, page.get_by_role("button", name="Find by tag", exact=True))
+        expect(page.locator("#related-list li").first).to_be_visible()
+        _press(page, page.get_by_role("button", name="More related memories", exact=True))
+        expect(page.locator("#related-list li").nth(10)).to_be_visible()
+        _press(page, page.locator("#related-list li button").nth(10))
+        expect(page.locator("#memory-body")).not_to_have_text("Caption note 00 about retention")
+        assert page.evaluate("document.activeElement.id") == "inspector"
