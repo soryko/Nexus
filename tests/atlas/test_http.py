@@ -231,3 +231,55 @@ def test_launch_file_carries_the_secret_in_a_fragment_and_is_private(enrolled, t
         assert server.launch_secret not in server.public_address
     finally:
         server.server_close()
+
+
+def _assert_hardened(label: str, headers: dict) -> None:
+    assert headers.get("cache-control") == "no-store", label
+    assert headers.get("referrer-policy") == "no-referrer", label
+    assert headers.get("x-frame-options") == "DENY", label
+    assert headers.get("x-content-type-options") == "nosniff", label
+    policy = dict(part.strip().split(" ", 1) for part in headers.get("content-security-policy", "").split(";") if part.strip())
+    assert policy.get("default-src") == "'none'" and policy.get("script-src") == "'self'", label
+    assert policy.get("frame-ancestors") == "'none'" and policy.get("base-uri") == "'none'", label
+    assert "unsafe-inline" not in headers["content-security-policy"] and "unsafe-eval" not in headers["content-security-policy"], label
+
+
+def test_every_response_carries_every_hardening_header(atlas) -> None:
+    origin = f"http://127.0.0.1:{atlas.server.port}"
+    plain = atlas.ids["plain"]
+    seen: dict[str, int] = {}
+
+    def check(label: str, response, expected: int) -> None:
+        status, headers, _ = response
+        assert status == expected, (label, status)
+        _assert_hardened(label, headers)
+        seen[label] = status
+
+    for path in ("/", "/index.html", "/app.js", "/graph.js", "/connections.js", "/atlas.css"):   # static assets
+        check(f"static {path}", atlas.request("GET", path), 200)
+    check("404 unknown path", atlas.request("GET", "/nope"), 404)
+    check("404 traversal", atlas.request("GET", "/../../etc/passwd"), 404)
+    check("403 wrong host", atlas.request("GET", "/", host="attacker.example"), 403)
+    check("401 no session", atlas.request("GET", "/api/overview"), 401)
+    check("403 wrong secret", atlas.request("POST", "/session", body={"key": "nope"}, origin=origin, cookie=False), 403)
+    check("403 no origin", atlas.request("POST", "/session", body={"key": "nope"}, cookie=False), 403)
+    check("400 malformed session", atlas.request("POST", "/session", body={"key": 1}, origin=origin, cookie=False), 400)
+    check("405 wrong post path", atlas.request("POST", "/api/overview", body={}, origin=origin), 405)
+    check("405 method", atlas.request("PUT", "/api/overview"), 405)
+    signed = atlas.request("POST", "/session", body={"key": atlas.server.launch_secret}, origin=origin, cookie=False)
+    check("204 session POST", signed, 204)
+    atlas.cookie = signed[1]["set-cookie"].split(";")[0]
+    check("403 session secret reused", atlas.request("POST", "/session", body={"key": atlas.server.launch_secret},
+                                                      origin=origin, cookie=False), 403)
+    check("200 overview", atlas.request("GET", "/api/overview"), 200)
+    check("200 search", atlas.request("GET", "/api/search?q=caption"), 200)
+    check("200 inspect", atlas.request("GET", f"/api/inspect?id={plain}"), 200)
+    check("200 hostile body", atlas.request("GET", f"/api/inspect?id={atlas.ids['hostile']}"), 200)
+    check("404 invisible identity", atlas.request("GET", "/api/inspect?id=does-not-exist"), 404)
+    check("404 unknown api route", atlas.request("GET", "/api/nope"), 404)
+    check("400 unknown parameter", atlas.request("GET", "/api/search?namespace=other"), 400)
+    check("403 cross-site", atlas.request("GET", "/api/overview", headers={"Sec-Fetch-Site": "cross-site"}), 403)
+    os.replace(atlas.enrolled.database, atlas.enrolled.database.with_suffix(".moved"))
+    check("503 binding lost", atlas.request("GET", "/api/overview"), 503)
+    # 409 is not listed: an expired search cursor restarts the list with a notice (200), by design.
+    assert len(seen) >= 20
