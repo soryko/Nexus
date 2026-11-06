@@ -196,13 +196,13 @@ import sqlite3 as _sqlite3
 _REPO, _COMMIT = "repo-one", "a" * 40
 
 
-def _cite(enrolled, memory_id: str, path: str) -> None:
+def _cite(enrolled, memory_id: str, path: str, repo: str = _REPO, commit: str = _COMMIT) -> None:
     with _sqlite3.connect(enrolled.database) as db:
         revision = db.execute("SELECT current_revision_id FROM memories WHERE memory_id=?", (memory_id,)).fetchone()[0]
         db.execute("INSERT OR IGNORE INTO repositories VALUES(?,?,?,?,?,?)",
-                   (enrolled.project_id, "local", _REPO, "sha1", None, "2026-11-05T00:00:00Z"))
+                   (enrolled.project_id, "local", repo, "sha1", None, "2026-11-05T00:00:00Z"))
         db.execute("INSERT INTO revision_references VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                   (enrolled.project_id, "local", memory_id, revision, _REPO, _COMMIT, path, "c" * 40, "blob",
+                   (enrolled.project_id, "local", memory_id, revision, repo, commit, path, "c" * 40, "blob",
                     "100644", "2026-11-05T00:00:00Z"))
 
 
@@ -809,3 +809,113 @@ def test_related_is_reachable_and_usable_by_keyboard_alone(enrolled, browser_pag
         _press(page, page.locator("#related-list li button").nth(10))
         expect(page.locator("#memory-body")).not_to_have_text("Caption note 00 about retention")
         assert page.evaluate("document.activeElement.id") == "inspector"
+
+
+# ---- follow-up: verified repository / path / commit filters in Find ----------------------------------------
+
+_OTHER_COMMIT = "b" * 40
+
+
+def _cited_corpus(enrolled) -> None:
+    for name, path, repo, commit in [("alpha", "src/a.py", _REPO, _COMMIT), ("beta", "src/b.py", _REPO, _COMMIT),
+                                     ("gamma", "lib/c.py", _REPO, _OTHER_COMMIT), ("delta", "src/a.py", "repo-two", _COMMIT)]:
+        _cite(enrolled, enrolled.record(f"Filter {name} memory", f"k-f{name}", kind="observation"), path, repo, commit)
+    enrolled.record("Filter epsilon memory with no citation", "k-fe", kind="observation")
+
+
+def _find(page) -> None:
+    page.get_by_role("button", name="Search", exact=True).click()
+
+
+def test_repository_path_prefix_and_commit_filters_narrow_show_in_the_summary_and_reset(enrolled, browser_page) -> None:
+    _cited_corpus(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open(page, server)
+        page.locator("#q").fill("Filter")
+        page.locator("#repo").fill(_REPO)
+        page.locator("#path").fill("src/a.py")
+        _find(page)
+        expect(page.locator("#count")).to_contain_text("1 matching")
+        assert "Filter alpha" in page.locator("#results").inner_text()
+        summary = page.locator("#filters").inner_text()
+        assert f"repository “{_REPO}”" in summary and "path “src/a.py”" in summary
+        page.locator("#path").fill("")
+        page.locator("#prefix").fill("src/")
+        _find(page)
+        expect(page.locator("#count")).to_contain_text("2 matching")
+        assert "path prefix “src”" in page.locator("#filters").inner_text()          # the trailing slash is dropped
+        assert page.locator("#prefix").input_value() == "src"
+        page.locator("#prefix").fill("")
+        page.locator("#commit").fill(_OTHER_COMMIT)
+        _find(page)
+        expect(page.locator("#count")).to_contain_text("1 matching")
+        assert "Filter gamma" in page.locator("#results").inner_text()
+        assert f"commit “{_OTHER_COMMIT[:12]}”" in page.locator("#filters").inner_text()
+        page.get_by_role("button", name="Reset filters").click()
+        expect(page.locator("#filters")).to_have_text("No filters: newest memories first.")
+        for field in ("q", "repo", "path", "prefix", "commit"):
+            assert page.locator(f"#{field}").input_value() == "", field
+        expect(page.locator("#count")).to_contain_text("matching (")
+
+
+def test_a_path_or_commit_without_a_repository_is_refused_not_sent_unverified(enrolled, browser_page) -> None:
+    _cited_corpus(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open(page, server)
+        before = page.locator("#count").inner_text()
+        requests = []
+        page.on("request", lambda r: requests.append(r.url) if "/api/search" in r.url else None)
+        page.locator("#path").fill("src/a.py")
+        _find(page)
+        expect(page.locator("#notice")).to_contain_text("Choose a repository")
+        assert not requests and page.locator("#count").inner_text() == before
+        page.locator("#repo").fill("repo-never-seen")
+        _find(page)
+        expect(page.locator("#count")).to_contain_text("No memories match")
+
+
+def test_back_restores_the_repository_and_path_filters(enrolled, browser_page) -> None:
+    _cited_corpus(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open(page, server)
+        page.locator("#repo").fill(_REPO)
+        page.locator("#prefix").fill("src")
+        _find(page)
+        expect(page.locator("#count")).to_contain_text("2 matching")
+        page.locator("#results li button").first.click()
+        expect(page.locator("#memory")).to_be_visible()
+        page.locator("#results li button").nth(1).click()       # leaving the first memory saves the repo/prefix view
+        expect(page.locator("#memory-body")).to_contain_text("Filter")
+        page.locator("#repo").fill("repo-two")
+        page.locator("#prefix").fill("")
+        page.locator("#path").fill("src/a.py")
+        _find(page)
+        expect(page.locator("#count")).to_contain_text("1 matching")
+        assert "repository “repo-two”" in page.locator("#filters").inner_text()
+        page.get_by_role("button", name="Back", exact=True).click()
+        expect(page.locator("#count")).to_contain_text("2 matching")
+        assert page.locator("#repo").input_value() == _REPO and page.locator("#prefix").input_value() == "src"
+        assert page.locator("#path").input_value() == ""
+        assert "path prefix “src”" in page.locator("#filters").inner_text()
+
+
+@pytest.mark.parametrize("width", [1024, 360], ids=["desktop", "360px"])
+def test_the_citation_filters_are_keyboard_reachable_and_fit_the_screen(enrolled, browser_page, width: int) -> None:
+    _cited_corpus(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        page.set_viewport_size({"width": width, "height": 740})
+        _open(page, server)
+        _tab_to(page, page.get_by_label("Repository"))
+        page.keyboard.type(_REPO)
+        _tab_to(page, page.get_by_label("Path prefix", exact=False))
+        page.keyboard.type("src")
+        page.keyboard.press("Enter")
+        expect(page.locator("#count")).to_contain_text("2 matching")
+        _no_sideways_scroll(page)
+        _press(page, page.get_by_role("button", name="Reset filters"))
+        expect(page.locator("#filters")).to_have_text("No filters: newest memories first.")
+        _no_sideways_scroll(page)

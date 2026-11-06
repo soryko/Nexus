@@ -5,7 +5,7 @@ const $ = (id) => document.getElementById(id);
 const PAGE = 20;
 
 const state = {
-  q: "", tag: "", kinds: new Set(),
+  q: "", tag: "", kinds: new Set(), repo: "", path: "", prefix: "", commit: "",
   cursors: [null], index: 0, nextCursor: null,
   group: null, searchToken: 0, openToken: 0, selected: null,   // selected: {memoryId, revisionId} or null
   related: { token: 0, how: null, cursor: null, shown: 0 },      // how: ["tag"|"term", value] of the open memory
@@ -47,18 +47,26 @@ function queryParams() {
   if (state.q) params.push(["q", state.q]);
   if (state.tag) params.push(["tag", state.tag]);
   for (const kind of state.kinds) params.push(["kind", kind]);
+  for (const name of CITATION_FILTERS) if (state[name]) params.push([name, state[name]]);
   const cursor = state.cursors[state.index];
   if (cursor) params.push(["cursor", cursor]);
   return params;
 }
 
-function filtersActive() { return Boolean(state.q || state.tag || state.kinds.size); }
+// A path, prefix or commit only means something inside one repository, so the page will not send them without it.
+const CITATION_FILTERS = ["repo", "path", "prefix", "commit"];
+const CITATION_LABELS = { repo: "repository", path: "path", prefix: "path prefix", commit: "commit" };
+
+function filtersActive() { return Boolean(state.q || state.tag || state.kinds.size || CITATION_FILTERS.some((n) => state[n])); }
 
 function renderFilters() {
   const parts = [];
   if (state.q) parts.push(`text “${state.q}”`);
   if (state.tag) parts.push(`tag “${state.tag}”`);
   if (state.kinds.size) parts.push(`kind ${[...state.kinds].join(", ")}`);
+  for (const name of CITATION_FILTERS) {
+    if (state[name]) parts.push(`${CITATION_LABELS[name]} “${name === "commit" ? state[name].slice(0, 12) : state[name]}”`);
+  }
   $("filters").textContent = parts.length ? `Filters: ${parts.join("; ")}` : "No filters: newest memories first.";
   $("reset").hidden = !filtersActive();
 }
@@ -150,7 +158,7 @@ function clearInspector(message) {
 function currentView() {
   if (!state.selected) return null;
   return {
-    search: { q: state.q, tag: state.tag, kinds: [...state.kinds], group: state.group, cursors: [...state.cursors], index: state.index },
+    search: { q: state.q, tag: state.tag, repo: state.repo, path: state.path, prefix: state.prefix, commit: state.commit, kinds: [...state.kinds], group: state.group, cursors: [...state.cursors], index: state.index },
     focus: connections.snapshot(),
     selected: { ...state.selected },
   };
@@ -284,11 +292,19 @@ function wire() {
     event.preventDefault();
     state.q = $("q").value.trim();
     state.tag = $("tag").value.trim();
+    for (const name of CITATION_FILTERS) state[name] = $(name).value.trim();
+    state.prefix = state.prefix.replace(/\/+$/, "");          // the server's prefix is a whole folder: "src", not "src/"
+    $("prefix").value = state.prefix;
+    if (!state.repo && (state.path || state.prefix || state.commit)) {
+      $("notice").textContent = "Choose a repository to filter by path, path prefix or commit.";
+      return;
+    }
     runSearch(true);
   });
   $("reset").addEventListener("click", () => {
     state.q = ""; state.tag = ""; state.kinds = new Set(); state.group = null;
     $("q").value = ""; $("tag").value = "";
+    for (const name of CITATION_FILTERS) { state[name] = ""; $(name).value = ""; }
     for (const box of document.querySelectorAll("#kinds input")) box.checked = false;
     runSearch(true);
     refreshOverview();
@@ -324,6 +340,7 @@ async function goBack() {
   if (!view) return;
   state.q = view.search.q; state.tag = view.search.tag; state.kinds = new Set(view.search.kinds);
   state.group = view.search.group; state.cursors = view.search.cursors; state.index = view.search.index;
+  for (const name of CITATION_FILTERS) { state[name] = view.search[name]; $(name).value = state[name]; }
   $("q").value = state.q; $("tag").value = state.tag;
   for (const box of document.querySelectorAll("#kinds input")) box.checked = state.kinds.has(box.value);
   await refreshOverview();

@@ -238,9 +238,12 @@ Stored text is only ever shown as text. Request lines are not logged. The browse
 Reading a store in WAL mode makes SQLite leave an empty `-wal` and a `-shm` coordination file beside it; the
 database file itself is untouched (see the measurements below).
 
-**Known limits in this version.** The server can list memories that share a tag or term with one (`/api/related`) and
-filter by verified repository, path and commit, but the page has no control for either yet. A memory's own relations
-(files it cites, its other revisions) can be listed up to 100 each; beyond that they are counted but not pageable (the
+The inspector's **Find related memories** lists other memories that share one of the open memory's tags or a term it
+contains (10 per page, with a *More related memories* button). **Find** also filters by repository, and within a
+repository by path, path prefix (a folder such as `src`) or commit; the page refuses a path, prefix or commit without a
+repository. Both are part of the saved Back view and cleared by *Reset filters*.
+
+**Known limits in this version.** A memory's own relations (files it cites, its other revisions) can be listed up to 100 each; beyond that they are counted but not pageable (the
 citing-memories list of a file hub is fully pageable). The browser's Forward button is ignored; use the page's Back. A
 store whose original recency backfill was never repaired is refused with a message: open it once with Nexus, then view it.
 On Linux a checkout whose `.git` is deleted and recreated can reuse its inode and is not detected (macOS records a birth time).
