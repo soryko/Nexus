@@ -1,0 +1,67 @@
+[
+ {
+  "corpus_id": "c01",
+  "memory_id": "989f2216-3f59-4e0a-832a-f0b5675dc242",
+  "kind": "constraint"
+ },
+ {
+  "corpus_id": "c02",
+  "memory_id": "55b8b9df-4df0-4059-a3da-73d2e24a859e",
+  "kind": "decision"
+ },
+ {
+  "corpus_id": "c03",
+  "memory_id": "798a77f3-ca99-4782-a830-a5aea16d4d64",
+  "kind": "observation"
+ },
+ {
+  "corpus_id": "c04",
+  "memory_id": "e55dfa7b-aae9-4863-842d-f3bd20b6c829",
+  "kind": "constraint"
+ },
+ {
+  "corpus_id": "c05",
+  "memory_id": "36f38b82-5e17-4826-bf31-a791624e98c0",
+  "kind": "constraint"
+ },
+ {
+  "corpus_id": "c06",
+  "memory_id": "61fbdf54-9d85-4bf2-9785-f3f08d7773ea",
+  "kind": "decision"
+ },
+ {
+  "corpus_id": "c07",
+  "memory_id": "6ac6eaf8-b130-40c5-b3ba-d4140eaca0b0",
+  "kind": "procedure"
+ },
+ {
+  "corpus_id": "c08",
+  "memory_id": "f6ed1a92-d30d-4aa4-b447-6283213f5370",
+  "kind": "failure"
+ },
+ {
+  "corpus_id": "c09",
+  "memory_id": "10e7eedf-5354-4726-af5c-d8d691e870f6",
+  "kind": "constraint"
+ },
+ {
+  "corpus_id": "c10",
+  "memory_id": "1bb2827a-d4be-4d8e-83cb-b1a96d7d36f8",
+  "kind": "procedure"
+ },
+ {
+  "corpus_id": "c11",
+  "memory_id": "10f50f7a-5dd6-4fec-a1f8-ddca5c56f9c0",
+  "kind": "procedure"
+ },
+ {
+  "corpus_id": "c12",
+  "memory_id": "6923ac42-7ba3-49cd-8e6b-398ece87c612",
+  "kind": "decision"
+ },
+ {
+  "corpus_id": "c13",
+  "memory_id": "6e0f8395-b31b-4f73-ad01-fcb75dfaf3df",
+  "kind": "procedure"
+ }
+]

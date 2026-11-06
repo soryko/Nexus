@@ -1,0 +1,35 @@
+==============================================================================================================
+A2-R -- FAILURES AND CEILING-TRUNCATED PASSES (descriptive; saved records; no model invoked)
+==============================================================================================================
+Issue order, not execution order. An errored command may still have written.
+A patch is a FINAL state: when it first became correct is not inferred.
+A completion message is a statement the model made, not a verification.
+
+(1) FUNCTIONAL FAILURES -- no final source diff
+  cell           calls srcEd  last after tEdit pytest t.aft repro retr reread gitm err   wall
+  -------------------------------------------------------------------------------------------
+  k3/nexus          50     0  None     0     0      0     -     3    6      8    0   1  197.6
+  k4/baseline       50     0  None     0     0      3     -     7    0      4    0   2  337.5
+  k4/notes          47     0  None     0     0      1     -     7    1      0    0   0  385.3
+
+(2) FUNCTIONAL PASSES THAT ENDED AT THE CEILING
+  cell           calls srcEd  last after tEdit pytest t.aft repro retr reread gitm err   wall
+  -------------------------------------------------------------------------------------------
+  k1/nexus          48     1    45     2     0      1     1     7    3     13    0   2  164.5
+  k3/baseline       55     2    35    19     1      8     6     3    0     12    1   0  196.4
+  k3/notes          51     4    32    18     1      6     6     6    1      0    1   1  159.6
+  k4/nexus          51     2    36    14     2      5     5     5    4      0    1   0  314.4
+
+(3) COMPLETED PASSES -- descriptive context, NOT a control
+  cell           calls srcEd  last after tEdit pytest t.aft repro retr reread gitm err   wall
+  -------------------------------------------------------------------------------------------
+  k1/baseline       42     1    19    22     4      9     9     4    0      7    2   1  117.2
+  k1/notes          56     1    40    15     2      4     4     6    1      0    0   0  228.7
+  k2/baseline       39     1    15    23     4      9     9     2    0      4    1   2  119.2
+  k2/nexus          48     1    34    13     1      7     7     2   14      5    1   0  128.7
+  k2/notes          37     1    26    10     1      6     6     3    1      5    1   1  126.6
+
+  srcEd = identified source-EDIT events; last = index of the last one;
+  after = calls issued after it; t.aft = pytest invocations after it;
+  gitm = git operations that CHANGE source state (stash/checkout) -- not edits.
+

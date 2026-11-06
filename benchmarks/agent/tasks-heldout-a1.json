@@ -1,0 +1,18 @@
+{
+ "_comment": [
+  "The four HELD-OUT tasks of freeze-heldout-a1.md section 1, in the order the schedule uses.",
+  "This file names the fixes, so it lives in benchmarks/agent/ -- which every arm and the",
+  "capture session are denied -- and it is never read by anything a task can reach.",
+  "Nothing here may change after 2026-09-12; the registration fixes the set."
+ ],
+ "tasks": [
+  {"task": "h1", "fix": "0f71fe771c", "pre_fix": "c943271a26",
+   "subject": "dual-option arbitration vs explicit defaults"},
+  {"task": "h2", "fix": "762c97eef7", "pre_fix": "8929d39278",
+   "subject": "double-bracketing of choices in the synopsis"},
+  {"task": "h3", "fix": "b67832c216", "pre_fix": "8c1a0a7abb",
+   "subject": "parsing when a parameter is named help"},
+  {"task": "h4", "fix": "f58ca3e814", "pre_fix": "420c8fb44e",
+   "subject": "copy/deepcopy/pickle of Sentinel"}
+ ]
+}

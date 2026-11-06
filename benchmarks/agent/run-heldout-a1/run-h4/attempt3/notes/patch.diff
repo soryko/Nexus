@@ -1,0 +1,49 @@
+diff --git a/src/click/_utils.py b/src/click/_utils.py
+index 05ee2e9..056c114 100644
+--- a/src/click/_utils.py
++++ b/src/click/_utils.py
+@@ -18,6 +18,12 @@ class Sentinel(enum.Enum):
+     def __repr__(self) -> str:
+         return f"{self.__class__.__name__}.{self.name}"
+ 
++    def __reduce_ex__(self, proto: int) -> t.Any:
++        # Enum members pickle by value by default, but our values are unique,
++        # anonymous ``object()`` instances. Reconstruct the member by name so
++        # that unpickling returns the very same enum member.
++        return getattr, (self.__class__, self.name)
++
+ 
+ UNSET: t.Literal[Sentinel.UNSET] = Sentinel.UNSET
+ """Sentinel used to indicate that a value is not set."""
+diff --git a/tests/test_utils/test_sentinel.py b/tests/test_utils/test_sentinel.py
+index 1dd5b15..3975807 100644
+--- a/tests/test_utils/test_sentinel.py
++++ b/tests/test_utils/test_sentinel.py
+@@ -1,7 +1,11 @@
++import copy
++import pickle
+ from decimal import Decimal
+ from fractions import Fraction
+ 
+-from click._utils import UNSET
++import pytest
++
++from click._utils import UNSET, Sentinel
+ 
+ 
+ def test_unset_sentinel():
+@@ -50,3 +54,14 @@ def test_unset_sentinel():
+         assert value is not real_value
+ 
+     assert value not in real_values
++
++
++@pytest.mark.parametrize("value", list(Sentinel))
++def test_sentinel_pickle_roundtrip(value):
++    assert pickle.loads(pickle.dumps(value)) is value
++
++
++@pytest.mark.parametrize("value", list(Sentinel))
++def test_sentinel_copy(value):
++    assert copy.copy(value) is value
++    assert copy.deepcopy(value) is value

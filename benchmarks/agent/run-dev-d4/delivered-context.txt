@@ -1,0 +1,21 @@
+--- baseline (none available) ---
+    memories delivered: 0/13   bytes: 0
+    necessary       : 0  []
+    useful support  : 0  []
+    outdated        : 0  []
+    irrelevant      : 0  []
+    necessary-fact coverage: N/A (task declares no necessary memory)
+--- nexus (per retrieval) ---
+    memories delivered: 4/13   bytes: 813
+    necessary       : 0  []
+    useful support  : 2  ['c07', 'c08']
+    outdated        : 1  ['c13']
+    irrelevant      : 1  ['c12']
+    necessary-fact coverage: N/A (task declares no necessary memory)
+--- notes (whole file, on first read) ---
+    memories delivered: 13/13   bytes: 2776
+    necessary       : 0  []
+    useful support  : 3  ['c07', 'c08', 'c09']
+    outdated        : 1  ['c13']
+    irrelevant      : 9  ['c01', 'c02', 'c03', 'c04', 'c05', 'c06', 'c10', 'c11', 'c12']
+    necessary-fact coverage: N/A (task declares no necessary memory)
