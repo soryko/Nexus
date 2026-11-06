@@ -1,0 +1,55 @@
+diff --git a/src/nexus_memory/transport/usage.py b/src/nexus_memory/transport/usage.py
+index a793642..bf5b823 100644
+--- a/src/nexus_memory/transport/usage.py
++++ b/src/nexus_memory/transport/usage.py
+@@ -52,7 +52,12 @@ except ImportError:  # pragma: no cover - older SDKs have no per-request envelop
+ FORMAT_VERSION = 2
+ #: The tools this build serves. Any other name is logged as "unknown", so a caller cannot write
+ #: arbitrary text into the log through the tool name.
+-KNOWN_TOOLS = frozenset({"record", "get", "revise", "forget", "search", "history", "status"})
++MODEL_TOOLS = frozenset({"record", "get", "revise", "forget", "search", "history", "status"})
++#: Lifecycle tools the host calls itself (SessionStart, UserPromptSubmit, PreToolUse hooks). They are
++#: logged with via="hook" so a pilot can never count them as the model consulting memory.
++HOOK_TOOLS = frozenset({"nexus_session_start", "nexus_recall", "nexus_pre_tool",
++                        "codex_session_start", "codex_recall", "task_pre_tool_use"})
++KNOWN_TOOLS = MODEL_TOOLS | HOOK_TOOLS
+ #: Search can return 100 hits; logging every identifier would make one line several kilobytes.
+ MAX_HIT_IDS = 20
+ _CLIENT_FIELD_LIMIT = 64
+@@ -404,6 +409,7 @@ class UsageMiddleware:
+         self.log.write({
+             "event": "call",
+             "tool": tool,
++            "via": "hook" if tool in HOOK_TOOLS else "model",
+             "outcome": outcome,
+             "ms": round((time.monotonic() - started) * 1000),
+             "client": client if client is not None else self._last_client,
+diff --git a/tests/transport/test_usage_via.py b/tests/transport/test_usage_via.py
+new file mode 100644
+index 0000000..12f7e3c
+--- /dev/null
++++ b/tests/transport/test_usage_via.py
+@@ -0,0 +1,23 @@
++"""Hook-driven lifecycle calls are logged via="hook", so no pilot counts them as model consults."""
++from __future__ import annotations
++
++import json
++import time
++from pathlib import Path
++from types import SimpleNamespace
++
++import pytest
++from nexus_memory.transport.usage import HOOK_TOOLS, MODEL_TOOLS, UsageLog, UsageMiddleware
++
++
++@pytest.mark.parametrize("tool", sorted(HOOK_TOOLS | MODEL_TOOLS | {"unknown"}))
++def test_every_call_line_carries_via(tmp_path: Path, tool: str) -> None:
++    log = UsageLog(tmp_path / "usage.jsonl", tmp_path / "db.sqlite3")
++    UsageMiddleware(log)._call(SimpleNamespace(session=None, params={}), tool, "ok", time.monotonic(), {})
++    call = [json.loads(line) for line in (tmp_path / "usage.jsonl").read_text().splitlines()][-1]
++    assert call["event"] == "call" and call["tool"] == tool
++    assert call["via"] == ("hook" if tool in HOOK_TOOLS else "model")
++
++
++def test_hook_and_model_tool_names_do_not_overlap() -> None:
++    assert not HOOK_TOOLS & MODEL_TOOLS

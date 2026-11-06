@@ -2,8 +2,11 @@
 
 When the `nexus_memory` MCP server is available, use it for project-specific prior
 decisions, procedures, constraints, and failure history. For tasks that depend on
-such history, search a few discriminating terms and `get` useful records before
-making assumptions. Skip memory for self-contained trivial requests.
+such history, fetch applicable automatic candidates with `get` first. Stop once
+a current record answers the task. When the user asks for research or essential
+information is still missing, search using both the subject and operation.
+Keep unrelated records and their contents out of task answers. Skip memory for
+self-contained trivial requests.
 
 Automatic recall supplies candidate IDs only. They are lexical matches, not proof
 of relevance. Fetch current content with `get`; use `history` for older revisions.

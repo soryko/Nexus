@@ -89,9 +89,10 @@ INSTRUCTIONS_DIGEST = _AUTONOMOUS.digest
 def _launch_policy(args: argparse.Namespace) -> _InstructionPolicy:
     if args.no_instructions:
         return _OFF
-    # The optional Codex adapter adds --codex-project-root. Its launch opts into explicit
+    # A hook-enabled launch (--hook-project-root, formerly --codex-project-root) opts into explicit
     # capture before initialization, including when SessionStart and recall hooks never run.
-    if args.capture_policy == "autonomous" and getattr(args, "codex_project_root", None) is None:
+    hooked = getattr(args, "hook_project_root", None) or getattr(args, "codex_project_root", None)
+    if args.capture_policy == "autonomous" and hooked is None:
         return _AUTONOMOUS
     return _EXPLICIT
 
@@ -590,8 +591,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--db", type=Path, default=None, help="SQLite database path")
     parser.add_argument("--repo", type=Path, default=None, help="Local Git checkout to bind for reference verification")
     parser.add_argument("--repo-id", default=None, help="Associate the checkout with an existing repository identity (requires --repo)")
-    parser.add_argument("--codex-project-root", type=Path, default=None,
-                        help="Enable Codex hooks and bind the launch cwd, only within this Git repository/worktrees")
+    parser.add_argument("--hook-project-root", "--codex-project-root", dest="hook_project_root",
+                        type=Path, default=None,
+                        help="Enable host lifecycle hooks (Claude Code, Codex) and bind the launch cwd, "
+                             "only within this Git repository/worktrees. Also binds that checkout for "
+                             "reference verification, as --repo does. --codex-project-root is the older spelling.")
     parser.add_argument("--capture-policy", choices=("explicit", "autonomous"), default="explicit",
                         help="Explicit requests by default; opt into autonomous guidance for the Claude pilot")
     parser.add_argument("--no-instructions", action="store_true",
@@ -604,18 +608,18 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
-    if args.codex_project_root is not None and args.repo is not None:
-        parser.error("--codex-project-root and --repo are mutually exclusive")
-    if args.repo_id is not None and args.repo is None and args.codex_project_root is None:
+    if args.hook_project_root is not None and args.repo is not None:
+        parser.error("--hook-project-root (--codex-project-root) and --repo are mutually exclusive")
+    if args.repo_id is not None and args.repo is None and args.hook_project_root is None:
         parser.error("--repo-id requires --repo")
     usage = None
     policy = _launch_policy(args)
     try:
         codex_checkout = None
-        if args.codex_project_root is not None:
+        if args.hook_project_root is not None:
             from nexus_memory.transport.codex import resolve_checkout
 
-            codex_checkout = resolve_checkout(args.codex_project_root, Path.cwd())
+            codex_checkout = resolve_checkout(args.hook_project_root, Path.cwd())
             args.repo = codex_checkout
         db_path = args.db if args.db is not None else _default_db()
         if args.usage_log is not None:

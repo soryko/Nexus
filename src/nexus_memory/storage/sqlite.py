@@ -18,6 +18,7 @@ from pathlib import Path
 import re
 from typing import Iterator
 
+from nexus_memory.lexical import is_code_shaped as _is_code_shaped
 from nexus_memory.domain.errors import (
     CursorExpired,
     IdempotencyConflict,
