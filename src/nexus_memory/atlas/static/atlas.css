@@ -1,0 +1,36 @@
+:root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.4; }
+body { margin: 0; padding: 0 1rem 2rem; }
+header, main { max-width: 64rem; margin: 0 auto; }
+main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+h1 { margin-bottom: .25rem; }
+.groups { display: flex; flex-wrap: wrap; gap: .5rem; list-style: none; padding: 0; margin: 0; }
+.groups button { font-size: 1rem; padding: .5rem .9rem; border-radius: .5rem; cursor: pointer; }
+.groups button[aria-pressed="true"] { outline: 3px solid Highlight; }
+form { display: grid; gap: .5rem; max-width: 36rem; }
+fieldset { display: flex; flex-wrap: wrap; gap: .75rem; border: 1px solid GrayText; }
+.results { list-style: none; padding: 0; margin: .5rem 0; display: grid; gap: .4rem; }
+.results button { width: 100%; text-align: left; padding: .6rem .8rem; border-radius: .4rem; cursor: pointer; }
+.results .meta { display: block; font-size: .85rem; opacity: .75; }
+.results .excerpt { display: block; overflow-wrap: anywhere; }
+#memory-body, #memory-diff { white-space: pre-wrap; overflow-wrap: anywhere; padding: .75rem; border: 1px solid GrayText; border-radius: .4rem; }
+#notice:empty { display: none; }
+#notice { padding: .5rem .75rem; border: 1px solid GrayText; border-radius: .4rem; }
+button:focus-visible, input:focus-visible { outline: 3px solid Highlight; outline-offset: 2px; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: .2rem .8rem; }
+dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 40rem) { body { padding: 0 .75rem 2rem; } .groups button { flex: 1 1 40%; } }
+
+/* graph */
+#graph svg { width: 100%; max-height: 32rem; border: 1px solid GrayText; border-radius: .4rem; touch-action: none; }
+#graph .controls { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
+.node circle { fill: Canvas; stroke: CanvasText; stroke-width: 2; cursor: pointer; }
+.node.focus circle { fill: Highlight; }
+.node.selected circle { stroke: Highlight; stroke-width: 4; }
+.node.file circle { fill: GrayText; }
+.node text { display: none; font-size: 11px; text-anchor: middle; fill: CanvasText; paint-order: stroke; stroke: Canvas; stroke-width: 3px; }
+.node:hover text, .node:focus text, .node.focus text, .node.selected text, svg.close .node text { display: inline; }
+.node:focus { outline: none; } .node:focus circle { stroke: Highlight; stroke-width: 5; }
+.edge { stroke: GrayText; stroke-width: 1.2; }
+#graph-limits:empty { display: none; }
+#graph-lists ul { list-style: none; padding: 0; display: grid; gap: .25rem; }
+#graph-lists li { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; overflow-wrap: anywhere; }

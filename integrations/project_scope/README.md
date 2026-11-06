@@ -22,6 +22,19 @@ The Nexus checkout's Codex configuration pairs `codex_recall` on prompt submissi
 
 The Claude handoff test uses the same hooks in a per-invocation task profile with strict MCP configuration. The registered Claude pilot has its own configuration and database. The [handoff receipt](../../docs/measurements/2026-11-04-recall-distractor-handoff.json) records the guarded tasks, earlier failed trials, and deliberate broad searches.
 
+## Open the read-only viewer
+
+`launcher.py atlas <absolute main checkout> [--no-browser]` starts the Memory Atlas viewer for an enrolled checkout. It
+needs the installed Nexus interpreter (run with `python -I`), never enrolls, migrates or writes, and prints the address
+without its launch secret; the secret is in a private `launch.html` (mode 0600) that is deleted once used. It binds
+`127.0.0.1` only. It shows recorded memories, revisions and cited files, and no agent activity. Replacing or moving the
+checkout, replacing or retiring the store, or removing the enrollment stops the viewer from serving data until it is
+relaunched. See the top-level README for the privacy boundary and measured timings.
+
+Installing it means copying this directory's `launcher.py` over the installed one; the other three entry points are
+unchanged by this feature. Back the old file up first. The existing `codex`, `claude` and `antigravity` commands behave
+identically (the same exec arguments and working directory were compared between the old and new file).
+
 ## Antigravity host context
 
 A lifecycle hook launched in the installed plugin directory validates the single workspace in the host event. A stdio server launched in that neutral directory asks the client for its MCP roots before admitting a tool call. An empty initial root allows discovery of the tool schemas. A memory operation requires one local, enrolled root. Once bound, a connection that observes a different or ambiguous root requires reconnection. No last-used project lookup is performed. A stored excerpt or tool argument cannot select a project.
