@@ -43,7 +43,7 @@ def main():
     atlas = commands.add_parser('atlas', help='open the read-only Memory Atlas viewer for an enrolled checkout')
     atlas.add_argument('checkout', type=Path)
     atlas.add_argument('--no-browser', action='store_true')
-    for name in ('codex', 'claude', 'antigravity'):
+    for name in ('codex', 'claude', 'claude-hooks', 'antigravity'):
         host = commands.add_parser(name)
         host.add_argument('runtime', type=Path)
         host.add_argument('--expected-project', type=Path)
@@ -68,12 +68,25 @@ def main():
             if args.expected_project is not None:
                 command.append(str(args.expected_project))
             os.execv(python, command)
-        project = host_project(args.command)
-        if args.expected_project is not None and resolve(args.expected_project).id != project.id:
-            raise ScopeError('host entry is bound to a different enrolled project')
+        hooks = args.command == 'claude-hooks'
+        try:
+            project = host_project('claude' if hooks else args.command)
+            if args.expected_project is not None and resolve(args.expected_project).id != project.id:
+                raise ScopeError('host entry is bound to a different enrolled project')
+        except (ScopeError, OSError):      # OSError: no registry yet, the first-run case
+            if not hooks:
+                raise
+            # Unenrolled or ambiguous. Stay connected with only no-op hook tools (no store, no memory
+            # tools) so the plugin's hooks say one line per session instead of failing on every prompt.
+            # The reason goes to stderr so misconfiguration is not mistaken for "not enrolled".
+            print('Nexus hooks: project not verified; serving no-op hooks only.', file=sys.stderr)
+            os.chdir(Path.home())
+            os.execv(args.runtime, [str(args.runtime), '--namespace', 'unenrolled', '--hook-unenrolled'])
         options = ['--db', str(project.database), '--namespace', project.id, '--actor', 'local']
         if args.command == 'codex':
             options.extend(['--codex-project-root', str(project.common.parent)])
+        elif hooks:
+            options.extend(['--hook-project-root', str(project.common.parent)])
         else:
             options.extend(['--repo', str(project.checkout)])
         os.chdir(project.checkout)

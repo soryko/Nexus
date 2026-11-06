@@ -1,0 +1,11 @@
+{
+  "name": "nexus-local",
+  "owner": {"name": "Nexus Memory"},
+  "plugins": [
+    {
+      "name": "nexus-memory",
+      "source": "./integrations/claude-plugin",
+      "description": "Nexus Memory hooks for Claude Code: ID-only recall on each prompt and a task guard before Nexus tool calls. Needs the nexus-memory MCP server from v0.1.0a3 or later."
+    }
+  ]
+}
