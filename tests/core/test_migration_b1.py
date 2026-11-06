@@ -168,3 +168,46 @@ def test_missing_fts_support_refuses_to_start(tmp_path: Path, monkeypatch) -> No
     monkeypatch.setattr(SQLiteRepository, "_probe_fts5", unavailable)
     with pytest.raises(UnsupportedRuntime):
         SQLiteRepository(tmp_path / "memory.sqlite3")
+
+
+@pytest.mark.parametrize("already_migrated", [False, True], ids=["v1", "legacy-v4"])
+def test_legacy_browse_recovers_head_receipt_sequence(tmp_path: Path, already_migrated: bool) -> None:
+    from nexus_memory.domain.errors import CursorExpired
+    from nexus_memory.domain.models import SearchQuery
+
+    path = tmp_path / "memory.sqlite3"
+    _v1_database(path)
+    with sqlite3.connect(path) as db:
+        # The newer memory was revised again. Its wall-clock time went backwards,
+        # so only the receipt of its current revision establishes its recency.
+        db.execute("INSERT INTO memories VALUES('a1','local','m-2','r-2',0)")
+        db.execute("INSERT INTO revisions VALUES('a1','local','m-2','r-2',NULL,1,'decision','[]',NULL,NULL,'2030')")
+        db.execute("INSERT INTO revisions VALUES('a1','local','m-2','r-3','r-2',1,'decision','[]',NULL,NULL,'2020')")
+        db.execute("UPDATE memories SET current_revision_id='r-3' WHERE memory_id='m-2'")
+        for n, operation in ((2, "record"), (3, "revise")):
+            db.execute("INSERT INTO outbox(namespace,actor,operation_id,payload) VALUES('a1','local',?,'{}')", (f"op-{n}",))
+            db.execute("INSERT INTO receipts VALUES('a1','local',?,'digest',?,?,?,?,?)",
+                       (f"key-{n}", "m-2", f"r-{n}", f"op-{n}", n, operation))
+
+    scope = Scope("a1", "local")
+    stale_cursor = None
+    if already_migrated:
+        service = MemoryService(SQLiteRepository(path), scope)
+        service.record(MemoryInput("newer native record"), "native")
+        # Recreate schema 4's zero sentinels without assuming later migration code.
+        with sqlite3.connect(path) as db:
+            db.execute("DROP TABLE IF EXISTS data_repairs")
+            assert db.execute("PRAGMA user_version").fetchone() == (4,)
+            db.execute("UPDATE head_index SET durable_seq=0 WHERE memory_id IN ('m-1','m-2')")
+        stale_cursor = service.search(SearchQuery(limit=1)).cursor
+        assert stale_cursor is not None
+
+    service = MemoryService(SQLiteRepository(path), scope)
+    if stale_cursor is not None:
+        with pytest.raises(CursorExpired):
+            service.search(SearchQuery(limit=1, cursor=stale_cursor))
+    assert [hit.memory_id for hit in service.search(SearchQuery()).hits][-2:] == ["m-2", "m-1"]
+    with sqlite3.connect(path) as db:
+        assert db.execute("SELECT memory_id,durable_seq FROM head_index ORDER BY durable_seq LIMIT 2").fetchall() == [
+            ("m-1", 1), ("m-2", 3)
+        ]

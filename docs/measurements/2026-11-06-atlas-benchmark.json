@@ -1,0 +1,1305 @@
+{
+  "binding_tiers": {
+    "full_check_with_git_ms": {
+      "max": 10.0,
+      "min": 7.77,
+      "n": 200,
+      "p50": 8.05,
+      "p95": 8.81,
+      "spread": 2.23,
+      "stdev": 0.29
+    },
+    "quick_check_stat_only_ms": {
+      "max": 0.05,
+      "min": 0.02,
+      "n": 5000,
+      "p50": 0.02,
+      "p95": 0.02,
+      "spread": 0.03,
+      "stdev": 0.0
+    },
+    "reader_including_quick_check_ms": {
+      "max": 8.36,
+      "min": 0.23,
+      "n": 5000,
+      "p50": 0.25,
+      "p95": 0.27,
+      "spread": 8.12,
+      "stdev": 0.15
+    }
+  },
+  "cold_start": {
+    "cache_state": "fresh store copy per run; fresh launcher process; fresh Chromium profile; OS file cache not flushed",
+    "runs": [
+      {
+        "browser_launch_ms": 127.0,
+        "goto_to_counted_overview_wall_ms": 55.2,
+        "in_page_counted_overview_ms": 48.9,
+        "launch_to_overview_ms": 122.3,
+        "process_launch_ms": 67.0
+      },
+      {
+        "browser_launch_ms": 111.3,
+        "goto_to_counted_overview_wall_ms": 50.7,
+        "in_page_counted_overview_ms": 44.6,
+        "launch_to_overview_ms": 119.0,
+        "process_launch_ms": 68.2
+      },
+      {
+        "browser_launch_ms": 182.9,
+        "goto_to_counted_overview_wall_ms": 81.7,
+        "in_page_counted_overview_ms": 73.4,
+        "launch_to_overview_ms": 154.4,
+        "process_launch_ms": 72.7
+      },
+      {
+        "browser_launch_ms": 388.6,
+        "goto_to_counted_overview_wall_ms": 91.2,
+        "in_page_counted_overview_ms": 71.3,
+        "launch_to_overview_ms": 176.7,
+        "process_launch_ms": 85.5
+      },
+      {
+        "browser_launch_ms": 427.0,
+        "goto_to_counted_overview_wall_ms": 92.8,
+        "in_page_counted_overview_ms": 74,
+        "launch_to_overview_ms": 174.6,
+        "process_launch_ms": 81.8
+      },
+      {
+        "browser_launch_ms": 314.5,
+        "goto_to_counted_overview_wall_ms": 86.7,
+        "in_page_counted_overview_ms": 71.1,
+        "launch_to_overview_ms": 170.0,
+        "process_launch_ms": 83.3
+      },
+      {
+        "browser_launch_ms": 342.2,
+        "goto_to_counted_overview_wall_ms": 85.2,
+        "in_page_counted_overview_ms": 68,
+        "launch_to_overview_ms": 171.8,
+        "process_launch_ms": 86.6
+      },
+      {
+        "browser_launch_ms": 209.8,
+        "goto_to_counted_overview_wall_ms": 62.7,
+        "in_page_counted_overview_ms": 56.4,
+        "launch_to_overview_ms": 138.4,
+        "process_launch_ms": 75.6
+      },
+      {
+        "browser_launch_ms": 236.6,
+        "goto_to_counted_overview_wall_ms": 64.1,
+        "in_page_counted_overview_ms": 55.7,
+        "launch_to_overview_ms": 137.6,
+        "process_launch_ms": 73.5
+      },
+      {
+        "browser_launch_ms": 288.6,
+        "goto_to_counted_overview_wall_ms": 87.5,
+        "in_page_counted_overview_ms": 72.7,
+        "launch_to_overview_ms": 168.6,
+        "process_launch_ms": 81.1
+      }
+    ],
+    "summary": {
+      "browser_launch_ms": {
+        "max": 427.0,
+        "min": 111.3,
+        "n": 10,
+        "p50": 262.6,
+        "p95": 427.0,
+        "spread": 315.7,
+        "stdev": 101.83
+      },
+      "goto_to_counted_overview_wall_ms": {
+        "max": 92.8,
+        "min": 50.7,
+        "n": 10,
+        "p50": 83.45,
+        "p95": 92.8,
+        "spread": 42.1,
+        "stdev": 15.06
+      },
+      "in_page_counted_overview_ms": {
+        "max": 74,
+        "min": 44.6,
+        "n": 10,
+        "p50": 69.55,
+        "p95": 74,
+        "spread": 29.4,
+        "stdev": 10.55
+      },
+      "launch_to_overview_ms": {
+        "max": 176.7,
+        "min": 119.0,
+        "n": 10,
+        "p50": 161.5,
+        "p95": 176.7,
+        "spread": 57.7,
+        "stdev": 21.13
+      },
+      "process_launch_ms": {
+        "max": 86.6,
+        "min": 67.0,
+        "n": 10,
+        "p50": 78.35,
+        "p95": 86.6,
+        "spread": 19.6,
+        "stdev": 6.72
+      }
+    }
+  },
+  "controls": {
+    "static_noop_page": {
+      "runs": [
+        {
+          "browser_launch_ms": 161.7,
+          "goto_to_counted_overview_wall_ms": 20.6,
+          "in_page_counted_overview_ms": 10.3,
+          "launch_to_overview_ms": 27.6,
+          "process_launch_ms": 7.0
+        },
+        {
+          "browser_launch_ms": 109.4,
+          "goto_to_counted_overview_wall_ms": 11.1,
+          "in_page_counted_overview_ms": 6.9,
+          "launch_to_overview_ms": 12.6,
+          "process_launch_ms": 1.4
+        },
+        {
+          "browser_launch_ms": 137.7,
+          "goto_to_counted_overview_wall_ms": 12.9,
+          "in_page_counted_overview_ms": 8.8,
+          "launch_to_overview_ms": 14.3,
+          "process_launch_ms": 1.5
+        },
+        {
+          "browser_launch_ms": 129.3,
+          "goto_to_counted_overview_wall_ms": 10.5,
+          "in_page_counted_overview_ms": 5.5,
+          "launch_to_overview_ms": 11.6,
+          "process_launch_ms": 1.0
+        },
+        {
+          "browser_launch_ms": 148.6,
+          "goto_to_counted_overview_wall_ms": 12.2,
+          "in_page_counted_overview_ms": 7.1,
+          "launch_to_overview_ms": 13.6,
+          "process_launch_ms": 1.4
+        },
+        {
+          "browser_launch_ms": 91.5,
+          "goto_to_counted_overview_wall_ms": 10.3,
+          "in_page_counted_overview_ms": 5.4,
+          "launch_to_overview_ms": 11.8,
+          "process_launch_ms": 1.5
+        },
+        {
+          "browser_launch_ms": 81.7,
+          "goto_to_counted_overview_wall_ms": 8.9,
+          "in_page_counted_overview_ms": 6.2,
+          "launch_to_overview_ms": 11.0,
+          "process_launch_ms": 2.1
+        },
+        {
+          "browser_launch_ms": 133.0,
+          "goto_to_counted_overview_wall_ms": 11.5,
+          "in_page_counted_overview_ms": 5.1,
+          "launch_to_overview_ms": 13.0,
+          "process_launch_ms": 1.5
+        },
+        {
+          "browser_launch_ms": 110.7,
+          "goto_to_counted_overview_wall_ms": 9.4,
+          "in_page_counted_overview_ms": 6.4,
+          "launch_to_overview_ms": 12.1,
+          "process_launch_ms": 2.7
+        },
+        {
+          "browser_launch_ms": 123.7,
+          "goto_to_counted_overview_wall_ms": 10.9,
+          "in_page_counted_overview_ms": 8.5,
+          "launch_to_overview_ms": 13.0,
+          "process_launch_ms": 2.0
+        }
+      ],
+      "summary": {
+        "browser_launch_ms": {
+          "max": 161.7,
+          "min": 81.7,
+          "n": 10,
+          "p50": 126.5,
+          "p95": 161.7,
+          "spread": 80.0,
+          "stdev": 23.54
+        },
+        "goto_to_counted_overview_wall_ms": {
+          "max": 20.6,
+          "min": 8.9,
+          "n": 10,
+          "p50": 11.0,
+          "p95": 20.6,
+          "spread": 11.7,
+          "stdev": 3.14
+        },
+        "in_page_counted_overview_ms": {
+          "max": 10.3,
+          "min": 5.1,
+          "n": 10,
+          "p50": 6.65,
+          "p95": 10.3,
+          "spread": 5.2,
+          "stdev": 1.61
+        },
+        "launch_to_overview_ms": {
+          "max": 27.6,
+          "min": 11.0,
+          "n": 10,
+          "p50": 12.8,
+          "p95": 27.6,
+          "spread": 16.6,
+          "stdev": 4.61
+        },
+        "process_launch_ms": {
+          "max": 7.0,
+          "min": 1.0,
+          "n": 10,
+          "p50": 1.5,
+          "p95": 7.0,
+          "spread": 6.0,
+          "stdev": 1.66
+        }
+      }
+    },
+    "tiny_store_10_memories": {
+      "runs": [
+        {
+          "browser_launch_ms": 81.1,
+          "goto_to_counted_overview_wall_ms": 63.1,
+          "in_page_counted_overview_ms": 54.3,
+          "launch_to_overview_ms": 135.7,
+          "process_launch_ms": 72.6
+        },
+        {
+          "browser_launch_ms": 110.2,
+          "goto_to_counted_overview_wall_ms": 44.8,
+          "in_page_counted_overview_ms": 38.2,
+          "launch_to_overview_ms": 121.8,
+          "process_launch_ms": 77.0
+        },
+        {
+          "browser_launch_ms": 269.3,
+          "goto_to_counted_overview_wall_ms": 64.6,
+          "in_page_counted_overview_ms": 53.8,
+          "launch_to_overview_ms": 142.7,
+          "process_launch_ms": 78.1
+        },
+        {
+          "browser_launch_ms": 266.6,
+          "goto_to_counted_overview_wall_ms": 70.0,
+          "in_page_counted_overview_ms": 60.3,
+          "launch_to_overview_ms": 169.0,
+          "process_launch_ms": 99.0
+        },
+        {
+          "browser_launch_ms": 357.4,
+          "goto_to_counted_overview_wall_ms": 75.7,
+          "in_page_counted_overview_ms": 58.7,
+          "launch_to_overview_ms": 155.8,
+          "process_launch_ms": 80.2
+        },
+        {
+          "browser_launch_ms": 264.8,
+          "goto_to_counted_overview_wall_ms": 56.0,
+          "in_page_counted_overview_ms": 44.6,
+          "launch_to_overview_ms": 131.5,
+          "process_launch_ms": 75.5
+        },
+        {
+          "browser_launch_ms": 359.0,
+          "goto_to_counted_overview_wall_ms": 73.1,
+          "in_page_counted_overview_ms": 55,
+          "launch_to_overview_ms": 150.2,
+          "process_launch_ms": 77.2
+        },
+        {
+          "browser_launch_ms": 303.6,
+          "goto_to_counted_overview_wall_ms": 73.0,
+          "in_page_counted_overview_ms": 57.9,
+          "launch_to_overview_ms": 151.5,
+          "process_launch_ms": 78.5
+        },
+        {
+          "browser_launch_ms": 365.2,
+          "goto_to_counted_overview_wall_ms": 75.0,
+          "in_page_counted_overview_ms": 58.1,
+          "launch_to_overview_ms": 149.7,
+          "process_launch_ms": 74.8
+        },
+        {
+          "browser_launch_ms": 294.2,
+          "goto_to_counted_overview_wall_ms": 135.7,
+          "in_page_counted_overview_ms": 100.7,
+          "launch_to_overview_ms": 236.4,
+          "process_launch_ms": 100.7
+        }
+      ],
+      "summary": {
+        "browser_launch_ms": {
+          "max": 365.2,
+          "min": 81.1,
+          "n": 10,
+          "p50": 281.75,
+          "p95": 365.2,
+          "spread": 284.1,
+          "stdev": 93.55
+        },
+        "goto_to_counted_overview_wall_ms": {
+          "max": 135.7,
+          "min": 44.8,
+          "n": 10,
+          "p50": 71.5,
+          "p95": 135.7,
+          "spread": 90.9,
+          "stdev": 22.81
+        },
+        "in_page_counted_overview_ms": {
+          "max": 100.7,
+          "min": 38.2,
+          "n": 10,
+          "p50": 56.45,
+          "p95": 100.7,
+          "spread": 62.5,
+          "stdev": 15.62
+        },
+        "launch_to_overview_ms": {
+          "max": 236.4,
+          "min": 121.8,
+          "n": 10,
+          "p50": 149.95,
+          "p95": 236.4,
+          "spread": 114.6,
+          "stdev": 30.1
+        },
+        "process_launch_ms": {
+          "max": 100.7,
+          "min": 72.6,
+          "n": 10,
+          "p50": 77.65,
+          "p95": 100.7,
+          "spread": 28.1,
+          "stdev": 9.46
+        }
+      }
+    }
+  },
+  "definitions": "Memory Atlas benchmark: a disposable 10,000-memory project, the real launcher, a real Chromium.\n\n    uv run --group atlas-ui python benchmarks/atlas/run.py --memories 10000 --interactions 100\n\nEverything is measured in the browser against the viewer launched through ``launcher.py atlas``. Targets are\nprinted beside measured values and never mixed with them. Nothing here tunes a result: the only gate is the\nfixture contract (``fixture.check_fixture``), which is checked before any timing and fails the run if unmet.\n\nDefinitions (also written to the report):\n  * percentiles use the nearest-rank method; spread is max - min.\n  * \"selection\" = click on a result to the first neighborhood drawn plus the inspector filled, then two animation\n    frames: the neighbors response has arrived, the focus node changed, and the page has painted twice. Two frames at\n    60 Hz are about 33 ms, a floor under every timing here; ``summary_data_ready_before_paint`` omits that floor.\n  * cold start = a fresh copy of the store file, a fresh launcher process, a fresh Chromium with an empty profile.\n    The operating-system file cache is NOT flushed (that needs privileges); the copy is cache-resident.\n",
+  "fixture": {
+    "active": 10000,
+    "build_seconds": 10.7,
+    "contract_problems": [],
+    "database_bytes": 25690112,
+    "foreign": 300,
+    "forgotten": 50,
+    "hub_citers": 1200,
+    "isolated": 2500,
+    "revised": 500
+  },
+  "generated_at": "2026-11-06T10:26:04+00:00",
+  "git_commit": "f35e7e77afd1b5673287ef4d6d8b2852ed31005f",
+  "hardware": {
+    "chip": "Apple M5",
+    "chromium": "151.0.7922.34",
+    "machine": "arm64",
+    "memory": "16 GB",
+    "model_identifier": "Mac17,2",
+    "model_name": "MacBook Pro",
+    "platform": "macOS-26.1-arm64-arm-64bit-Mach-O",
+    "playwright": "1.62.0",
+    "python": "3.13.14",
+    "total_number_of_cores": "10 (4 performance and 6 efficiency)"
+  },
+  "hub_journey": {
+    "1024": {
+      "back_ms": 51.9,
+      "first_selection_ms": 34.1,
+      "hub_next_ms": {
+        "max": 41.2,
+        "min": 31.2,
+        "n": 47,
+        "p50": 39.3,
+        "p95": 39.8,
+        "spread": 10.0,
+        "stdev": 1.33
+      },
+      "hub_next_samples": [
+        38.5,
+        39.4,
+        38.5,
+        39.1,
+        41,
+        37.2,
+        39,
+        39.5,
+        39.3,
+        39.4,
+        39.6,
+        37.7,
+        38.8,
+        39.2,
+        39.2,
+        39.1,
+        38.8,
+        39.5,
+        39.3,
+        39.3,
+        39.3,
+        39.6,
+        39.4,
+        39.2,
+        39.5,
+        37.6,
+        41.2,
+        39.1,
+        38.6,
+        39.7,
+        38.7,
+        38.9,
+        39.6,
+        39.3,
+        39.5,
+        39.2,
+        39.1,
+        39.1,
+        39.3,
+        39.5,
+        39.3,
+        39.8,
+        31.2,
+        39.1,
+        39.4,
+        39.6,
+        39.6
+      ],
+      "hub_open_ms": 40,
+      "hub_pages": 48,
+      "last_title": "Showing 1176\u20131200 of 1200 citing memories of src/hub.py",
+      "max_visible": {
+        "edges": 99,
+        "nodes": 100
+      },
+      "open_last_result_ms": 28.5,
+      "width": 1024
+    },
+    "360": {
+      "back_ms": 48.7,
+      "first_selection_ms": 25.4,
+      "hub_next_ms": {
+        "max": 41.6,
+        "min": 30,
+        "n": 47,
+        "p50": 39.4,
+        "p95": 41.4,
+        "spread": 11.6,
+        "stdev": 2.88
+      },
+      "hub_next_samples": [
+        39.4,
+        39.3,
+        39.5,
+        39.4,
+        39.2,
+        41.4,
+        37.3,
+        30.9,
+        39,
+        39.3,
+        41.6,
+        36.9,
+        40.1,
+        30.4,
+        39.7,
+        40.5,
+        30,
+        39.5,
+        31.2,
+        38.7,
+        39,
+        39.4,
+        41.4,
+        37.1,
+        39.6,
+        39.2,
+        31.4,
+        33.2,
+        39.5,
+        38.9,
+        37.4,
+        39.5,
+        39,
+        39.5,
+        39.2,
+        39.4,
+        39.5,
+        39.5,
+        39.6,
+        39.1,
+        39.4,
+        39.4,
+        39.6,
+        39.3,
+        39.6,
+        39.9,
+        38.7
+      ],
+      "hub_open_ms": 40.7,
+      "hub_pages": 48,
+      "last_title": "Showing 1176\u20131200 of 1200 citing memories of src/hub.py",
+      "max_visible": {
+        "edges": 99,
+        "nodes": 100
+      },
+      "open_last_result_ms": 30.9,
+      "width": 360
+    }
+  },
+  "interactions_requested": 100,
+  "late_result_pages": {
+    "pages_advanced": 40,
+    "samples": [
+      40.6,
+      39.8,
+      39.7,
+      60.8,
+      47,
+      40.7,
+      41,
+      42.1,
+      47.9,
+      49.2,
+      40.4,
+      41,
+      47.6,
+      52,
+      47.3,
+      48.7,
+      42.8,
+      49.1,
+      121.7,
+      41,
+      40.9,
+      48.8,
+      40.8,
+      41.5,
+      40.1,
+      51.3,
+      38.8,
+      40.8,
+      41.9,
+      40,
+      40.4,
+      42.7,
+      55.1,
+      40.8,
+      42,
+      40.2,
+      41.9,
+      38.7,
+      49.1,
+      45.9
+    ],
+    "summary": {
+      "max": 121.7,
+      "min": 38.7,
+      "n": 40,
+      "p50": 41.9,
+      "p95": 55.1,
+      "spread": 83.0,
+      "stdev": 13.08
+    }
+  },
+  "raw_database_files": [
+    "/private/var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/atlas-bench-6l0c2fwj/main/home/.local/share/nexus-memory/project-scopes-v1/0357dbc9-6d0b-4c86-95e0-b2af92bb73e1.sqlite3"
+  ],
+  "targets": {
+    "overview_ms": 2000,
+    "warm_selection_p95_ms": 300
+  },
+  "verdict_vs_targets": {
+    "launch_to_counted_overview_p95_ms": {
+      "measured": 176.7,
+      "met": true,
+      "target": 2000
+    },
+    "warm_selection_p95_ms": {
+      "measured": 36,
+      "met": true,
+      "target": 300
+    }
+  },
+  "warm_selection": {
+    "by_stratum": {
+      "hub": {
+        "max": 45.1,
+        "min": 25,
+        "n": 25,
+        "p50": 30.8,
+        "p95": 32.7,
+        "spread": 20.1,
+        "stdev": 3.31
+      },
+      "isolated": {
+        "max": 40.3,
+        "min": 27.6,
+        "n": 25,
+        "p50": 30.2,
+        "p95": 37.6,
+        "spread": 12.7,
+        "stdev": 2.69
+      },
+      "ordinary": {
+        "max": 38.4,
+        "min": 26.4,
+        "n": 25,
+        "p50": 30.3,
+        "p95": 36.5,
+        "spread": 12.0,
+        "stdev": 2.91
+      },
+      "revised": {
+        "max": 33.8,
+        "min": 25.9,
+        "n": 25,
+        "p50": 29.6,
+        "p95": 33.5,
+        "spread": 7.9,
+        "stdev": 1.92
+      }
+    },
+    "max_visible": {
+      "edges": 5,
+      "nodes": 6
+    },
+    "samples": [
+      {
+        "memory_id": "d3b10b5e-50c5-4ba3-a363-b234fe55c51b",
+        "ms": 45.1,
+        "ready_ms": 28.7,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "7f262202-766a-4089-be63-1c116baeee03",
+        "ms": 31.5,
+        "ready_ms": 15.4,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "db1e7f18-c5bd-4b06-9c0f-c04102755b84",
+        "ms": 29.3,
+        "ready_ms": 12.9,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "7b0822ed-a3ce-43b3-aff2-2fbbad28233d",
+        "ms": 31.9,
+        "ready_ms": 13.5,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "4c62ec69-5dbb-40e4-a8b4-922fa4bcdbfa",
+        "ms": 31.8,
+        "ready_ms": 13.2,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "9e54e79a-f18e-43f6-ba19-880fb50e7ce9",
+        "ms": 29.5,
+        "ready_ms": 13.4,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "851108dd-7b29-45b0-bddb-a3e7ff9c4bd7",
+        "ms": 29.7,
+        "ready_ms": 13.5,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "5768dd0d-8e21-49a9-b116-d83bf3e79449",
+        "ms": 31.3,
+        "ready_ms": 14.8,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "6b402a46-04fa-4451-b35f-16eec799088d",
+        "ms": 32.1,
+        "ready_ms": 14.2,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "c47ca600-d5de-4780-9f1a-c65c412f0362",
+        "ms": 27.3,
+        "ready_ms": 11.4,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "a1761122-5685-48c2-9ed8-392b68f1baed",
+        "ms": 29.2,
+        "ready_ms": 12,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "c32c3a7f-1cf7-4b3d-b488-71bbc5e37ea9",
+        "ms": 25,
+        "ready_ms": 6.6,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "cc54e63a-c77d-47b2-a9e9-0ea62ae27b9c",
+        "ms": 31.3,
+        "ready_ms": 12.9,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "6269f775-48a3-4204-9ae5-23161802aefd",
+        "ms": 32.7,
+        "ready_ms": 13.1,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "a0a9e505-5073-44c6-a855-ef05c0ee0718",
+        "ms": 30.8,
+        "ready_ms": 13,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "e68265f8-2644-4db0-8174-4157e6567ada",
+        "ms": 30,
+        "ready_ms": 13.8,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "e50f0475-6a7a-449b-a8d5-61d3f334b4e8",
+        "ms": 30.7,
+        "ready_ms": 12.2,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "f80986db-5602-404b-ac9b-c230600675d9",
+        "ms": 30.4,
+        "ready_ms": 14,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "0f05cd61-93a7-4adc-8bda-12953faa4301",
+        "ms": 31.4,
+        "ready_ms": 15,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "064cd3ce-4808-4251-9738-53db2b841bf1",
+        "ms": 30.8,
+        "ready_ms": 14.7,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "2af5768a-0918-4e85-b17e-47b96dce61bc",
+        "ms": 31.7,
+        "ready_ms": 14.1,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "d3541824-f441-44f9-bb76-c05d1665ab87",
+        "ms": 31.9,
+        "ready_ms": 12,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "998c7b55-c152-402c-9cbc-0e238691da75",
+        "ms": 29.8,
+        "ready_ms": 13.4,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "7d7fb68c-eed0-4a50-9989-96feae38435b",
+        "ms": 31.4,
+        "ready_ms": 13.4,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "eeac6787-6e61-41e7-9391-4f126c372718",
+        "ms": 28.9,
+        "ready_ms": 12.5,
+        "stratum": "hub"
+      },
+      {
+        "memory_id": "fae34a2e-78d9-487e-b077-d75362824ccf",
+        "ms": 29.3,
+        "ready_ms": 13.1,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "bfb364ae-8c01-4a45-abc9-e3edda6e0967",
+        "ms": 28.9,
+        "ready_ms": 12.9,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "3f95b057-a64c-44ac-bc15-938302db7be1",
+        "ms": 29.2,
+        "ready_ms": 12.9,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "02b960ac-0860-402e-991c-d9d006cc5c96",
+        "ms": 33.8,
+        "ready_ms": 14.2,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "7bf14418-1f84-4ba5-b9c4-b1cf192a0cd0",
+        "ms": 31.3,
+        "ready_ms": 15.1,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "378bf882-7163-434e-88f8-773b7e3aefb2",
+        "ms": 29.2,
+        "ready_ms": 13.1,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "6dd2ff4f-e67b-407d-9592-f38b706a9756",
+        "ms": 29.5,
+        "ready_ms": 13.5,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "c3316329-6fcf-4ec3-9a08-7a1d734029f9",
+        "ms": 31.7,
+        "ready_ms": 12,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "cc526e21-bf9d-426a-8c92-8356016c33c8",
+        "ms": 30.8,
+        "ready_ms": 13.4,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "7d5e9773-ca37-439a-bda8-4de45ab75d5d",
+        "ms": 32.7,
+        "ready_ms": 13.2,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "2a70a268-3b4d-47f3-b3d6-eb47a53ccdc1",
+        "ms": 31.2,
+        "ready_ms": 14.1,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "78ff1e04-1c40-48f5-95a5-f4b93dd590cd",
+        "ms": 29.6,
+        "ready_ms": 12.9,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "2bdaace5-3c2f-40db-b3e1-9edb83a2f31a",
+        "ms": 28.9,
+        "ready_ms": 13.7,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "3329414b-8ff9-403a-b821-abb540f5c274",
+        "ms": 27.1,
+        "ready_ms": 11,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "1e168f11-82be-4f8c-af80-536288a7df59",
+        "ms": 28,
+        "ready_ms": 13.1,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "3394e5fb-cfd8-48a2-b4dd-312a3db9b671",
+        "ms": 29.3,
+        "ready_ms": 10.6,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "e862b985-76a7-4fe0-bc63-79b42f93fb33",
+        "ms": 32.1,
+        "ready_ms": 15.6,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "22cee215-0d5e-467b-a930-8e29f91d1d3a",
+        "ms": 31.4,
+        "ready_ms": 14.8,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "712bbacb-1e4e-45fb-bb6d-b12cf75ca73f",
+        "ms": 25.9,
+        "ready_ms": 9.6,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "3d94c27d-6157-48f6-9a20-2bed35411ceb",
+        "ms": 30.4,
+        "ready_ms": 14.4,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "93960382-53a3-4c9f-b219-5a94ef0bee28",
+        "ms": 31.1,
+        "ready_ms": 14.9,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "a71f20c4-aff5-4316-876d-1064c5bd61b8",
+        "ms": 33.5,
+        "ready_ms": 15.7,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "6eca57e6-28fc-408e-a529-ca868fd4dc44",
+        "ms": 30.6,
+        "ready_ms": 14.3,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "5f0669c1-a2e7-4658-807a-d78bc4730a2e",
+        "ms": 27.7,
+        "ready_ms": 11.7,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "cc222f19-c6be-4cbb-b2c4-a25843eb3566",
+        "ms": 28.1,
+        "ready_ms": 11.8,
+        "stratum": "revised"
+      },
+      {
+        "memory_id": "83b1543e-fecb-4615-a7b0-e03c097c393b",
+        "ms": 29.3,
+        "ready_ms": 12.9,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "5620826b-9b23-4ef6-8e7a-ecb40a267190",
+        "ms": 30.8,
+        "ready_ms": 14.4,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "0f702369-fc95-40ee-84cb-57f800d05a72",
+        "ms": 30,
+        "ready_ms": 12.5,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "0df3cc23-910a-417b-bce1-6a219ab2929e",
+        "ms": 31.3,
+        "ready_ms": 14.8,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "1e34a908-2c16-4a5c-9c86-f65a9727612c",
+        "ms": 32.6,
+        "ready_ms": 12.8,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "3f118267-31a2-4b1b-b0e8-0e10916416af",
+        "ms": 29.1,
+        "ready_ms": 12.6,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "46881067-a858-4f08-bbd4-09d80cc48c4c",
+        "ms": 29.6,
+        "ready_ms": 13.3,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "0ce76a58-db09-4ad5-9e9f-7ff27b2c4785",
+        "ms": 30,
+        "ready_ms": 13.6,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "f65a4254-ddb4-4948-a478-a7ecc4074b1b",
+        "ms": 30.7,
+        "ready_ms": 14.6,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "ff813c89-3783-43fb-b461-2b4062b83abe",
+        "ms": 31.3,
+        "ready_ms": 11.8,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "794c8465-ec7b-4c8b-8556-87ea9b2283e2",
+        "ms": 29.9,
+        "ready_ms": 13.5,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "1a7ac712-e176-409c-aa64-4dc184b1c65e",
+        "ms": 30,
+        "ready_ms": 13.8,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "159ba248-f296-4ce6-80a6-362b1571a562",
+        "ms": 30.2,
+        "ready_ms": 14,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "0966ec28-805d-41f5-9c6b-2d5a67b21ef1",
+        "ms": 30.2,
+        "ready_ms": 13.9,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "d4425e65-cb08-4621-88a3-f319ae93208b",
+        "ms": 30,
+        "ready_ms": 13.8,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "ea1dd31b-eeb3-4a1d-8567-48b33349c65e",
+        "ms": 28.4,
+        "ready_ms": 12,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "a5be2aec-ee15-4a37-b34d-fec70fcd48ae",
+        "ms": 31.6,
+        "ready_ms": 14.9,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "61e551f1-80e3-48c7-980b-4ae153e57d6a",
+        "ms": 33.1,
+        "ready_ms": 16.5,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "c595ee7e-da6c-4009-b408-eb777621bec6",
+        "ms": 40.3,
+        "ready_ms": 24.3,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "096ecde8-6d8c-463d-8bfa-47a4325ed808",
+        "ms": 34,
+        "ready_ms": 14.2,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "ee34b8ac-19bf-4ea8-a0bd-eadea87711c5",
+        "ms": 27.6,
+        "ready_ms": 11.3,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "a40733f5-f4c8-479a-a375-cc59d776bf56",
+        "ms": 37.6,
+        "ready_ms": 18.4,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "ae6a057b-34b9-44fb-8252-535ecf759d17",
+        "ms": 29.7,
+        "ready_ms": 13.4,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "d5fc98f5-ebcd-4ee9-abba-f8b2eee86cbf",
+        "ms": 30.6,
+        "ready_ms": 13,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "09543ef4-5477-45cd-ade6-2cac68c46fde",
+        "ms": 31.4,
+        "ready_ms": 13,
+        "stratum": "isolated"
+      },
+      {
+        "memory_id": "21b35363-774f-4cb2-89cf-14f3edbdefaa",
+        "ms": 30.9,
+        "ready_ms": 14.3,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "36f22f3a-12b3-4ec5-9fa3-31805a68dd8c",
+        "ms": 29.5,
+        "ready_ms": 15.8,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "e5390cca-e5bf-439c-a8d8-d805ebbb4be2",
+        "ms": 29.4,
+        "ready_ms": 12.9,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "46eebe4f-e360-4785-aed5-b2759bdf0923",
+        "ms": 30.3,
+        "ready_ms": 11.3,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "bc308c88-cdfe-4914-950d-5fa31db543b0",
+        "ms": 36,
+        "ready_ms": 17.4,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "4368b9b6-00a6-4bea-a6e6-d8beca327859",
+        "ms": 32.8,
+        "ready_ms": 16.1,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "730e8279-76c4-44bc-b755-01d8f46a63ce",
+        "ms": 29.9,
+        "ready_ms": 13.6,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "30e23d75-58b4-4fc0-b2f2-be3a5c0ce432",
+        "ms": 28.3,
+        "ready_ms": 12.1,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "16a7f778-fbc8-44b2-9fc1-d99adaf3c38e",
+        "ms": 30.8,
+        "ready_ms": 13.1,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "132350b4-68ee-42a3-b2fe-cac2e69b2e8b",
+        "ms": 30.9,
+        "ready_ms": 12,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "bd767023-d57b-4d4b-b044-d4e4b80ae006",
+        "ms": 32.8,
+        "ready_ms": 13.9,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "c9478e27-311e-4daf-85bd-8901599a4e68",
+        "ms": 31.1,
+        "ready_ms": 16.6,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "b4898b4e-df2c-4871-8360-b737810272fb",
+        "ms": 27.6,
+        "ready_ms": 11.3,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "b74b2602-6e87-4b20-a056-7b19ad412dde",
+        "ms": 29.8,
+        "ready_ms": 13.1,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "08f011fa-cace-4ee0-abdc-86d0ccb6695d",
+        "ms": 33.1,
+        "ready_ms": 16.5,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "3ddbdb89-3ed3-4307-b132-8eb1b911ff25",
+        "ms": 38.4,
+        "ready_ms": 22,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "5ca82aa3-fd53-480e-adf4-e0092bbfa033",
+        "ms": 28.1,
+        "ready_ms": 11.3,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "1290d7d0-1b4c-44d3-8566-cbc76269cb22",
+        "ms": 30.6,
+        "ready_ms": 12.1,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "27d3658d-1ed6-47cd-abea-9feec75f8ceb",
+        "ms": 26.5,
+        "ready_ms": 10.4,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "54eb4fca-3839-4a6c-85e1-0d2e58197761",
+        "ms": 31.1,
+        "ready_ms": 11.7,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "6392df36-4be9-41c9-bfb1-bafb1744043c",
+        "ms": 26.4,
+        "ready_ms": 11.2,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "93510df6-456c-4fab-ba03-78426ffdc48b",
+        "ms": 36.5,
+        "ready_ms": 20.1,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "447cdd23-7c12-4a56-aad0-e35f183ac4e6",
+        "ms": 30.2,
+        "ready_ms": 13.5,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "e7599ff4-087f-4fe1-ae9f-dd684e05e1fb",
+        "ms": 30,
+        "ready_ms": 13.7,
+        "stratum": "ordinary"
+      },
+      {
+        "memory_id": "7f5fd83a-15c9-4c9d-a528-572246c9ce84",
+        "ms": 27.3,
+        "ready_ms": 11.2,
+        "stratum": "ordinary"
+      }
+    ],
+    "summary": {
+      "max": 45.1,
+      "min": 25,
+      "n": 100,
+      "p50": 30.5,
+      "p95": 36,
+      "spread": 20.1,
+      "stdev": 2.79
+    },
+    "summary_data_ready_before_paint": {
+      "max": 28.7,
+      "min": 6.6,
+      "n": 100,
+      "p50": 13.4,
+      "p95": 17.4,
+      "spread": 22.1,
+      "stdev": 2.7
+    }
+  }
+}
