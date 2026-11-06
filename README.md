@@ -215,6 +215,47 @@ A `history` entry records **what** changed — revision IDs, parent links, times
 
 `history` takes two optional arguments beside the required `memory_id`: `limit` (default 20, between 1 and 100) and `cursor`, which pages through a chain longer than one request returns. A history cursor is bound to the memory it was minted for: presented for another memory in the same scope it is `cursor_expired`, as it is when one of its fields is malformed. It is **not** tamper-detecting — an edit substituting another well-formed value is accepted, and pages from the position that value names. Unlike a search cursor it carries no index generation, so a concurrent write does not invalidate it.
 
+## Memory Atlas (read-only viewer)
+
+A local browser viewer for one enrolled project's memories: counts by kind, search with filters, the full text and
+revision history of a memory, and its recorded connections (the files it cites and the memories that cite them).
+It is read-only: it opens the store in SQLite read-only mode, never enrolls, migrates or writes a memory, and shows
+**no agent activity** (which tool an agent called, or when) in this version.
+
+```sh
+"$nexus_python" -I "$scope_bin/launcher.py" atlas "$main_checkout"          # opens your browser
+"$nexus_python" -I "$scope_bin/launcher.py" atlas "$main_checkout" --no-browser   # prints a private launch file instead
+```
+
+The checkout must already be enrolled (see `integrations/project_scope/README.md`) and the interpreter must be the
+installed Nexus one. Press Ctrl+C to stop. Keyboard and 360 px-wide screens are supported end to end.
+
+**Privacy boundary.** The server listens on `127.0.0.1` on a random port, accepts only its own `Host`/`Origin`, and
+needs a one-time secret that travels in a URL fragment (never in a request, a log or a `Referer`) to receive an
+`HttpOnly`, `SameSite=Strict` cookie. Every response carries `Cache-Control: no-store`, `Referrer-Policy:
+no-referrer`, a self-only Content-Security-Policy without inline script, `X-Frame-Options: DENY` and `nosniff`.
+Stored text is only ever shown as text. Request lines are not logged. The browser cannot name a scope or a path.
+Reading a store in WAL mode makes SQLite leave an empty `-wal` and a `-shm` coordination file beside it; the
+database file itself is untouched (see the measurements below).
+
+**Measured** on one MacBook Pro (Apple M5, 16 GB, macOS 26.1, Chromium 151.0.7922.34, Playwright 1.62.0), 10,000
+active memories, a file cited by 1,200 of them, 500 revised, 2,500 isolated, 50 forgotten and 300 foreign-scope
+controls, a single full run of `benchmarks/atlas/run.py`, operating-system file cache not flushed:
+
+| What | Measured (ms) | Target (ms) |
+| --- | --- | --- |
+| Launcher start to counted overview, 10 cold runs, p50 / p95 / max | 161.5 / 176.7 / 176.7 | p95 under 2000 |
+| Selection to first neighborhood and inspector, 100 distinct targets, p50 / p95 / max | 30.5 / 36.0 / 45.1 | p95 under 300 |
+| Same selections, data ready before the two paint frames, p50 / p95 | 13.4 / 17.4 | n/a |
+| Next result page, 40 late pages, p50 / p95 / max | 41.9 / 55.1 / 121.7 | none set |
+| Next hub page of 48 (1,200 citing memories), p50 / p95 | 39.3 / 39.8 | none set |
+| Binding check: stat-only per request / full with git, p50 | 0.02 / 8.05 | none set |
+
+Controls on the same harness: a static no-op page took 12.8 ms p50 and a 10-memory store took 150 ms p50, so
+Chromium and the harness account for little of the viewer's figures. The visible graph never exceeded 100 nodes and
+99 edges. Raw samples and definitions: `docs/measurements/2026-11-06-atlas-benchmark.json`. Reproduce with
+`uv run --group atlas-ui python benchmarks/atlas/run.py --memories 10000 --interactions 100`.
+
 ## Semantics worth knowing
 
 <details>
