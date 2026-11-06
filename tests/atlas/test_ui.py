@@ -589,3 +589,77 @@ def test_explicit_refresh_rereads_counts_and_lists(enrolled, browser_page) -> No
         enrolled.record("Added after the page loaded", "k-added", kind="observation")
         page.get_by_role("button", name="Refresh").click()
         expect(page.locator("#status")).not_to_have_text(before)
+
+
+# ---- 5f: keyboard only, and a 360 px screen ----------------------------------------------------------
+
+def _tab_to(page, locator, limit: int = 400) -> None:
+    """Move focus to ``locator`` with the Tab key alone; fail if it is not reachable."""
+    target = locator.first
+    target.wait_for(state="attached")
+    for _ in range(limit):
+        if target.evaluate("e => e === document.activeElement"):
+            return
+        page.keyboard.press("Tab")
+    raise AssertionError("not reachable by Tab")
+
+
+def _press(page, locator, key: str = "Enter") -> None:
+    _tab_to(page, locator)
+    page.keyboard.press(key)
+
+
+def _no_sideways_scroll(page) -> None:
+    wide = page.evaluate("""[...document.querySelectorAll('body *')].filter(e => e.scrollWidth > document.documentElement.clientWidth)
+                            .slice(0, 5).map(e => e.tagName + '#' + e.id + '.' + e.className)""")
+    assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth"), \
+        page.evaluate("document.documentElement.scrollWidth + ' > ' + document.documentElement.clientWidth") + str(wide)
+
+
+@pytest.mark.parametrize("width", [1024, 360], ids=["desktop", "360px"])
+def test_find_hub_last_result_back_by_keyboard_alone(enrolled, browser_page, width: int) -> None:
+    _dense(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        page.set_viewport_size({"width": width, "height": 740})
+        _open(page, server)
+        # find: type into the search box, submit with Enter
+        _tab_to(page, page.locator("#q"))
+        page.keyboard.type("unique-m-token")
+        page.keyboard.press("Enter")
+        expect(page.locator("#count")).to_contain_text("1 matching")
+        _press(page, page.locator("#results li button"))
+        expect(page.locator("#graph")).to_be_visible()
+        expect(page.locator("[data-node-id]").nth(1)).to_be_visible()
+        first = page.locator(".node.focus").get_attribute("data-node-id")
+        _no_sideways_scroll(page)
+        # hub: every graph node has a text entry with its own button, so no action needs the pointer
+        for node in page.locator("[data-node-id]:not(.focus)").all():
+            label = node.get_attribute("aria-label").split(": ", 1)[1]
+            assert page.locator("#graph-lists li", has_text=label).count() >= 1, label
+        _press(page, page.locator("#graph-lists li", has_text="src/hub.py").get_by_role("button", name="Expand"))
+        section = page.locator("#graph-lists section", has_text="citing memories of src/hub.py")
+        expect(section.locator("h3")).to_have_text("Showing 1–25 of 121 citing memories of src/hub.py")
+        # the camera has a text path too
+        _press(page, page.get_by_role("button", name="Zoom in"))
+        expect(page.locator("#world")).to_have_attribute("data-k", "1.25")
+        # last result
+        nxt = page.get_by_role("button", name="Next citing memories")
+        for _ in range(10):
+            if nxt.is_disabled():
+                break
+            _press(page, nxt)
+            page.wait_for_timeout(120)
+        expect(section.locator("h3")).to_have_text("Showing 101–121 of 121 citing memories of src/hub.py")
+        # the focused memory cites the hub too; if it is listed last, take the last one that is not it
+        last = section.locator("li:not(:has-text('unique-m-token'))").last
+        chosen = last.locator("span").inner_text()
+        _press(page, last.get_by_role("button", name="Open"))
+        expect(page.locator(".node.focus")).not_to_have_attribute("data-node-id", first)
+        expect(page.locator("#memory-body")).to_contain_text(chosen.split(" ")[0])
+        _no_sideways_scroll(page)
+        # Back
+        _press(page, page.locator("#back"))
+        expect(page.locator(".node.focus")).to_have_attribute("data-node-id", first)
+        assert page.evaluate("document.activeElement.tagName") != "BODY"        # focus was not dropped
+        _no_sideways_scroll(page)

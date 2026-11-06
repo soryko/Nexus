@@ -117,7 +117,7 @@ The project-scope integration (`integrations/`, `tests/tools/test_project_scope.
 - [ ] Tests: Back restores search, filters, list position, camera, selection and expansions; after a forget, Back shows no stale text, counts, cached bodies or selection, including through the browser’s back/forward cache; after an unrelated write the viewer announces the expired cursor and restarts the affected list; late responses from an earlier selection are ignored. Implement and commit.
 
 **5f · Keyboard and narrow viewport.**
-- [ ] Tests: the whole find → hub → last result → Back journey by keyboard with a text path for every graph action, and at 360 px width. Verify packaged CSS and JS are in the wheel. Commit.
+- [x] Tests: the whole find → hub → last result → Back journey by keyboard with a text path for every graph action, and at 360 px width. Verify packaged CSS and JS are in the wheel. Commit.
 
 ## Task 6 · Measure and release-check the installed path
 

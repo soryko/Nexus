@@ -1,7 +1,7 @@
 :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.4; }
 body { margin: 0; padding: 0 1rem 2rem; }
 header, main { max-width: 64rem; margin: 0 auto; }
-main { display: grid; gap: 1.5rem; }
+main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
 h1 { margin-bottom: .25rem; }
 .groups { display: flex; flex-wrap: wrap; gap: .5rem; list-style: none; padding: 0; margin: 0; }
 .groups button { font-size: 1rem; padding: .5rem .9rem; border-radius: .5rem; cursor: pointer; }
@@ -12,7 +12,7 @@ fieldset { display: flex; flex-wrap: wrap; gap: .75rem; border: 1px solid GrayTe
 .results button { width: 100%; text-align: left; padding: .6rem .8rem; border-radius: .4rem; cursor: pointer; }
 .results .meta { display: block; font-size: .85rem; opacity: .75; }
 .results .excerpt { display: block; overflow-wrap: anywhere; }
-#memory-body { white-space: pre-wrap; overflow-wrap: anywhere; padding: .75rem; border: 1px solid GrayText; border-radius: .4rem; }
+#memory-body, #memory-diff { white-space: pre-wrap; overflow-wrap: anywhere; padding: .75rem; border: 1px solid GrayText; border-radius: .4rem; }
 #notice:empty { display: none; }
 #notice { padding: .5rem .75rem; border: 1px solid GrayText; border-radius: .4rem; }
 button:focus-visible, input:focus-visible { outline: 3px solid Highlight; outline-offset: 2px; }
