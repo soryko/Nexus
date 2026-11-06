@@ -5,7 +5,7 @@ import anyio
 import pytest
 from mcp import Client
 
-from tests.transport.test_codex_integration import repository, server
+from test_codex_integration import repository, server
 
 NEW = {"nexus_session_start", "nexus_recall", "nexus_pre_tool"}
 OLD = {"codex_session_start", "codex_recall", "task_pre_tool_use"}

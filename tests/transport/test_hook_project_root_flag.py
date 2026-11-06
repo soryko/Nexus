@@ -9,7 +9,7 @@ import anyio
 import pytest
 from mcp import Client, StdioServerParameters
 
-from tests.transport.test_codex_integration import PROJECT, repository
+from test_codex_integration import PROJECT, repository
 
 HOOKS = {"nexus_session_start", "nexus_recall", "nexus_pre_tool"}
 
