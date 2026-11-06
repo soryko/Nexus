@@ -110,6 +110,8 @@ The checkout registers an opaque identity in `<git-dir>/nexus/checkout-token`, s
 
 ## Connect an agent
 
+For Codex Desktop, see the [project-scoped setup and recall hooks](docs/codex-desktop.md).
+
 Add a stdio server entry to your MCP client's configuration, substituting your absolute project path:
 
 ```json

@@ -322,6 +322,7 @@ def _run(call: Callable[[], Any], output: type[BaseModel]) -> BaseModel | CallTo
 def create_server(
     service: MemoryService,
     *,
+    codex_checkout: Path | None = None,
     instructions: bool = True,
     capture_policy: _InstructionPolicy = _EXPLICIT,
     usage: UsageLog | None = None,
@@ -547,6 +548,10 @@ def create_server(
         except Exception:
             return _error("internal_error", "operation failed")
 
+    if codex_checkout is not None:
+        from nexus_memory.transport.codex import register_hooks
+
+        register_hooks(server, service, codex_checkout)
     return server
 
 
@@ -585,6 +590,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--db", type=Path, default=None, help="SQLite database path")
     parser.add_argument("--repo", type=Path, default=None, help="Local Git checkout to bind for reference verification")
     parser.add_argument("--repo-id", default=None, help="Associate the checkout with an existing repository identity (requires --repo)")
+    parser.add_argument("--codex-project-root", type=Path, default=None,
+                        help="Enable Codex hooks and bind the launch cwd, only within this Git repository/worktrees")
     parser.add_argument("--capture-policy", choices=("explicit", "autonomous"), default="explicit",
                         help="Explicit requests by default; opt into autonomous guidance for the Claude pilot")
     parser.add_argument("--no-instructions", action="store_true",
@@ -597,11 +604,19 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
-    if args.repo_id is not None and args.repo is None:
+    if args.codex_project_root is not None and args.repo is not None:
+        parser.error("--codex-project-root and --repo are mutually exclusive")
+    if args.repo_id is not None and args.repo is None and args.codex_project_root is None:
         parser.error("--repo-id requires --repo")
     usage = None
     policy = _launch_policy(args)
     try:
+        codex_checkout = None
+        if args.codex_project_root is not None:
+            from nexus_memory.transport.codex import resolve_checkout
+
+            codex_checkout = resolve_checkout(args.codex_project_root, Path.cwd())
+            args.repo = codex_checkout
         db_path = args.db if args.db is not None else _default_db()
         if args.usage_log is not None:
             # Checked before the store is opened, so a refused destination leaves the store untouched.
@@ -653,7 +668,7 @@ def main(argv: list[str] | None = None) -> int:
         if hasattr(signal, "SIGTERM"):
             signal.signal(signal.SIGTERM, lambda signum, frame: _stop_and_exit(usage))
     try:
-        create_server(service, capture_policy=policy, usage=usage, database=db_path).run()
+        create_server(service, codex_checkout=codex_checkout, capture_policy=policy, usage=usage, database=db_path).run()
     finally:
         _write_stop(usage, "end_of_input")
         _close(usage)
