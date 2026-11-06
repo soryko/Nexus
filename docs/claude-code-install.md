@@ -87,7 +87,7 @@ that matches a stored memory shows IDs in the injected context. In an unenrolled
 
 ## Keep in mind
 
-- Step 5 registers this checkout as a marketplace in place. Installed plugin files are copied into Claude's
+- Step 5 registers this checkout as a marketplace in place. Installed plugin files are, as far as I know (unobserved), copied into Claude's
   plugin cache, but moving or deleting this checkout breaks `claude plugin marketplace update`.
 - Replacing the launcher is atomic (rename). Servers already running keep the old file; new sessions use the new one.
 - Codex uses `launcher.py codex`, which this change does not touch.
