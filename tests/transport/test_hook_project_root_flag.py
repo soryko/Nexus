@@ -43,6 +43,78 @@ def test_flag_refuses_an_unrelated_launch_cwd_and_repo_combination(tmp_path) -> 
     both = subprocess.run([*base, "--hook-project-root", str(repo), "--repo", str(repo)],
                           cwd=repo, env=env, capture_output=True, text=True, timeout=30)
     assert both.returncode == 2 and "mutually exclusive" in both.stderr
-    wrong = subprocess.run([*base, "--hook-project-root", str(repo)], cwd=other, env=env,
+    wrong = subprocess.run([*base, "--hook-project-root", str(repo)], cwd=other, env=env, input="",
                            capture_output=True, text=True, timeout=30)
     assert wrong.returncode == 1 and "startup_error" in wrong.stderr
+
+
+def test_unenrolled_mode_says_one_line_per_session_opens_no_store_and_has_no_memory_tools(tmp_path) -> None:
+    repo = repository(tmp_path / "repo")
+    db = tmp_path / "must-not-exist.sqlite3"
+    parameters = StdioServerParameters(command=sys.executable, args=[
+        "-m", "nexus_memory", "--namespace", "n", "--hook-unenrolled"], cwd=repo,
+        env={**os.environ, "PYTHONPATH": str(PROJECT / "src")})
+
+    async def run() -> None:
+        async with Client(parameters) as client:
+            names = {tool.name for tool in (await client.list_tools()).tools}
+            assert names == HOOKS  # no record/get/search: nothing to disclose
+            args = {"cwd": str(repo), "session_id": "a", "prompt": "Explain quasarflux"}
+            first = await client.call_tool("nexus_recall", args)
+            assert list(first.structured_content) == ["systemMessage"]
+            assert "not enrolled" in first.structured_content["systemMessage"]
+            for _ in range(3):
+                assert (await client.call_tool("nexus_recall", args)).structured_content == {}
+            other = await client.call_tool("nexus_recall", {**args, "session_id": "b"})
+            assert "systemMessage" in other.structured_content
+            pre = await client.call_tool("nexus_pre_tool", {"cwd": str(repo), "session_id": "a",
+                                                           "tool_name": "mcp__nexus-memory__search", "tool_input": {}})
+            assert pre.structured_content == {}
+            start = await client.call_tool("nexus_session_start", {"cwd": str(repo), "session_id": "a"})
+            assert start.structured_content == {}
+
+    anyio.run(run)
+    assert not db.exists()
+
+
+def test_unenrolled_mode_refuses_store_options(tmp_path) -> None:
+    repo = repository(tmp_path / "repo")
+    env = {**os.environ, "PYTHONPATH": str(PROJECT / "src")}
+    for extra in (["--db", str(tmp_path / "x.sqlite3")], ["--repo", str(repo)], ["--hook-project-root", str(repo)]):
+        r = subprocess.run([sys.executable, "-m", "nexus_memory", "--namespace", "n", "--hook-unenrolled", *extra],
+                           cwd=repo, env=env, capture_output=True, text=True, timeout=30)
+        assert r.returncode == 2 and "no store or repository option" in r.stderr
+    assert not (tmp_path / "x.sqlite3").exists()
+
+
+def test_an_unavailable_store_degrades_to_one_line_hooks_and_no_memory_tools(tmp_path) -> None:
+    repo = repository(tmp_path / "repo")
+    db = tmp_path / "db.sqlite3"
+    db.write_bytes(b"")
+    db.chmod(0)
+    try:
+        async def run() -> None:
+            async with Client(params(tmp_path, repo, "--hook-project-root")) as client:
+                assert {t.name for t in (await client.list_tools()).tools} == HOOKS
+                args = {"cwd": str(repo), "session_id": "s", "prompt": "Explain quasarflux"}
+                first = (await client.call_tool("nexus_recall", args)).structured_content
+                assert list(first) == ["systemMessage"] and "could not start" in first["systemMessage"]
+                assert (await client.call_tool("nexus_recall", args)).structured_content == {}
+
+        anyio.run(run)
+    finally:
+        db.chmod(0o600)
+
+
+def test_a_launch_without_hooks_still_fails_plainly_on_an_unavailable_store(tmp_path) -> None:
+    repo = repository(tmp_path / "repo")
+    db = tmp_path / "db.sqlite3"
+    db.write_bytes(b"")
+    db.chmod(0)
+    try:
+        r = subprocess.run([sys.executable, "-m", "nexus_memory", "--namespace", "n", "--db", str(db), "--repo", str(repo)],
+                           cwd=repo, env={**os.environ, "PYTHONPATH": str(PROJECT / "src")}, input="",
+                           capture_output=True, text=True, timeout=30)
+        assert r.returncode == 1 and "startup_error" in r.stderr
+    finally:
+        db.chmod(0o600)

@@ -596,6 +596,9 @@ def _parser() -> argparse.ArgumentParser:
                         help="Enable host lifecycle hooks (Claude Code, Codex) and bind the launch cwd, "
                              "only within this Git repository/worktrees. Also binds that checkout for "
                              "reference verification, as --repo does. --codex-project-root is the older spelling.")
+    parser.add_argument("--hook-unenrolled", action="store_true",
+                        help="Serve only no-op lifecycle hook tools for a project that is not enrolled: "
+                             "opens no store and exposes no memory tools. Exclusive with every other option except --namespace/--actor.")
     parser.add_argument("--capture-policy", choices=("explicit", "autonomous"), default="explicit",
                         help="Explicit requests by default; opt into autonomous guidance for the Claude pilot")
     parser.add_argument("--no-instructions", action="store_true",
@@ -605,9 +608,34 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _degraded(args: argparse.Namespace) -> int:
+    """A hook-enabled launch whose store could not start still answers its hooks: one line, then silence.
+
+    Without it the host's mcp_tool hooks fail with "not connected" on every prompt. No store is open
+    and no memory tool exists, so nothing can be disclosed. Other launches keep the plain failure.
+    """
+    if args.hook_project_root is None:
+        return 1
+    from nexus_memory.transport.codex import UNAVAILABLE_LINE, register_unenrolled
+
+    server = MCPServer(name="nexus-memory", description="Nexus hooks while the store is unavailable.")
+    register_unenrolled(server, UNAVAILABLE_LINE)
+    server.run()
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
+    if args.hook_unenrolled:
+        if args.db is not None or args.repo is not None or args.repo_id is not None or args.hook_project_root is not None:
+            parser.error("--hook-unenrolled takes no store or repository option")
+        from nexus_memory.transport.codex import register_unenrolled
+
+        server = MCPServer(name="nexus-memory", description="Nexus hooks for a project that is not enrolled.")
+        register_unenrolled(server)
+        server.run()
+        return 0
     if args.hook_project_root is not None and args.repo is not None:
         parser.error("--hook-project-root (--codex-project-root) and --repo are mutually exclusive")
     if args.repo_id is not None and args.repo is None and args.hook_project_root is None:
@@ -644,18 +672,18 @@ def main(argv: list[str] | None = None) -> int:
     except NexusError as error:
         print(f"startup_error: {error.code}: {error}", file=sys.stderr)
         _close(usage)
-        return 1
+        return _degraded(args)
     except OSError:
         print(
             "startup_error: storage_unavailable: cannot create or open the database file",
             file=sys.stderr,
         )
         _close(usage)
-        return 1
+        return _degraded(args)
     except Exception:
         print("startup_error: internal_error: unable to initialize storage", file=sys.stderr)
         _close(usage)
-        return 1
+        return _degraded(args)
     if usage is not None:
         usage.write({
             "event": "start",

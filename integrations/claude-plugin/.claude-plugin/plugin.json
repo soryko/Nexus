@@ -1,0 +1,5 @@
+{
+  "name": "nexus-memory",
+  "version": "0.1.0",
+  "description": "Hooks-only read path for Nexus Memory: ID-only recall on prompt submit and a task guard before Nexus tool calls. Uses an existing nexus-memory MCP server; bundles no server and enrols nothing."
+}

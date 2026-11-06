@@ -1,0 +1,30 @@
+diff --git a/integrations/project_scope/launcher.py b/integrations/project_scope/launcher.py
+index 3fed123..e8f14e1 100644
+--- a/integrations/project_scope/launcher.py
++++ b/integrations/project_scope/launcher.py
+@@ -37,12 +37,22 @@ def main():
+             if args.expected_project is not None:
+                 command.append(str(args.expected_project))
+             os.execv(python, command)
+-        project = host_project(args.command)
+-        if args.expected_project is not None and resolve(args.expected_project).id != project.id:
+-            raise ScopeError('host entry is bound to a different enrolled project')
++        try:
++            project = host_project(args.command)
++            if args.expected_project is not None and resolve(args.expected_project).id != project.id:
++                raise ScopeError('host entry is bound to a different enrolled project')
++        except ScopeError:
++            if args.command != 'claude':
++                raise
++            # Unenrolled or ambiguous: serve only no-op hook tools (no store, no memory tools) so the
++            # plugin's hooks stay connected and say one line instead of failing on every prompt.
++            os.chdir(Path.home())
++            os.execv(args.runtime, [str(args.runtime), '--namespace', 'unenrolled', '--hook-unenrolled'])
+         options = ['--db', str(project.database), '--namespace', project.id, '--actor', 'local']
+         if args.command == 'codex':
+             options.extend(['--codex-project-root', str(project.common.parent)])
++        elif args.command == 'claude':
++            options.extend(['--hook-project-root', str(project.common.parent)])
+         else:
+             options.extend(['--repo', str(project.checkout)])
+         os.chdir(project.checkout)
