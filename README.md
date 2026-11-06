@@ -130,6 +130,16 @@ On Windows the installed command is `<environment>\Scripts\nexus-memory.exe`. Yo
 > [!TIP]
 > Point `command` at the environment whose SQLite check passed. A client launching an interpreter below the floor only sees the transport close, because the diagnosis (`startup_error: unsupported_runtime`) goes to the server's stderr where the client is not looking.
 
+### What the server tells the model, and what it records
+
+Builds after `0.1.0a2` add three things. None changes the database schema, so they share a database with `0.1.0a2` clients in either order and at the same time.
+
+- **Capture policy.** The default `--capture-policy explicit` sends instructions permitting memory changes only on the user's explicit request, including on a plain Codex MCP connection without hooks. When installing this build for the dedicated Claude pilot, pass `--capture-policy autonomous` to preserve the pilot treatment. Its original instruction text has SHA-256 prefix `e6733e856c06`. A build that includes the Codex adapter selects explicit capture automatically for `--codex-project-root`, even when the client skips its hooks. These rules guide the agent. The write tools stay available for authorized requests. `--no-instructions` suppresses the initialization text for either treatment. Status and every usage-log line include the effective `capture_policy` and the `instructions_digest` of the text actually sent.
+- **Status.** `status` also reports the launch-bound `namespace` and `actor`, `service_version`, whether instructions are on and their digest, the usage-log state, and `database_location_fingerprint`: the first 12 hex characters of a SHA-256 of the database's resolved path. It tells two clients apart without disclosing the path. It identifies a location, not a store, and a predictable path can be guessed from it.
+- **Usage log (opt-in).** `--usage-log /absolute/path/usage.jsonl` appends one JSON line per tool call: the time, a random server-instance id, the client's name and version, the tool, the outcome (`ok`, the error code, or `cancelled` when the client abandoned the call), the duration, and the opaque identifiers a *successful* call returned. Version 2 logs carry the receipt identifiers and a `replayed` flag from the store's idempotency check. A retry keeps its original receipt even when the first write took place before logging began. Search events carry the hit count and up to 20 hit IDs. It never records arguments, bodies, queries, tags, references or paths. Every line also carries `seq`, which counts write *attempts* per instance, so a gap is a lost line; the instructions state and digest; and the instance id. An instance opens with a `start` event and, on a clean shutdown, closes with a `stop` event carrying its counters and the number of calls still awaiting a logged outcome. A server instance is a process lifetime, not a conversation: one client process can serve several conversations.
+- **Reading pilot counts.** The offline reporter counts confirmed new writes. Calls from older logs without a replay flag appear under `health.writes_without_disposition`. A nonzero `truncated_searches` means reuse candidates may be missing. `calls_in_flight_at_stop` counts calls whose outcomes may be missing, including writes committed just before shutdown. For older SIGTERM records, `sigterm_stops_without_inflight_count` marks that uncertainty.
+- **Where it may write.** The destination is checked before the store is opened. It is refused if it is the database or one of its sidecar files (compared by spelling, case-insensitively, and by file identity), a symbolic link, a FIFO or anything else that is not a regular file, or a file owned by another user. Missing directories are created `0700`, the file is `0600` (an existing log is tightened to it), and a file created during a refused check is removed. If the log is moved or deleted while a server runs, it is re-created and a `reopened` event marks the join; a write that still fails is counted, never raised, and `status` reports `usage_log: failing`. Memory ids still link activity across events, so treat the log as private.
+
 ## Using it day to day
 
 Connecting a client is not the same as getting anything out of it. Three milestones, worth
@@ -176,7 +186,7 @@ Keep the returned `memory_id` and `revision_id`. Read with `get`, and pass the l
 
 ## Finding a memory
 
-`search` returns bounded excerpts and the reason each hit matched, never whole bodies — fetch those with `get`. The workflow the milestone is built around:
+`search` returns up to 240 Unicode characters of each body and the reason it matched. Use `get` for the complete stored text.
 
 ```text
 search "retry policy"      -> a hit, with has_earlier_revisions: true
@@ -206,6 +216,47 @@ Literal mode makes two separate commitments, and they are worth stating apart be
 A `history` entry records **what** changed — revision IDs, parent links, timestamps. It never carries a rationale, because Nexus does not infer *why* a change was made from the difference between two revisions. If the reason matters, record it as a memory.
 
 `history` takes two optional arguments beside the required `memory_id`: `limit` (default 20, between 1 and 100) and `cursor`, which pages through a chain longer than one request returns. A history cursor is bound to the memory it was minted for: presented for another memory in the same scope it is `cursor_expired`, as it is when one of its fields is malformed. It is **not** tamper-detecting — an edit substituting another well-formed value is accepted, and pages from the position that value names. Unlike a search cursor it carries no index generation, so a concurrent write does not invalidate it.
+
+## Memory Atlas (read-only viewer)
+
+A local browser viewer for one enrolled project's memories: counts by kind, search with filters, the full text and
+revision history of a memory, and its recorded connections (the files it cites and the memories that cite them).
+It is read-only: it opens the store in SQLite read-only mode, never enrolls, migrates or writes a memory, and shows
+**no agent activity** (which tool an agent called, or when) in this version.
+
+```sh
+"$nexus_python" -I "$scope_bin/launcher.py" atlas "$main_checkout"          # opens your browser
+"$nexus_python" -I "$scope_bin/launcher.py" atlas "$main_checkout" --no-browser   # prints a private launch file instead
+```
+
+The checkout must already be enrolled (see `integrations/project_scope/README.md`) and the interpreter must be the
+installed Nexus one. Press Ctrl+C to stop. Keyboard and 360 px-wide screens are supported end to end.
+
+**Privacy boundary.** The server listens on `127.0.0.1` on a random port, accepts only its own `Host`/`Origin`, and
+needs a one-time secret that travels in a URL fragment (never in a request, a log or a `Referer`) to receive an
+`HttpOnly`, `SameSite=Strict` cookie. Every response carries `Cache-Control: no-store`, `Referrer-Policy:
+no-referrer`, a self-only Content-Security-Policy without inline script, `X-Frame-Options: DENY` and `nosniff`.
+Stored text is only ever shown as text. Request lines are not logged. The browser cannot name a scope or a path.
+Reading a store in WAL mode makes SQLite leave an empty `-wal` and a `-shm` coordination file beside it; the
+database file itself is untouched (see the measurements below).
+
+**Measured** on one MacBook Pro (Apple M5, 16 GB, macOS 26.1, Chromium 151.0.7922.34, Playwright 1.62.0), 10,000
+active memories, a file cited by 1,200 of them, 500 revised, 2,500 isolated, 50 forgotten and 300 foreign-scope
+controls, a single full run of `benchmarks/atlas/run.py`, operating-system file cache not flushed:
+
+| What | Measured (ms) | Target (ms) |
+| --- | --- | --- |
+| Launcher start to counted overview, 10 cold runs, p50 / p95 / max | 161.5 / 176.7 / 176.7 | p95 under 2000 |
+| Selection to first neighborhood and inspector, 100 distinct targets, p50 / p95 / max | 30.5 / 36.0 / 45.1 | p95 under 300 |
+| Same selections, data ready before the two paint frames, p50 / p95 | 13.4 / 17.4 | n/a |
+| Next result page, 40 late pages, p50 / p95 / max | 41.9 / 55.1 / 121.7 | none set |
+| Next hub page of 48 (1,200 citing memories), p50 / p95 | 39.3 / 39.8 | none set |
+| Binding check: stat-only per request / full with git, p50 | 0.02 / 8.05 | none set |
+
+Controls on the same harness: a static no-op page took 12.8 ms p50 and a 10-memory store took 150 ms p50, so
+Chromium and the harness account for little of the viewer's figures. The visible graph never exceeded 100 nodes and
+99 edges. Raw samples and definitions: `docs/measurements/2026-11-06-atlas-benchmark.json`. Reproduce with
+`uv run --group atlas-ui python benchmarks/atlas/run.py --memories 10000 --interactions 100`.
 
 ## Semantics worth knowing
 

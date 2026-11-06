@@ -340,22 +340,26 @@ Correct whether or not the server is running, and the procedure this page recomm
 
 ```bash
 "$nexus_runtime/bin/python" - '/absolute/path/nexus-data/memory.sqlite3' '/absolute/path/backups/memory-2026-09-20.sqlite3' <<'PY'
-import sqlite3, sys
+import os, sqlite3, sys, tempfile
+from contextlib import closing
 from pathlib import Path
 
 source, destination = Path(sys.argv[1]), Path(sys.argv[2])
-if destination.exists():
-    raise SystemExit(f"refusing to overwrite an existing backup: {destination}")
+os.umask(0o077)  # applies to all new parents and SQLite files in this process
 destination.parent.mkdir(parents=True, exist_ok=True)
 
-# as_uri() percent-encodes the characters a URI would otherwise eat. A path built by
-# string interpolation breaks on a space and breaks WORSE on '#', which starts a URI
-# fragment: SQLite then opens a DIFFERENT, empty database and reports no error at all.
-src = sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True)
-dst = sqlite3.connect(destination)
-with dst:
-    src.backup(dst)
-src.close(); dst.close()
+# as_uri() preserves spaces and '#' in the source filename. mode=ro refuses a missing source.
+with tempfile.TemporaryDirectory(dir=destination.parent) as staging:
+    copy = Path(staging) / "backup.sqlite3"
+    with closing(sqlite3.connect(source.resolve().as_uri() + "?mode=ro", uri=True)) as src:
+        with closing(sqlite3.connect(copy)) as dst:
+            src.backup(dst)
+    # Publish only the finished, closed copy. link() fails if ANY directory entry already
+    # occupies the destination, including a dangling symlink or a concurrent backup.
+    try:
+        os.link(copy, destination)
+    except FileExistsError:
+        raise SystemExit(f"refusing to overwrite an existing backup: {destination}")
 print("backed up to", destination)
 PY
 ```

@@ -90,8 +90,8 @@ and an unquoted `$pilot_log_dir` would split into two arguments and create the w
 Then fill the private manifest from the **client entry that launches the server**.
 
 > [!WARNING]
-> Do not derive `database_path`, `namespace`, or `actor` from `status` — it reports none of
-> the three. Read them from the client configuration, as
+> Do not derive `database_path`, `namespace`, or `actor` from `status`. It never reports the
+> path, and `0.1.0a2` reports none of the three. Read them from the client configuration, as
 > [the triage table in the routine](daily-use.md#when-it-goes-wrong) describes. And do not
 > change `--actor` to label this pilot: the actor **partitions** the store, so relabelling
 > it points the client at a different set of memories and the pilot would begin against an

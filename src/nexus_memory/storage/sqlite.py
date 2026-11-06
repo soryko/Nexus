@@ -5,9 +5,12 @@ import binascii
 import hashlib
 import json
 import math
+import os
 import sqlite3
 import time
+import unicodedata
 import uuid
+from urllib.parse import quote
 from contextlib import closing, contextmanager
 from datetime import UTC, datetime
 from importlib.resources import files
@@ -45,9 +48,10 @@ from nexus_memory.domain.models import (
     WriteReceipt,
 )
 
+from .repository import write_observation
 
-_TOKEN = re.compile(r"\w+", re.UNICODE)
 
+_MARKS_AND_PRIVATE_USE = frozenset(("Mn", "Mc", "Me", "Co"))
 _SEPARATORS = ("_", "/", "\\", ".")
 _CAMEL = re.compile(r"[a-z0-9][A-Z]")
 _ALNUM_MIX = re.compile(r"(?:[A-Za-z][0-9])|(?:[0-9][A-Za-z])")
@@ -92,6 +96,35 @@ _SQLITE_INTEGER_MIN = -2 ** 63
 _SQLITE_INTEGER_MAX = 2 ** 63 - 1
 
 
+class _SnapshotConnection:
+    """One connection shared by every read made inside ``read_snapshot``.
+
+    The core read methods each open a connection, ``BEGIN`` and commit. Inside a snapshot
+    those calls are absorbed so that they all see the same committed state, and the
+    connection is released only when the snapshot ends.
+    """
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self._connection = connection
+
+    def execute(self, sql, *arguments):
+        if sql.strip().upper() == "BEGIN":
+            return self._connection.execute("SELECT 1")
+        return self._connection.execute(sql, *arguments)
+
+    def commit(self) -> None:
+        pass
+
+    def rollback(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+    def __getattr__(self, name):
+        return getattr(self._connection, name)
+
+
 class SQLiteRepository:
     SCHEMA_VERSION = 4
     MINIMUM_SQLITE = (3, 51, 3)
@@ -129,7 +162,96 @@ class SQLiteRepository:
         self.history_profile = history_profile
         self._migrate()
 
+    #: Set only by ``open_readonly``. A read-only instance never migrates, repairs or
+    #: rebuilds anything, and every connection it makes refuses writes.
+    _read_only = False
+
+    @classmethod
+    def open_readonly(cls, path: str | Path) -> "SQLiteRepository":
+        """Open an existing, current-schema store for reading and nothing else.
+
+        The constructor migrates and may rebuild the search structures, which a viewer
+        must never do. This keeps the runtime-floor check and adopts the profiles the
+        database already carries, without creating the optional history-profile table.
+        A store at any other schema version, including a retired one, is refused.
+        """
+        if sqlite3.sqlite_version_info < cls.MINIMUM_SQLITE:
+            raise UnsupportedRuntime("SQLite 3.51.3 or newer is required")
+        repository = cls.__new__(cls)
+        repository.path = str(path)
+        repository._read_only = True
+        repository.index_profile = "exact"
+        repository.history_profile = "none"
+        connection = repository._connect()
+        try:
+            repository.index_profile = connection.execute(
+                "SELECT profile FROM search_profile WHERE id=1").fetchone()[0]
+            if connection.execute(
+                    "SELECT count(*) FROM sqlite_master WHERE name='history_profile'").fetchone()[0]:
+                repository.history_profile = connection.execute(
+                    "SELECT profile FROM history_profile WHERE id=1").fetchone()[0]
+        except (sqlite3.Error, TypeError) as error:
+            raise UnsupportedSchema("database schema is not supported for read-only access") from error
+        finally:
+            connection.close()
+        return repository
+
+    def _connect_read_only(self) -> sqlite3.Connection:
+        uri = "file:" + quote(os.path.abspath(self.path), safe="/") + "?mode=ro"
+        connection = None
+        try:
+            connection = sqlite3.connect(uri, uri=True, timeout=5, isolation_level=None)
+            connection.execute("PRAGMA query_only = ON")
+            connection.execute("PRAGMA busy_timeout = 5000")
+            connection.execute("PRAGMA foreign_keys = ON")
+            # A retired store keeps its inode and carries only a marker, so the version is
+            # checked on every connection rather than trusted from the last one.
+            if connection.execute("PRAGMA user_version").fetchone()[0] != self.SCHEMA_VERSION:
+                raise UnsupportedSchema("database schema is not supported for read-only access")
+            return connection
+        except sqlite3.Error as error:
+            if connection is not None:
+                connection.close()
+            raise StorageIntegrityError("storage unavailable") from error
+        except BaseException:
+            if connection is not None:
+                connection.close()
+            raise
+
+    _pinned: "_SnapshotConnection | None" = None
+
+    @contextmanager
+    def read_snapshot(self) -> Iterator["SQLiteRepository"]:
+        """Run several reads against one consistent view of a read-only store.
+
+        A forget that commits while the block runs is invisible to every read inside it,
+        so a response assembled from several calls is either all before or all after it.
+        """
+        if not self._read_only:
+            raise UnsupportedRuntime("snapshots are only available on a read-only repository")
+        if self._pinned is not None:
+            yield self
+            return
+        connection = self._connect_read_only()
+        try:
+            connection.execute("BEGIN")
+            connection.execute("SELECT generation FROM index_state WHERE id=1").fetchone()  # fixes the snapshot
+            self._pinned = _SnapshotConnection(connection)
+            yield self
+        except sqlite3.Error as error:
+            raise StorageIntegrityError("storage operation failed") from error
+        finally:
+            self._pinned = None
+            try:
+                connection.rollback()
+            finally:
+                connection.close()
+
     def _connect(self) -> sqlite3.Connection:
+        if self._pinned is not None:
+            return self._pinned
+        if self._read_only:
+            return self._connect_read_only()
         connection = None
         try:
             connection = sqlite3.connect(self.path, timeout=5, isolation_level=None)
@@ -443,6 +565,29 @@ class SQLiteRepository:
                 raise StorageIntegrityError("storage initialization failed")
             time.sleep(cls.WAL_SWITCH_RETRY_SECONDS)
 
+    def _repair_legacy_recency(self, db: sqlite3.Connection) -> None:
+        """Restore sequence numbers lost by the original v1 head-index backfill.
+
+        The index shape is unchanged. A transactional marker keeps existing schema-4
+        executables compatible and makes subsequent opens skip the historical scan.
+        """
+        db.execute("CREATE TABLE IF NOT EXISTS data_repairs (name TEXT PRIMARY KEY) WITHOUT ROWID")
+        marker = db.execute("INSERT OR IGNORE INTO data_repairs VALUES ('v1-head-recency')")
+        if not marker.rowcount:
+            return
+        legacy_heads = db.execute("SELECT count(*) FROM head_index WHERE durable_seq=0").fetchone()[0]
+        if not legacy_heads:
+            return
+        updated = db.execute(
+            "UPDATE head_index AS h SET durable_seq=r.durable_seq FROM receipts AS r"
+            " WHERE h.durable_seq=0 AND r.namespace=h.namespace AND r.actor=h.actor"
+            " AND r.memory_id=h.memory_id AND r.revision_id=h.revision_id"
+            " AND r.operation IN ('record','revise')"
+        )
+        if updated.rowcount != legacy_heads:
+            raise StorageIntegrityError("a migrated head has no matching write receipt")
+        self._bump_generation(db)
+
     def _migrate(self) -> None:
         connection = None
         try:
@@ -474,6 +619,7 @@ class SQLiteRepository:
                         connection.execute(statement)
                 version = 4
             connection.execute(f"PRAGMA user_version = {version}")
+            self._repair_legacy_recency(connection)
             self._apply_profile(connection)
             self._apply_history_profile(connection)
             connection.commit()
@@ -530,6 +676,10 @@ class SQLiteRepository:
             "SELECT memory_id,revision_id,operation_id,durable_seq,operation,request_digest FROM receipts WHERE namespace=? AND actor=? AND idempotency_key=?",
             (scope.namespace, scope.actor, key),
         ).fetchone()
+        # Includes reference retries satisfied by the read-only receipt lookup. If the
+        # precheck misses, the subsequent lookup under BEGIN IMMEDIATE decides the race.
+        if observation := write_observation.get():
+            observation.replayed = row is not None
         if row is None:
             return None
         if row[5] != digest:
@@ -889,6 +1039,10 @@ class SQLiteRepository:
             "reference_path_prefix": query.reference_path_prefix,
             "reference_commits": list(query.reference_commits or ()),
         }
+        # Schema-4 servers may share a store across this tokenizer correction.
+        # Older literal cursors page across a different match set for these terms.
+        if not query.advanced and any(unicodedata.category(ch) in _MARKS_AND_PRIVATE_USE for ch in query.query or ""):
+            payload["literal_tokenization"] = 2
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         return hashlib.sha256(encoded).hexdigest()
 
@@ -1083,6 +1237,17 @@ class SQLiteRepository:
         return " ".join(clauses), parameters
 
     @staticmethod
+    def _literal_expression(text: str) -> str | None:
+        # Preserve combining marks with their base, so SQLite gets the same spelling
+        # on lookup that its tokenizer saw on insert. unicode61 also indexes private
+        # use characters. Separators keep independent query terms disjunctive.
+        words = "".join(
+            char if char.isalnum() or char == "_" or unicodedata.category(char) in _MARKS_AND_PRIVATE_USE else " "
+            for char in text
+        ).split()
+        return " OR ".join(f'"{word}"' for word in words) or None
+
+    @staticmethod
     def _match_expression(query: SearchQuery) -> str | None:
         """Literal mode means FTS operators are inert, not that the text must appear verbatim.
 
@@ -1094,10 +1259,7 @@ class SQLiteRepository:
         """
         if query.advanced:
             return query.query or ""
-        tokens = _TOKEN.findall(query.query or "")
-        if not tokens:
-            return None
-        return " OR ".join('"' + token.replace('"', '""') + '"' for token in tokens)
+        return SQLiteRepository._literal_expression(query.query or "")
 
     def _match_legs(self, query: SearchQuery, expression: str) -> list[tuple[str, str]]:
         """Which index or indexes this profile matches against, and with what expression.
@@ -1116,10 +1278,9 @@ class SQLiteRepository:
         legs = [("head_fts", expression)]
         if query.advanced:
             return legs
-        prose = [chunk for chunk in (query.query or "").split() if not _is_code_shaped(chunk)]
-        tokens = _TOKEN.findall(" ".join(prose))
-        if tokens:
-            legs.append(("head_fts_prose", " OR ".join('"' + token.replace('"', '""') + '"' for token in tokens)))
+        prose = self._literal_expression(_prose_text(query.query or ""))
+        if prose:
+            legs.append(("head_fts_prose", prose))
         return legs
 
     @staticmethod
@@ -1216,7 +1377,88 @@ class SQLiteRepository:
             [after[0], after[0], after[1]],
         )
 
-    def search(self, scope: Scope, query: SearchQuery, repository_id: str | None = None) -> SearchPage:
+    @classmethod
+    def _excerpt_sql(cls, table: str) -> str:
+        # FTS5 limits snippets in tokens. A single token can fill the entire body.
+        # If the context is too long, start again at the match before clipping.
+        context = f"snippet({table},0,'','','…',16)"
+        match = f"snippet({table},0,'','','…',1)"
+        return (f"substr(CASE WHEN length({context}) <= {cls.EXCERPT_LIMIT} THEN {context}"
+                f" ELSE {match} END,1,{cls.EXCERPT_LIMIT})")
+
+    def _candidates(self, scope: Scope, query: SearchQuery, repository_id: str | None,
+                    exclude_memory_id: str | None = None) -> "tuple[str, list, bool] | None":
+        """The unordered, unpaged candidate statement for a query, or None if it matches nothing."""
+        filters, filter_parameters = self._filters(query, repository_id)
+        if exclude_memory_id is not None:
+            filters += " AND h.memory_id <> ?"
+            filter_parameters = [*filter_parameters, exclude_memory_id]
+        # The authoritative join is mandatory: external content does not self-synchronise,
+        # and every eligibility filter is applied before the limit, never after.
+        authority = (
+            " JOIN memories m ON m.namespace=h.namespace AND m.actor=h.actor AND m.memory_id=h.memory_id"
+            " WHERE h.namespace=? AND h.actor=? AND m.tombstoned=0 AND m.current_revision_id=h.revision_id "
+        )
+        if query.query:
+            expression = self._match_expression(query)
+            if expression is None:
+                return None
+            self._validate_match_expression(expression)
+            legs = self._match_legs(query, expression)
+            leg_sql = []
+            parameters: list = []
+            for table, leg_expression in legs:
+                leg_sql.append(
+                    "SELECT h.seq AS seq,h.memory_id,h.revision_id,h.kind,h.tags_json,h.created_at,"
+                    f"h.has_parent,bm25({table}) AS rank,"
+                    f"{self._excerpt_sql(table)} AS excerpt"
+                    f" FROM {table} JOIN head_index h ON h.seq={table}.rowid"
+                    + authority + f"AND {table} MATCH ? " + filters
+                )
+                parameters.extend([scope.namespace, scope.actor, leg_expression, *filter_parameters])
+            if len(leg_sql) == 1:
+                inner = leg_sql[0]
+            else:
+                # One row per memory, keeping its best leg. BM25 scores from two indexes
+                # are computed over different corpus statistics, so best-of is a stated
+                # heuristic, not a principled combination — it is recorded as such.
+                inner = (
+                    "SELECT seq,memory_id,revision_id,kind,tags_json,created_at,has_parent,"
+                    "MIN(rank) AS rank,excerpt FROM (" + " UNION ALL ".join(leg_sql) + ") GROUP BY seq"
+                )
+            return inner, parameters, False
+        inner = (
+            "SELECT h.seq AS seq,h.memory_id,h.revision_id,h.kind,h.tags_json,h.created_at,"
+            "h.has_parent,-h.durable_seq AS rank,"
+            f"substr(CAST(b.body AS TEXT),1,{self.EXCERPT_LIMIT}) AS excerpt"
+            " FROM head_index h JOIN blobs b ON b.id=h.blob_id"
+            + authority + filters
+        )
+        return inner, [scope.namespace, scope.actor, *filter_parameters], True
+
+    def count_matches(self, scope: Scope, query: SearchQuery, repository_id: str | None = None,
+                      exclude_memory_id: str | None = None) -> int:
+        """How many memories a search would return across every page, cursor ignored."""
+        db = None
+        try:
+            db = self._connect()
+            with closing(db):
+                db.execute("BEGIN")
+                plan = self._candidates(scope, query, repository_id, exclude_memory_id)
+                if plan is None:
+                    db.commit()
+                    return 0
+                inner, parameters, _ = plan
+                total = db.execute(f"SELECT count(*) FROM ({inner})", parameters).fetchone()[0]
+                db.commit()
+                return total
+        except NexusError:
+            raise
+        except (sqlite3.Error, UnicodeError, ValueError) as error:
+            raise StorageIntegrityError("storage operation failed") from error
+
+    def search(self, scope: Scope, query: SearchQuery, repository_id: str | None = None,
+               exclude_memory_id: str | None = None) -> SearchPage:
         """``repository_id`` is the identity the *service* resolved for ``repository: "bound"``.
 
         Storage never reads a binding and never learns one from a tool call: it is handed the
@@ -1230,6 +1472,8 @@ class SQLiteRepository:
                 db.execute("BEGIN")  # one read snapshot for generation, index and authority
                 generation = self._generation(db)
                 fingerprint = self._fingerprint(scope, query, repository_id)
+                if exclude_memory_id is not None:  # unchanged for every existing caller
+                    fingerprint = hashlib.sha256(f"{fingerprint}|exclude|{exclude_memory_id}".encode()).hexdigest()
                 after: tuple[float, int] | None = None
                 browse = False  # the recency branch orders on head_index_recent directly
                 if query.cursor is not None:
@@ -1238,51 +1482,11 @@ class SQLiteRepository:
                         raise CursorExpired("cursor is not valid for this search")
                     after = self._cursor_position(payload, "cursor is not valid for this search")
 
-                filters, filter_parameters = self._filters(query, repository_id)
-                # The authoritative join is mandatory: external content does not self-synchronise,
-                # and every eligibility filter is applied before the limit, never after.
-                authority = (
-                    " JOIN memories m ON m.namespace=h.namespace AND m.actor=h.actor AND m.memory_id=h.memory_id"
-                    " WHERE h.namespace=? AND h.actor=? AND m.tombstoned=0 AND m.current_revision_id=h.revision_id "
-                )
-                if query.query:
-                    expression = self._match_expression(query)
-                    if expression is None:  # no indexable token: match nothing, never everything
-                        db.commit()
-                        return SearchPage(hits=(), cursor=None, generation=generation)
-                    self._validate_match_expression(expression)
-                    legs = self._match_legs(query, expression)
-                    leg_sql = []
-                    parameters = []
-                    for table, leg_expression in legs:
-                        leg_sql.append(
-                            "SELECT h.seq AS seq,h.memory_id,h.revision_id,h.kind,h.tags_json,h.created_at,"
-                            f"h.has_parent,bm25({table}) AS rank,"
-                            f"snippet({table},0,'','','…',16) AS excerpt"
-                            f" FROM {table} JOIN head_index h ON h.seq={table}.rowid"
-                            + authority + f"AND {table} MATCH ? " + filters
-                        )
-                        parameters.extend([scope.namespace, scope.actor, leg_expression, *filter_parameters])
-                    if len(leg_sql) == 1:
-                        inner = leg_sql[0]
-                    else:
-                        # One row per memory, keeping its best leg. BM25 scores from two indexes
-                        # are computed over different corpus statistics, so best-of is a stated
-                        # heuristic, not a principled combination — it is recorded as such.
-                        inner = (
-                            "SELECT seq,memory_id,revision_id,kind,tags_json,created_at,has_parent,"
-                            "MIN(rank) AS rank,excerpt FROM (" + " UNION ALL ".join(leg_sql) + ") GROUP BY seq"
-                        )
-                else:
-                    browse = True
-                    inner = (
-                        "SELECT h.seq AS seq,h.memory_id,h.revision_id,h.kind,h.tags_json,h.created_at,"
-                        "h.has_parent,-h.durable_seq AS rank,"
-                        f"substr(CAST(b.body AS TEXT),1,{self.EXCERPT_LIMIT}) AS excerpt"
-                        " FROM head_index h JOIN blobs b ON b.id=h.blob_id"
-                        + authority + filters
-                    )
-                    parameters = [scope.namespace, scope.actor, *filter_parameters]
+                plan = self._candidates(scope, query, repository_id, exclude_memory_id)
+                if plan is None:  # no indexable token: match nothing, never everything
+                    db.commit()
+                    return SearchPage(hits=(), cursor=None, generation=generation)
+                inner, parameters, browse = plan
 
                 order = self._browse_statement if browse else self._ranked_statement
                 statement, cursor_parameters = order(inner, after)
@@ -1344,7 +1548,7 @@ class SQLiteRepository:
                 rows = db.execute(
                     "SELECT x.memory_id,x.revision_id,m.current_revision_id,x.kind,x.tags_json,"
                     "x.created_at,bm25(revision_fts) AS rank,"
-                    f"snippet(revision_fts,0,'','','…',16) AS excerpt"
+                    f"{self._excerpt_sql('revision_fts')} AS excerpt"
                     " FROM revision_fts JOIN revision_index x ON x.seq=revision_fts.rowid"
                     " JOIN memories m ON m.namespace=x.namespace AND m.actor=x.actor"
                     "   AND m.memory_id=x.memory_id"

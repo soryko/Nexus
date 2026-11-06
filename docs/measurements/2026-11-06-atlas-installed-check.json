@@ -1,0 +1,83 @@
+{
+  "steps": {
+    "enroll_again_via_installed_launcher": {
+      "returncode": 0,
+      "stdout": "8e9271ee-f253-4ffb-92d6-0eaea29b2b32"
+    },
+    "journey": {
+      "back_ms": 29.7,
+      "hub_next_ms": 25.4,
+      "hub_open_ms": 23.6,
+      "open_last_ms": 31.8,
+      "selection_ms": 36.7,
+      "status": "600 active memories"
+    },
+    "wheel": {
+      "bytes": 106193,
+      "file": "nexus_memory-0.1.0a2-py3-none-any.whl",
+      "installed_package_dir": "/var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/atlas-installed-i4qmytdb/venv/lib/python3.13/site-packages/nexus_memory",
+      "static_files": [
+        "app.js",
+        "atlas.css",
+        "connections.js",
+        "graph.js",
+        "index.html"
+      ]
+    }
+  },
+  "store_hashes_after": {
+    "registry.json": {
+      "bytes": 300,
+      "exists": true,
+      "mtime_ns": 1793961070952294744,
+      "sha256": "f10037be79f2a833a14657c87f43acd29fccc1351737389579447abfb4538f12"
+    },
+    "sqlite3": {
+      "bytes": 1703936,
+      "exists": true,
+      "mtime_ns": 1793961071670383832,
+      "sha256": "e94142a6c33a9ff68e5b0ab0a49b2c621b32efecdcbff04f8cb6dd34d9bdea14"
+    },
+    "sqlite3-shm": {
+      "bytes": 32768,
+      "exists": true,
+      "mtime_ns": 1793961072649777603,
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb"
+    },
+    "sqlite3-wal": {
+      "bytes": 0,
+      "exists": true,
+      "mtime_ns": 1793961072073749365,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "store_hashes_before": {
+    "registry.json": {
+      "bytes": 300,
+      "exists": true,
+      "mtime_ns": 1793961070952294744,
+      "sha256": "f10037be79f2a833a14657c87f43acd29fccc1351737389579447abfb4538f12"
+    },
+    "sqlite3": {
+      "bytes": 1703936,
+      "exists": true,
+      "mtime_ns": 1793961071670383832,
+      "sha256": "e94142a6c33a9ff68e5b0ab0a49b2c621b32efecdcbff04f8cb6dd34d9bdea14"
+    },
+    "sqlite3-shm": {
+      "bytes": null,
+      "exists": false,
+      "mtime_ns": null,
+      "sha256": null
+    },
+    "sqlite3-wal": {
+      "bytes": null,
+      "exists": false,
+      "mtime_ns": null,
+      "sha256": null
+    }
+  },
+  "store_unchanged": true,
+  "strict_identical_including_sidecars_and_mtimes": false,
+  "work_directory": "/var/folders/24/01628ttx16j2tszb0lxfs0jw0000gn/T/atlas-installed-i4qmytdb"
+}

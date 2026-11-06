@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Memory Atlas</title>
+<link rel="stylesheet" href="/atlas.css">
+</head>
+<body>
+<header>
+  <h1>Memory Atlas</h1>
+  <p id="status" role="status">Starting…</p>
+  <p><button type="button" id="back" disabled>Back</button> <button type="button" id="refresh">Refresh</button></p>
+</header>
+<main>
+  <section aria-labelledby="map-title">
+    <h2 id="map-title">Project map</h2>
+    <ul id="groups" class="groups"></ul>
+  </section>
+
+  <section aria-labelledby="find-title">
+    <h2 id="find-title">Find</h2>
+    <form id="find" role="search">
+      <label for="q">Search memories</label>
+      <input id="q" name="q" type="search" autocomplete="off" maxlength="1024">
+      <label for="tag">Tag</label>
+      <input id="tag" name="tag" type="text" autocomplete="off" maxlength="64">
+      <fieldset id="kinds"><legend>Kind</legend></fieldset>
+      <button type="submit">Search</button>
+      <button type="button" id="reset" hidden>Reset filters</button>
+    </form>
+    <p id="filters" aria-live="polite"></p>
+    <p id="count" role="status" aria-live="polite"></p>
+    <p id="notice" role="alert"></p>
+    <ol id="results" class="results"></ol>
+    <nav aria-label="Result pages">
+      <button type="button" id="prev" disabled>Previous page</button>
+      <span id="page"></span>
+      <button type="button" id="next" disabled>Next page</button>
+    </nav>
+  </section>
+
+  <section id="inspector" aria-labelledby="inspect-title" tabindex="-1">
+    <h2 id="inspect-title">Memory</h2>
+    <p id="inspect-empty">Choose a memory to read it.</p>
+    <article id="memory" hidden>
+      <h3 id="memory-title"></h3>
+      <p id="memory-flag"></p>
+      <dl id="memory-meta"></dl>
+      <pre id="memory-body"></pre>
+      <h4>Recorded references</h4>
+      <ul id="memory-refs"></ul>
+      <h4>Changes from the parent revision</h4>
+      <pre id="memory-diff"></pre>
+      <h4>Revisions</h4>
+      <ul id="memory-history"></ul>
+    </article>
+  </section>
+
+  <section id="graph" aria-labelledby="graph-title" hidden>
+    <h2 id="graph-title">Connections</h2>
+    <p id="graph-limits" role="status" aria-live="polite"></p>
+    <div class="controls" role="group" aria-label="Graph view">
+      <button type="button" id="zoom-in">Zoom in</button>
+      <button type="button" id="zoom-out">Zoom out</button>
+      <button type="button" id="fit">Fit</button>
+      <button type="button" id="back-to-selection">Back to selection</button>
+    </div>
+    <div id="graph-canvas" tabindex="0" aria-label="Graph canvas: arrow keys pan, plus and minus zoom, 0 fits"></div>
+    <div id="graph-lists"></div>
+  </section>
+</main>
+<script type="module" src="/app.js"></script>
+</body>
+</html>
