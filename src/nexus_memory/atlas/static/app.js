@@ -5,9 +5,10 @@ const $ = (id) => document.getElementById(id);
 const PAGE = 20;
 
 const state = {
-  q: "", tag: "", kinds: new Set(),
+  q: "", tag: "", kinds: new Set(), repo: "", path: "", prefix: "", commit: "",
   cursors: [null], index: 0, nextCursor: null,
   group: null, searchToken: 0, openToken: 0, selected: null,   // selected: {memoryId, revisionId} or null
+  related: { token: 0, how: null, cursor: null, shown: 0 },      // how: ["tag"|"term", value] of the open memory
 };
 const trail = [];   // earlier views, newest last; Back restores the top one
 
@@ -46,18 +47,26 @@ function queryParams() {
   if (state.q) params.push(["q", state.q]);
   if (state.tag) params.push(["tag", state.tag]);
   for (const kind of state.kinds) params.push(["kind", kind]);
+  for (const name of CITATION_FILTERS) if (state[name]) params.push([name, state[name]]);
   const cursor = state.cursors[state.index];
   if (cursor) params.push(["cursor", cursor]);
   return params;
 }
 
-function filtersActive() { return Boolean(state.q || state.tag || state.kinds.size); }
+// A path, prefix or commit only means something inside one repository, so the page will not send them without it.
+const CITATION_FILTERS = ["repo", "path", "prefix", "commit"];
+const CITATION_LABELS = { repo: "repository", path: "path", prefix: "path prefix", commit: "commit" };
+
+function filtersActive() { return Boolean(state.q || state.tag || state.kinds.size || CITATION_FILTERS.some((n) => state[n])); }
 
 function renderFilters() {
   const parts = [];
   if (state.q) parts.push(`text “${state.q}”`);
   if (state.tag) parts.push(`tag “${state.tag}”`);
   if (state.kinds.size) parts.push(`kind ${[...state.kinds].join(", ")}`);
+  for (const name of CITATION_FILTERS) {
+    if (state[name]) parts.push(`${CITATION_LABELS[name]} “${name === "commit" ? state[name].slice(0, 12) : state[name]}”`);
+  }
   $("filters").textContent = parts.length ? `Filters: ${parts.join("; ")}` : "No filters: newest memories first.";
   $("reset").hidden = !filtersActive();
 }
@@ -97,17 +106,19 @@ function renderKinds(overview) {
 
 function firstLine(text) { return (text || "").split("\n").find((line) => line.trim()) || "(empty)"; }
 
+function hitItem(hit) {
+  const meta = `${hit.kind}${hit.tags.length ? " · " + hit.tags.join(", ") : ""} · ${hit.created_at.slice(0, 10)}`;
+  const button = el("button", { attrs: { type: "button" } },
+    el("span", { text: meta, className: "meta" }),
+    el("span", { text: firstLine(hit.excerpt), className: "excerpt" }));
+  button.addEventListener("click", () => openMemory(hit.memory_id, hit.revision_id).catch(sessionLost));
+  return el("li", {}, button);
+}
+
 function renderResults(page) {
   const list = $("results");
   list.replaceChildren();
-  for (const hit of page.items) {
-    const meta = `${hit.kind}${hit.tags.length ? " · " + hit.tags.join(", ") : ""} · ${hit.created_at.slice(0, 10)}`;
-    const button = el("button", { attrs: { type: "button" } },
-      el("span", { text: meta, className: "meta" }),
-      el("span", { text: firstLine(hit.excerpt), className: "excerpt" }));
-    button.addEventListener("click", () => openMemory(hit.memory_id, hit.revision_id).catch(sessionLost));
-    list.append(el("li", {}, button));
-  }
+  for (const hit of page.items) list.append(hitItem(hit));
   const shown = state.index * PAGE + page.items.length;
   const start = page.items.length ? state.index * PAGE + 1 : 0;
   $("count").textContent = page.matched === 0
@@ -147,7 +158,7 @@ function clearInspector(message) {
 function currentView() {
   if (!state.selected) return null;
   return {
-    search: { q: state.q, tag: state.tag, kinds: [...state.kinds], group: state.group, cursors: [...state.cursors], index: state.index },
+    search: { q: state.q, tag: state.tag, repo: state.repo, path: state.path, prefix: state.prefix, commit: state.commit, kinds: [...state.kinds], group: state.group, cursors: [...state.cursors], index: state.index },
     focus: connections.snapshot(),
     selected: { ...state.selected },
   };
@@ -193,10 +204,51 @@ async function openMemory(memoryId, revisionId, options = {}) {
   for (const [name, value] of rows) dl.append(el("dt", { text: name }), el("dd", { text: value }));
   $("memory-body").textContent = text.body.content;
   renderReferences(m.references);
+  resetRelated(m.tags);
   renderDiff(diff);
   renderHistory(memoryId, past, m.revision_id);
   if (!options.viaTrail) { $("inspector").focus(); await connections.show(memoryId, revisionId, m.title.slice(0, 40)); }
   return true;
+}
+
+function resetRelated(tags) {
+  state.related = { token: state.related.token + 1, how: null, cursor: null, shown: 0 };
+  $("related-list").replaceChildren();
+  $("related-status").textContent = "";
+  $("related-more").disabled = true;
+  $("related-term").value = "";
+  const select = $("related-tag");
+  select.replaceChildren(...tags.map((tag) => el("option", { text: tag, attrs: { value: tag } })));
+  select.disabled = tags.length === 0;
+  $("related-by-tag").disabled = tags.length === 0;
+}
+
+// Pages through /api/related with the server's own cursor; `more` appends the next page to the list.
+async function findRelated(how, more) {
+  if (!state.selected) return;
+  const related = state.related;
+  const token = more ? related.token : ++related.token;
+  const memoryId = state.selected.memoryId;
+  const params = [["id", memoryId], ["limit", "10"], [(more ? related.how : how)[0], (more ? related.how : how)[1]]];
+  if (more && related.cursor) params.push(["cursor", related.cursor]);
+  const { status, body } = await get("/api/related", params);
+  if (token !== related.token || !state.selected || state.selected.memoryId !== memoryId) return;
+  if (status !== 200) {
+    $("related-list").replaceChildren();
+    $("related-more").disabled = true;
+    $("related-status").textContent = "That relation was not accepted: the tag or term must be on this memory.";
+    return;
+  }
+  const page = body.page;
+  if (!more || page.restarted) { $("related-list").replaceChildren(); related.shown = 0; }
+  for (const hit of page.items) $("related-list").append(hitItem(hit));
+  related.how = more ? related.how : how;
+  related.shown += page.items.length;
+  related.cursor = page.cursor;
+  $("related-more").disabled = !page.cursor;
+  $("related-status").textContent = page.matched === 0
+    ? `No other memory ${body.reason}.`
+    : `Showing 1–${related.shown} of ${page.matched} related memories, each of which ${body.reason}.`;
 }
 
 function renderReferences(references) {
@@ -228,15 +280,31 @@ function renderHistory(memoryId, reply, selectedRevision) {
 }
 
 function wire() {
+  $("related-by-tag").addEventListener("click", () => {
+    if ($("related-tag").value) findRelated(["tag", $("related-tag").value], false).catch(sessionLost);
+  });
+  $("related-by-term").addEventListener("click", () => {
+    const term = $("related-term").value.trim();
+    if (term) findRelated(["term", term], false).catch(sessionLost);
+  });
+  $("related-more").addEventListener("click", () => { findRelated(null, true).catch(sessionLost); });
   $("find").addEventListener("submit", (event) => {
     event.preventDefault();
     state.q = $("q").value.trim();
     state.tag = $("tag").value.trim();
+    for (const name of CITATION_FILTERS) state[name] = $(name).value.trim();
+    state.prefix = state.prefix.replace(/\/+$/, "");          // the server's prefix is a whole folder: "src", not "src/"
+    $("prefix").value = state.prefix;
+    if (!state.repo && (state.path || state.prefix || state.commit)) {
+      $("notice").textContent = "Choose a repository to filter by path, path prefix or commit.";
+      return;
+    }
     runSearch(true);
   });
   $("reset").addEventListener("click", () => {
     state.q = ""; state.tag = ""; state.kinds = new Set(); state.group = null;
     $("q").value = ""; $("tag").value = "";
+    for (const name of CITATION_FILTERS) { state[name] = ""; $(name).value = ""; }
     for (const box of document.querySelectorAll("#kinds input")) box.checked = false;
     runSearch(true);
     refreshOverview();
@@ -272,6 +340,7 @@ async function goBack() {
   if (!view) return;
   state.q = view.search.q; state.tag = view.search.tag; state.kinds = new Set(view.search.kinds);
   state.group = view.search.group; state.cursors = view.search.cursors; state.index = view.search.index;
+  for (const name of CITATION_FILTERS) { state[name] = view.search[name]; $(name).value = state[name]; }
   $("q").value = state.q; $("tag").value = state.tag;
   for (const box of document.querySelectorAll("#kinds input")) box.checked = state.kinds.has(box.value);
   await refreshOverview();
@@ -302,7 +371,13 @@ async function main() {
   wire();
   $("back").addEventListener("click", () => history.back());
   $("refresh").addEventListener("click", () => revalidate().catch(sessionLost));
-  window.addEventListener("popstate", () => { if (trail.length) goBack().catch(sessionLost); });
+  window.addEventListener("popstate", (event) => {
+    // Entries pushed by this page carry {depth}. Going to a shallower entry is Back; a deeper one is the browser's
+    // Forward, which cannot rebuild a view that was already popped, so step back and leave the current view alone.
+    const depth = (event.state && event.state.depth) || 0;
+    if (depth > trail.length) { history.back(); return; }
+    if (depth < trail.length) goBack().catch(sessionLost);
+  });
   window.addEventListener("pageshow", (event) => { if (event.persisted) revalidate().catch(sessionLost); });
   await runSearch(true);
 }

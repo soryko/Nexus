@@ -191,11 +191,25 @@ class SQLiteRepository:
                     "SELECT count(*) FROM sqlite_master WHERE name='history_profile'").fetchone()[0]:
                 repository.history_profile = connection.execute(
                     "SELECT profile FROM history_profile WHERE id=1").fetchone()[0]
+            repository._require_recency_repaired(connection)
         except (sqlite3.Error, TypeError) as error:
             raise UnsupportedSchema("database schema is not supported for read-only access") from error
         finally:
             connection.close()
         return repository
+
+    @staticmethod
+    def _require_recency_repaired(connection: sqlite3.Connection) -> None:
+        """A store whose original head-index backfill was never repaired lists newest-first wrongly.
+
+        The repair is a write that only a normal open performs, so a viewer refuses such a store
+        instead of showing a misleading order.
+        """
+        marked = connection.execute(
+            "SELECT count(*) FROM sqlite_master WHERE name='data_repairs'").fetchone()[0] and connection.execute(
+            "SELECT count(*) FROM data_repairs WHERE name='v1-head-recency'").fetchone()[0]
+        if not marked and connection.execute("SELECT count(*) FROM head_index WHERE durable_seq=0").fetchone()[0]:
+            raise UnsupportedSchema("this store has a pending upgrade; open it once with Nexus before viewing it")
 
     def _connect_read_only(self) -> sqlite3.Connection:
         uri = "file:" + quote(os.path.abspath(self.path), safe="/") + "?mode=ro"

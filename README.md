@@ -233,29 +233,46 @@ The checkout must already be enrolled (see `integrations/project_scope/README.md
 installed Nexus one. Press Ctrl+C to stop. Keyboard and 360 px-wide screens are supported end to end.
 
 **Privacy boundary.** The server listens on `127.0.0.1` on a random port, accepts only its own `Host`/`Origin`, and
-needs a one-time secret that travels in a URL fragment (never in a request, a log or a `Referer`) to receive an
+needs a one-time secret that travels in a URL fragment (so it is never in a URL the server sees, a log or a `Referer`; the page posts it once in a request body) to receive an
 `HttpOnly`, `SameSite=Strict` cookie. Every response carries `Cache-Control: no-store`, `Referrer-Policy:
 no-referrer`, a self-only Content-Security-Policy without inline script, `X-Frame-Options: DENY` and `nosniff`.
 Stored text is only ever shown as text. Request lines are not logged. The browser cannot name a scope or a path.
 Reading a store in WAL mode makes SQLite leave an empty `-wal` and a `-shm` coordination file beside it; the
 database file itself is untouched (see the measurements below).
 
+The inspector's **Find related memories** lists other memories that share one of the open memory's tags or a term it
+contains (10 per page, with a *More related memories* button). **Find** also filters by repository, and within a
+repository by path, path prefix (a folder such as `src`) or commit; the page refuses a path, prefix or commit without a
+repository. Both are part of the saved Back view and cleared by *Reset filters*.
+
+**Known limits in this version.** A memory's own relations (files it cites, its other revisions) can be listed up to 100 each; beyond that they are counted but not pageable (the
+citing-memories list of a file hub is fully pageable). The browser's Forward button is ignored; use the page's Back. A
+store whose original recency backfill was never repaired is refused with a message: open it once with Nexus, then view it.
+On Linux a checkout whose `.git` is deleted and recreated can reuse its inode and is not detected (macOS records a birth time).
+
 **Measured** on one MacBook Pro (Apple M5, 16 GB, macOS 26.1, Chromium 151.0.7922.34, Playwright 1.62.0), 10,000
 active memories, a file cited by 1,200 of them, 500 revised, 2,500 isolated, 50 forgotten and 300 foreign-scope
-controls, a single full run of `benchmarks/atlas/run.py`, operating-system file cache not flushed:
+controls, the second of two full runs of `benchmarks/atlas/run.py` (commit `622e130`, clean tree), operating-system file
+cache not flushed. Only the Chromium pane at 1024 px is timed except where a width is named.
 
 | What | Measured (ms) | Target (ms) |
 | --- | --- | --- |
-| Launcher start to counted overview, 10 cold runs, p50 / p95 / max | 161.5 / 176.7 / 176.7 | p95 under 2000 |
-| Selection to first neighborhood and inspector, 100 distinct targets, p50 / p95 / max | 30.5 / 36.0 / 45.1 | p95 under 300 |
-| Same selections, data ready before the two paint frames, p50 / p95 | 13.4 / 17.4 | n/a |
-| Next result page, 40 late pages, p50 / p95 / max | 41.9 / 55.1 / 121.7 | none set |
-| Next hub page of 48 (1,200 citing memories), p50 / p95 | 39.3 / 39.8 | none set |
-| Binding check: stat-only per request / full with git, p50 | 0.02 / 8.05 | none set |
+| Launcher start to counted overview, 10 cold runs, p50 / p95 / max | 113.1 / 116.4 / 116.4 | p95 under 2000 |
+| Selection to first neighborhood and inspector, 100 distinct targets, p50 / p95 / max | 31.2 / 32.7 / 39.7 | p95 under 300 |
+| Same selections, data ready before the two paint frames, p50 / p95 | 14.5 / 16.4 | n/a |
+| Next result page, all 499 advances from page 1 to page 500 of 500, p50 / p95 / max | 40.8 / 48.8 / 74.1 | none set |
+| Same, first 10 / last 10 advances, p50 | 40.9 / 40.9 | none set |
+| Next hub page of 48 (1,200 citing memories), p50 / p95: 1024 px, 360 px | 39.0 / 40.0, 39.1 / 46.8 | none set |
+| Back to the previous view after the hub journey: 1024 px, 360 px | 50.5, 58.1 | none set |
+| Binding check, p50 / p95: stat-only per request, full with git | 0.02 / 0.02, 11.3 / 19.1 | none set |
 
-Controls on the same harness: a static no-op page took 12.8 ms p50 and a 10-memory store took 150 ms p50, so
-Chromium and the harness account for little of the viewer's figures. The visible graph never exceeded 100 nodes and
-99 edges. Raw samples and definitions: `docs/measurements/2026-11-06-atlas-benchmark.json`. Reproduce with
+The first full run (an earlier commit of the same harness) gave a cold p95 of 176.7 ms and a warm selection p95 of
+36.0 ms, so cold start varies by tens of milliseconds between runs; both runs are far inside the targets. Controls on
+the same harness: two animation frames on an empty page take 16.7 ms p50 (part of every selection figure above), a
+static no-op page took 14.8 ms p50 and a 10-memory store 101.6 ms p50 for the cold row. The visible graph never
+exceeded 100 nodes and 99 edges. The harness checks the counts the viewer displays (10,000 active memories; 1,200
+citing memories) so a scope or forgotten-memory leak invalidates the run. Raw samples and definitions:
+`docs/measurements/2026-11-06-atlas-benchmark.json`. Reproduce with
 `uv run --group atlas-ui python benchmarks/atlas/run.py --memories 10000 --interactions 100`.
 
 ## Semantics worth knowing

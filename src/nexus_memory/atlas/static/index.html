@@ -26,6 +26,14 @@
       <input id="q" name="q" type="search" autocomplete="off" maxlength="1024">
       <label for="tag">Tag</label>
       <input id="tag" name="tag" type="text" autocomplete="off" maxlength="64">
+      <label for="repo">Repository</label>
+      <input id="repo" name="repo" type="text" autocomplete="off" maxlength="128">
+      <label for="path">Path</label>
+      <input id="path" name="path" type="text" autocomplete="off" maxlength="512">
+      <label for="prefix">Path prefix (a folder, such as src)</label>
+      <input id="prefix" name="prefix" type="text" autocomplete="off" maxlength="512">
+      <label for="commit">Commit</label>
+      <input id="commit" name="commit" type="text" autocomplete="off" maxlength="64">
       <fieldset id="kinds"><legend>Kind</legend></fieldset>
       <button type="submit">Search</button>
       <button type="button" id="reset" hidden>Reset filters</button>
@@ -49,6 +57,22 @@
       <p id="memory-flag"></p>
       <dl id="memory-meta"></dl>
       <pre id="memory-body"></pre>
+      <section id="related" aria-labelledby="related-title">
+        <h4 id="related-title">Find related memories</h4>
+        <div class="row">
+          <label for="related-tag">Tag shared with this memory</label>
+          <select id="related-tag"></select>
+          <button type="button" id="related-by-tag">Find by tag</button>
+        </div>
+        <div class="row">
+          <label for="related-term">Term shared with this memory</label>
+          <input id="related-term" type="text" autocomplete="off" maxlength="128">
+          <button type="button" id="related-by-term">Find by term</button>
+        </div>
+        <p id="related-status" role="status" aria-live="polite"></p>
+        <ol id="related-list" class="results"></ol>
+        <button type="button" id="related-more" disabled>More related memories</button>
+      </section>
       <h4>Recorded references</h4>
       <ul id="memory-refs"></ul>
       <h4>Changes from the parent revision</h4>
