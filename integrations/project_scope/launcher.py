@@ -19,8 +19,11 @@ def run_atlas(checkout, open_browser):
         from nexus_memory.atlas.binding import open_binding
         from nexus_memory.atlas.server import serve
         from nexus_memory.domain.errors import NexusError
-    except ImportError:
-        print('Atlas needs the installed Nexus interpreter (run this launcher with its python).', file=sys.stderr)
+    except ImportError as error:
+        if (error.name or '').startswith('nexus_memory.atlas'):
+            print('This Nexus runtime does not include Atlas; install a newer Nexus wheel.', file=sys.stderr)
+        else:
+            print('Atlas needs the installed Nexus interpreter (run this launcher with its python).', file=sys.stderr)
         return 1
     try:
         serve(open_binding(checkout, resolve), open_browser)

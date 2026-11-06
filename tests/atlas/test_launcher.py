@@ -54,3 +54,16 @@ def test_launch_serves_the_shell_prints_no_secret_and_stops_on_interrupt(enrolle
     finally:
         if process.poll() is None:
             process.kill()
+
+
+def test_a_runtime_without_atlas_says_so_instead_of_blaming_the_interpreter(enrolled, tmp_path) -> None:
+    import shutil
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name in ("launcher.py", "project_scope.py"):
+        shutil.copyfile(INTEGRATION / name, bin_dir / name)
+    (bin_dir / "nexus_memory").mkdir()                       # an older runtime: the package exists, Atlas does not
+    (bin_dir / "nexus_memory" / "__init__.py").write_text("")
+    result = subprocess.run([sys.executable, "-I", str(bin_dir / "launcher.py"), "atlas", str(enrolled.checkout), "--no-browser"],
+                            env=_env(enrolled.home), capture_output=True, text=True, timeout=30, cwd=tmp_path)
+    assert result.returncode == 1 and "does not include Atlas" in result.stderr and "Traceback" not in result.stderr

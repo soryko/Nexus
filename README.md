@@ -231,12 +231,19 @@ The checkout must already be enrolled (see `integrations/project_scope/README.md
 installed Nexus one. Press Ctrl+C to stop. Keyboard and 360 px-wide screens are supported end to end.
 
 **Privacy boundary.** The server listens on `127.0.0.1` on a random port, accepts only its own `Host`/`Origin`, and
-needs a one-time secret that travels in a URL fragment (never in a request, a log or a `Referer`) to receive an
+needs a one-time secret that travels in a URL fragment (so it is never in a URL the server sees, a log or a `Referer`; the page posts it once in a request body) to receive an
 `HttpOnly`, `SameSite=Strict` cookie. Every response carries `Cache-Control: no-store`, `Referrer-Policy:
 no-referrer`, a self-only Content-Security-Policy without inline script, `X-Frame-Options: DENY` and `nosniff`.
 Stored text is only ever shown as text. Request lines are not logged. The browser cannot name a scope or a path.
 Reading a store in WAL mode makes SQLite leave an empty `-wal` and a `-shm` coordination file beside it; the
 database file itself is untouched (see the measurements below).
+
+**Known limits in this version.** The server can list memories that share a tag or term with one (`/api/related`) and
+filter by verified repository, path and commit, but the page has no control for either yet. A memory's own relations
+(files it cites, its other revisions) can be listed up to 100 each; beyond that they are counted but not pageable (the
+citing-memories list of a file hub is fully pageable). The browser's Forward button is ignored; use the page's Back. A
+store whose original recency backfill was never repaired is refused with a message: open it once with Nexus, then view it.
+On Linux a checkout whose `.git` is deleted and recreated can reuse its inode and is not detected (macOS records a birth time).
 
 **Measured** on one MacBook Pro (Apple M5, 16 GB, macOS 26.1, Chromium 151.0.7922.34, Playwright 1.62.0), 10,000
 active memories, a file cited by 1,200 of them, 500 revised, 2,500 isolated, 50 forgotten and 300 foreign-scope

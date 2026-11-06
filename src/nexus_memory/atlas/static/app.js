@@ -302,7 +302,13 @@ async function main() {
   wire();
   $("back").addEventListener("click", () => history.back());
   $("refresh").addEventListener("click", () => revalidate().catch(sessionLost));
-  window.addEventListener("popstate", () => { if (trail.length) goBack().catch(sessionLost); });
+  window.addEventListener("popstate", (event) => {
+    // Entries pushed by this page carry {depth}. Going to a shallower entry is Back; a deeper one is the browser's
+    // Forward, which cannot rebuild a view that was already popped, so step back and leave the current view alone.
+    const depth = (event.state && event.state.depth) || 0;
+    if (depth > trail.length) { history.back(); return; }
+    if (depth < trail.length) goBack().catch(sessionLost);
+  });
   window.addEventListener("pageshow", (event) => { if (event.persisted) revalidate().catch(sessionLost); });
   await runSearch(true);
 }

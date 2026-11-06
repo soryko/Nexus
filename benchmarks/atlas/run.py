@@ -7,10 +7,12 @@ printed beside measured values and never mixed with them. Nothing here tunes a r
 fixture contract (``fixture.check_fixture``), which is checked before any timing and fails the run if unmet.
 
 Definitions (also written to the report):
-  * percentiles use the nearest-rank method; spread is max - min.
+  * p95 uses the nearest-rank method; p50 is the median (the mean of the two middle samples for an even count);
+    spread is max - min.
   * "selection" = click on a result to the first neighborhood drawn plus the inspector filled, then two animation
-    frames: the neighbors response has arrived, the focus node changed, and the page has painted twice. Two frames at
-    60 Hz are about 33 ms, a floor under every timing here; ``summary_data_ready_before_paint`` omits that floor.
+    frames: the neighbors response has arrived, the focus node changed, and the page has painted twice. The frame wait
+    is part of ``ms`` (up to about 33 ms at 60 Hz; ``frame_wait_control`` measures it on an empty page);
+    ``summary_data_ready_before_paint`` is the same selections without it.
   * cold start = a fresh copy of the store file, a fresh launcher process, a fresh Chromium with an empty profile.
     The operating-system file cache is NOT flushed (that needs privileges); the copy is cache-resident.
 """
@@ -217,7 +219,7 @@ def wait_overview(page, timeout: float = 15.0) -> float:
     raise TimeoutError("overview was never counted")
 
 
-def cold_run(playwright, subject: Subject, python: str, launcher: Path, cwd: Path) -> dict:
+def cold_run(playwright, subject: Subject, python: str, launcher: Path, cwd: Path, expect_active: int | None = None) -> dict:
     subject.reset_store()
     t = time.perf_counter()
     browser, page = new_page(playwright)
@@ -228,6 +230,9 @@ def cold_run(playwright, subject: Subject, python: str, launcher: Path, cwd: Pat
         page.goto(viewer.launch_file.as_uri())
         in_page = wait_overview(page)
         wall = (time.perf_counter() - t) * 1000
+        shown = page.inner_text("#status")
+        if expect_active is not None and shown != f"{expect_active} active memories":
+            raise AssertionError(f"measurement invalid: the viewer shows {shown!r}, expected {expect_active} active memories")
     finally:
         browser.close()
         viewer.stop()
@@ -271,6 +276,20 @@ def noop_run(playwright) -> dict:
     return {"browser_launch_ms": round(browser_ms, 1), "process_launch_ms": round(process_ms, 1),
             "goto_to_counted_overview_wall_ms": round(wall, 1), "in_page_counted_overview_ms": round(in_page, 1),
             "launch_to_overview_ms": round(process_ms + wall, 1)}
+
+
+def frame_wait_control(playwright, repeats: int = 100) -> dict:
+    """How long two animation frames take on an empty page here: the part of every ``ms`` that is not Atlas."""
+    browser, page = new_page(playwright)
+    try:
+        page.goto("about:blank")
+        samples = page.evaluate("""async (n) => { const out = [];
+            for (let i = 0; i < n; i++) { const t = performance.now();
+              await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+              out.push(performance.now() - t); } return out; }""", repeats)
+    finally:
+        browser.close()
+    return {"two_animation_frames_ms": summarize(samples)}
 
 
 def cold_summary(runs: list[dict]) -> dict:
@@ -322,15 +341,20 @@ def warm_selections(page, manifest: dict, count: int) -> dict:
 
 
 def late_pages(page, pages: int) -> dict:
+    """Advance the plain search 'pages' times from page 1; the report names the page reached."""
     search_for(page, "memory", " matching", "bm")
     end = time.perf_counter() + 15
     while page.is_disabled("#next") and time.perf_counter() < end:     # the previous search's text can still be showing
         time.sleep(0.005)
     samples = [round(act(page, action="page")["ms"], 2) for _ in range(pages)]
-    return {"pages_advanced": pages, "summary": summarize(samples), "samples": samples}
+    reached = page.inner_text("#page")
+    return {"pages_advanced": pages, "page_reached": reached, "count_text": page.inner_text("#count"),
+            "summary": summarize(samples), "first_10_pages": summarize(samples[:10]),
+            "last_10_pages": summarize(samples[-10:]), "samples": samples}
 
 
 def hub_journey(playwright, viewer: Viewer, manifest: dict, width: int) -> dict:
+    expected_citers = manifest["counts"]["hub_citers"]
     browser, page = new_page(playwright, width=width, height=800)
     try:
         page.goto(viewer.launch_file.as_uri())
@@ -349,6 +373,8 @@ def hub_journey(playwright, viewer: Viewer, manifest: dict, width: int) -> dict:
             maxima["nodes"] = max(maxima["nodes"], step["nodes"])
             maxima["edges"] = max(maxima["edges"], step["edges"])
         last_title = page.locator("#graph-lists section", has_text="citing memories of src/hub.py").locator("h3").inner_text()
+        if f"of {expected_citers} citing memories" not in last_title:      # a foreign-scope or forgotten leak would change this
+            raise AssertionError(f"measurement invalid: hub shows {last_title!r}, expected {expected_citers} citers")
         chosen = act(page, action="hub-open-last", skip=target["token"])
         back = act(page, action="back", expect=first["focus"])
         for step in (chosen, back):
@@ -397,8 +423,11 @@ def hardware() -> dict:
     return info
 
 
-def git_commit() -> str:
-    return subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+def git_commit() -> dict:
+    head = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    dirty = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain", "--", "src", "benchmarks/atlas", "integrations"],
+                           capture_output=True, text=True).stdout.strip()
+    return {"commit": head, "tracked_or_untracked_changes_in_src_benchmarks_atlas_integrations": bool(dirty)}
 
 
 def main() -> int:
@@ -406,7 +435,7 @@ def main() -> int:
     parser.add_argument("--memories", type=int, default=10_000)
     parser.add_argument("--interactions", type=int, default=100)
     parser.add_argument("--cold-runs", type=int, default=10)
-    parser.add_argument("--late-pages", type=int, default=40)
+    parser.add_argument("--late-pages", type=int, default=499)
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--no-generate", action="store_true", help="check the fixture contract and stop: fails on an empty store")
     parser.add_argument("--python", default=sys.executable)
@@ -447,15 +476,17 @@ def main() -> int:
         from importlib.metadata import version
         report["hardware"]["playwright"] = version("playwright")
 
+        report_frames = frame_wait_control(playwright)
         print("controls: static no-op page", flush=True)
         noop = [noop_run(playwright) for _ in range(args.cold_runs)]
         print("controls: tiny store", flush=True)
         tiny = Subject(work, "tiny")
         tiny.build(fx.Spec(memories=10, hub_citers=3, hub_min=2, revised=1, forgotten=1, foreign=2), progress=lambda m: None)
-        tiny_runs = [cold_run(playwright, tiny, args.python, args.launcher, cwd) for _ in range(args.cold_runs)]
+        tiny_runs = [cold_run(playwright, tiny, args.python, args.launcher, cwd, expect_active=10) for _ in range(args.cold_runs)]
         os.environ["HOME"] = str(subject.home)
         print("cold start x", args.cold_runs, flush=True)
-        cold = [cold_run(playwright, subject, args.python, args.launcher, cwd) for _ in range(args.cold_runs)]
+        cold = [cold_run(playwright, subject, args.python, args.launcher, cwd, expect_active=args.memories) for _ in range(args.cold_runs)]
+        report["frame_wait_control"] = report_frames
         report["controls"] = {"static_noop_page": {"runs": noop, "summary": cold_summary(noop)},
                               "tiny_store_10_memories": {"runs": tiny_runs, "summary": cold_summary(tiny_runs)}}
         report["cold_start"] = {"cache_state": "fresh store copy per run; fresh launcher process; fresh Chromium profile; OS file cache not flushed",

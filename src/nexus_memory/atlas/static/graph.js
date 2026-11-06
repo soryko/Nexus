@@ -90,7 +90,7 @@ export function renderGraph(container, graph, camera, selectedId, onSelect) {
     const g = svg("g", {
       class: `node ${node.type}${id === graph.focusId ? " focus" : ""}${id === selectedId ? " selected" : ""}`,
       transform: `translate(${p.x} ${p.y})`, tabindex: 0, role: "button",
-      "aria-label": `${node.type}: ${node.label}`, "data-node-id": id, "data-x": p.x.toFixed(3), "data-y": p.y.toFixed(3),
+      "aria-label": `${node.type}: ${node.label}`, "data-node-id": id, "data-key": `node:${id}`, "data-x": p.x.toFixed(3), "data-y": p.y.toFixed(3),
     });
     g.append(svg("circle", { r: node.type === "file" ? 9 : 11 }), svg("text", { y: 24 }, node.label));
     g.addEventListener("click", (event) => { event.stopPropagation(); onSelect(node); });

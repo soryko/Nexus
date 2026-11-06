@@ -663,3 +663,57 @@ def test_find_hub_last_result_back_by_keyboard_alone(enrolled, browser_page, wid
         expect(page.locator(".node.focus")).to_have_attribute("data-node-id", first)
         assert page.evaluate("document.activeElement.tagName") != "BODY"        # focus was not dropped
         _no_sideways_scroll(page)
+
+
+# ---- review fixes: focus survives a redraw; the browser's Forward button is not Back ---------------------------
+
+def _focused_key(page) -> str | None:
+    return page.evaluate("document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key || null : null")
+
+
+def test_keyboard_focus_stays_on_the_control_after_it_redraws_the_graph(enrolled, browser_page) -> None:
+    _dense(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open_focus(page, server)
+        expand = page.locator("#graph-lists li", has_text="src/hub.py").get_by_role("button", name="Expand")
+        _tab_to(page, expand)
+        key = _focused_key(page)
+        page.keyboard.press("Enter")
+        expect(page.locator("#graph-lists h3", has_text="citing memories of src/hub.py")).to_be_visible()
+        assert _focused_key(page) == key, "focus was dropped after Expand"
+        nxt = page.get_by_role("button", name="Next citing memories")
+        _tab_to(page, nxt)
+        page.keyboard.press("Enter")
+        expect(page.locator("#graph-lists h3", has_text="Showing 26–50")).to_be_visible()
+        assert page.evaluate("document.activeElement.textContent") == "Next citing memories"
+        while page.get_by_role("button", name="Next citing memories").is_enabled():
+            page.keyboard.press("Enter")
+            page.wait_for_timeout(150)
+        assert page.evaluate("document.activeElement.textContent") == "Previous citing memories"   # Next is disabled at the end
+        node = page.locator(".node.file").first
+        node.focus()
+        key = _focused_key(page)
+        page.keyboard.press("Enter")
+        page.wait_for_timeout(300)
+        assert _focused_key(page) == key, "focus was dropped after choosing a node"
+
+
+def test_the_browsers_forward_button_does_not_act_as_back(enrolled, browser_page) -> None:
+    _dense(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open(page, server)
+        seen = []
+        for n in (1, 2, 3):
+            page.locator("#q").fill(f"Citer {n:03d}")
+            page.get_by_role("button", name="Search", exact=True).click()
+            expect(page.locator("#results")).to_contain_text(f"Citer {n:03d}")
+            page.locator("#results li button").first.click()
+            expect(page.locator("#memory-title")).to_contain_text(f"Citer {n:03d}")
+            seen.append(f"Citer {n:03d}")
+        page.go_back()
+        expect(page.locator("#memory-title")).to_contain_text("Citer 002")
+        page.go_forward()
+        page.wait_for_timeout(400)
+        expect(page.locator("#memory-title")).to_contain_text("Citer 002")      # not Citer 001, the wrong view the old code showed
