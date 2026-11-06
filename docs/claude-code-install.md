@@ -41,21 +41,30 @@ python3 tools/check_claude_code_setup.py --runtime "$nexus_runtime/bin/nexus-mem
 
 Expect four `PASS` lines. Rollback: copy the `.before-claude-hooks` file back.
 
-## 3. Note what Claude launches today (read-only)
+## 3. Note what Claude launches today (read-only), and keep a copy of the file it lives in
 
 ```bash
-claude mcp get nexus-memory        # save this output; it is your rollback
+claude mcp get nexus-memory        # save this output; carry any extra arguments or env (such as --expected-project) into step 4
+claude mcp list                    # shows each server's health
+cp -p ~/.claude.json ~/.claude.json.before-claude-hooks      # the rollback that cannot lose a detail
 ```
+
+`claude mcp get` is a summary; the copied file is the exact record. A project's own `.mcp.json` that defines a
+server named `nexus-memory` takes precedence over the user entry in that project: check the enrolled projects
+for one before expecting step 4 to apply there.
 
 ## 4. Point the user-scope entry at the hook-enabled launch
 
 ```bash
 claude mcp remove nexus-memory --scope user
-claude mcp add --scope user nexus-memory -- python3 -I "$scope_bin/launcher.py" claude-hooks "$nexus_runtime/bin/nexus-memory"
+claude mcp add --scope user nexus-memory -- "$nexus_runtime/bin/python" -I "$scope_bin/launcher.py" claude-hooks "$nexus_runtime/bin/nexus-memory"
 claude mcp get nexus-memory
+claude mcp list                    # nexus-memory should show as connected
 ```
 
-Rollback: remove it and re-add the command you saved in step 3.
+The interpreter is the runtime's own, by absolute path, so the entry does not depend on the `PATH` the desktop app
+launches it with. Between `remove` and `add` there is no entry: do it when no session is starting. Rollback: remove
+the entry and re-add the command saved in step 3, or restore `~/.claude.json.before-claude-hooks` while Claude is closed.
 
 ## 5. Install and trust the plugin
 
@@ -69,9 +78,19 @@ yourself; `/hooks` lists the plugin's hooks.
 
 ## Verify
 
+Run `claude mcp list` once from an enrolled project and once from a directory that is not enrolled: the server
+must show as connected in both (in the second it is the no-op hook server, and says so in its first reply).
+
 In a new session inside an enrolled project: `/nexus-memory:status` reports the hooks are active, and a prompt
 that matches a stored memory shows IDs in the injected context. In an unenrolled project you see exactly one
 "not enrolled" line per session. The status command prints only; it never enrolls.
+
+## Keep in mind
+
+- Step 5 registers this checkout as a marketplace in place. Installed plugin files are copied into Claude's
+  plugin cache, but moving or deleting this checkout breaks `claude plugin marketplace update`.
+- Replacing the launcher is atomic (rename). Servers already running keep the old file; new sessions use the new one.
+- Codex uses `launcher.py codex`, which this change does not touch.
 
 ## What is not verified
 
