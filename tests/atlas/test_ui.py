@@ -196,13 +196,13 @@ import sqlite3 as _sqlite3
 _REPO, _COMMIT = "repo-one", "a" * 40
 
 
-def _cite(enrolled, memory_id: str, path: str) -> None:
+def _cite(enrolled, memory_id: str, path: str, repo: str = _REPO, commit: str = _COMMIT) -> None:
     with _sqlite3.connect(enrolled.database) as db:
         revision = db.execute("SELECT current_revision_id FROM memories WHERE memory_id=?", (memory_id,)).fetchone()[0]
         db.execute("INSERT OR IGNORE INTO repositories VALUES(?,?,?,?,?,?)",
-                   (enrolled.project_id, "local", _REPO, "sha1", None, "2026-11-05T00:00:00Z"))
+                   (enrolled.project_id, "local", repo, "sha1", None, "2026-11-05T00:00:00Z"))
         db.execute("INSERT INTO revision_references VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                   (enrolled.project_id, "local", memory_id, revision, _REPO, _COMMIT, path, "c" * 40, "blob",
+                   (enrolled.project_id, "local", memory_id, revision, repo, commit, path, "c" * 40, "blob",
                     "100644", "2026-11-05T00:00:00Z"))
 
 
@@ -633,6 +633,15 @@ def test_find_hub_last_result_back_by_keyboard_alone(enrolled, browser_page, wid
         expect(page.locator("[data-node-id]").nth(1)).to_be_visible()
         first = page.locator(".node.focus").get_attribute("data-node-id")
         _no_sideways_scroll(page)
+        # related memories: term box, its button and the cursor button are all reachable and fit the screen
+        _tab_to(page, page.get_by_label("Term shared with this memory"))
+        page.keyboard.type("the")
+        _press(page, page.get_by_role("button", name="Find by term", exact=True))
+        expect(page.locator("#related-list li").first).to_be_visible()
+        expect(page.locator("#related-status")).to_contain_text("of 120 related memories")
+        _press(page, page.get_by_role("button", name="More related memories", exact=True))
+        expect(page.locator("#related-list li").nth(10)).to_be_visible()
+        _no_sideways_scroll(page)
         # hub: every graph node has a text entry with its own button, so no action needs the pointer
         for node in page.locator("[data-node-id]:not(.focus)").all():
             label = node.get_attribute("aria-label").split(": ", 1)[1]
@@ -662,4 +671,251 @@ def test_find_hub_last_result_back_by_keyboard_alone(enrolled, browser_page, wid
         _press(page, page.locator("#back"))
         expect(page.locator(".node.focus")).to_have_attribute("data-node-id", first)
         assert page.evaluate("document.activeElement.tagName") != "BODY"        # focus was not dropped
+        _no_sideways_scroll(page)
+
+
+# ---- review fixes: focus survives a redraw; the browser's Forward button is not Back ---------------------------
+
+def _focused_key(page) -> str | None:
+    return page.evaluate("document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key || null : null")
+
+
+def test_keyboard_focus_stays_on_the_control_after_it_redraws_the_graph(enrolled, browser_page) -> None:
+    _dense(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open_focus(page, server)
+        expand = page.locator("#graph-lists li", has_text="src/hub.py").get_by_role("button", name="Expand")
+        _tab_to(page, expand)
+        key = _focused_key(page)
+        page.keyboard.press("Enter")
+        expect(page.locator("#graph-lists h3", has_text="citing memories of src/hub.py")).to_be_visible()
+        assert _focused_key(page) == key, "focus was dropped after Expand"
+        nxt = page.get_by_role("button", name="Next citing memories")
+        _tab_to(page, nxt)
+        page.keyboard.press("Enter")
+        expect(page.locator("#graph-lists h3", has_text="Showing 26–50")).to_be_visible()
+        assert page.evaluate("document.activeElement.textContent") == "Next citing memories"
+        while page.get_by_role("button", name="Next citing memories").is_enabled():
+            page.keyboard.press("Enter")
+            page.wait_for_timeout(150)
+        assert page.evaluate("document.activeElement.textContent") == "Previous citing memories"   # Next is disabled at the end
+        node = page.locator(".node.file").first
+        node.focus()
+        key = _focused_key(page)
+        page.keyboard.press("Enter")
+        page.wait_for_timeout(300)
+        assert _focused_key(page) == key, "focus was dropped after choosing a node"
+
+
+def test_the_browsers_forward_button_does_not_act_as_back(enrolled, browser_page) -> None:
+    _dense(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open(page, server)
+        seen = []
+        for n in (1, 2, 3):
+            page.locator("#q").fill(f"Citer {n:03d}")
+            page.get_by_role("button", name="Search", exact=True).click()
+            expect(page.locator("#results")).to_contain_text(f"Citer {n:03d}")
+            page.locator("#results li button").first.click()
+            expect(page.locator("#memory-title")).to_contain_text(f"Citer {n:03d}")
+            seen.append(f"Citer {n:03d}")
+        page.go_back()
+        expect(page.locator("#memory-title")).to_contain_text("Citer 002")
+        page.go_forward()
+        page.wait_for_timeout(400)
+        expect(page.locator("#memory-title")).to_contain_text("Citer 002")      # not Citer 001, the wrong view the old code showed
+
+
+# ---- follow-up: find related memories from the inspector ----------------------------------------------
+
+def _open_note(page, server, text: str) -> None:
+    _open(page, server)
+    page.locator("#q").fill(text)
+    page.get_by_role("button", name="Search", exact=True).click()
+    hit = page.locator("#results li button", has_text=text).first
+    expect(hit).to_be_visible()
+    hit.click()
+    expect(page.locator("#memory")).to_be_visible()
+
+
+def test_related_by_tag_pages_with_a_real_cursor_and_opening_one_feeds_the_trail(enrolled, browser_page) -> None:
+    _corpus(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open_note(page, server, "Caption note 00 about")
+        related = page.locator("#related")
+        expect(related).to_be_visible()
+        page.get_by_label("Tag shared with this memory").select_option("queue")
+        page.get_by_role("button", name="Find by tag", exact=True).click()
+        expect(page.locator("#related-status")).to_contain_text("shares the tag “queue”")
+        expect(page.locator("#related-status")).to_contain_text("Showing 1–10 of 22")
+        assert page.locator("#related-list li").count() == 10
+        first_page = page.locator("#related-list li .excerpt").all_text_contents()
+        assert not any("note 00 " in text for text in first_page)           # the open memory is not its own relative
+        page.get_by_role("button", name="More related memories", exact=True).click()
+        expect(page.locator("#related-status")).to_contain_text("Showing 1–20 of 22")
+        assert page.locator("#related-list li").count() == 20
+        page.get_by_role("button", name="More related memories", exact=True).click()
+        expect(page.locator("#related-status")).to_contain_text("Showing 1–22 of 22")
+        assert page.locator("#related-list li").count() == 22
+        assert page.get_by_role("button", name="More related memories", exact=True).is_disabled()
+        chosen = page.locator("#related-list li .excerpt").last.inner_text()
+        page.locator("#related-list li button").last.click()
+        expect(page.locator("#memory-body")).to_have_text(chosen)
+        assert page.get_by_role("button", name="Back", exact=True).is_enabled()
+        page.get_by_role("button", name="Back", exact=True).click()
+        expect(page.locator("#memory-body")).to_have_text("Caption note 00 about retention")
+
+
+def test_related_by_term_rejects_a_term_the_memory_does_not_contain_and_is_inert(enrolled, browser_page) -> None:
+    ids = _corpus(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open_note(page, server, "Caption note 01 about")
+        assert page.get_by_label("Tag shared with this memory").is_disabled()      # note 01 has no tag
+        page.get_by_label("Term shared with this memory").fill("absentterm")
+        page.get_by_role("button", name="Find by term", exact=True).click()
+        expect(page.locator("#related-status")).to_contain_text("not accepted")
+        assert page.locator("#related-list li").count() == 0
+        page.get_by_label("Term shared with this memory").fill("retention")
+        page.get_by_role("button", name="Find by term", exact=True).click()
+        expect(page.locator("#related-status")).to_contain_text("matches the term “retention”")
+        expect(page.locator("#related-status")).to_contain_text("of 44")
+
+
+def test_related_text_is_text_only(enrolled, browser_page) -> None:
+    enrolled.record("hostile <img src=x onerror=window.pwned=1> marker", "k-h1", kind="decision", tags=["t"])
+    enrolled.record("sibling <script>window.pwned=1</script> marker", "k-h2", kind="decision", tags=["t"])
+    with _served(enrolled) as server:
+        page = browser_page
+        _open_note(page, server, "hostile")
+        page.get_by_role("button", name="Find by tag", exact=True).click()
+        expect(page.locator("#related-list")).to_contain_text("<script>")
+        assert page.evaluate("window.pwned") is None
+        assert page.locator("#related img, #related script").count() == 0
+
+
+def test_related_is_reachable_and_usable_by_keyboard_alone(enrolled, browser_page) -> None:
+    _corpus(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open_note(page, server, "Caption note 00 about")
+        _press(page, page.get_by_role("button", name="Find by tag", exact=True))
+        expect(page.locator("#related-list li").first).to_be_visible()
+        _press(page, page.get_by_role("button", name="More related memories", exact=True))
+        expect(page.locator("#related-list li").nth(10)).to_be_visible()
+        _press(page, page.locator("#related-list li button").nth(10))
+        expect(page.locator("#memory-body")).not_to_have_text("Caption note 00 about retention")
+        assert page.evaluate("document.activeElement.id") == "inspector"
+
+
+# ---- follow-up: verified repository / path / commit filters in Find ----------------------------------------
+
+_OTHER_COMMIT = "b" * 40
+
+
+def _cited_corpus(enrolled) -> None:
+    for name, path, repo, commit in [("alpha", "src/a.py", _REPO, _COMMIT), ("beta", "src/b.py", _REPO, _COMMIT),
+                                     ("gamma", "lib/c.py", _REPO, _OTHER_COMMIT), ("delta", "src/a.py", "repo-two", _COMMIT)]:
+        _cite(enrolled, enrolled.record(f"Filter {name} memory", f"k-f{name}", kind="observation"), path, repo, commit)
+    enrolled.record("Filter epsilon memory with no citation", "k-fe", kind="observation")
+
+
+def _find(page) -> None:
+    page.get_by_role("button", name="Search", exact=True).click()
+
+
+def test_repository_path_prefix_and_commit_filters_narrow_show_in_the_summary_and_reset(enrolled, browser_page) -> None:
+    _cited_corpus(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open(page, server)
+        page.locator("#q").fill("Filter")
+        page.locator("#repo").fill(_REPO)
+        page.locator("#path").fill("src/a.py")
+        _find(page)
+        expect(page.locator("#count")).to_contain_text("1 matching")
+        assert "Filter alpha" in page.locator("#results").inner_text()
+        summary = page.locator("#filters").inner_text()
+        assert f"repository “{_REPO}”" in summary and "path “src/a.py”" in summary
+        page.locator("#path").fill("")
+        page.locator("#prefix").fill("src/")
+        _find(page)
+        expect(page.locator("#count")).to_contain_text("2 matching")
+        assert "path prefix “src”" in page.locator("#filters").inner_text()          # the trailing slash is dropped
+        assert page.locator("#prefix").input_value() == "src"
+        page.locator("#prefix").fill("")
+        page.locator("#commit").fill(_OTHER_COMMIT)
+        _find(page)
+        expect(page.locator("#count")).to_contain_text("1 matching")
+        assert "Filter gamma" in page.locator("#results").inner_text()
+        assert f"commit “{_OTHER_COMMIT[:12]}”" in page.locator("#filters").inner_text()
+        page.get_by_role("button", name="Reset filters").click()
+        expect(page.locator("#filters")).to_have_text("No filters: newest memories first.")
+        for field in ("q", "repo", "path", "prefix", "commit"):
+            assert page.locator(f"#{field}").input_value() == "", field
+        expect(page.locator("#count")).to_contain_text("matching (")
+
+
+def test_a_path_or_commit_without_a_repository_is_refused_not_sent_unverified(enrolled, browser_page) -> None:
+    _cited_corpus(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open(page, server)
+        before = page.locator("#count").inner_text()
+        requests = []
+        page.on("request", lambda r: requests.append(r.url) if "/api/search" in r.url else None)
+        page.locator("#path").fill("src/a.py")
+        _find(page)
+        expect(page.locator("#notice")).to_contain_text("Choose a repository")
+        assert not requests and page.locator("#count").inner_text() == before
+        page.locator("#repo").fill("repo-never-seen")
+        _find(page)
+        expect(page.locator("#count")).to_contain_text("No memories match")
+
+
+def test_back_restores_the_repository_and_path_filters(enrolled, browser_page) -> None:
+    _cited_corpus(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        _open(page, server)
+        page.locator("#repo").fill(_REPO)
+        page.locator("#prefix").fill("src")
+        _find(page)
+        expect(page.locator("#count")).to_contain_text("2 matching")
+        page.locator("#results li button").first.click()
+        expect(page.locator("#memory")).to_be_visible()
+        page.locator("#results li button").nth(1).click()       # leaving the first memory saves the repo/prefix view
+        expect(page.locator("#memory-body")).to_contain_text("Filter")
+        page.locator("#repo").fill("repo-two")
+        page.locator("#prefix").fill("")
+        page.locator("#path").fill("src/a.py")
+        _find(page)
+        expect(page.locator("#count")).to_contain_text("1 matching")
+        assert "repository “repo-two”" in page.locator("#filters").inner_text()
+        page.get_by_role("button", name="Back", exact=True).click()
+        expect(page.locator("#count")).to_contain_text("2 matching")
+        assert page.locator("#repo").input_value() == _REPO and page.locator("#prefix").input_value() == "src"
+        assert page.locator("#path").input_value() == ""
+        assert "path prefix “src”" in page.locator("#filters").inner_text()
+
+
+@pytest.mark.parametrize("width", [1024, 360], ids=["desktop", "360px"])
+def test_the_citation_filters_are_keyboard_reachable_and_fit_the_screen(enrolled, browser_page, width: int) -> None:
+    _cited_corpus(enrolled)
+    with _served(enrolled) as server:
+        page = browser_page
+        page.set_viewport_size({"width": width, "height": 740})
+        _open(page, server)
+        _tab_to(page, page.get_by_label("Repository"))
+        page.keyboard.type(_REPO)
+        _tab_to(page, page.get_by_label("Path prefix", exact=False))
+        page.keyboard.type("src")
+        page.keyboard.press("Enter")
+        expect(page.locator("#count")).to_contain_text("2 matching")
+        _no_sideways_scroll(page)
+        _press(page, page.get_by_role("button", name="Reset filters"))
+        expect(page.locator("#filters")).to_have_text("No filters: newest memories first.")
         _no_sideways_scroll(page)

@@ -226,3 +226,14 @@ def test_quick_check_never_runs_git(enrolled, monkeypatch) -> None:
     binding.reader()
     binding.check()
     assert calls == []
+
+
+def test_a_store_with_an_unrepaired_recency_order_is_refused_not_misordered(enrolled) -> None:
+    enrolled.record("A second memory", "k-two", kind="observation")
+    with sqlite3.connect(enrolled.database) as db:
+        db.execute("DROP TABLE IF EXISTS data_repairs")
+        db.execute("UPDATE head_index SET durable_seq=0")
+    with pytest.raises(NexusError, match="pending upgrade"):
+        open_binding(enrolled.checkout, enrolled.resolve)
+    enrolled.writer()                                   # a normal open performs the repair
+    assert open_binding(enrolled.checkout, enrolled.resolve).reader().status(enrolled.scope)

@@ -288,3 +288,17 @@ def test_neighbors_of_an_older_revision_use_that_revisions_own_citations(corpus)
 def test_neighbors_refuse_a_forgotten_memory(corpus) -> None:
     with pytest.raises(MemoryNotFound):
         corpus.queries().neighbors(corpus.ids["gone"])
+
+
+def test_two_dense_relation_types_both_stay_visible_when_each_exceeds_the_allowance(corpus) -> None:
+    from nexus_memory.atlas.queries import _allocate
+    given = _allocate([30, 60], 25)
+    assert sum(given) == 25 and min(given) >= 10, given          # a first-type-first split would give [25, 0]
+    target, revision = corpus.ids["dec1"], corpus.revs["dec1"]
+    for n in range(30):
+        revision = corpus.service.revise(target, revision, MemoryInput(f"Decision 1, long chain {n}", kind="decision"),
+                                         f"k-long-{n}").revision_id
+    _cite_many(corpus, target, revision, 60)
+    relations = {r.kind: r for r in corpus.queries().neighbors(target).relations}
+    assert len(relations["revision-of"].items) >= 10 and len(relations["cites"].items) >= 10
+    assert len(relations["revision-of"].items) + len(relations["cites"].items) == 25

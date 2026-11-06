@@ -20,10 +20,17 @@ export function createConnections({ get, onOpen }) {
 
   const revisionLabel = (text) => ((text || "").split("\n").find((l) => l.trim()) || "(empty)").slice(0, 40);
 
+  // Every redraw rebuilds the controls, which would drop keyboard focus to <body>. Controls carry a stable
+  // data-key; the focused one is found again afterwards (a disabled Next falls back to its Previous).
   function draw() {
+    const key = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key : null;
     renderGraph($("graph-canvas"), graph, camera, selectedId, select);
     drawLists();
     drawLimits();
+    if (!key) return;
+    const usable = (k) => { const e = document.querySelector(`[data-key="${CSS.escape(k)}"]`); return e && !e.disabled ? e : null; };
+    const target = usable(key) || (key.endsWith(":next") ? usable(key.slice(0, -5) + ":prev") : null);
+    if (target) target.focus();
   }
 
   function drawLimits() {
@@ -44,6 +51,7 @@ export function createConnections({ get, onOpen }) {
         const row = el("li");
         const button = el("button", item.action);
         button.type = "button";
+        button.dataset.key = `rel:${rel.kind}:${item.node.id}`;
         button.addEventListener("click", () => select(item.node));
         row.append(button, el("span", item.text));
         list.append(row);
@@ -52,6 +60,7 @@ export function createConnections({ get, onOpen }) {
       if (rel.total > rel.shown && !graph.full) {
         const more = el("button", `Show more ${noun}`);
         more.type = "button";
+        more.dataset.key = `more:${rel.kind}`;
         more.addEventListener("click", () => showMore());
         section.append(more);
       }
@@ -67,9 +76,10 @@ export function createConnections({ get, onOpen }) {
       const form = el("form");
       const label = el("label", `Filter citing memories of ${hub.label}`);
       const input = el("input");
+      input.dataset.key = `hub:${id}:filter`;
       input.type = "search"; input.value = hub.filter; input.maxLength = 1024;
       label.append(" ", input);
-      const submit = el("button", "Filter"); submit.type = "submit";
+      const submit = el("button", "Filter"); submit.type = "submit"; submit.dataset.key = `hub:${id}:submit`;
       form.append(label, " ", submit);
       form.addEventListener("submit", (event) => { event.preventDefault(); hub.filter = input.value.trim(); hub.cursors = [null]; hub.index = 0; loadHub(graph.nodes.get(id)); });
       section.append(form);
@@ -78,14 +88,15 @@ export function createConnections({ get, onOpen }) {
         const row = el("li");
         const button = el("button", "Open");
         button.type = "button";
+        button.dataset.key = `hub:${id}:open:${item.node.id}`;
         button.addEventListener("click", () => select(item.node));
         row.append(button, el("span", item.text));
         list.append(row);
       }
       section.append(list);
-      const prev = el("button", "Previous citing memories"); prev.type = "button"; prev.disabled = hub.index === 0;
+      const prev = el("button", "Previous citing memories"); prev.type = "button"; prev.disabled = hub.index === 0; prev.dataset.key = `hub:${id}:prev`;
       prev.addEventListener("click", () => { hub.index -= 1; loadHub(graph.nodes.get(id)); });
-      const next = el("button", "Next citing memories"); next.type = "button"; next.disabled = !page.cursor;
+      const next = el("button", "Next citing memories"); next.type = "button"; next.disabled = !page.cursor; next.dataset.key = `hub:${id}:next`;
       next.addEventListener("click", () => { hub.cursors = hub.cursors.slice(0, hub.index + 1); hub.cursors.push(page.cursor); hub.index += 1; loadHub(graph.nodes.get(id)); });
       section.append(prev, " ", el("span", `Page ${hub.index + 1}`), " ", next);
       box.append(section);
