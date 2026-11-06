@@ -49,7 +49,7 @@ Python 3.12+ and [uv](https://docs.astral.sh/uv/getting-started/installation/), 
 only needed to install and upgrade — not to run:
 
 ```bash
-nexus_runtime="$HOME/.local/share/nexus-memory/venvs/0.1.0a2"
+nexus_runtime="$HOME/.local/share/nexus-memory/venvs/0.1.0a3"
 python3 tools/install.py --venv "$nexus_runtime"
 "$nexus_runtime/bin/nexus-memory-check"
 ```
@@ -118,7 +118,7 @@ Add a stdio server entry to your MCP client's configuration, substituting your a
 {
   "mcpServers": {
     "nexus-memory": {
-      "command": "/absolute/path/.local/share/nexus-memory/venvs/0.1.0a2/bin/nexus-memory",
+      "command": "/absolute/path/.local/share/nexus-memory/venvs/0.1.0a3/bin/nexus-memory",
       "args": ["--namespace", "my-repo", "--actor", "local"]
     }
   }
@@ -132,7 +132,7 @@ On Windows the installed command is `<environment>\Scripts\nexus-memory.exe`. Yo
 
 ### What the server tells the model, and what it records
 
-Builds after `0.1.0a2` add three things. None changes the database schema, so they share a database with `0.1.0a2` clients in either order and at the same time.
+Since `0.1.0a3` the server adds three things (`0.1.0a2` has none of them). None changes the database schema, so they share a database with `0.1.0a2` clients in either order and at the same time.
 
 - **Capture policy.** The default `--capture-policy explicit` sends instructions permitting memory changes only on the user's explicit request, including on a plain Codex MCP connection without hooks. When installing this build for the dedicated Claude pilot, pass `--capture-policy autonomous` to preserve the pilot treatment. Its original instruction text has SHA-256 prefix `e6733e856c06`. A build that includes the Codex adapter selects explicit capture automatically for `--codex-project-root`, even when the client skips its hooks. These rules guide the agent. The write tools stay available for authorized requests. `--no-instructions` suppresses the initialization text for either treatment. Status and every usage-log line include the effective `capture_policy` and the `instructions_digest` of the text actually sent.
 - **Status.** `status` also reports the launch-bound `namespace` and `actor`, `service_version`, whether instructions are on and their digest, the usage-log state, and `database_location_fingerprint`: the first 12 hex characters of a SHA-256 of the database's resolved path. It tells two clients apart without disclosing the path. It identifies a location, not a store, and a predictable path can be guessed from it.
