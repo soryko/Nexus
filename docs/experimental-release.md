@@ -41,7 +41,7 @@ closed transport with no reason attached. That is what §1 and §2 exist to prev
 ```bash
 git clone https://github.com/soryko/Nexus.git
 cd Nexus
-git checkout v0.1.0a2
+git checkout v0.1.0a3
 ```
 
 > [!NOTE]
@@ -50,7 +50,7 @@ git checkout v0.1.0a2
 > must not run `git checkout` in the checkout that release was installed from.
 
 The version you check out here is the version you install. Installing into a directory
-named `0.1.0a2` does not make the checkout `0.1.0a2`; if these disagree you will get the
+named `0.1.0a3` does not make the checkout `0.1.0a3`; if these disagree you will get the
 other release's package, and on `v0.1.0a1` there is no `nexus-memory-check` to run in §2.
 Confirm after installing:
 
@@ -61,7 +61,7 @@ Confirm after installing:
 ## 1. Install
 
 ```bash
-nexus_runtime="$HOME/.local/share/nexus-memory/venvs/0.1.0a2"
+nexus_runtime="$HOME/.local/share/nexus-memory/venvs/0.1.0a3"
 python3 tools/install.py --venv "$nexus_runtime"
 ```
 
@@ -121,7 +121,7 @@ The pair CI pins, and the one the fresh-install job runs on `ubuntu-24.04`:
 curl -LsSf https://astral.sh/uv/0.11.21/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 uv python install 3.13.14
-nexus_runtime="$HOME/.local/share/nexus-memory/venvs/0.1.0a2"
+nexus_runtime="$HOME/.local/share/nexus-memory/venvs/0.1.0a3"
 python3 tools/install.py \
   --python "$(uv python find --system 3.13.14)" \
   --venv "$nexus_runtime"
@@ -137,7 +137,7 @@ Measured on macOS 26.1 (arm64) with uv 0.11.21 — same commands:
 
 ```bash
 uv python install 3.13.14
-nexus_runtime="$HOME/.local/share/nexus-memory/venvs/0.1.0a2"
+nexus_runtime="$HOME/.local/share/nexus-memory/venvs/0.1.0a3"
 python3 tools/install.py \
   --python "$(uv python find --system 3.13.14)" \
   --venv "$nexus_runtime"
@@ -235,7 +235,7 @@ already depend on:
 
 ```bash
 claude mcp add nexus-memory-release-check -s user -- \
-  /absolute/path/.local/share/nexus-memory/venvs/0.1.0a2/bin/nexus-memory \
+  /absolute/path/.local/share/nexus-memory/venvs/0.1.0a3/bin/nexus-memory \
   --db /absolute/path/nexus-data/memory.sqlite3 \
   --namespace my-repo --actor local
 
@@ -257,7 +257,7 @@ Project scope is the alternative — a `.mcp.json` committed with the repository
 {
   "mcpServers": {
     "nexus-memory": {
-      "command": "/absolute/path/.local/share/nexus-memory/venvs/0.1.0a2/bin/nexus-memory",
+      "command": "/absolute/path/.local/share/nexus-memory/venvs/0.1.0a3/bin/nexus-memory",
       "args": [
         "--db", "/absolute/path/nexus-data/memory.sqlite3",
         "--namespace", "my-repo",
@@ -273,7 +273,7 @@ Project scope is the alternative — a `.mcp.json` committed with the repository
 > *does* expand `${VAR}` and `${VAR:-default}` in `.mcp.json`, in `command`, `args`, `env`,
 > `url` and `headers`
 > ([docs](https://code.claude.com/docs/en/mcp#environment-variable-expansion-in-mcp-json)).
-> So `${HOME}/.local/share/nexus-memory/venvs/0.1.0a2/bin/nexus-memory` works.
+> So `${HOME}/.local/share/nexus-memory/venvs/0.1.0a3/bin/nexus-memory` works.
 >
 > What does **not** expand is shell syntax: a bare `~` is not a home directory here, it is a
 > filename that does not exist, and `$HOME` without braces is not the documented form. If a

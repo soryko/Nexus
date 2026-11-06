@@ -25,7 +25,7 @@ trusting that the venv inherited what the candidate had.
     python3 tools/install.py                      # probe and build .venv
     python3 tools/install.py --python /path/to/python3.12
     python3 tools/install.py --check-only         # report, build nothing
-    python3 tools/install.py --venv "$HOME/.local/share/nexus-memory/venvs/0.1.0a2"
+    python3 tools/install.py --venv "$HOME/.local/share/nexus-memory/venvs/0.1.0a3"
 
 What this builds is a NORMAL installation: the package is copied into the environment,
 not linked back to this checkout, and development dependencies are left out. So the
