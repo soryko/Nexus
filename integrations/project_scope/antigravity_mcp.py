@@ -40,6 +40,10 @@ def denied():
                                 content=[types.TextContent(type='text', text=json.dumps(error))])
 
 
+class ConcurrentRootsChange(ScopeError):
+    """The roots changed while a call was resolving them: refuse this call, but the next one re-checks."""
+
+
 class GuardedService:
     """Keep the original tool handlers; admit every call against fresh client roots."""
 
@@ -59,8 +63,6 @@ class GuardedService:
     async def authorize(self, ctx, call_next):
         if ctx.method == 'notifications/roots/list_changed':
             self.generation += 1
-            if self.project is not None:
-                self.changed = True
         if ctx.method != 'tools/call':
             return await call_next(ctx)
         async with self.lock:
@@ -73,8 +75,11 @@ class GuardedService:
                 with anyio.fail_after(3):
                     roots = await ctx.session.list_roots()
                 project = host_project('antigravity', [root_path(roots.roots)])
-                if epoch != self.generation or (self.project is not None and self.project != project):
+                if self.project is not None and self.project != project:
+                    self.changed = True
                     raise ScopeError('project changed')
+                if epoch != self.generation:
+                    raise ConcurrentRootsChange('concurrent roots change')
                 if self.expected is not None and resolve(self.expected).id != project.id:
                     raise ScopeError('workspace differs from configured project')
                 if self.service is None:
@@ -85,8 +90,10 @@ class GuardedService:
                     binding, verifier = bind_repository(store, scope, project.checkout, None, GitCli())
                     self.service = MemoryService(store, scope, binding, verifier)
                     self.project = project
-            except Exception:
-                if self.project is not None:
+            except Exception as error:
+                # Once bound, any failure to confirm the same single root (a different or ambiguous root, a host
+                # failure) requires reconnection. Only a race with a roots notification is retried by the next call.
+                if self.project is not None and not isinstance(error, ConcurrentRootsChange):
                     self.changed = True
                 return denied()
             return await call_next(ctx)

@@ -103,3 +103,72 @@ def test_antigravity_hook_uses_single_host_workspace_at_plugin_root(tmp_path):
     assert not event([a], PWD=str(b))
     assert not event([a], AGY_WORKSPACE=str(b))
     assert not event([tmp_path / 'missing' / 'alpha'])
+
+
+def test_antigravity_hook_stop_capture(tmp_path):
+    home = tmp_path / 'home'
+    plugin = home / '.gemini/config/plugins/nexus-memory'
+    plugin.mkdir(parents=True)
+    root = tmp_path / 'alpha'
+    root.mkdir()
+    git(root, 'init', '-q')
+    (root / 'file.txt').write_text('initial')
+    git(root, 'add', 'file.txt')
+    git(root, 'commit', '-q', '-m', 'initial')
+    assert launch(root, home, 'enroll', root).returncode == 0
+
+    transcript = tmp_path / 'transcript.jsonl'
+
+    def write_transcript(steps):
+        with transcript.open('w') as f:
+            for s in steps:
+                f.write(json.dumps(s) + '\n')
+
+    def stop_event(payload_extra=None, **extra):
+        payload = {
+            'workspacePaths': [str(root)],
+            'conversationId': 'conv-123',
+            'transcriptPath': str(transcript),
+            'terminationReason': 'NO_TOOL_CALL',
+            'fullyIdle': True,
+        }
+        if payload_extra:
+            payload.update(payload_extra)
+        result = subprocess.run(
+            [sys.executable, '-I', ENTRY.with_name('antigravity_hook.py'), 'stop'],
+            cwd=plugin, env={'HOME': str(home), 'PATH': os.environ['PATH'], **extra},
+            input=json.dumps(payload), capture_output=True,
+            text=True, check=True)
+        return json.loads(result.stdout)
+
+    # 1. Non-NO_TOOL_CALL returns empty
+    write_transcript([
+        {'step_index': 1, 'type': 'USER_INPUT', 'content': 'fix a bug'},
+        {'step_index': 2, 'type': 'PLANNER_RESPONSE', 'tool_calls': [{'name': 'edit_file', 'args': {}}]}
+    ])
+    assert stop_event({'terminationReason': 'ERROR'}) == {}
+
+    # 2. Tool edit triggers nudge
+    res = stop_event()
+    assert res.get('decision') == 'continue'
+    assert 'Nexus Memory Check' in res.get('reason', '')
+
+    # 3. Repeat on same turn suppressed
+    assert stop_event() == {}
+
+    # 4. New turn with NO_MEMORY suppressed
+    write_transcript([
+        {'step_index': 3, 'type': 'USER_INPUT', 'content': 'minor tweak'},
+        {'step_index': 4, 'type': 'PLANNER_RESPONSE', 'content': 'Done. NO_MEMORY', 'tool_calls': [{'name': 'edit_file', 'args': {}}]}
+    ])
+    assert stop_event() == {}
+
+    # 5. New turn where record was already called suppressed
+    write_transcript([
+        {'step_index': 5, 'type': 'USER_INPUT', 'content': 'remember this decision'},
+        {'step_index': 6, 'type': 'PLANNER_RESPONSE', 'tool_calls': [
+            {'name': 'call_mcp_tool', 'args': {'ServerName': 'nexus-memory_nexus-memory', 'ToolName': 'record'}}
+        ]}
+    ])
+    assert stop_event() == {}
+
