@@ -1,0 +1,117 @@
+[
+ {
+  "run": "a4run",
+  "task": "d1",
+  "arm": "baseline",
+  "functional_correctness": true,
+  "requirement_compliance": "4/4",
+  "failed_requirements": [],
+  "termination_reason": "completed",
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass",
+  "tool_calls": 19
+ },
+ {
+  "run": "a4run",
+  "task": "d1",
+  "arm": "nexus",
+  "functional_correctness": true,
+  "requirement_compliance": "5/5",
+  "failed_requirements": [],
+  "termination_reason": "completed",
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass",
+  "tool_calls": 36
+ },
+ {
+  "run": "a4run",
+  "task": "d1",
+  "arm": "notes",
+  "functional_correctness": true,
+  "requirement_compliance": "5/5",
+  "failed_requirements": [],
+  "termination_reason": "completed",
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass",
+  "tool_calls": 28
+ },
+ {
+  "run": "run-d2",
+  "task": "d2",
+  "arm": "baseline",
+  "functional_correctness": true,
+  "requirement_compliance": "4/4",
+  "failed_requirements": [],
+  "termination_reason": "completed",
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass",
+  "tool_calls": 31
+ },
+ {
+  "run": "run-d2",
+  "task": "d2",
+  "arm": "nexus",
+  "functional_correctness": true,
+  "requirement_compliance": "5/5",
+  "failed_requirements": [],
+  "termination_reason": "completed",
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass",
+  "tool_calls": 41
+ },
+ {
+  "run": "run-d2",
+  "task": "d2",
+  "arm": "notes",
+  "functional_correctness": true,
+  "requirement_compliance": "5/5",
+  "failed_requirements": [],
+  "termination_reason": "completed",
+  "outcome_original_rule": "pass",
+  "outcome_amended_rule": "pass",
+  "tool_calls": 36
+ },
+ {
+  "run": "run-d3",
+  "task": "d3",
+  "arm": "baseline",
+  "functional_correctness": true,
+  "requirement_compliance": "3/4",
+  "failed_requirements": [
+   "R4_reply_done"
+  ],
+  "termination_reason": "max_turns",
+  "outcome_original_rule": "fail (truncated)",
+  "outcome_amended_rule": "pass",
+  "tool_calls": 38
+ },
+ {
+  "run": "run-d3",
+  "task": "d3",
+  "arm": "nexus",
+  "functional_correctness": true,
+  "requirement_compliance": "3/5",
+  "failed_requirements": [
+   "R2_extend_tests",
+   "R4_reply_done"
+  ],
+  "termination_reason": "max_turns",
+  "outcome_original_rule": "fail (truncated)",
+  "outcome_amended_rule": "pass",
+  "tool_calls": 47
+ },
+ {
+  "run": "run-d3",
+  "task": "d3",
+  "arm": "notes",
+  "functional_correctness": true,
+  "requirement_compliance": "4/5",
+  "failed_requirements": [
+   "R4_reply_done"
+  ],
+  "termination_reason": "max_turns",
+  "outcome_original_rule": "fail (truncated)",
+  "outcome_amended_rule": "pass",
+  "tool_calls": 42
+ }
+]

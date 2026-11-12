@@ -1,0 +1,40 @@
+diff --git a/_probe_help.py b/_probe_help.py
+new file mode 100644
+index 0000000..8201a03
+--- /dev/null
++++ b/_probe_help.py
+@@ -0,0 +1,34 @@
++import click
++from click.testing import CliRunner
++r = CliRunner()
++
++def show(label, cli, args):
++    res = r.invoke(cli, args)
++    print(f"=== {label} args={args} -> exit {res.exit_code}")
++    print(res.output.rstrip())
++    print()
++
++@click.command()
++@click.argument("help")
++def c1(help): click.echo(f"got {help!r}")
++show("Argument help", c1, ["value"])
++show("Argument help --help", c1, ["--help"])
++
++@click.command()
++@click.option("--name", "help")
++def c2(help): click.echo(f"got {help!r}")
++show("Option dest help", c2, ["--name", "value"])
++show("Option dest help --help", c2, ["--help"])
++
++@click.command(context_settings={"help_option_names": ["-h", "--help"]})
++@click.argument("help")
++def c3(help): click.echo(f"got {help!r}")
++show("custom names + Argument help", c3, ["value"])
++show("custom names + Argument help -h", c3, ["-h"])
++
++@click.command()
++@click.argument("help")
++@click.help_option("-h", "--help")
++def c4(help): click.echo(f"got {help!r}")
++show("explicit help_option + arg help", c4, ["value"])
++show("explicit help_option + arg help -h", c4, ["-h"])

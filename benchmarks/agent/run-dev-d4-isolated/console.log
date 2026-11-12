@@ -1,0 +1,16 @@
+seed=20260911  realised arm order: baseline -> nexus -> notes
+
+frozen store digest before any arm: e914d8b853fd5e17
+
+[baseline] boundary: egress=True dns=True held-checks=True (paired control: works_outside=True)
+[baseline] running ...
+  -> {'terminal': 'completed', 'meaning': 'ran to completion', 'scored': True, 'truncated': False, 'evidence': {'forced_verdict': None, 'envelope_present': True, 'terminal_reason': 'completed', 'is_error': False, 'subtype': 'success'}, 'envelope': {'is_error': False, 'subtype': 'success', 'terminal_reason': 'completed'}}  patch=1228B  checks: 1 passed in 0.01s  wall=35.6s
+[nexus] boundary: egress=True dns=True held-checks=True (paired control: works_outside=True)
+[nexus] memory visibility: scope=(a1-dev,agent) visible=13
+[nexus] running ...
+  -> {'terminal': 'completed', 'meaning': 'ran to completion', 'scored': True, 'truncated': False, 'evidence': {'forced_verdict': None, 'envelope_present': True, 'terminal_reason': 'completed', 'is_error': False, 'subtype': 'success'}, 'envelope': {'is_error': False, 'subtype': 'success', 'terminal_reason': 'completed'}}  patch=1201B  checks: 1 passed in 0.00s  wall=28.1s
+[notes] boundary: egress=True dns=True held-checks=True (paired control: works_outside=True)
+[notes] running ...
+  -> {'terminal': 'completed', 'meaning': 'ran to completion', 'scored': True, 'truncated': False, 'evidence': {'forced_verdict': None, 'envelope_present': True, 'terminal_reason': 'completed', 'is_error': False, 'subtype': 'success'}, 'envelope': {'is_error': False, 'subtype': 'success', 'terminal_reason': 'completed'}}  patch=1098B  checks: 1 passed in 0.00s  wall=32.2s
+
+frozen store digest after all arms: e914d8b853fd5e17  unchanged=True

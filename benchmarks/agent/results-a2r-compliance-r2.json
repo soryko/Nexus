@@ -1,0 +1,1473 @@
+[
+ {
+  "ceiling": 45,
+  "task": "k1",
+  "arm": "baseline",
+  "run_dir": "/Users/soko/Cerebros/nexus-a1-fixtures/a2r-run/c45/run-k1/attempt1",
+  "terminal": "completed",
+  "scored": true,
+  "truncated": false,
+  "functional": true,
+  "scorer_version": "a1-scorer-5",
+  "scorer_ran": true,
+  "requirement_compliance": "4/5",
+  "unknown_count": 0,
+  "not_applicable_count": 1,
+  "passed": [
+   "E1_regression_discriminates",
+   "S1_touched_src",
+   "S2_paths_within_scope",
+   "S3_added_test_file_change"
+  ],
+  "failed": [
+   "P1_final_reply_opens_done"
+  ],
+  "unknown": [],
+  "not_applicable": [
+   "P2_content_delivered_before_edit"
+  ],
+  "instrument_errors": [],
+  "checks": {
+   "S1_touched_src": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under src/click/"
+   },
+   "S2_paths_within_scope": {
+    "verdict": "pass",
+    "reason": "every changed path is within ('src/click/', 'tests/', 'CHANGES.rst')"
+   },
+   "S3_added_test_file_change": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under tests/"
+   },
+   "E1_regression_discriminates": {
+    "verdict": "pass",
+    "reason": "absent-or-passing on the fixture, fails as the task predicts with the test hunks alone, passes on the full patch"
+   },
+   "P1_final_reply_opens_done": {
+    "verdict": "fail",
+    "reason": "the reply's first word is '(nothing)'"
+   },
+   "P2_content_delivered_before_edit": {
+    "verdict": "not_applicable",
+    "reason": "the baseline arm is offered no prior-work memory"
+   }
+  },
+  "regression_probe": {
+   "applicable": true,
+   "added_tests": [
+    "tests/test_context.py::test_call_on_close_runs_when_eager_option_exits",
+    "tests/test_context.py::test_call_on_close_skipped_after_eager_exit",
+    "tests/test_context.py::test_call_on_close_resets_state_after_eager_exit"
+   ],
+   "skipped_tests": [],
+   "instrument_error": null,
+   "baseline": {
+    "rc": 4,
+    "verdict": "absent",
+    "cases": [],
+    "report_text": "",
+    "tail": "no tests ran in 0.01s",
+    "instrument_error": null
+   },
+   "prefix": {
+    "rc": 1,
+    "verdict": "failure",
+    "cases": [
+     {
+      "name": "test_call_on_close_runs_when_eager_option_exits",
+      "classname": "tests.test_context",
+      "kind": "failure",
+      "message": "AssertionError: assert ['register', 'exit'] == ['register', 'exit', 'close'] Right contains one more item: 'close' Use -v to get more diff runner = <click.testing.CliRunner object at 0x1086d5010> def test_call_on_close_runs_when_eager_option_exits(runner): \"\"\"A cleanup registered by an earlier eager"
+     },
+     {
+      "name": "test_call_on_close_skipped_after_eager_exit",
+      "classname": "tests.test_context",
+      "kind": "failure",
+      "message": "AssertionError: assert ['exit'] == ['exit', 'exit-close'] Right contains one more item: 'exit-close' Use -v to get more diff runner = <click.testing.CliRunner object at 0x1087247d0> def test_call_on_close_skipped_after_eager_exit(runner): \"\"\"An eager option after an exiting one is never processed, s"
+     },
+     {
+      "name": "test_call_on_close_resets_state_after_eager_exit",
+      "classname": "tests.test_context",
+      "kind": "failure",
+      "message": "assert 50 == 30 + where 50 = <Logger test_context.state (CRITICAL)>.level + and 30 = logging.WARNING runner = <click.testing.CliRunner object at 0x108725a90> def test_call_on_close_resets_state_after_eager_exit(runner): \"\"\"Cleanups registered before an eager option exits can restore state that would"
+     }
+    ],
+    "report_text": "AssertionError: assert ['register', 'exit'] == ['register', 'exit', 'close'] Right contains one more item: 'close' Use -v to get more diff runner = <click.testing.CliRunner object at 0x1086d5010> def test_call_on_close_runs_when_eager_option_exits(runner): \"\"\"A cleanup registered by an earlier eager option runs when a later eager option ends the invocation with ``ctx.exit()``. \"\"\" events = [] def register(ctx, param, value): if value: events.append(\"register\") @ctx.call_on_close def close(): # The context is still the current one while closing. assert click.get_current_context() is ctx events.append(\"close\") return value def force_exit(ctx, param, value): if value: events.append(\"exit\") ctx.exit() return value @click.command() @click.option( \"--register\", is_flag=True, is_eager=True, callback=register, expose_value=False, ) @click.option( \"--force-exit\", is_flag=True, is_eager=True, callback=force_exit, expose_value=False, ) def cli(): events.append(\"body\") result = runner.invoke(cli, [\"--register\", \"--force-exit\"]) assert result.exit_code == 0 > assert events == [\"register\", \"exit\", \"close\"] E AssertionError: assert ['register', 'exit'] == ['register', 'exit', 'close'] E E Right contains one more item: 'close' E Use -v to get more diff tests/test_context.py:286: AssertionError AssertionError: assert ['exit'] == ['exit', 'exit-close'] Right contains one more item: 'exit-close' Use -v to get more diff runner = <click.testing.CliRunner object at 0x1087247d0> def test_call_on_close_skipped_after_eager_exit(runner): \"\"\"An eager option after an exiting one is never processed, so only the exiting option's own cleanup is registered and run. \"\"\" events = [] def register(ctx, param, value): if value: events.append(\"register\") ctx.call_on_close(lambda: events.append(\"close\")) return value def force_exit(ctx, param, value): if value: events.append(\"exit\") ctx.call_on_close(lambda: events.append(\"exit-close\")) ctx.exit() return value @click.command() @click.option( \"--register\"",
+    "tail": "3 failed in 0.03s",
+    "instrument_error": null
+   },
+   "candidate": {
+    "rc": 0,
+    "verdict": "passed",
+    "cases": [
+     {
+      "name": "test_call_on_close_runs_when_eager_option_exits",
+      "classname": "tests.test_context",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_call_on_close_skipped_after_eager_exit",
+      "classname": "tests.test_context",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_call_on_close_resets_state_after_eager_exit",
+      "classname": "tests.test_context",
+      "kind": "passed",
+      "message": ""
+     }
+    ],
+    "report_text": "",
+    "tail": "3 passed in 0.02s",
+    "instrument_error": null
+   },
+   "baseline_clean": true,
+   "fails_prefix": true,
+   "passes_candidate": true,
+   "discriminates": true
+  },
+  "unsettled_by_machine": [
+   "relevance of the source change to the reported defect",
+   "whether the added test covers the defect rather than merely failing in the predicted way"
+  ]
+ },
+ {
+  "ceiling": 45,
+  "task": "k1",
+  "arm": "notes",
+  "run_dir": "/Users/soko/Cerebros/nexus-a1-fixtures/a2r-run/c45/run-k1/attempt1",
+  "terminal": "completed",
+  "scored": true,
+  "truncated": false,
+  "functional": true,
+  "scorer_version": "a1-scorer-5",
+  "scorer_ran": true,
+  "requirement_compliance": "5/6",
+  "unknown_count": 0,
+  "not_applicable_count": 0,
+  "passed": [
+   "E1_regression_discriminates",
+   "P2_content_delivered_before_edit",
+   "S1_touched_src",
+   "S2_paths_within_scope",
+   "S3_added_test_file_change"
+  ],
+  "failed": [
+   "P1_final_reply_opens_done"
+  ],
+  "unknown": [],
+  "not_applicable": [],
+  "instrument_errors": [],
+  "checks": {
+   "S1_touched_src": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under src/click/"
+   },
+   "S2_paths_within_scope": {
+    "verdict": "pass",
+    "reason": "every changed path is within ('src/click/', 'tests/', 'CHANGES.rst')"
+   },
+   "S3_added_test_file_change": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under tests/"
+   },
+   "E1_regression_discriminates": {
+    "verdict": "pass",
+    "reason": "absent-or-passing on the fixture, fails as the task predicts with the test hunks alone, passes on the full patch"
+   },
+   "P1_final_reply_opens_done": {
+    "verdict": "fail",
+    "reason": "the reply's first word is 'The'"
+   },
+   "P2_content_delivered_before_edit": {
+    "verdict": "pass",
+    "reason": "content arrived at event 1 via notes text, before the first edit at 80 (Edit on ('src/click',))"
+   }
+  },
+  "regression_probe": {
+   "applicable": true,
+   "added_tests": [
+    "tests/test_context.py::test_call_on_close_eager_exit",
+    "tests/test_context.py::test_call_on_close_eager_exit_does_not_leak_state"
+   ],
+   "skipped_tests": [],
+   "instrument_error": null,
+   "baseline": {
+    "rc": 4,
+    "verdict": "absent",
+    "cases": [],
+    "report_text": "",
+    "tail": "no tests ran in 0.02s",
+    "instrument_error": null
+   },
+   "prefix": {
+    "rc": 1,
+    "verdict": "failure",
+    "cases": [
+     {
+      "name": "test_call_on_close_eager_exit",
+      "classname": "tests.test_context",
+      "kind": "failure",
+      "message": "AssertionError: assert ['a', 'b'] == ['a', 'b', 'c...b', 'close a'] Right contains 2 more items, first extra item: 'close b' Use -v to get more diff runner = <click.testing.CliRunner object at 0x10909cec0> def test_call_on_close_eager_exit(runner): \"\"\"Close callbacks registered while parsing eager o"
+     },
+     {
+      "name": "test_call_on_close_eager_exit_does_not_leak_state",
+      "classname": "tests.test_context",
+      "kind": "failure",
+      "message": "assert 10 == 0 + where 10 = <Logger test_call_on_close_eager_exit_does_not_leak_state (DEBUG)>.level runner = <click.testing.CliRunner object at 0x109002d50> def test_call_on_close_eager_exit_does_not_leak_state(runner): \"\"\"A cleanup registered by an eager option runs when a later eager option exits"
+     }
+    ],
+    "report_text": "AssertionError: assert ['a', 'b'] == ['a', 'b', 'c...b', 'close a'] Right contains 2 more items, first extra item: 'close b' Use -v to get more diff runner = <click.testing.CliRunner object at 0x10909cec0> def test_call_on_close_eager_exit(runner): \"\"\"Close callbacks registered while parsing eager options run even if a later eager option ends the invocation with ``ctx.exit()``. They run in eager processing order, so an option processed after the exiting one never gets to register its callback. \"\"\" called = [] def register_a(ctx, param, value): if value: called.append(\"a\") @ctx.call_on_close def close_a(): called.append(\"close a\") return value def register_b(ctx, param, value): if value: called.append(\"b\") @ctx.call_on_close def close_b(): called.append(\"close b\") ctx.exit() return value @click.command() @click.option( \"--option-with-callback\", is_eager=True, is_flag=True, callback=register_a ) @click.option(\"--force-exit\", is_eager=True, is_flag=True, callback=register_b) def cli(**kwargs): called.append(\"body\") result = runner.invoke( cli, [\"--option-with-callback\", \"--force-exit\"], standalone_mode=False, ) assert result.exit_code == 0 # Both close callbacks ran, in exit stack (LIFO) order, and the command # callback was never invoked. > assert called == [\"a\", \"b\", \"close b\", \"close a\"] E AssertionError: assert ['a', 'b'] == ['a', 'b', 'c...b', 'close a'] E E Right contains 2 more items, first extra item: 'close b' E Use -v to get more diff tests/test_context.py:287: AssertionError assert 10 == 0 + where 10 = <Logger test_call_on_close_eager_exit_does_not_leak_state (DEBUG)>.level runner = <click.testing.CliRunner object at 0x109002d50> def test_call_on_close_eager_exit_does_not_leak_state(runner): \"\"\"A cleanup registered by an eager option runs when a later eager option exits, so state it changed (such as a logger's level) is not leaked. \"\"\" logger = logging.getLogger(\"test_call_on_close_eager_exit_does_not_leak_state\") original_level = logger.level def set_level(",
+    "tail": "2 failed in 0.04s",
+    "instrument_error": null
+   },
+   "candidate": {
+    "rc": 0,
+    "verdict": "passed",
+    "cases": [
+     {
+      "name": "test_call_on_close_eager_exit",
+      "classname": "tests.test_context",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_call_on_close_eager_exit_does_not_leak_state",
+      "classname": "tests.test_context",
+      "kind": "passed",
+      "message": ""
+     }
+    ],
+    "report_text": "",
+    "tail": "2 passed in 0.02s",
+    "instrument_error": null
+   },
+   "baseline_clean": true,
+   "fails_prefix": true,
+   "passes_candidate": true,
+   "discriminates": true
+  },
+  "unsettled_by_machine": [
+   "relevance of the source change to the reported defect",
+   "whether the added test covers the defect rather than merely failing in the predicted way"
+  ]
+ },
+ {
+  "ceiling": 45,
+  "task": "k1",
+  "arm": "nexus",
+  "run_dir": "/Users/soko/Cerebros/nexus-a1-fixtures/a2r-run/c45/run-k1/attempt1",
+  "terminal": "max_turns",
+  "scored": true,
+  "truncated": true,
+  "functional": true,
+  "scorer_version": "a1-scorer-5",
+  "scorer_ran": true,
+  "requirement_compliance": "2/6",
+  "unknown_count": 0,
+  "not_applicable_count": 0,
+  "passed": [
+   "P2_content_delivered_before_edit",
+   "S1_touched_src"
+  ],
+  "failed": [
+   "E1_regression_discriminates",
+   "P1_final_reply_opens_done",
+   "S2_paths_within_scope",
+   "S3_added_test_file_change"
+  ],
+  "unknown": [],
+  "not_applicable": [],
+  "instrument_errors": [],
+  "checks": {
+   "S1_touched_src": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under src/click/"
+   },
+   "S2_paths_within_scope": {
+    "verdict": "fail",
+    "reason": "outside ('src/click/', 'tests/', 'CHANGES.rst'): ['dump_pyc.py', 'repro2.py', 'repro3.py', 'repro4.py', 'repro5.py', 'repro_call_on_close.py']"
+   },
+   "S3_added_test_file_change": {
+    "verdict": "fail",
+    "reason": "no file under tests/ in the patch"
+   },
+   "E1_regression_discriminates": {
+    "verdict": "fail",
+    "reason": "no addressable regression test: no test-file changes in the patch"
+   },
+   "P1_final_reply_opens_done": {
+    "verdict": "fail",
+    "reason": "the reply's first word is '(nothing)'"
+   },
+   "P2_content_delivered_before_edit": {
+    "verdict": "pass",
+    "reason": "content arrived at event 5 via nexus search hits, before the first edit at 82 (Bash write)"
+   }
+  },
+  "regression_probe": {
+   "applicable": false,
+   "reason": "no test-file changes in the patch"
+  },
+  "unsettled_by_machine": [
+   "relevance of the source change to the reported defect",
+   "whether the added test covers the defect rather than merely failing in the predicted way"
+  ]
+ },
+ {
+  "ceiling": 45,
+  "task": "k2",
+  "arm": "baseline",
+  "run_dir": "/Users/soko/Cerebros/nexus-a1-fixtures/a2r-run/c45/run-k2/attempt1",
+  "terminal": "completed",
+  "scored": true,
+  "truncated": false,
+  "functional": true,
+  "scorer_version": "a1-scorer-5",
+  "scorer_ran": true,
+  "requirement_compliance": "4/5",
+  "unknown_count": 0,
+  "not_applicable_count": 1,
+  "passed": [
+   "E1_regression_discriminates",
+   "S1_touched_src",
+   "S2_paths_within_scope",
+   "S3_added_test_file_change"
+  ],
+  "failed": [
+   "P1_final_reply_opens_done"
+  ],
+  "unknown": [],
+  "not_applicable": [
+   "P2_content_delivered_before_edit"
+  ],
+  "instrument_errors": [],
+  "checks": {
+   "S1_touched_src": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under src/click/"
+   },
+   "S2_paths_within_scope": {
+    "verdict": "pass",
+    "reason": "every changed path is within ('src/click/', 'tests/', 'CHANGES.rst')"
+   },
+   "S3_added_test_file_change": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under tests/"
+   },
+   "E1_regression_discriminates": {
+    "verdict": "pass",
+    "reason": "absent-or-passing on the fixture, fails as the task predicts with the test hunks alone, passes on the full patch"
+   },
+   "P1_final_reply_opens_done": {
+    "verdict": "fail",
+    "reason": "the reply's first word is 'The'"
+   },
+   "P2_content_delivered_before_edit": {
+    "verdict": "not_applicable",
+    "reason": "the baseline arm is offered no prior-work memory"
+   }
+  },
+  "regression_probe": {
+   "applicable": true,
+   "added_tests": [
+    "tests/test_options.py::test_flag_with_explicit_type_toggles_default",
+    "tests/test_options.py::test_flag_with_explicit_non_bool_type_uses_flag_value"
+   ],
+   "skipped_tests": [],
+   "instrument_error": null,
+   "baseline": {
+    "rc": 4,
+    "verdict": "absent",
+    "cases": [],
+    "report_text": "",
+    "tail": "no tests ran in 0.05s",
+    "instrument_error": null
+   },
+   "prefix": {
+    "rc": 1,
+    "verdict": "failure",
+    "cases": [
+     {
+      "name": "test_flag_with_explicit_type_toggles_default[type=bool]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "assert None is True + where None = <Option foo>.flag_value runner = <click.testing.CliRunner object at 0x1093001a0> kwargs = {'type': <class 'bool'>}, flag_value = True @pytest.mark.parametrize( (\"kwargs\", \"flag_value\"), [ pytest.param({\"type\": bool}, True, id=\"type=bool\"), pytest.param( {\"type\": bo"
+     },
+     {
+      "name": "test_flag_with_explicit_type_toggles_default[type=bool,default=True]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "assert None is False + where None = <Option foo>.flag_value runner = <click.testing.CliRunner object at 0x109266e90> kwargs = {'type': <class 'bool'>, 'default': True}, flag_value = False @pytest.mark.parametrize( (\"kwargs\", \"flag_value\"), [ pytest.param({\"type\": bool}, True, id=\"type=bool\"), pytest"
+     },
+     {
+      "name": "test_flag_with_explicit_type_toggles_default[type=click.BOOL]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "assert None is True + where None = <Option foo>.flag_value runner = <click.testing.CliRunner object at 0x109ea1810> kwargs = {'type': BOOL}, flag_value = True @pytest.mark.parametrize( (\"kwargs\", \"flag_value\"), [ pytest.param({\"type\": bool}, True, id=\"type=bool\"), pytest.param( {\"type\": bool, \"defau"
+     },
+     {
+      "name": "test_flag_with_explicit_non_bool_type_uses_flag_value",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "AssertionError: assert None == 'True' + where None = <Result okay>.return_value runner = <click.testing.CliRunner object at 0x1092b6fd0> def test_flag_with_explicit_non_bool_type_uses_flag_value(runner): \"\"\"A flag with an explicit non-boolean type casts the flag value.\"\"\" opt = click.Option([\"--foo\""
+     }
+    ],
+    "report_text": "assert None is True + where None = <Option foo>.flag_value runner = <click.testing.CliRunner object at 0x1093001a0> kwargs = {'type': <class 'bool'>}, flag_value = True @pytest.mark.parametrize( (\"kwargs\", \"flag_value\"), [ pytest.param({\"type\": bool}, True, id=\"type=bool\"), pytest.param( {\"type\": bool, \"default\": True}, False, id=\"type=bool,default=True\" ), pytest.param({\"type\": click.BOOL}, True, id=\"type=click.BOOL\"), ], ) def test_flag_with_explicit_type_toggles_default(runner, kwargs, flag_value): \"\"\"Passing a flag with an explicit type must store the inverse of the default, not ``None``. \"\"\" opt = click.Option([\"--foo\"], is_flag=True, **kwargs) > assert opt.flag_value is flag_value E assert None is True E + where None = <Option foo>.flag_value tests/test_options.py:1044: AssertionError assert None is False + where None = <Option foo>.flag_value runner = <click.testing.CliRunner object at 0x109266e90> kwargs = {'type': <class 'bool'>, 'default': True}, flag_value = False @pytest.mark.parametrize( (\"kwargs\", \"flag_value\"), [ pytest.param({\"type\": bool}, True, id=\"type=bool\"), pytest.param( {\"type\": bool, \"default\": True}, False, id=\"type=bool,default=True\" ), pytest.param({\"type\": click.BOOL}, True, id=\"type=click.BOOL\"), ], ) def test_flag_with_explicit_type_toggles_default(runner, kwargs, flag_value): \"\"\"Passing a flag with an explicit type must store the inverse of the default, not ``None``. \"\"\" opt = click.Option([\"--foo\"], is_flag=True, **kwargs) > assert opt.flag_value is flag_value E assert None is False E + where None = <Option foo>.flag_value tests/test_options.py:1044: AssertionError assert None is True + where None = <Option foo>.flag_value runner = <click.testing.CliRunner object at 0x109ea1810> kwargs = {'type': BOOL}, flag_value = True @pytest.mark.parametrize( (\"kwargs\", \"flag_value\"), [ pytest.param({\"type\": bool}, True, id=\"type=bool\"), pytest.param( {\"type\": bool, \"default\": True}, False, id=\"type=bool,default=True\" ), pytest.param({\"type\": clic",
+    "tail": "4 failed in 0.09s",
+    "instrument_error": null
+   },
+   "candidate": {
+    "rc": 0,
+    "verdict": "passed",
+    "cases": [
+     {
+      "name": "test_flag_with_explicit_type_toggles_default[type=bool]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_with_explicit_type_toggles_default[type=bool,default=True]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_with_explicit_type_toggles_default[type=click.BOOL]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_with_explicit_non_bool_type_uses_flag_value",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     }
+    ],
+    "report_text": "",
+    "tail": "4 passed in 0.07s",
+    "instrument_error": null
+   },
+   "baseline_clean": true,
+   "fails_prefix": true,
+   "passes_candidate": true,
+   "discriminates": true
+  },
+  "unsettled_by_machine": [
+   "relevance of the source change to the reported defect",
+   "whether the added test covers the defect rather than merely failing in the predicted way"
+  ]
+ },
+ {
+  "ceiling": 45,
+  "task": "k2",
+  "arm": "nexus",
+  "run_dir": "/Users/soko/Cerebros/nexus-a1-fixtures/a2r-run/c45/run-k2/attempt1",
+  "terminal": "completed",
+  "scored": true,
+  "truncated": false,
+  "functional": true,
+  "scorer_version": "a1-scorer-5",
+  "scorer_ran": true,
+  "requirement_compliance": "5/6",
+  "unknown_count": 0,
+  "not_applicable_count": 0,
+  "passed": [
+   "E1_regression_discriminates",
+   "P2_content_delivered_before_edit",
+   "S1_touched_src",
+   "S2_paths_within_scope",
+   "S3_added_test_file_change"
+  ],
+  "failed": [
+   "P1_final_reply_opens_done"
+  ],
+  "unknown": [],
+  "not_applicable": [],
+  "instrument_errors": [],
+  "checks": {
+   "S1_touched_src": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under src/click/"
+   },
+   "S2_paths_within_scope": {
+    "verdict": "pass",
+    "reason": "every changed path is within ('src/click/', 'tests/', 'CHANGES.rst')"
+   },
+   "S3_added_test_file_change": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under tests/"
+   },
+   "E1_regression_discriminates": {
+    "verdict": "pass",
+    "reason": "absent-or-passing on the fixture, fails as the task predicts with the test hunks alone, passes on the full patch"
+   },
+   "P1_final_reply_opens_done": {
+    "verdict": "fail",
+    "reason": "the reply's first word is 'Root'"
+   },
+   "P2_content_delivered_before_edit": {
+    "verdict": "pass",
+    "reason": "content arrived at event 6 via nexus search hits, before the first edit at 68 (Edit on ('src/click',))"
+   }
+  },
+  "regression_probe": {
+   "applicable": true,
+   "added_tests": [
+    "tests/test_options.py::test_flag_value_inferred_with_explicit_type",
+    "tests/test_options.py::test_is_flag_with_explicit_type"
+   ],
+   "skipped_tests": [],
+   "instrument_error": null,
+   "baseline": {
+    "rc": 4,
+    "verdict": "absent",
+    "cases": [],
+    "report_text": "",
+    "tail": "no tests ran in 0.05s",
+    "instrument_error": null
+   },
+   "prefix": {
+    "rc": 1,
+    "verdict": "failure",
+    "cases": [
+     {
+      "name": "test_flag_value_inferred_with_explicit_type[None-True]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "assert None is True + where None = <Option foo>.flag_value default = None, expect = True @pytest.mark.parametrize( (\"default\", \"expect\"), [(None, True), (False, True), (True, False)], ) def test_flag_value_inferred_with_explicit_type(default, expect): \"\"\"An ``is_flag`` option gets an automatic ``fla"
+     },
+     {
+      "name": "test_flag_value_inferred_with_explicit_type[False-True]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "assert None is True + where None = <Option foo>.flag_value default = False, expect = True @pytest.mark.parametrize( (\"default\", \"expect\"), [(None, True), (False, True), (True, False)], ) def test_flag_value_inferred_with_explicit_type(default, expect): \"\"\"An ``is_flag`` option gets an automatic ``fl"
+     },
+     {
+      "name": "test_flag_value_inferred_with_explicit_type[True-False]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "assert None is False + where None = <Option foo>.flag_value default = True, expect = False @pytest.mark.parametrize( (\"default\", \"expect\"), [(None, True), (False, True), (True, False)], ) def test_flag_value_inferred_with_explicit_type(default, expect): \"\"\"An ``is_flag`` option gets an automatic ``f"
+     },
+     {
+      "name": "test_is_flag_with_explicit_type[type=bool]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "assert False == True + where False = <Result okay>.return_value runner = <click.testing.CliRunner object at 0x109460980> option_kwargs = {'type': <class 'bool'>}, expected_present = True expected_absent = False @pytest.mark.parametrize( (\"option_kwargs\", \"expected_present\", \"expected_absent\"), [ pyt"
+     },
+     {
+      "name": "test_is_flag_with_explicit_type[type=bool default=True]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "assert True == False + where True = <Result okay>.return_value runner = <click.testing.CliRunner object at 0x109ff6990> option_kwargs = {'type': <class 'bool'>, 'default': True} expected_present = False, expected_absent = True @pytest.mark.parametrize( (\"option_kwargs\", \"expected_present\", \"expected"
+     },
+     {
+      "name": "test_is_flag_with_explicit_type[type=click.BOOL]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "assert False == True + where False = <Result okay>.return_value runner = <click.testing.CliRunner object at 0x109ff7250> option_kwargs = {'type': BOOL}, expected_present = True, expected_absent = False @pytest.mark.parametrize( (\"option_kwargs\", \"expected_present\", \"expected_absent\"), [ pytest.param"
+     },
+     {
+      "name": "test_is_flag_with_explicit_type[type=str]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "AssertionError: assert None == 'True' + where None = <Result okay>.return_value runner = <click.testing.CliRunner object at 0x109416190> option_kwargs = {'type': <class 'str'>}, expected_present = 'True' expected_absent = None @pytest.mark.parametrize( (\"option_kwargs\", \"expected_present\", \"expected"
+     }
+    ],
+    "report_text": "assert None is True + where None = <Option foo>.flag_value default = None, expect = True @pytest.mark.parametrize( (\"default\", \"expect\"), [(None, True), (False, True), (True, False)], ) def test_flag_value_inferred_with_explicit_type(default, expect): \"\"\"An ``is_flag`` option gets an automatic ``flag_value`` based on its ``default`` even when an explicit ``type`` is given, just as it does when the type is guessed. \"\"\" kwargs = {} if default is None else {\"default\": default} param = click.Option([\"--foo\"], is_flag=True, type=bool, **kwargs) > assert param.flag_value is expect E assert None is True E + where None = <Option foo>.flag_value tests/test_options.py:1021: AssertionError assert None is True + where None = <Option foo>.flag_value default = False, expect = True @pytest.mark.parametrize( (\"default\", \"expect\"), [(None, True), (False, True), (True, False)], ) def test_flag_value_inferred_with_explicit_type(default, expect): \"\"\"An ``is_flag`` option gets an automatic ``flag_value`` based on its ``default`` even when an explicit ``type`` is given, just as it does when the type is guessed. \"\"\" kwargs = {} if default is None else {\"default\": default} param = click.Option([\"--foo\"], is_flag=True, type=bool, **kwargs) > assert param.flag_value is expect E assert None is True E + where None = <Option foo>.flag_value tests/test_options.py:1021: AssertionError assert None is False + where None = <Option foo>.flag_value default = True, expect = False @pytest.mark.parametrize( (\"default\", \"expect\"), [(None, True), (False, True), (True, False)], ) def test_flag_value_inferred_with_explicit_type(default, expect): \"\"\"An ``is_flag`` option gets an automatic ``flag_value`` based on its ``default`` even when an explicit ``type`` is given, just as it does when the type is guessed. \"\"\" kwargs = {} if default is None else {\"default\": default} param = click.Option([\"--foo\"], is_flag=True, type=bool, **kwargs) > assert param.flag_value is expect E assert None is False E + where None =",
+    "tail": "7 failed in 0.10s",
+    "instrument_error": null
+   },
+   "candidate": {
+    "rc": 0,
+    "verdict": "passed",
+    "cases": [
+     {
+      "name": "test_flag_value_inferred_with_explicit_type[None-True]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_value_inferred_with_explicit_type[False-True]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_value_inferred_with_explicit_type[True-False]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_is_flag_with_explicit_type[type=bool]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_is_flag_with_explicit_type[type=bool default=True]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_is_flag_with_explicit_type[type=click.BOOL]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_is_flag_with_explicit_type[type=str]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     }
+    ],
+    "report_text": "",
+    "tail": "7 passed in 0.05s",
+    "instrument_error": null
+   },
+   "baseline_clean": true,
+   "fails_prefix": true,
+   "passes_candidate": true,
+   "discriminates": true
+  },
+  "unsettled_by_machine": [
+   "relevance of the source change to the reported defect",
+   "whether the added test covers the defect rather than merely failing in the predicted way"
+  ]
+ },
+ {
+  "ceiling": 45,
+  "task": "k2",
+  "arm": "notes",
+  "run_dir": "/Users/soko/Cerebros/nexus-a1-fixtures/a2r-run/c45/run-k2/attempt1",
+  "terminal": "completed",
+  "scored": true,
+  "truncated": false,
+  "functional": true,
+  "scorer_version": "a1-scorer-5",
+  "scorer_ran": true,
+  "requirement_compliance": "5/6",
+  "unknown_count": 0,
+  "not_applicable_count": 0,
+  "passed": [
+   "E1_regression_discriminates",
+   "P2_content_delivered_before_edit",
+   "S1_touched_src",
+   "S2_paths_within_scope",
+   "S3_added_test_file_change"
+  ],
+  "failed": [
+   "P1_final_reply_opens_done"
+  ],
+  "unknown": [],
+  "not_applicable": [],
+  "instrument_errors": [],
+  "checks": {
+   "S1_touched_src": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under src/click/"
+   },
+   "S2_paths_within_scope": {
+    "verdict": "pass",
+    "reason": "every changed path is within ('src/click/', 'tests/', 'CHANGES.rst')"
+   },
+   "S3_added_test_file_change": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under tests/"
+   },
+   "E1_regression_discriminates": {
+    "verdict": "pass",
+    "reason": "absent-or-passing on the fixture, fails as the task predicts with the test hunks alone, passes on the full patch"
+   },
+   "P1_final_reply_opens_done": {
+    "verdict": "fail",
+    "reason": "the reply's first word is 'The'"
+   },
+   "P2_content_delivered_before_edit": {
+    "verdict": "pass",
+    "reason": "content arrived at event 1 via notes text, before the first edit at 52 (Edit on ('src/click',))"
+   }
+  },
+  "regression_probe": {
+   "applicable": true,
+   "added_tests": [
+    "tests/test_options.py::test_flag_with_explicit_type",
+    "tests/test_options.py::test_flag_value_is_set_with_explicit_type"
+   ],
+   "skipped_tests": [],
+   "instrument_error": null,
+   "baseline": {
+    "rc": 4,
+    "verdict": "absent",
+    "cases": [],
+    "report_text": "",
+    "tail": "no tests ran in 0.05s",
+    "instrument_error": null
+   },
+   "prefix": {
+    "rc": 1,
+    "verdict": "failure",
+    "cases": [
+     {
+      "name": "test_flag_with_explicit_type[bool]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "assert False == True + where False = <Result okay>.return_value runner = <click.testing.CliRunner object at 0x1088d81a0> kwargs = {'is_flag': True, 'type': <class 'bool'>}, args = ['--foo'] expected = True @pytest.mark.parametrize( (\"kwargs\", \"args\", \"expected\"), [ pytest.param({\"is_flag\": True, \"ty"
+     },
+     {
+      "name": "test_flag_with_explicit_type[bool default]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_with_explicit_type[bool default True]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "assert True == False + where True = <Result okay>.return_value runner = <click.testing.CliRunner object at 0x10883ee90> kwargs = {'is_flag': True, 'type': <class 'bool'>, 'default': True} args = ['--foo'], expected = False @pytest.mark.parametrize( (\"kwargs\", \"args\", \"expected\"), [ pytest.param({\"is"
+     },
+     {
+      "name": "test_flag_with_explicit_type[bool default True omitted]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_with_explicit_type[click.BOOL]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "assert False == True + where False = <Result okay>.return_value runner = <click.testing.CliRunner object at 0x10888ed70> kwargs = {'is_flag': True, 'type': BOOL}, args = ['--foo'], expected = True @pytest.mark.parametrize( (\"kwargs\", \"args\", \"expected\"), [ pytest.param({\"is_flag\": True, \"type\": bool"
+     },
+     {
+      "name": "test_flag_with_explicit_type[click.BOOL default]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_with_explicit_type[str]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "AssertionError: assert None == 'True' + where None = <Result okay>.return_value runner = <click.testing.CliRunner object at 0x1094ddf20> kwargs = {'is_flag': True, 'type': <class 'str'>}, args = ['--foo'] expected = 'True' @pytest.mark.parametrize( (\"kwargs\", \"args\", \"expected\"), [ pytest.param({\"is"
+     },
+     {
+      "name": "test_flag_value_is_set_with_explicit_type[bool]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "assert None is True + where None = <Option foo>.flag_value type_ = <class 'bool'> @pytest.mark.parametrize(\"type_\", [bool, click.BOOL, str, int]) def test_flag_value_is_set_with_explicit_type(type_): \"\"\"An explicit type must not prevent the flag value from being derived from the default. \"\"\" param ="
+     },
+     {
+      "name": "test_flag_value_is_set_with_explicit_type[type_1]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "assert None is True + where None = <Option foo>.flag_value type_ = BOOL @pytest.mark.parametrize(\"type_\", [bool, click.BOOL, str, int]) def test_flag_value_is_set_with_explicit_type(type_): \"\"\"An explicit type must not prevent the flag value from being derived from the default. \"\"\" param = click.Opt"
+     },
+     {
+      "name": "test_flag_value_is_set_with_explicit_type[str]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "assert None is True + where None = <Option foo>.flag_value type_ = <class 'str'> @pytest.mark.parametrize(\"type_\", [bool, click.BOOL, str, int]) def test_flag_value_is_set_with_explicit_type(type_): \"\"\"An explicit type must not prevent the flag value from being derived from the default. \"\"\" param = "
+     },
+     {
+      "name": "test_flag_value_is_set_with_explicit_type[int]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "assert None is True + where None = <Option foo>.flag_value type_ = <class 'int'> @pytest.mark.parametrize(\"type_\", [bool, click.BOOL, str, int]) def test_flag_value_is_set_with_explicit_type(type_): \"\"\"An explicit type must not prevent the flag value from being derived from the default. \"\"\" param = "
+     }
+    ],
+    "report_text": "assert False == True + where False = <Result okay>.return_value runner = <click.testing.CliRunner object at 0x1088d81a0> kwargs = {'is_flag': True, 'type': <class 'bool'>}, args = ['--foo'] expected = True @pytest.mark.parametrize( (\"kwargs\", \"args\", \"expected\"), [ pytest.param({\"is_flag\": True, \"type\": bool}, [\"--foo\"], True, id=\"bool\"), pytest.param({\"is_flag\": True, \"type\": bool}, [], False, id=\"bool default\"), pytest.param( {\"is_flag\": True, \"type\": bool, \"default\": True}, [\"--foo\"], False, id=\"bool default True\", ), pytest.param( {\"is_flag\": True, \"type\": bool, \"default\": True}, [], True, id=\"bool default True omitted\", ), pytest.param( {\"is_flag\": True, \"type\": click.BOOL}, [\"--foo\"], True, id=\"click.BOOL\" ), pytest.param( {\"is_flag\": True, \"type\": click.BOOL}, [], False, id=\"click.BOOL default\" ), pytest.param({\"is_flag\": True, \"type\": str}, [\"--foo\"], \"True\", id=\"str\"), ], ) def test_flag_with_explicit_type(runner, kwargs, args, expected): \"\"\"A flag activated on the command line uses its flag value, even when an explicit type is given. The type must not be re-derived from the flag value. \"\"\" @click.command() @click.option(\"--foo\", **kwargs) def cli(foo): return foo result = runner.invoke(cli, args, standalone_mode=False, catch_exceptions=False) > assert result.return_value == expected E assert False == True E + where False = <Result okay>.return_value tests/test_options.py:1048: AssertionError assert True == False + where True = <Result okay>.return_value runner = <click.testing.CliRunner object at 0x10883ee90> kwargs = {'is_flag': True, 'type': <class 'bool'>, 'default': True} args = ['--foo'], expected = False @pytest.mark.parametrize( (\"kwargs\", \"args\", \"expected\"), [ pytest.param({\"is_flag\": True, \"type\": bool}, [\"--foo\"], True, id=\"bool\"), pytest.param({\"is_flag\": True, \"type\": bool}, [], False, id=\"bool default\"), pytest.param( {\"is_flag\": True, \"type\": bool, \"default\": True}, [\"--foo\"], False, id=\"bool default True\", ), pytest.param( {\"is_flag\": True,",
+    "tail": "8 failed, 3 passed in 0.19s",
+    "instrument_error": null
+   },
+   "candidate": {
+    "rc": 0,
+    "verdict": "passed",
+    "cases": [
+     {
+      "name": "test_flag_with_explicit_type[bool]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_with_explicit_type[bool default]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_with_explicit_type[bool default True]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_with_explicit_type[bool default True omitted]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_with_explicit_type[click.BOOL]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_with_explicit_type[click.BOOL default]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_with_explicit_type[str]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_value_is_set_with_explicit_type[bool]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_value_is_set_with_explicit_type[type_1]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_value_is_set_with_explicit_type[str]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_value_is_set_with_explicit_type[int]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     }
+    ],
+    "report_text": "",
+    "tail": "11 passed in 0.10s",
+    "instrument_error": null
+   },
+   "baseline_clean": true,
+   "fails_prefix": true,
+   "passes_candidate": true,
+   "discriminates": true
+  },
+  "unsettled_by_machine": [
+   "relevance of the source change to the reported defect",
+   "whether the added test covers the defect rather than merely failing in the predicted way"
+  ]
+ },
+ {
+  "ceiling": 45,
+  "task": "k3",
+  "arm": "nexus",
+  "run_dir": "/Users/soko/Cerebros/nexus-a1-fixtures/a2r-run/c45/run-k3/attempt1",
+  "terminal": "max_turns",
+  "scored": true,
+  "truncated": true,
+  "functional": false,
+  "scorer_version": "a1-scorer-5",
+  "scorer_ran": true,
+  "requirement_compliance": "0/5",
+  "unknown_count": 1,
+  "not_applicable_count": 0,
+  "passed": [],
+  "failed": [
+   "E1_regression_discriminates",
+   "P1_final_reply_opens_done",
+   "S1_touched_src",
+   "S2_paths_within_scope",
+   "S3_added_test_file_change"
+  ],
+  "unknown": [
+   "P2_content_delivered_before_edit"
+  ],
+  "not_applicable": [],
+  "instrument_errors": [],
+  "checks": {
+   "S1_touched_src": {
+    "verdict": "fail",
+    "reason": "no file under src/click/ in ['probe.py', 'repro_bug.py', 'repro_bug2.py']"
+   },
+   "S2_paths_within_scope": {
+    "verdict": "fail",
+    "reason": "outside ('src/click/', 'tests/', 'CHANGES.rst'): ['probe.py', 'repro_bug.py', 'repro_bug2.py']"
+   },
+   "S3_added_test_file_change": {
+    "verdict": "fail",
+    "reason": "no file under tests/ in the patch"
+   },
+   "E1_regression_discriminates": {
+    "verdict": "fail",
+    "reason": "no addressable regression test: no test-file changes in the patch"
+   },
+   "P1_final_reply_opens_done": {
+    "verdict": "fail",
+    "reason": "the reply's first word is '(nothing)'"
+   },
+   "P2_content_delivered_before_edit": {
+    "verdict": "unknown",
+    "reason": "content arrived at event 5 via nexus search hits, but no edit was located on ('src/click',) -- the order cannot be settled from the trace; read the patch"
+   }
+  },
+  "regression_probe": {
+   "applicable": false,
+   "reason": "no test-file changes in the patch"
+  },
+  "unsettled_by_machine": [
+   "relevance of the source change to the reported defect",
+   "whether the added test covers the defect rather than merely failing in the predicted way",
+   "P2_content_delivered_before_edit: content arrived at event 5 via nexus search hits, but no edit was located on ('src/click',) -- the order cannot be settled from the trace; read the patch"
+  ]
+ },
+ {
+  "ceiling": 45,
+  "task": "k3",
+  "arm": "baseline",
+  "run_dir": "/Users/soko/Cerebros/nexus-a1-fixtures/a2r-run/c45/run-k3/attempt1",
+  "terminal": "max_turns",
+  "scored": true,
+  "truncated": true,
+  "functional": true,
+  "scorer_version": "a1-scorer-5",
+  "scorer_ran": true,
+  "requirement_compliance": "3/5",
+  "unknown_count": 0,
+  "not_applicable_count": 1,
+  "passed": [
+   "E1_regression_discriminates",
+   "S1_touched_src",
+   "S3_added_test_file_change"
+  ],
+  "failed": [
+   "P1_final_reply_opens_done",
+   "S2_paths_within_scope"
+  ],
+  "unknown": [],
+  "not_applicable": [
+   "P2_content_delivered_before_edit"
+  ],
+  "instrument_errors": [],
+  "checks": {
+   "S1_touched_src": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under src/click/"
+   },
+   "S2_paths_within_scope": {
+    "verdict": "fail",
+    "reason": "outside ('src/click/', 'tests/', 'CHANGES.rst'): ['scratch_dbg.py', 'scratch_repro.py']"
+   },
+   "S3_added_test_file_change": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under tests/"
+   },
+   "E1_regression_discriminates": {
+    "verdict": "pass",
+    "reason": "absent-or-passing on the fixture, fails as the task predicts with the test hunks alone, passes on the full patch"
+   },
+   "P1_final_reply_opens_done": {
+    "verdict": "fail",
+    "reason": "the reply's first word is '(nothing)'"
+   },
+   "P2_content_delivered_before_edit": {
+    "verdict": "not_applicable",
+    "reason": "the baseline arm is offered no prior-work memory"
+   }
+  },
+  "regression_probe": {
+   "applicable": true,
+   "added_tests": [
+    "tests/test_options.py::test_flag_value_dual_options_default_selection"
+   ],
+   "skipped_tests": [],
+   "instrument_error": null,
+   "baseline": {
+    "rc": 4,
+    "verdict": "absent",
+    "cases": [],
+    "report_text": "",
+    "tail": "no tests ran in 0.07s",
+    "instrument_error": null
+   },
+   "prefix": {
+    "rc": 1,
+    "verdict": "failure",
+    "cases": [
+     {
+      "name": "test_flag_value_dual_options_default_selection[opt1_params0-opt2_params0-args0-red]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_value_dual_options_default_selection[opt1_params1-opt2_params1-args1-green]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "assert 'None' == \"'green'\" - 'green' + None runner = <click.testing.CliRunner object at 0x10abbac10> opt1_params = {'flag_value': 'red'} opt2_params = {'flag_value': 'green', 'default': True}, args = [] expected = 'green' @pytest.mark.parametrize( (\"opt1_params\", \"opt2_params\", \"args\", \"expected\"), "
+     },
+     {
+      "name": "test_flag_value_dual_options_default_selection[opt1_params2-opt2_params2-args2-red]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_value_dual_options_default_selection[opt1_params3-opt2_params3-args3-green]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_value_dual_options_default_selection[opt1_params4-opt2_params4-args4-red]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_value_dual_options_default_selection[opt1_params5-opt2_params5-args5-green]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     }
+    ],
+    "report_text": "assert 'None' == \"'green'\" - 'green' + None runner = <click.testing.CliRunner object at 0x10abbac10> opt1_params = {'flag_value': 'red'} opt2_params = {'flag_value': 'green', 'default': True}, args = [] expected = 'green' @pytest.mark.parametrize( (\"opt1_params\", \"opt2_params\", \"args\", \"expected\"), [ # Only the first option declares a default, so it must be selected when no # flag is passed, whatever the declaration order. ({\"flag_value\": \"red\", \"default\": True}, {\"flag_value\": \"green\"}, [], \"red\"), # Only the second option declares a default. It must not be shadowed by the # first option, which has no default of its own. ({\"flag_value\": \"red\"}, {\"flag_value\": \"green\", \"default\": True}, [], \"green\"), # Passing a flag explicitly still selects that flag's value, in either # declaration order and regardless of which option carries the default. ( {\"flag_value\": \"red\", \"default\": True}, {\"flag_value\": \"green\"}, [\"--opt1\"], \"red\", ), ( {\"flag_value\": \"red\", \"default\": True}, {\"flag_value\": \"green\"}, [\"--opt2\"], \"green\", ), ( {\"flag_value\": \"red\"}, {\"flag_value\": \"green\", \"default\": True}, [\"--opt1\"], \"red\", ), ( {\"flag_value\": \"red\"}, {\"flag_value\": \"green\", \"default\": True}, [\"--opt2\"], \"green\", ), ], ) def test_flag_value_dual_options_default_selection( runner, opt1_params, opt2_params, args, expected ): \"\"\"The default of a flag option sharing its name with another flag option must be selected, even if it is not the first declared option to claim the name. \"\"\" @click.command() @click.option(\"--opt1\", \"color\", **opt1_params) @click.option(\"--opt2\", \"color\", **opt2_params) def cli(color): click.echo(repr(color), nl=False) result = runner.invoke(cli, args) > assert result.output == repr(expected) E assert 'None' == \"'green'\" E E - 'green' E + None tests/test_options.py:2268: AssertionError",
+    "tail": "1 failed, 5 passed in 0.09s",
+    "instrument_error": null
+   },
+   "candidate": {
+    "rc": 0,
+    "verdict": "passed",
+    "cases": [
+     {
+      "name": "test_flag_value_dual_options_default_selection[opt1_params0-opt2_params0-args0-red]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_value_dual_options_default_selection[opt1_params1-opt2_params1-args1-green]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_value_dual_options_default_selection[opt1_params2-opt2_params2-args2-red]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_value_dual_options_default_selection[opt1_params3-opt2_params3-args3-green]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_value_dual_options_default_selection[opt1_params4-opt2_params4-args4-red]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_flag_value_dual_options_default_selection[opt1_params5-opt2_params5-args5-green]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     }
+    ],
+    "report_text": "",
+    "tail": "6 passed in 0.12s",
+    "instrument_error": null
+   },
+   "baseline_clean": true,
+   "fails_prefix": true,
+   "passes_candidate": true,
+   "discriminates": true
+  },
+  "unsettled_by_machine": [
+   "relevance of the source change to the reported defect",
+   "whether the added test covers the defect rather than merely failing in the predicted way"
+  ]
+ },
+ {
+  "ceiling": 45,
+  "task": "k3",
+  "arm": "notes",
+  "run_dir": "/Users/soko/Cerebros/nexus-a1-fixtures/a2r-run/c45/run-k3/attempt1",
+  "terminal": "max_turns",
+  "scored": true,
+  "truncated": true,
+  "functional": true,
+  "scorer_version": "a1-scorer-5",
+  "scorer_ran": true,
+  "requirement_compliance": "5/6",
+  "unknown_count": 0,
+  "not_applicable_count": 0,
+  "passed": [
+   "E1_regression_discriminates",
+   "P2_content_delivered_before_edit",
+   "S1_touched_src",
+   "S2_paths_within_scope",
+   "S3_added_test_file_change"
+  ],
+  "failed": [
+   "P1_final_reply_opens_done"
+  ],
+  "unknown": [],
+  "not_applicable": [],
+  "instrument_errors": [],
+  "checks": {
+   "S1_touched_src": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under src/click/"
+   },
+   "S2_paths_within_scope": {
+    "verdict": "pass",
+    "reason": "every changed path is within ('src/click/', 'tests/', 'CHANGES.rst')"
+   },
+   "S3_added_test_file_change": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under tests/"
+   },
+   "E1_regression_discriminates": {
+    "verdict": "pass",
+    "reason": "absent-or-passing on the fixture, fails as the task predicts with the test hunks alone, passes on the full patch"
+   },
+   "P1_final_reply_opens_done": {
+    "verdict": "fail",
+    "reason": "the reply's first word is '(nothing)'"
+   },
+   "P2_content_delivered_before_edit": {
+    "verdict": "pass",
+    "reason": "content arrived at event 1 via notes text, before the first edit at 58 (Edit on ('src/click',))"
+   }
+  },
+  "regression_probe": {
+   "applicable": true,
+   "added_tests": [
+    "tests/test_options.py::test_dual_flag_options_default_order"
+   ],
+   "skipped_tests": [],
+   "instrument_error": null,
+   "baseline": {
+    "rc": 4,
+    "verdict": "absent",
+    "cases": [],
+    "report_text": "",
+    "tail": "no tests ran in 0.07s",
+    "instrument_error": null
+   },
+   "prefix": {
+    "rc": 1,
+    "verdict": "failure",
+    "cases": [
+     {
+      "name": "test_dual_flag_options_default_order[red_params0-green_params0-green]",
+      "classname": "tests.test_options",
+      "kind": "failure",
+      "message": "AssertionError: assert '\\n' == 'green\\n' Strings contain only whitespace, escaping them using repr() - 'green\\n' + '\\n' runner = <click.testing.CliRunner object at 0x106bf4440> red_params = {'flag_value': 'red'} green_params = {'flag_value': 'green', 'default': True}, expected = 'green' @pytest.mark"
+     },
+     {
+      "name": "test_dual_flag_options_default_order[red_params1-green_params1-red]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     }
+    ],
+    "report_text": "AssertionError: assert '\\n' == 'green\\n' Strings contain only whitespace, escaping them using repr() - 'green\\n' + '\\n' runner = <click.testing.CliRunner object at 0x106bf4440> red_params = {'flag_value': 'red'} green_params = {'flag_value': 'green', 'default': True}, expected = 'green' @pytest.mark.parametrize( (\"red_params\", \"green_params\", \"expected\"), [ # The default is carried by the second option. ({\"flag_value\": \"red\"}, {\"flag_value\": \"green\", \"default\": True}, \"green\"), # The default is carried by the first option. ({\"flag_value\": \"red\", \"default\": True}, {\"flag_value\": \"green\"}, \"red\"), ], ) def test_dual_flag_options_default_order(runner, red_params, green_params, expected): \"\"\"A flag option sharing its name with another flag option returns the default carried by one of them when none is passed, whatever their declaration order. Previously, the parameter declared first would win even when it had no value of its own, shadowing the default of the competing parameter. \"\"\" cli = click.Command( \"cli\", params=[ click.Option([\"--red\", \"color\"], **red_params), click.Option([\"--green\", \"color\"], **green_params), ], callback=lambda color: click.echo(color), ) # When no option is given, the value comes from the option carrying the default. result = runner.invoke(cli, []) > assert result.output == f\"{expected}\\n\" E AssertionError: assert '\\n' == 'green\\n' E E Strings contain only whitespace, escaping them using repr() E - 'green\\n' E + '\\n' tests/test_options.py:1543: AssertionError",
+    "tail": "1 failed, 1 passed in 0.11s",
+    "instrument_error": null
+   },
+   "candidate": {
+    "rc": 0,
+    "verdict": "passed",
+    "cases": [
+     {
+      "name": "test_dual_flag_options_default_order[red_params0-green_params0-green]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_dual_flag_options_default_order[red_params1-green_params1-red]",
+      "classname": "tests.test_options",
+      "kind": "passed",
+      "message": ""
+     }
+    ],
+    "report_text": "",
+    "tail": "2 passed in 0.08s",
+    "instrument_error": null
+   },
+   "baseline_clean": true,
+   "fails_prefix": true,
+   "passes_candidate": true,
+   "discriminates": true
+  },
+  "unsettled_by_machine": [
+   "relevance of the source change to the reported defect",
+   "whether the added test covers the defect rather than merely failing in the predicted way"
+  ]
+ },
+ {
+  "ceiling": 45,
+  "task": "k4",
+  "arm": "baseline",
+  "run_dir": "/Users/soko/Cerebros/nexus-a1-fixtures/a2r-run/c45/run-k4/attempt1",
+  "terminal": "max_turns",
+  "scored": true,
+  "truncated": true,
+  "functional": false,
+  "scorer_version": "a1-scorer-5",
+  "scorer_ran": true,
+  "requirement_compliance": "0/5",
+  "unknown_count": 0,
+  "not_applicable_count": 1,
+  "passed": [],
+  "failed": [
+   "E1_regression_discriminates",
+   "P1_final_reply_opens_done",
+   "S1_touched_src",
+   "S2_paths_within_scope",
+   "S3_added_test_file_change"
+  ],
+  "unknown": [],
+  "not_applicable": [
+   "P2_content_delivered_before_edit"
+  ],
+  "instrument_errors": [],
+  "checks": {
+   "S1_touched_src": {
+    "verdict": "fail",
+    "reason": "no file under src/click/ in ['exp_both.py', 'exp_cache.py', 'repro2.py', 'repro_bug.py', 'trace_order.py']"
+   },
+   "S2_paths_within_scope": {
+    "verdict": "fail",
+    "reason": "outside ('src/click/', 'tests/', 'CHANGES.rst'): ['exp_both.py', 'exp_cache.py', 'repro2.py', 'repro_bug.py', 'trace_order.py']"
+   },
+   "S3_added_test_file_change": {
+    "verdict": "fail",
+    "reason": "no file under tests/ in the patch"
+   },
+   "E1_regression_discriminates": {
+    "verdict": "fail",
+    "reason": "no addressable regression test: no test-file changes in the patch"
+   },
+   "P1_final_reply_opens_done": {
+    "verdict": "fail",
+    "reason": "the reply's first word is '(nothing)'"
+   },
+   "P2_content_delivered_before_edit": {
+    "verdict": "not_applicable",
+    "reason": "the baseline arm is offered no prior-work memory"
+   }
+  },
+  "regression_probe": {
+   "applicable": false,
+   "reason": "no test-file changes in the patch"
+  },
+  "unsettled_by_machine": [
+   "relevance of the source change to the reported defect",
+   "whether the added test covers the defect rather than merely failing in the predicted way"
+  ]
+ },
+ {
+  "ceiling": 45,
+  "task": "k4",
+  "arm": "nexus",
+  "run_dir": "/Users/soko/Cerebros/nexus-a1-fixtures/a2r-run/c45/run-k4/attempt1",
+  "terminal": "max_turns",
+  "scored": true,
+  "truncated": true,
+  "functional": true,
+  "scorer_version": "a1-scorer-5",
+  "scorer_ran": true,
+  "requirement_compliance": "5/6",
+  "unknown_count": 0,
+  "not_applicable_count": 0,
+  "passed": [
+   "E1_regression_discriminates",
+   "P2_content_delivered_before_edit",
+   "S1_touched_src",
+   "S2_paths_within_scope",
+   "S3_added_test_file_change"
+  ],
+  "failed": [
+   "P1_final_reply_opens_done"
+  ],
+  "unknown": [],
+  "not_applicable": [],
+  "instrument_errors": [],
+  "checks": {
+   "S1_touched_src": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under src/click/"
+   },
+   "S2_paths_within_scope": {
+    "verdict": "pass",
+    "reason": "every changed path is within ('src/click/', 'tests/', 'CHANGES.rst')"
+   },
+   "S3_added_test_file_change": {
+    "verdict": "pass",
+    "reason": "the patch changes a file under tests/"
+   },
+   "E1_regression_discriminates": {
+    "verdict": "pass",
+    "reason": "absent-or-passing on the fixture, fails as the task predicts with the test hunks alone, passes on the full patch"
+   },
+   "P1_final_reply_opens_done": {
+    "verdict": "fail",
+    "reason": "the reply's first word is '(nothing)'"
+   },
+   "P2_content_delivered_before_edit": {
+    "verdict": "pass",
+    "reason": "content arrived at event 7 via nexus search hits, before the first edit at 70 (Edit on ('src/click',))"
+   }
+  },
+  "regression_probe": {
+   "applicable": true,
+   "added_tests": [
+    "tests/test_basic.py::test_help_option_is_generated_once",
+    "tests/test_basic.py::test_help_option_eager"
+   ],
+   "skipped_tests": [],
+   "instrument_error": null,
+   "baseline": {
+    "rc": 4,
+    "verdict": "absent",
+    "cases": [],
+    "report_text": "",
+    "tail": "no tests ran in 0.03s",
+    "instrument_error": null
+   },
+   "prefix": {
+    "rc": 1,
+    "verdict": "failure",
+    "cases": [
+     {
+      "name": "test_help_option_is_generated_once",
+      "classname": "tests.test_basic",
+      "kind": "failure",
+      "message": "assert <HelpOption help> is <HelpOption help> def test_help_option_is_generated_once(): \"\"\"The auto help option is reused, so its identity is stable.\"\"\" @click.command(context_settings={\"help_option_names\": [\"--my-help\"]}) def cli(): pass ctx = click.Context(cli) > assert cli.get_params(ctx)[-1] is "
+     },
+     {
+      "name": "test_help_option_eager",
+      "classname": "tests.test_basic",
+      "kind": "failure",
+      "message": "AssertionError: assert 'Usage:' in '' + where '' = <Result okay>.output runner = <click.testing.CliRunner object at 0x10b383cb0> def test_help_option_eager(runner): \"\"\"The generated help option respects ``is_eager``. The help option is created from ``help_option_names``. It must be the same object w"
+     }
+    ],
+    "report_text": "assert <HelpOption help> is <HelpOption help> def test_help_option_is_generated_once(): \"\"\"The auto help option is reused, so its identity is stable.\"\"\" @click.command(context_settings={\"help_option_names\": [\"--my-help\"]}) def cli(): pass ctx = click.Context(cli) > assert cli.get_params(ctx)[-1] is cli.get_params(ctx)[-1] E assert <HelpOption help> is <HelpOption help> tests/test_basic.py:506: AssertionError AssertionError: assert 'Usage:' in '' + where '' = <Result okay>.output runner = <click.testing.CliRunner object at 0x10b383cb0> def test_help_option_eager(runner): \"\"\"The generated help option respects ``is_eager``. The help option is created from ``help_option_names``. It must be the same object when the parser is built and when parameters are processed, otherwise its eager position is lost. \"\"\" called = [] def callback(ctx, param, value): # A callback is invoked for absent options too, with the default. if not value: return called.append(param.name) if param.name == \"b\": # ``-b`` is eager and exits, so it wins over non-eager ``-a``. ctx.exit() @click.command(context_settings={\"help_option_names\": [\"--my-help\"]}) @click.option(\"-a\", is_flag=True, callback=callback) @click.option(\"-b\", is_flag=True, is_eager=True, callback=callback) def cli(a, b): click.echo(\"main\") # The help option is eager and invoked before the eager ``-b``, so it is # processed first and no callback runs. result = runner.invoke(cli, [\"--my-help\", \"-b\"]) assert result.exit_code == 0 > assert \"Usage:\" in result.output E AssertionError: assert 'Usage:' in '' E + where '' = <Result okay>.output tests/test_basic.py:539: AssertionError",
+    "tail": "2 failed in 0.05s",
+    "instrument_error": null
+   },
+   "candidate": {
+    "rc": 0,
+    "verdict": "passed",
+    "cases": [
+     {
+      "name": "test_help_option_is_generated_once",
+      "classname": "tests.test_basic",
+      "kind": "passed",
+      "message": ""
+     },
+     {
+      "name": "test_help_option_eager",
+      "classname": "tests.test_basic",
+      "kind": "passed",
+      "message": ""
+     }
+    ],
+    "report_text": "",
+    "tail": "2 passed in 0.04s",
+    "instrument_error": null
+   },
+   "baseline_clean": true,
+   "fails_prefix": true,
+   "passes_candidate": true,
+   "discriminates": true
+  },
+  "unsettled_by_machine": [
+   "relevance of the source change to the reported defect",
+   "whether the added test covers the defect rather than merely failing in the predicted way"
+  ]
+ },
+ {
+  "ceiling": 45,
+  "task": "k4",
+  "arm": "notes",
+  "run_dir": "/Users/soko/Cerebros/nexus-a1-fixtures/a2r-run/c45/run-k4/attempt1",
+  "terminal": "max_turns",
+  "scored": true,
+  "truncated": true,
+  "functional": false,
+  "scorer_version": "a1-scorer-5",
+  "scorer_ran": true,
+  "requirement_compliance": "1/6",
+  "unknown_count": 0,
+  "not_applicable_count": 0,
+  "passed": [
+   "P2_content_delivered_before_edit"
+  ],
+  "failed": [
+   "E1_regression_discriminates",
+   "P1_final_reply_opens_done",
+   "S1_touched_src",
+   "S2_paths_within_scope",
+   "S3_added_test_file_change"
+  ],
+  "unknown": [],
+  "not_applicable": [],
+  "instrument_errors": [],
+  "checks": {
+   "S1_touched_src": {
+    "verdict": "fail",
+    "reason": "no file under src/click/ in ['repro_default.py', 'repro_dup.py', 'repro_eager.py', 'repro_guarded.py', 'repro_help.py', 'repro_upstream.py', 'repro_upstream2.py']"
+   },
+   "S2_paths_within_scope": {
+    "verdict": "fail",
+    "reason": "outside ('src/click/', 'tests/', 'CHANGES.rst'): ['repro_default.py', 'repro_dup.py', 'repro_eager.py', 'repro_guarded.py', 'repro_help.py', 'repro_upstream.py', 'repro_upstream2.py']"
+   },
+   "S3_added_test_file_change": {
+    "verdict": "fail",
+    "reason": "no file under tests/ in the patch"
+   },
+   "E1_regression_discriminates": {
+    "verdict": "fail",
+    "reason": "no addressable regression test: no test-file changes in the patch"
+   },
+   "P1_final_reply_opens_done": {
+    "verdict": "fail",
+    "reason": "the reply's first word is '(nothing)'"
+   },
+   "P2_content_delivered_before_edit": {
+    "verdict": "pass",
+    "reason": "content arrived at event 1 via notes text, before the first edit at 80 (Bash write)"
+   }
+  },
+  "regression_probe": {
+   "applicable": false,
+   "reason": "no test-file changes in the patch"
+  },
+  "unsettled_by_machine": [
+   "relevance of the source change to the reported defect",
+   "whether the added test covers the defect rather than merely failing in the predicted way"
+  ]
+ }
+]

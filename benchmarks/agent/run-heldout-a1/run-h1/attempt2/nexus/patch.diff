@@ -1,0 +1,46 @@
+diff --git a/.probe-dl/probe2.py b/.probe-dl/probe2.py
+new file mode 100644
+index 0000000..14be169
+--- /dev/null
++++ b/.probe-dl/probe2.py
+@@ -0,0 +1,14 @@
++import click
++from click.testing import CliRunner
++
++@click.command()
++@click.option("--without-xyz", "xyz", flag_value=False)
++@click.option("--with-xyz", "xyz", flag_value=True, default=True)
++def cli(xyz):
++    click.echo(xyz)
++
++print("params:", [(p.name, p.opts, p.flag_value, p.default, p.is_flag, p.is_bool_flag, p.is_eager) for p in cli.params])
++r = CliRunner()
++for args in ([], ["--with-xyz"], ["--without-xyz"]):
++    res = r.invoke(cli, args)
++    print(args, "->", repr(res.output.strip()))
+diff --git a/.probe-dl/repro.py b/.probe-dl/repro.py
+new file mode 100644
+index 0000000..554ae01
+--- /dev/null
++++ b/.probe-dl/repro.py
+@@ -0,0 +1,20 @@
++import click
++from click.testing import CliRunner
++
++def make(order):
++    @click.command()
++    def cli(xyz):
++        click.echo(xyz)
++    opts = [click.option("--without-xyz", "xyz", flag_value=False),
++            click.option("--with-xyz", "xyz", flag_value=True, default=True)]
++    if order == "reverse":
++        opts = opts[::-1]
++    for o in opts:
++        cli = o(cli)
++    return cli
++
++r = CliRunner()
++for order in ("normal", "reverse"):
++    for args in ([], ["--with-xyz"], ["--without-xyz"], ["--with-xyz","--without-xyz"], ["--without-xyz","--with-xyz"]):
++        res = r.invoke(make(order), args)
++        print(order, args, "->", repr(res.output.strip()), "exc:", res.exception)
