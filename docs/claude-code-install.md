@@ -10,8 +10,11 @@ enrolled, one line per session and then silence. Nothing here enrolls a project 
 **Everything below is run by you.** It changes live client configuration, so none of it is done for you.
 Steps 1–2 only add files; steps 3–5 change what Claude launches. Each has a rollback.
 
-> **Pilot note.** The user-scope `nexus-memory` entry is also what the `p1-claude-auto` pilot observes.
-> Changing it ends that measurement segment. Record the change in the pilot log before step 4 if you care.
+> **Pilot note.** The `p1-claude-auto` pilot does **not** use the user-scope entry: each of its ~40 `~/Repos`
+> projects has its own local-scope `nexus-memory` entry (a different runtime and database), which overrides the
+> user entry there. Step 4 therefore leaves the pilot alone. A **user-wide plugin** would not: its hooks would run in
+> those projects too and call tools their runtime does not have. Step 5 installs the plugin at `local` scope for this
+> checkout only, for that reason. Check `~/.claude.json` for project entries before changing scope.
 
 ## Prerequisites (already true after v0.1.0a3 is released)
 
@@ -69,9 +72,16 @@ the entry and re-add the command saved in step 3, or restore `~/.claude.json.bef
 ## 5. Install and trust the plugin
 
 ```bash
-claude plugin marketplace add "$PWD"            # this repository is the marketplace (.claude-plugin/marketplace.json)
-claude plugin install nexus-memory@nexus-local
+cd /path/to/this/checkout
+claude plugin marketplace add "$PWD" --scope local     # this repository is the marketplace (.claude-plugin/marketplace.json)
+claude plugin install nexus-memory@nexus-local --scope local
+claude plugin list | grep -A3 nexus-memory              # expect: Scope: local, Status: enabled
 ```
+
+`--scope local` applies the plugin to this checkout only (`user` is the default and applies everywhere). The
+plugin is read from `integrations/claude-plugin` in this checkout, so keep the checkout on a branch whose plugin
+files you want to run. Rollback: `claude plugin uninstall nexus-memory@nexus-local --scope local`, then
+`claude plugin marketplace remove nexus-local`.
 
 Restart Claude (the Code tab: start a new session). If a hook-trust prompt appears, read it and approve it
 yourself; `/hooks` lists the plugin's hooks.
@@ -92,9 +102,18 @@ that matches a stored memory shows IDs in the injected context. In an unenrolled
 - Replacing the launcher is atomic (rename). Servers already running keep the old file; new sessions use the new one.
 - Codex uses `launcher.py codex`, which this change does not touch.
 
+## Observed (2026-11-12, one machine, as run by the owner)
+
+Steps 1–5 were run as written, with the scope change in step 5. Observed: `nexus-memory-check` passed 9/9 on
+Python 3.14.7 with SQLite 3.53.4; the readiness check printed four `PASS` lines; after step 4 `claude mcp list`
+showed `nexus-memory` as connected with the `claude-hooks` command; `claude plugin install … --scope local` printed
+success with no confirmation prompt; `claude plugin list` showed the plugin enabled at local scope; and in a new
+session in the checkout `/nexus-memory:status` replied "Nexus: enrolled, hooks active."
+
 ## What is not verified
 
-Whether Claude desktop's Code tab shares `~/.claude` with the `claude` command line used above, and the exact
-wording of its trust prompt for plugin hooks, have not been observed; `docs/hook-engine-phase1-interactive-checks.md`
+That the ID-only recall actually fires on a matching prompt in a real session (the status line shows enrolment and
+the session cue, not recall). Whether Claude desktop's Code tab shares `~/.claude` with the `claude` command line used
+above, and the exact wording of any trust prompt for plugin hooks (none was reported), have not been observed; `docs/hook-engine-phase1-interactive-checks.md`
 is the checklist for recording both in a throwaway configuration first. A recorded failure of the `mcp_tool` hook
 at `SessionStart` is why that one hook is a plain command.
