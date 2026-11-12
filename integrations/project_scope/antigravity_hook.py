@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 from uuid import UUID
 
@@ -106,6 +107,218 @@ def recall(project, payload):
              + '\nUse the nexus-memory get tool to inspect relevant records.'}]
 
 
+DECISION_PATTERNS = re.compile(
+    r'\b(remember\s+this|architectur(al|e)\s+decision|we\s+decided|from\s+now\s+on|'
+    r'record\s+this|save\s+to\s+nexus|decision:|constraint:|procedure:)\b',
+    re.IGNORECASE
+)
+
+
+def _arg(args, name):
+    """The CLI writes every tool argument as a JSON-encoded string ('"record"'); accept plain strings too."""
+    value = args.get(name, '')
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+        except ValueError:
+            return value
+        return decoded if isinstance(decoded, str) else value
+    return ''
+
+
+def get_turn_details(transcript_path: str):
+    """Scan the tail of the transcript for the current user turn and agent actions."""
+    if not isinstance(transcript_path, str):
+        return None
+    path = Path(transcript_path)
+    # The host names this file. Read only a regular .jsonl file, never through a symlink.
+    if path.suffix != '.jsonl' or path.is_symlink() or not path.is_file():
+        return None
+
+    try:
+        with path.open('rb') as f:
+            size = f.seek(0, 2)
+            f.seek(max(0, size - 131072))
+            lines = f.read().splitlines()
+    except OSError:
+        return None
+
+    last_user_idx = None
+    user_prompt = ''
+    user_line_idx = -1
+    for i in range(len(lines) - 1, -1, -1):
+        try:
+            item = json.loads(lines[i])
+        except (ValueError, UnicodeError):
+            continue
+        if isinstance(item, dict) and item.get('type') == 'USER_INPUT':
+            last_user_idx = item.get('step_index')
+            user_prompt = item.get('content', '') or ''
+            user_line_idx = i
+            break
+
+    if last_user_idx is None:
+        return None
+
+    has_recorded = False
+    has_opted_out = False
+    tools_used = []
+
+    for line in lines[user_line_idx + 1:]:
+        try:
+            item = json.loads(line)
+        except (ValueError, UnicodeError):
+            continue
+        if not isinstance(item, dict):
+            continue
+
+        content = item.get('content', '') or ''
+        if isinstance(content, str) and 'NO_MEMORY' in content:
+            has_opted_out = True
+
+        for tc in item.get('tool_calls', []) or []:
+            name = tc.get('name', '')
+            args = tc.get('args', {}) or {}
+            tools_used.append(name)
+            if name == 'call_mcp_tool' and isinstance(args, dict):
+                tname = _arg(args, 'ToolName')
+                sname = _arg(args, 'ServerName')
+                if tname in ('record', 'revise') and 'nexus-memory' in sname:
+                    has_recorded = True
+
+    return {
+        'turn_id': last_user_idx,
+        'user_prompt': user_prompt,
+        'has_recorded': has_recorded,
+        'has_opted_out': has_opted_out,
+        'tools_used': tools_used,
+    }
+
+
+def check_and_update_nudge_state(project: Project, session_id: str, turn_id: int) -> bool:
+    """Return True if this turn is allowed to be nudged, and record the nudge."""
+    if not isinstance(session_id, str) or not session_id or len(session_id) > 1024:
+        return False
+    path = project.database.with_suffix('.stop_nudge.json')
+    with os.fdopen(os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600), 'r+') as f:
+        private_file(path)
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            state = json.load(f)
+        except ValueError:
+            state = {}
+        if not isinstance(state, dict):
+            state = {}
+
+        sess = state.get(session_id, {'nudged_turns': [], 'count': 0})
+        nudged_turns = sess.get('nudged_turns', [])
+        count = sess.get('count', 0)
+
+        if turn_id in nudged_turns or count >= 3:
+            return False
+
+        nudged_turns.append(turn_id)
+        sess['nudged_turns'] = nudged_turns[-32:]
+        sess['count'] = count + 1
+        state[session_id] = sess
+
+        while len(state) > 100:
+            del state[next(iter(state))]
+
+        f.seek(0)
+        json.dump(state, f)
+        f.truncate()
+        return True
+
+
+def get_git_evidence(checkout: Path) -> tuple[str, list[str], bool]:
+    """Get HEAD commit, touched files, and whether there are uncommitted or new changes."""
+    sha = ''
+    files = []
+    has_changes = False
+    try:
+        res = subprocess.run(
+            ['/usr/bin/git', '-C', str(checkout), 'rev-parse', '--short', 'HEAD'],
+            capture_output=True, timeout=2, text=True,
+            env={'PATH': '/usr/bin:/bin', 'HOME': str(Path.home()),
+                 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull}
+        )
+        if res.returncode == 0:
+            sha = res.stdout.strip()
+    except (subprocess.SubprocessError, OSError):
+        pass
+
+    try:
+        res = subprocess.run(
+            ['/usr/bin/git', '-C', str(checkout), 'status', '--porcelain'],
+            capture_output=True, timeout=2, text=True,
+            env={'PATH': '/usr/bin:/bin', 'HOME': str(Path.home()),
+                 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull}
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            has_changes = True
+            for line in res.stdout.splitlines()[:5]:
+                parts = line.strip().split(maxsplit=1)
+                if len(parts) == 2:
+                    files.append(parts[1])
+    except (subprocess.SubprocessError, OSError):
+        pass
+
+    return sha, files, has_changes
+
+
+def stop_capture(project: Project, payload: dict) -> dict:
+    if payload.get('terminationReason') != 'NO_TOOL_CALL':
+        return {}
+    if not payload.get('fullyIdle', False) or payload.get('error'):
+        return {}
+
+    session_id = payload.get('conversationId')
+    transcript_path = payload.get('transcriptPath')
+    if not session_id or not transcript_path:
+        return {}
+
+    turn = get_turn_details(transcript_path)
+    if not turn or turn.get('turn_id') is None:
+        return {}
+
+    if turn['has_recorded'] or turn['has_opted_out']:
+        return {}
+
+    code_tools = {'edit_file', 'write_file'}
+    has_code_edit = any(t in code_tools for t in turn['tools_used'])
+    has_run_cmd = 'run_command' in turn['tools_used']
+    has_decision_prompt = bool(DECISION_PATTERNS.search(turn['user_prompt']))
+    sha, touched_files, has_git_changes = get_git_evidence(project.checkout)
+
+    if not (has_code_edit or has_decision_prompt or (has_run_cmd and has_git_changes)):
+        return {}
+
+    if not check_and_update_nudge_state(project, session_id, turn['turn_id']):
+        return {}
+
+    evidence_parts = []
+    if sha:
+        evidence_parts.append(f"HEAD={sha}")
+    if touched_files:                      # a count only: file names are untrusted text and stay out of the prompt
+        evidence_parts.append(f"changed_files={len(touched_files)}{'+' if len(touched_files) >= 5 else ''}")
+
+    evidence_str = f" ({', '.join(evidence_parts)})" if evidence_parts else ""
+
+    reason = (
+        f"Nexus Memory Check: Task turn completed{evidence_str}. "
+        "If this turn verified a reusable bug fix, architectural decision, deployment procedure, or constraint, "
+        "record it to project memory using call_mcp_tool(ServerName='nexus-memory_nexus-memory', ToolName='record') "
+        "with kind in {decision, procedure, constraint, failure}, tags, provenance, and Git ref. "
+        "If nothing qualifies as durable knowledge, reply with exactly: NO_MEMORY."
+    )
+
+    return {
+        "decision": "continue",
+        "reason": reason
+    }
+
+
 def main():
     os.umask(0o077)
     steps = []
@@ -116,12 +329,21 @@ def main():
             if sys.argv[1:] == ['start']:
                 update_seen(project, payload.get('conversationId'))
                 steps = [{'systemMessage': {'systemMessage': GUIDANCE}}]
+                print(json.dumps({'injectSteps': steps}))
+                return
             elif sys.argv[1:] == ['recall']:
                 steps = recall(project, payload)
+                print(json.dumps({'injectSteps': steps}))
+                return
+            elif sys.argv[1:] == ['stop']:
+                result = stop_capture(project, payload)
+                print(json.dumps(result))
+                return
     except Exception:
         # Host hooks must fail closed even for malformed stored data or unavailable storage.
         pass
-    print(json.dumps({'injectSteps': steps}))
+    # The Stop contract: anything but {"decision": "continue"} lets the agent stop, so a failure answers {}.
+    print(json.dumps({} if sys.argv[1:] == ['stop'] else {'injectSteps': steps}))
 
 
 if __name__ == '__main__':

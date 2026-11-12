@@ -39,6 +39,17 @@ identically (the same exec arguments and working directory were compared between
 
 A lifecycle hook launched in the installed plugin directory validates the single workspace in the host event. A stdio server launched in that neutral directory asks the client for its MCP roots before admitting a tool call. An empty initial root allows discovery of the tool schemas. A memory operation requires one local, enrolled root. Once bound, a connection that observes a different or ambiguous root requires reconnection. No last-used project lookup is performed. A stored excerpt or tool argument cannot select a project.
 
+### Antigravity Stop hook (capture nudge)
+
+`antigravity_hook.py stop` runs when an Antigravity turn ends (`terminationReason` `NO_TOOL_CALL`, fully idle, no error)
+and answers the host's Stop contract. If the turn edited a file, ran a command in a repository with uncommitted
+changes, or the prompt reads like a decision, it returns `{"decision": "continue", "reason": ...}`, which asks the agent
+to record a durable fact or reply `NO_MEMORY`. It does this at most once per turn and three times per session, and never
+after a `record`/`revise` call or a `NO_MEMORY` reply. **This asks the agent to save without the user having asked**, which
+differs from the rule that memory is written only on request; decide whether to install it with that in mind. The
+reason text carries the HEAD commit and a count of changed files, never file names. A project that is not enrolled,
+or any failure, answers `{}` and lets the agent stop. The hook reads only a regular `.jsonl` transcript named by the host.
+
 ## Retire a vulnerable shared endpoint
 
 After installing the new readers, run the maintenance command directly as the store owner. It operates on a local Nexus v4 SQLite store and checks that active read transactions can drain. Supply a private recovery directory and retain its contents.
