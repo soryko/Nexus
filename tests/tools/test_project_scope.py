@@ -114,7 +114,7 @@ def test_antigravity_hook_stop_capture(tmp_path):
     git(root, 'init', '-q')
     (root / 'file.txt').write_text('initial')
     git(root, 'add', 'file.txt')
-    git(root, 'commit', '-q', '-m', 'initial')
+    git(root, '-c', 'user.name=t', '-c', 'user.email=t@x', 'commit', '-q', '-m', 'initial')
     assert launch(root, home, 'enroll', root).returncode == 0
 
     transcript = tmp_path / 'transcript.jsonl'
