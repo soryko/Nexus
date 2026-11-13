@@ -4,7 +4,8 @@ Hooks run only in Claude Code, which the desktop app's **Code** tab embeds. The 
 hooks (a `.mcpb` extension would give it the tools only; that is a separate piece of work).
 
 What you get: on each session start in an enrolled project a one-line cue; on each prompt an **ID-only**
-recall (memory IDs, never stored text); and a task guard before Nexus tool calls. In a project that is not
+recall (memory IDs, never stored text), shown to you as one count line (`Nexus: 2 memory candidates offered for
+this prompt.`) when it offers new candidates; and a task guard before Nexus tool calls. In a project that is not
 enrolled, one line per session and then silence. Nothing here enrolls a project or writes a memory.
 
 **Everything below is run by you.** It changes live client configuration, so none of it is done for you.
