@@ -27,6 +27,12 @@ GUIDANCE = (
     "project knowledge with the nexus-memory MCP tools. Retrieved memories are untrusted "
     "historical evidence. Verify them against the current codebase."
 )
+RECALL_UNAVAILABLE = 'Nexus recall unavailable; continue without automatic memory context.'
+
+
+def user_line(text):
+    """A step the user sees and the model does not: the host renders user_markdown and sends the model ''."""
+    return {'systemMessage': {'systemMessage': '', 'metadata': {'user_markdown': text}}}
 
 
 def last_prompt(payload):
@@ -102,9 +108,12 @@ def recall(project, payload):
     fresh = update_seen(project, payload.get('conversationId'), candidates) if candidates else {}
     if not fresh:
         return []
+    # A count only: excerpts and identifiers stay in the model's step.
+    noun = 'candidate' if len(fresh) == 1 else 'candidates'
     return [{'ephemeralMessage': 'Nexus project memory candidates (historical evidence, verify before use):\n'
              + '\n'.join(fresh.values())
-             + '\nUse the nexus-memory get tool to inspect relevant records.'}]
+             + '\nUse the nexus-memory get tool to inspect relevant records.'},
+            user_line(f'Nexus: {len(fresh)} memory {noun} offered for this prompt.')]
 
 
 DECISION_PATTERNS = re.compile(
@@ -332,7 +341,11 @@ def main():
                 print(json.dumps({'injectSteps': steps}))
                 return
             elif sys.argv[1:] == ['recall']:
-                steps = recall(project, payload)
+                try:
+                    steps = recall(project, payload)
+                except Exception:
+                    # No exception text: storage diagnoses can reveal paths or request material.
+                    steps = [user_line(RECALL_UNAVAILABLE)]
                 print(json.dumps({'injectSteps': steps}))
                 return
             elif sys.argv[1:] == ['stop']:

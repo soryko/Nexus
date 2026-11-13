@@ -201,6 +201,53 @@ def test_recall_limits_utf8_queries(tmp_path: Path) -> None:
     anyio.run(run)
 
 
+def test_recall_shows_one_count_line_only_when_candidates_are_offered(tmp_path: Path) -> None:
+    repo = repository(tmp_path / "repo")
+    other = repository(tmp_path / "other")
+
+    async def run() -> None:
+        async with Client(server(tmp_path / "db.sqlite3", repo, repo)) as client:
+            ids = []
+            for n, text in enumerate([
+                "quasarflux secret-body-0", "quasarflux secret-body-1", "quasarflux secret-body-2",
+                "Calibration: secure the lens assembly with a copper collar.",
+                "Maple42: Route frozen vials to the amber bench. Sign the specimen ticket.",
+            ]):
+                receipt = await client.call_tool("record", {"content": text, "idempotency_key": f"line-{n}"})
+                ids.append(receipt.structured_content["memory_id"])
+
+            async def recall(prompt: str, session: str = "s", cwd: Path = repo) -> dict:
+                result = await client.call_tool("codex_recall", {
+                    "cwd": str(cwd), "prompt": prompt, "session_id": session,
+                })
+                assert not result.is_error
+                return result.structured_content or {}
+
+            several = await recall("Explain quasarflux")
+            assert several["systemMessage"] == "Nexus: 3 memory candidates offered for this prompt."
+            assert several["hookSpecificOutput"]["additionalContext"].count("memory_id=") == 3
+            one = await recall("How is the lens assembly secured?")
+            assert one["systemMessage"] == "Nexus: 1 memory candidate offered for this prompt."
+            # The line is a count. Identifiers and stored text stay out of what the user is shown.
+            for shown in (several["systemMessage"], one["systemMessage"]):
+                assert not any(mid in shown for mid in ids)
+                assert "secret-body" not in shown and "lens" not in shown
+
+            # Nothing new, nothing found, an abstention and a foreign checkout are all silent.
+            assert "systemMessage" not in await recall("Explain quasarflux")
+            assert "systemMessage" not in await recall("zzzxxyynomatch")
+            abstained = await recall("Pine54: sign the specimen ticket.")
+            assert "hookSpecificOutput" in abstained and "systemMessage" not in abstained
+            assert await recall("Explain quasarflux", session="elsewhere", cwd=other) == {}
+            # Both names are the same handler, so the plugin's hook gets the same line.
+            named = await client.call_tool("nexus_recall", {
+                "cwd": str(repo), "prompt": "Explain quasarflux", "session_id": "plugin",
+            })
+            assert named.structured_content["systemMessage"] == several["systemMessage"]
+
+    anyio.run(run)
+
+
 def test_task_pre_tool_use_is_optional_current_and_bound_to_the_user_prompt(tmp_path: Path) -> None:
     repo, other = repository(tmp_path / "repo"), repository(tmp_path / "other")
 
