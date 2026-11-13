@@ -31,7 +31,10 @@ RECALL_UNAVAILABLE = 'Nexus recall unavailable; continue without automatic memor
 
 
 def user_line(text):
-    """A step the user sees and the model does not: the host renders user_markdown and sends the model ''."""
+    """A step the user sees and the model does not: the host renders user_markdown and sends the model ''.
+
+    Use it only in an output that carries nothing else: some hosts drop the whole output on this field.
+    """
     return {'systemMessage': {'systemMessage': '', 'metadata': {'user_markdown': text}}}
 
 
@@ -108,12 +111,11 @@ def recall(project, payload):
     fresh = update_seen(project, payload.get('conversationId'), candidates) if candidates else {}
     if not fresh:
         return []
-    # A count only: excerpts and identifiers stay in the model's step.
-    noun = 'candidate' if len(fresh) == 1 else 'candidates'
+    # No user line here. Antigravity hosts with the reported metadata.user_markdown panic (through 1.5.2)
+    # drop the hook's entire output, which would cost the model these candidates, not just the line.
     return [{'ephemeralMessage': 'Nexus project memory candidates (historical evidence, verify before use):\n'
              + '\n'.join(fresh.values())
-             + '\nUse the nexus-memory get tool to inspect relevant records.'},
-            user_line(f'Nexus: {len(fresh)} memory {noun} offered for this prompt.')]
+             + '\nUse the nexus-memory get tool to inspect relevant records.'}]
 
 
 DECISION_PATTERNS = re.compile(

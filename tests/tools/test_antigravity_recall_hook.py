@@ -1,5 +1,5 @@
-"""The Antigravity prompt hook shows the user one count line, and only the user: the model gets the candidates
-through its own step and never the line."""
+"""The Antigravity prompt hook tells the user when recall failed, in an output that carries nothing else, and
+never puts a user line beside the model's candidates."""
 import json
 import os
 from pathlib import Path
@@ -69,17 +69,14 @@ def shown(steps):
     return lines
 
 
-def test_recall_offers_candidates_to_the_model_and_a_count_to_the_user(world):
+def test_candidates_never_share_an_output_with_a_user_line(world):
+    # Hosts with the metadata.user_markdown panic drop the whole output, so a user line next to the
+    # candidates would cost the model the candidates. Delivery comes first.
     world.seed('quasarflux secret-body-0', 'quasarflux secret-body-1', 'lens assembly uses a copper collar')
     steps = world.recall('Explain quasarflux please')
-    assert shown(steps) == ['Nexus: 2 memory candidates offered for this prompt.']
-    model = [step['ephemeralMessage'] for step in steps if 'ephemeralMessage' in step]
-    assert len(model) == 1 and model[0].count('(id: ') == 2
-    # The count line carries no stored text.
-    assert 'secret-body' not in shown(steps)[0]
-
-    assert shown(world.recall('How is the lens assembly secured?')) == [
-        'Nexus: 1 memory candidate offered for this prompt.']
+    assert steps == [{'ephemeralMessage': steps[0]['ephemeralMessage']}]
+    assert steps[0]['ephemeralMessage'].count('(id: ') == 2
+    assert 'user_markdown' not in json.dumps(world.recall('How is the lens assembly secured?'))
     # Nothing new, nothing found, and a prompt too short to search are all silent.
     assert world.recall('Explain quasarflux please') == []
     assert world.recall('zzzxxyynomatch anywhere') == []
