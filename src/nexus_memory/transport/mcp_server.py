@@ -16,6 +16,7 @@ from mcp.server.context import ServerRequestContext
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, ConfigDict, Field
 
+from nexus_memory.activity import ActivityJournal, ActivityMiddleware
 from nexus_memory.domain.errors import NexusError
 from nexus_memory.domain.models import (
     MAX_REFERENCE_FILTER_VALUES,
@@ -335,13 +336,19 @@ def create_server(
     instructions: bool = True,
     capture_policy: _InstructionPolicy = _EXPLICIT,
     usage: UsageLog | None = None,
-    database: Path | None = None,
+    database: Path | Callable[[], Path | None] | None = None,
+    activity_journal: ActivityJournal | Callable[[], ActivityJournal | None] | None = None,
 ) -> MCPServer:
     policy = capture_policy if instructions else _OFF
     treatment = policy.metadata()
     validation = SafeToolValidation()
-    # Usage logging is outermost, so it records the result after validation has made error text safe.
-    middleware: list[Any] = [UsageMiddleware(usage), validation] if usage is not None else [validation]
+    # Usage and activity logging sit outside validation, recording sanitized results and errors.
+    middleware: list[Any] = []
+    if usage is not None:
+        middleware.append(UsageMiddleware(usage))
+    if activity_journal is not None:
+        middleware.append(ActivityMiddleware(activity_journal))
+    middleware.append(validation)
     server = MCPServer(
         name="nexus-memory",
         description="Durable exact memory with launch-bound namespace and actor scope.",
@@ -349,7 +356,7 @@ def create_server(
         middleware=middleware,
     )
     validation.bind(server)
-    fingerprint = database_location_fingerprint(database) if database is not None else None
+    static_fingerprint = database_location_fingerprint(database) if isinstance(database, Path) else None
     service_version = _service_version()
 
     @server.tool(
@@ -552,12 +559,17 @@ def create_server(
             else:
                 log_state = "failing" if usage.write_failures else "on"
                 written, failures = usage.events_written, usage.write_failures
+            if callable(database):
+                resolved_db = database()
+                resolved_fingerprint = database_location_fingerprint(resolved_db) if resolved_db is not None else None
+            else:
+                resolved_fingerprint = static_fingerprint
             return {
                 **stored,
                 "namespace": service.scope.namespace,
                 "actor": service.scope.actor,
                 "service_version": service_version,
-                "database_location_fingerprint": fingerprint,
+                "database_location_fingerprint": resolved_fingerprint,
                 **treatment,
                 "usage_log": log_state,
                 "usage_events_written": written,
