@@ -14,6 +14,7 @@ dependencies = ["mcp==2.1.1"]
 
 [project.scripts]
 nexus-memory = "nexus_memory.transport.mcp_server:main"
+nexus-memory-admin = "nexus_memory.spaces.admin:main"
 nexus-memory-check = "nexus_memory.install_check:main"
 
 [dependency-groups]
@@ -24,6 +25,10 @@ dev = ["pytest==9.1.1", "hypothesis==6.167.1"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/nexus_memory"]
+dev-mode-dirs = ["src", "integrations/project_scope"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"integrations/project_scope/project_scope.py" = "project_scope.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
