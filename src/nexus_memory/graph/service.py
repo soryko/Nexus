@@ -5,11 +5,12 @@ import json
 from uuid import uuid4
 
 from nexus_memory.domain.errors import (IdempotencyConflict, InvalidEvidence, InvalidInput,
-                                        InvalidRelation, RevisionConflict)
+                                        InvalidRelation, ResolutionConflict, RevisionConflict)
 from nexus_memory.domain.graph import (AssertionRevisionRef, CurationBatch, EntityRef,
-                                       EvidenceRecord, GraphWriteReceipt, MemorySource)
+                                       CodeSource, EvidenceRecord, GraphWriteReceipt, MemorySource)
 from nexus_memory.domain.spaces import canonical_command_digest
 from . import resolution
+from .evidence import capture_git_span
 
 
 def uid():
@@ -17,7 +18,8 @@ def uid():
 
 
 class GraphService:
-    def __init__(self, repository, binding):
+    def __init__(self, repository, binding, *, git_binding=None):
+        self.git_binding = git_binding
         self.repository, self.binding = repository, binding
 
     def _write(self, kind, args, operation, apply):
@@ -32,26 +34,111 @@ class GraphService:
                 return GraphWriteReceipt.from_json(prior[1])
             seq = db.execute('SELECT coalesce(max(seq),0)+1 FROM graph_events WHERE space_id=?',(space,)).fetchone()[0]
             op_id = uid()
-            db.execute('INSERT INTO graph_events VALUES(?,?,?,?,?,?)',(space,seq,op_id,key[1],kind,'{}'))
+            recorded_at = datetime.now(UTC).isoformat().replace('+00:00','Z')
+            db.execute('INSERT INTO graph_events VALUES(?,?,?,?,?,?)',(space,seq,op_id,key[1],kind,json.dumps({'recorded_at':recorded_at})))
             db.execute('INSERT OR IGNORE INTO graph_generations VALUES(?,1,0)',(space,))
             mappings,refs = apply(db,seq)
             gen = db.execute('SELECT active FROM graph_generations WHERE space_id=?',(space,)).fetchone()[0]
             receipt = GraphWriteReceipt(op_id,mappings,refs,seq,gen)
             db.execute('UPDATE graph_events SET payload=? WHERE space_id=? AND seq=?',
-                       (json.dumps({'command':args,'receipt':json.loads(receipt.to_json())},sort_keys=True,separators=(',',':')),space,seq))
+                       (json.dumps({'recorded_at':recorded_at,'command':args,'receipt':json.loads(receipt.to_json())},sort_keys=True,separators=(',',':')),space,seq))
             db.execute("INSERT INTO graph_operations VALUES(?,'graph-v1',?,?,?,?,?)",(*key,digest,receipt.to_json(),seq))
             db.execute("INSERT INTO graph_projection_state VALUES(?,?,?,'ready') ON CONFLICT(space_id,generation) DO UPDATE SET watermark=excluded.watermark",(space,gen,seq))
             return receipt
 
-    def curate(self, batch, *, operation):
-        return self._write('curate',json.loads(batch.to_json()),operation,
-                           lambda db,seq: _Batch(db,self.binding,seq).apply(batch))
+    def curate(self, batch, *, operation, derived_sources=None):
+        args = json.loads(batch.to_json())
+        dependencies = {}
+        for name, required in (derived_sources or {}).items():
+            if (name not in {e.temp_id for e in batch.evidence} or not isinstance(required,(tuple,list))
+                    or not 1 <= len(required) <= 128 or not all(isinstance(k,str) for k in required)):
+                raise InvalidEvidence('invalid original dependencies')
+            dependencies[name] = list(required)
+        if dependencies:
+            args = {'batch':args,'original_dependencies':dependencies}
+            if len(json.dumps(args).encode()) > 1 << 20:
+                raise InvalidInput('oversized graph batch')
+        captured = {}
+        code = [item for item in batch.evidence if isinstance(item.source, CodeSource)]
+        if code:
+            # A replay returns its durable receipt even if Git is now offline.
+            with self.repository.transaction(self.binding,write=False) as db:
+                row = db.execute("SELECT digest,receipt FROM graph_operations WHERE space_id=? AND family='graph-v1' AND writer=? AND key=?",
+                    (self.binding.space_id,operation.writer_stream_id,operation.operation_key)).fetchone()
+                if row:
+                    if row[0] != canonical_command_digest(1,'curate',args):
+                        raise IdempotencyConflict('graph operation changed')
+                    return GraphWriteReceipt.from_json(row[1])
+            if not self.git_binding or not any(r.repository_id == self.git_binding[0].repository_id for r in self.binding.repository_bindings):
+                raise InvalidEvidence('repository unavailable')
+            for item in code:
+                src = item.source
+                capture = capture_git_span(self.git_binding,src.commit_oid,src.path,item.span)
+                if capture.source != src:
+                    raise InvalidEvidence('source mismatch')
+                captured[item] = capture.captured_bytes
+        def apply(db, seq):
+            if code:
+                self.git_binding[1].check_identity()
+            writer = _Batch(db,self.binding,seq,captured)
+            result = writer.apply(batch)
+            for name, required in dependencies.items():
+                key = writer.ids[name]
+                writer.query('INSERT INTO graph_derived_sources VALUES(?,?)',key)
+                for dependency in set(required):
+                    dep = writer.ids.get(dependency, dependency)
+                    writer.require_evidence(dep)
+                    writer.query('INSERT INTO graph_source_dependencies VALUES(?,?,?)',key,dep)
+            for name in dependencies:
+                writer.reject_evidence_cycle(writer.ids[name])
+            return result
+        return self._write('curate',args,operation,apply)
 
-    def correct(self, assertion_id, expected_revision_id, replacement, *, operation):
+    def retain(self, source, attestation, *, operation):
+        """Owner curation of scoped continued support; never changes the source head."""
+        is_revision = isinstance(source,AssertionRevisionRef)
+        kind = 'retain_assertion' if is_revision else 'retain_evidence'
+        args = {'source':json.loads(source.to_json()) if is_revision else source,
+                'attestation':json.loads(attestation.to_json())}
+        def apply(db,seq):
+            writer = _Batch(db,self.binding,seq)
+            if not attestation.evidence or len(attestation.evidence)>128:
+                raise InvalidEvidence('retention requires exact evidence')
+            for key in attestation.evidence:
+                writer.require_evidence(key)
+            if is_revision:
+                writer.endpoint(source)
+            else:
+                writer.require_evidence(source)
+                writer.query('INSERT INTO graph_retained_support VALUES(?,?,?,?)',source,seq,attestation.to_json())
+                writer.reject_evidence_cycle(source)
+            return {},()
+        return self._write(kind,args,operation,apply)
+
+    def correct(self, assertion_id, expected_revision_id, replacement, *, operation, expected_resolution_generation=None):
         ref = AssertionRevisionRef(assertion_id,expected_revision_id)
         args = {'expected':json.loads(ref.to_json()),'replacement':json.loads(replacement.to_json())}
-        return self._write('correct',args,operation,lambda db,seq: _Batch(db,self.binding,seq).apply(
-            CurationBatch(assertions=(replacement,)),correct=ref))
+        if expected_resolution_generation is not None:
+            if type(expected_resolution_generation) is not int or expected_resolution_generation < 0:
+                raise InvalidInput('invalid resolution generation')
+            args['expected_resolution_generation'] = expected_resolution_generation
+
+        def apply(db, seq):
+            writer = _Batch(db,self.binding,seq)
+            row = writer.query('''SELECT r.seq, g.resolution FROM graph_assertions a
+                JOIN graph_assertion_revisions r ON (r.space_id,r.id,r.rev)=(a.space_id,a.id,a.head)
+                JOIN graph_generations g USING(space_id)
+                WHERE a.space_id=? AND a.id=? AND a.head=?''', assertion_id,expected_revision_id).fetchone()
+            if not row:
+                raise RevisionConflict('graph head changed')
+            expected = expected_resolution_generation
+            if expected is None:
+                # Legacy call binds to the generation at the exact observed revision.
+                expected = writer.query('SELECT coalesce(max(generation),0) FROM graph_resolution_events WHERE space_id=? AND seq<=?',row[0]).fetchone()[0]
+            if row[1] != expected:
+                raise ResolutionConflict('resolution generation changed')
+            return writer.apply(CurationBatch(assertions=(replacement,)),correct=ref)
+        return self._write('correct',args,operation,apply)
 
     def supersede(self, change, *, operation):
         def apply(db, seq):
@@ -70,12 +157,29 @@ class GraphService:
 
 
 class _Batch:
-    def __init__(self, db, binding, seq):
+    def __init__(self, db, binding, seq, captured=None):
+        self.captured = captured or {}
         self.db,self.binding,self.seq = db,binding,seq
         self.ids,self.revisions = {},{}
 
     def query(self, sql, *args):
         return self.db.execute(sql,(self.binding.space_id,*args))
+
+    def require_evidence(self, key):
+        if not self.query('SELECT 1 FROM graph_evidence_state WHERE space_id=? AND evidence=? AND withdrawn=0',key).fetchone():
+            raise InvalidEvidence('evidence unavailable')
+
+    def reject_evidence_cycle(self, start):
+        # Include retained-support attestation inputs as well as immutable originals.
+        cyclic = self.query('''WITH RECURSIVE edges(a,b) AS (
+            SELECT derived,required FROM graph_source_dependencies WHERE space_id=?1 UNION
+            SELECT r.evidence,j.value FROM graph_retained_support r,json_each(r.attestation,'$.evidence') j
+            WHERE r.space_id=?1 AND r.seq=(SELECT max(t.seq) FROM graph_retained_support t
+               WHERE t.space_id=r.space_id AND t.evidence=r.evidence)), walk(node) AS (
+            SELECT b FROM edges WHERE a=?2 UNION SELECT b FROM edges JOIN walk ON a=node)
+            SELECT 1 FROM walk WHERE node=?2 LIMIT 1''',start).fetchone()
+        if cyclic:
+            raise InvalidRelation('cyclic evidence dependency')
 
     def map(self, name, value):
         if name is not None:
@@ -125,7 +229,7 @@ class _Batch:
             d = replace(draft,subject=self.endpoint(draft.subject),object=self.endpoint(draft.object),applicability=applicability)
             resolved.append(d)
             cols = (ref.assertion_id,ref.revision_id,d.subject.to_json(),d.predicate,d.object.to_json())
-            now = datetime.now(UTC).isoformat().replace('+00:00','Z')
+            now = self.query("SELECT json_extract(payload,'$.recorded_at') FROM graph_events WHERE space_id=? AND seq=?",self.seq).fetchone()[0]
             self.query('INSERT INTO graph_assertion_revisions VALUES(?,?,?,?,?,?,?,?,?)',*cols,d.to_json(),now,self.seq)
             self.query('INSERT INTO graph_adjacency VALUES(?,?,?,?,?,?,?)',*cols,int(d.review_state!='retracted'))
         for item, key in evidence:
@@ -145,20 +249,27 @@ class _Batch:
 
     def capture(self,item,key):
         src = item.source
-        if not isinstance(src,MemorySource) or src.ref.space_id != self.binding.space_id:
-            raise InvalidEvidence('source unavailable')
-        scope = self.binding.scope
-        row = self.db.execute('SELECT b.body FROM memories m JOIN revisions r USING(namespace,actor,memory_id) JOIN blobs b ON (b.namespace,b.actor,b.id)=(r.namespace,r.actor,r.blob_id) WHERE m.namespace=? AND m.actor=? AND m.memory_id=? AND m.current_revision_id=r.revision_id AND r.revision_id=? AND m.tombstoned=0',
-                              (scope.namespace,scope.actor,src.ref.memory_id,src.ref.revision_id)).fetchone()
         target = self.revisions.get(item.target)
         if target is None:
             found = self.query('SELECT id,rev FROM graph_assertion_revisions WHERE space_id=? AND rev=?',item.target).fetchone()
             target = AssertionRevisionRef(*found) if found else None
-        if not row or not target:
+        if not target:
             raise InvalidEvidence('source or target unavailable')
-        data = row[0][item.span.start:item.span.end]
+        if isinstance(src, CodeSource):
+            data = self.captured[item]
+            origin = src.to_json()
+        else:
+            if not isinstance(src,MemorySource) or src.ref.space_id != self.binding.space_id:
+                raise InvalidEvidence('source unavailable')
+            scope = self.binding.scope
+            row = self.db.execute('SELECT b.body FROM memories m JOIN revisions r USING(namespace,actor,memory_id) JOIN blobs b ON (b.namespace,b.actor,b.id)=(r.namespace,r.actor,r.blob_id) WHERE m.namespace=? AND m.actor=? AND m.memory_id=? AND m.current_revision_id=r.revision_id AND r.revision_id=? AND m.tombstoned=0',
+                                  (scope.namespace,scope.actor,src.ref.memory_id,src.ref.revision_id)).fetchone()
+            if not row:
+                raise InvalidEvidence('source unavailable')
+            data = row[0][item.span.start:item.span.end]
+            origin = src.ref.memory_id
         try:
-            record = EvidenceRecord(key,target,item.role,src,item.span,data,src.ref.memory_id)
+            record = EvidenceRecord(key,target,item.role,src,item.span,data,origin)
         except InvalidInput:
             raise InvalidEvidence('invalid source span') from None
         self.query('INSERT INTO graph_evidence VALUES(?,?,?,?,?,?)',key,src.to_json(),item.span.to_json(),data,record.origin_identity)
