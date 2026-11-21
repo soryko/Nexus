@@ -1,4 +1,4 @@
-"""Owner-side inventory and online backup. Neither helper opens a repository or migrates it."""
+"""Owner-side inventory, online backup and catalog-directed schema preparation."""
 from __future__ import annotations
 
 from contextlib import closing
@@ -61,6 +61,23 @@ def store_manifest(connection: sqlite3.Connection) -> BackupManifest:
     return BackupManifest(version, identity, counts, hashes, last,
                           tuple(msg for msg, in connection.execute('PRAGMA integrity_check')),
                           tuple(connection.execute('PRAGMA foreign_key_check')))
+
+
+def prepare_owner_store(path: Path, store_id: str) -> None:
+    """Apply 005 with identity from a durable catalog intent, preserving profiles."""
+    from nexus_memory.storage import SQLiteRepository  # repository imports inventory_partitions
+
+    class ReservedIdentityRepository(SQLiteRepository):
+        def _allocate_store_id(self):
+            return store_id
+
+    profiles = {}
+    if path.exists():
+        with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as db:
+            for table, argument in [('search_profile', 'index_profile'), ('history_profile', 'history_profile')]:
+                if db.execute('SELECT 1 FROM sqlite_schema WHERE name=?', (table,)).fetchone():
+                    profiles[argument], = db.execute(f'SELECT profile FROM {table} WHERE id=1').fetchone()
+    ReservedIdentityRepository(path, owner_schema5=True, **profiles)
 
 
 def backup_store(path: str | Path, destination: str | Path) -> BackupManifest:

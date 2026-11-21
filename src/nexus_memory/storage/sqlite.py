@@ -618,13 +618,16 @@ class SQLiteRepository:
             raise StorageIntegrityError("a migrated head has no matching write receipt")
         self._bump_generation(db)
 
+    def _allocate_store_id(self) -> str:
+        return str(uuid.uuid4())
+
     def _apply_migration_005(self, connection: sqlite3.Connection) -> None:
         # The dispatcher owns the entire transaction, including user_version. Never
         # use executescript here: it can commit ahead of the first DDL statement.
         for statement in self._script("005_space_identity.sql").split(";"):
             if statement.strip():
                 connection.execute(statement)
-        store_id = str(uuid.uuid4())
+        store_id = self._allocate_store_id()
         connection.execute("INSERT INTO store_identity(id,store_id) VALUES(1,?)", (store_id,))
         for scope in inventory_partitions(connection, self._configured_scope):
             connection.execute("INSERT INTO space_partitions(store_id,namespace,actor,space_id) VALUES(?,?,?,?)",
