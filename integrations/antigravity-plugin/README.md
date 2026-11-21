@@ -31,3 +31,15 @@ Local, append-only project memory backed by SQLite, lexical BM25 retrieval, cont
    ```bash
    python3 -I scripts/launcher.py recover /path/to/repo --expected-project-id <UUID>
    ```
+5. On Antigravity surfaces whose global plugin MCP client does not advertise `roots` (`host_missing_roots`), Nexus Studio and hooks still receive workspace paths natively. To also pin MCP tools to one enrolled repository, add a workspace-scoped `.agents/mcp_config.json`:
+   ```json
+   {
+     "mcpServers": {
+       "nexus-memory": {
+         "command": "node",
+         "args": ["~/.gemini/config/plugins/nexus-memory/scripts/launch.mjs", "mcp", "--workspace", "/abs/path/to/repo"]
+       }
+     }
+   }
+   ```
+   (Expand `~` to your absolute `$HOME` path.)

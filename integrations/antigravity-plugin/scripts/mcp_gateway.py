@@ -2,6 +2,7 @@
 """Bind a portable Antigravity plugin stdio connection to its verified single root."""
 from __future__ import annotations
 
+import argparse
 import importlib.metadata
 import json
 import os
@@ -127,8 +128,9 @@ class ConcurrentRootsChange(ScopeError):
 class GuardedService:
     """Keep the original tool handlers; admit every call against fresh client roots."""
 
-    def __init__(self, expected: Path | None) -> None:
+    def __init__(self, expected: Path | None, *, pinned_workspace: Path | None = None) -> None:
         self.expected = expected
+        self.pinned_workspace = pinned_workspace
         self.project = None
         self.service: MemoryService | None = None
         self.journal: ActivityJournal | None = None
@@ -163,22 +165,46 @@ class GuardedService:
             try:
                 epoch = self.generation
                 _refuse_git_env_overrides()
-                if not ctx.session.check_client_capability(types.ClientCapabilities(roots=types.RootsCapability())):
+                has_roots_cap = ctx.session.check_client_capability(
+                    types.ClientCapabilities(roots=types.RootsCapability())
+                )
+                if has_roots_cap:
+                    with anyio.fail_after(3):
+                        roots = await ctx.session.list_roots()
+
+                    root_list = getattr(roots, "roots", []) or []
+                    if len(root_list) == 0:
+                        if self.project is None and tool_name == "status":
+                            return _diagnostic_status_result(
+                                scope_state="empty",
+                                message="No active workspace root advertised by client.",
+                            )
+                        raise ScopeError("one workspace root is required")
+                    if len(root_list) > 1:
+                        if self.project is None and tool_name == "status":
+                            return _diagnostic_status_result(
+                                scope_state="ambiguous",
+                                message="Multiple workspace roots are open; select a single enrolled checkout.",
+                            )
+                        raise ScopeError("one workspace root is required")
+                    raw_path = root_path(root_list)
+                elif self.pinned_workspace is not None:
+                    if not self.pinned_workspace.is_absolute():
+                        raise ScopeError("workspace must be an absolute local directory")
+                    raw_path = str(self.pinned_workspace)
+                else:
+                    if self.project is None and tool_name == "status":
+                        return _diagnostic_status_result(
+                            scope_state="host_missing_roots",
+                            message=(
+                                "MCP client did not advertise roots capability; global plugin MCP stays "
+                                "fail-closed without attested roots (Nexus Studio and hooks still receive "
+                                "workspace URIs natively). For hosts without MCP roots, add a workspace-scoped "
+                                ".agents/mcp_config.json launching `launch.mjs mcp --workspace /abs/path/to/repo`."
+                            ),
+                        )
                     raise ScopeError("client did not advertise roots")
-                with anyio.fail_after(3):
-                    roots = await ctx.session.list_roots()
 
-                root_list = getattr(roots, "roots", []) or []
-                if len(root_list) == 0:
-                    if self.project is None and tool_name == "status":
-                        return _diagnostic_status_result(scope_state="empty", message="No active workspace root advertised by client.")
-                    raise ScopeError("one workspace root is required")
-                if len(root_list) > 1:
-                    if self.project is None and tool_name == "status":
-                        return _diagnostic_status_result(scope_state="ambiguous", message="Multiple workspace roots are open; select a single enrolled checkout.")
-                    raise ScopeError("one workspace root is required")
-
-                raw_path = root_path(root_list)
                 diag = inspect_scope(Path(raw_path))
                 if diag.state != "bound":
                     if self.project is not None:
@@ -205,6 +231,9 @@ class GuardedService:
                 project = resolve(Path(raw_path))
                 _verify_env_signals_agree(project.checkout)
 
+                if has_roots_cap and self.pinned_workspace is not None:
+                    if resolve(self.pinned_workspace).id != project.id:
+                        raise ScopeError("pinned workspace disagrees with client root")
                 if self.project is not None and self.project != project:
                     self.changed = True
                     raise ScopeError("project changed")
@@ -233,10 +262,22 @@ class GuardedService:
             return await call_next(ctx)
 
 
-def main() -> int:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Antigravity MCP gateway for Nexus Memory.")
+    parser.add_argument("expected_project", nargs="?", type=Path, default=None)
+    parser.add_argument(
+        "--workspace",
+        type=Path,
+        default=None,
+        help="Owner-pinned absolute checkout path for workspace-local configs on hosts without MCP roots.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
     os.umask(0o077)
-    expected = Path(sys.argv[1]) if len(sys.argv) == 2 else None
-    guard = GuardedService(expected)
+    args = _parse_args(argv)
+    guard = GuardedService(args.expected_project, pinned_workspace=args.workspace)
     server = create_server(
         guard,
         database=lambda: guard.database_path,

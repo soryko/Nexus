@@ -323,3 +323,112 @@ def test_agy_plugin_validate_strict_reports_zero_errors_and_zero_warnings() -> N
     report = json.loads(res.stdout)
     bad = [f for f in report.get("findings", []) if f.get("severity") in ("error", "warning")]
     assert bad == [], f"unexpected errors/warnings: {bad}"
+
+
+def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prev_umask = os.umask(0o077)
+    try:
+        home = tmp_path / "home"
+        home.mkdir(mode=0o700)
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.setenv("PLUGIN_ROOT", str(PLUGIN_ROOT))
+
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _git(repo, "init", "-q")
+        repo = repo.resolve()
+
+        other = tmp_path / "other"
+        other.mkdir()
+        _git(other, "init", "-q")
+        other = other.resolve()
+
+        scope_mod = _load_script_module("project_scope")
+        observed = scope_mod.identity(repo / ".git")
+        if observed["birth_time"] is None:
+            monkeypatch.setattr(scope_mod, "identity", lambda _: {**observed, "birth_time": 112233.5})
+        gw_mod = _load_script_module("mcp_gateway")
+
+        scope_mod.enroll(repo)
+        scope_mod.enroll(other)
+
+        class NoRootsSession:
+            def check_client_capability(self, _cap) -> bool:
+                return False
+
+        class WithRootsSession:
+            def __init__(self, roots: list[Path]) -> None:
+                self._roots = roots
+
+            def check_client_capability(self, _cap) -> bool:
+                return True
+
+            async def list_roots(self):
+                return SimpleNamespace(roots=[SimpleNamespace(uri=r.as_uri()) for r in self._roots])
+
+        # 1. Neutral plugin stays fail-closed without roots, returning host_missing_roots on status
+        async def _admit(_ctx):
+            return "admitted"
+
+        guard_neutral = gw_mod.GuardedService(None)
+
+        async def check_neutral_no_roots() -> None:
+            st = await guard_neutral.authorize(
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="status"), session=NoRootsSession()),
+                _admit,
+            )
+            assert st.is_error is False
+            assert st.structured_content["scope_state"] == "host_missing_roots"
+
+            denied_search = await guard_neutral.authorize(
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="search"), session=NoRootsSession()),
+                _admit,
+            )
+            assert denied_search.is_error is True
+            assert "project_scope_unavailable" in denied_search.content[0].text
+
+        anyio.run(check_neutral_no_roots)
+
+        # 2. Owner-pinned --workspace admits bound repo without roots, refuses disagreeing client roots, surfaces drift
+        args = gw_mod._parse_args(["--workspace", str(repo)])
+        assert args.workspace == repo
+        guard_pinned = gw_mod.GuardedService(None, pinned_workspace=args.workspace)
+
+        async def check_pinned() -> None:
+            ok_call = await guard_pinned.authorize(
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="status"), session=NoRootsSession()),
+                _admit,
+            )
+            assert ok_call == "admitted"
+            assert guard_pinned.project.checkout == repo
+
+            # Disagreeing client root must fail closed even on pinned connection
+            mismatch = await guard_pinned.authorize(
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="status"), session=WithRootsSession([other])),
+                _admit,
+            )
+            assert mismatch.is_error is True
+
+        anyio.run(check_pinned)
+
+        # Drifted pinned workspace surfaces device_drift on fresh guard
+        reg_path = scope_mod.private_base() / "registry.json"
+        reg = json.loads(reg_path.read_bytes())
+        reg["projects"][str(repo / ".git")]["device"] += 4
+        reg_path.write_text(json.dumps(reg))
+
+        guard_pinned_drift = gw_mod.GuardedService(None, pinned_workspace=repo)
+
+        async def check_pinned_drift() -> None:
+            st = await guard_pinned_drift.authorize(
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="status"), session=NoRootsSession()),
+                _admit,
+            )
+            assert st.is_error is False
+            assert st.structured_content["scope_state"] == "device_drift"
+
+        anyio.run(check_pinned_drift)
+    finally:
+        os.umask(prev_umask)
