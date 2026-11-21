@@ -142,7 +142,7 @@ class SQLiteRepository:
     REFERENCE_COLUMNS = "repository_id,commit_oid,path,object_oid,entry_type,mode,checked_at"
 
     def __init__(self, path: str | Path, index_profile: str = "exact",
-                 history_profile: str = "none", *, owner_schema5: bool = False,
+                 history_profile: str = "none", *, owner_schema5: bool = False, owner_schema6: bool = False,
                  configured_scope: Scope | None = None) -> None:
         """``index_profile`` selects how bodies are tokenised for search.
 
@@ -164,9 +164,13 @@ class SQLiteRepository:
         """
         if type(owner_schema5) is not bool:
             raise ValueError("owner_schema5 must be a boolean")
-        if configured_scope is not None and not owner_schema5:
+        if type(owner_schema6) is not bool or (owner_schema5 and owner_schema6):
+            raise ValueError("select one explicit owner schema")
+        if configured_scope is not None and not (owner_schema5 or owner_schema6):
             raise ValueError("configured_scope requires owner_schema5=True")
-        if owner_schema5:
+        if owner_schema6:
+            self._target_schema_version = 6
+        elif owner_schema5:
             self._target_schema_version = self.OWNER_SCHEMA_VERSION
         if sqlite3.sqlite_version_info < self.MINIMUM_SQLITE:
             raise UnsupportedRuntime("SQLite 3.51.3 or newer is required")
@@ -674,9 +678,14 @@ class SQLiteRepository:
                     if statement.strip():
                         connection.execute(statement)
                 version = 4
-            if version == 4 and self._target_schema_version == self.OWNER_SCHEMA_VERSION:
+            if version == 4 and self._target_schema_version >= self.OWNER_SCHEMA_VERSION:
                 self._apply_migration_005(connection)
                 version = 5
+            if version == 5 and self._target_schema_version == 6:
+                for statement in self._script("006_graph.sql").split(";"):
+                    if statement.strip():
+                        connection.execute(statement)
+                version = 6
             connection.execute(f"PRAGMA user_version = {version}")
             self._repair_legacy_recency(connection)
             self._apply_profile(connection)
