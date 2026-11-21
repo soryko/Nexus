@@ -76,6 +76,17 @@ class Snapshot(TemporalSelection):
             result.append(EvidenceRecord(row['id'],ref,row['role'],source,Span.from_json(row['span']),row['captured'],row['origin']))
         return tuple(result)
 
+    def retrieval_refs(self, condition, params, limit):
+        """Internal fixed predicates only. Caller reserves and charges its own probe."""
+        if self.known_as_of:
+            rows = self.query(f'''SELECT id,rev FROM graph_assertion_revisions r WHERE space_id=?1 AND seq<=?2
+                AND NOT EXISTS(SELECT 1 FROM graph_assertion_revisions n WHERE n.space_id=r.space_id AND n.id=r.id AND n.seq>r.seq AND n.seq<=?2)
+                AND json_extract(content,'$.review_state')!='retracted' AND ({condition}) ORDER BY id,rev LIMIT ?''',
+                self.graph_event_seq, *params, limit)
+        else:
+            rows = self.query(f'SELECT id,rev FROM graph_adjacency WHERE space_id=? AND active=1 AND ({condition}) ORDER BY id,rev LIMIT ?', *params, limit)
+        yield from (AssertionRevisionRef(*row) for row in rows)
+
     def _page(self, condition, params, after, limit):
         if type(limit) is not int or not 1 <= limit <= 1024:
             raise InvalidInput('invalid graph page size')

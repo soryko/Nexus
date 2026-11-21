@@ -22,6 +22,9 @@ class Proof:
         self.controls = budget.conflict_rows
         self.active = set()
         self.groups = {}
+        self.premises = {}
+        self.originals = {}
+        self.retained_by = {}
         self.reasons = set()
 
     def fail(self, reason, value=NO):
@@ -53,7 +56,24 @@ class Proof:
                 WHERE space_id=? AND seq<=? AND kind='retain_assertion' AND json_extract(payload,'$.command.source.revision_id')=? ORDER BY seq DESC LIMIT 1""",self.snap.graph_event_seq,source.revision_id).fetchone()
         else:
             row = self.snap.query('SELECT attestation FROM graph_retained_support WHERE space_id=? AND evidence=? AND seq<=? ORDER BY seq DESC LIMIT 1',source,self.snap.graph_event_seq).fetchone()
-        return self.applicability(Applicability.from_json(row[0])) if row else self.fail('source_superseded')
+        if not row:
+            return self.fail('source_superseded')
+        app = Applicability.from_json(row[0])
+        value = self.applicability(app)
+        if value == YES:
+            self.retained_by[source] = app.evidence
+        return value
+
+    def bounded_rows(self, rows):
+        """Reserve before consuming a premise or probe, including rejected ones."""
+        while self.remaining:
+            row = rows.fetchone()
+            if row is None:
+                return
+            self.remaining -= 1
+            yield row
+        self.fail('proof_budget', MAYBE)
+        yield None
 
     def evidence(self, key):
         def check():
@@ -70,7 +90,14 @@ class Proof:
                 if head != ref.revision_id:
                     state = self.retention(key)
             deps = self.snap.query('SELECT required FROM graph_source_dependencies WHERE space_id=? AND derived=? ORDER BY required',key)
-            return conjunction((state,conjunction(self.evidence(r[0]) for r in deps)))
+            originals = []
+            for r in self.bounded_rows(deps):
+                if r is None: return MAYBE
+                originals.append(r[0])
+                state = conjunction((state, self.evidence(r[0])))
+                if state == NO: return NO
+            self.originals[key] = tuple(originals)
+            return state
         return self.visit(('e',key),check)
 
     def revision(self, ref, *, premise=False, suppress=True):
@@ -90,7 +117,14 @@ class Proof:
             if guard == NO:
                 return NO
             complete = []; unknown = False
-            for i,group in enumerate(self.snap.support_groups(ref)):
+            if ref not in self.premises:
+                rows = self.snap.query('SELECT ordinal, coalesce(evidence,dependency) FROM graph_support_premises WHERE space_id=? AND rev=? ORDER BY ordinal,position',ref.revision_id)
+                groups = {}
+                for row in self.bounded_rows(rows):
+                    if row is None: return MAYBE
+                    groups.setdefault(row[0], []).append(row[1])
+                self.premises[ref] = tuple(tuple(g) for g in groups.values())
+            for i,group in enumerate(self.premises[ref]):
                 value = conjunction(self.premise(p,suppress) for p in group)
                 if value == YES:
                     complete.append(str(i))
@@ -112,11 +146,14 @@ class Proof:
     def not_suppressed(self, ref):
         # Read immutable control endpoints, not cached active adjacency. Test replacement
         # BASE support: suppressing B by C must not resurrect A in C -> B -> A.
-        rows = self.snap.query("SELECT id,rev,subject FROM graph_assertion_revisions WHERE space_id=? AND predicate='SUPERSEDES' AND object=? AND seq<=? ORDER BY seq",ref.to_json(),self.snap.graph_event_seq)
+        # Nested proof shares this allowance. Do not fetch even a limit probe
+        # after another control/replacement consumed the remaining rows.
+        rows = self.snap.query("SELECT id,rev,subject FROM graph_assertion_revisions WHERE space_id=? AND predicate='SUPERSEDES' AND object=? AND seq<=? ORDER BY seq LIMIT ?",ref.to_json(),self.snap.graph_event_seq,self.controls)
         unknown = False
-        for row in rows:
-            if self.controls <= 0:
-                return self.fail('control_budget',MAYBE)
+        while self.controls:
+            row = rows.fetchone()
+            if row is None:
+                return MAYBE if unknown else YES
             self.controls -= 1
             control = AssertionRevisionRef(row[0],row[1]); replacement = AssertionRevisionRef.from_json(row[2])
             # A control may cite this predecessor as a base premise. Base proof
@@ -125,7 +162,7 @@ class Proof:
             if state == YES:
                 return self.fail('superseded')
             unknown |= state == MAYBE
-        return MAYBE if unknown else YES
+        return self.fail('control_budget', MAYBE)
 
 
 def evaluate(ref, snapshot, context, budget):

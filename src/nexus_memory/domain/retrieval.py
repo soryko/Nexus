@@ -393,6 +393,8 @@ class EvidencePack(_Record):
     serialized_utf8_bytes: int
     counter_identity: str = 'utf8_bytes_div_4'
     conflict_coverage: Literal['recorded_explicit_only'] = 'recorded_explicit_only'
+    proof_edge_rows: int = 0
+    proof_edges: int = 0
 
     def __post_init__(self):
         super().__post_init__()
