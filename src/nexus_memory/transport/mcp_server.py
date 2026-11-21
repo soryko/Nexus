@@ -16,7 +16,7 @@ from mcp.server.context import ServerRequestContext
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, ConfigDict, Field
 
-from nexus_memory.domain.errors import NexusError
+from nexus_memory.domain.errors import SCOPED_ERROR_MESSAGES, NexusError, OperationFailure
 from nexus_memory.domain.models import (
     MAX_REFERENCE_FILTER_VALUES,
     MAX_REFERENCES,
@@ -233,6 +233,9 @@ class HistoryOutput(BaseModel):
 
 
 def _safe_error_text(text: str) -> bool:
+    code, _, _detail = text.partition(":")
+    if code in SCOPED_ERROR_MESSAGES:
+        return text == f"{code}: {SCOPED_ERROR_MESSAGES[code]}"
     error_types = NexusError.__subclasses__()
     prefixes = tuple(f"{error_type.code}:" for error_type in error_types) + ("internal_error:",)
     return text.startswith(prefixes)
@@ -306,7 +309,20 @@ def _invalid_result() -> CallToolResult:
     )
 
 
+def _operation_error(failure: OperationFailure) -> CallToolResult:
+    # Never serialize the internal DTO: it may carry an owner-only OperationRef.
+    message = SCOPED_ERROR_MESSAGES.get(failure.code, failure.code.replace('_', ' '))
+    return CallToolResult(
+        content=[TextContent(type="text", text=f"{failure.code}: {message}")],
+        structured_content=failure.for_model(),
+        is_error=True,
+    )
+
+
 def _error(code: str, message: str) -> CallToolResult:
+    if code in SCOPED_ERROR_MESSAGES:
+        # Busy precedes durable effect; unknown delivery needs reconciliation, not a fresh write.
+        return _operation_error(OperationFailure(code, code in {'authority_busy', 'publication_busy'}))
     return CallToolResult(content=[TextContent(type="text", text=f"{code}: {message}")], is_error=True)
 
 
