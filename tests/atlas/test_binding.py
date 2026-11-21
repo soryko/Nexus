@@ -76,6 +76,18 @@ def test_linked_worktree_binds_to_the_main_checkouts_project(enrolled, tmp_path)
     assert binding.scope == enrolled.scope
 
 
+def test_relative_gitdir_is_resolved_from_worktree(enrolled, tmp_path, monkeypatch) -> None:
+    worktree = tmp_path / "linked"
+    git(enrolled.checkout, "worktree", "add", "-q", str(worktree))
+    marker = worktree / ".git"
+    admin = marker.read_text().strip().removeprefix("gitdir: ")
+    marker.write_text(f"gitdir: {os.path.relpath(worktree / admin, worktree)}\n")
+    monkeypatch.chdir(tmp_path)  # a different parent, so ../repo is wrong from here
+    binding = open_binding(worktree.resolve(), enrolled.resolve)
+    assert binding.scope == enrolled.scope
+    binding.full_check()
+
+
 def test_reader_sees_committed_wal_data_and_writes_nothing(enrolled, monkeypatch) -> None:
     # A live connection stops the last-close checkpoint, so the data stays in the WAL.
     keeper = sqlite3.connect(enrolled.database)
@@ -206,6 +218,7 @@ def test_quick_and_full_checks_agree_on_every_mutation(enrolled, mutate) -> None
     mutate(enrolled)
     assert _refused(binding.reader), "the per-request check missed the mutation"
     assert _refused(binding.full_check), "a fresh full resolve accepted the mutation"
+    assert _refused(binding.reader), "the failed full check adopted the changed binding"
 
 
 def test_pruned_linked_worktree_is_refused(enrolled, tmp_path) -> None:

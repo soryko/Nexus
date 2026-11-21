@@ -98,7 +98,7 @@ def _git_directory_at(directory: Path) -> Path | None:
             git_dir = (git_dir / common.read_text("utf-8").strip()).resolve()
         git_dir = git_dir.resolve()
         return git_dir if _holds_repository_metadata(git_dir) else None
-    except OSError:
+    except (OSError, ValueError):  # unreadable or malformed gitdir/commondir marker
         return None
 
 

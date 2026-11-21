@@ -199,16 +199,21 @@ class SQLiteRepository:
         return repository
 
     @staticmethod
+    def _recency_marked(connection: sqlite3.Connection) -> bool:
+        return bool(connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='data_repairs'"
+        ).fetchone() and connection.execute(
+            "SELECT 1 FROM data_repairs WHERE name='v1-head-recency'"
+        ).fetchone())
+
+    @staticmethod
     def _require_recency_repaired(connection: sqlite3.Connection) -> None:
         """A store whose original head-index backfill was never repaired lists newest-first wrongly.
 
         The repair is a write that only a normal open performs, so a viewer refuses such a store
         instead of showing a misleading order.
         """
-        marked = connection.execute(
-            "SELECT count(*) FROM sqlite_master WHERE name='data_repairs'").fetchone()[0] and connection.execute(
-            "SELECT count(*) FROM data_repairs WHERE name='v1-head-recency'").fetchone()[0]
-        if not marked and connection.execute("SELECT count(*) FROM head_index WHERE durable_seq=0").fetchone()[0]:
+        if not SQLiteRepository._recency_marked(connection) and connection.execute("SELECT count(*) FROM head_index WHERE durable_seq=0").fetchone()[0]:
             raise UnsupportedSchema("this store has a pending upgrade; open it once with Nexus before viewing it")
 
     def _connect_read_only(self) -> sqlite3.Connection:
@@ -390,13 +395,6 @@ class SQLiteRepository:
             "SELECT count(*) FROM sqlite_master WHERE name='history_profile'"
         ).fetchone()[0]
         if not exists:
-            if self.history_profile == "none":
-                return "none"
-            connection.execute(
-                "CREATE TABLE history_profile("
-                "id INTEGER PRIMARY KEY CHECK(id = 1), profile TEXT NOT NULL)"
-            )
-            connection.execute("INSERT INTO history_profile(id,profile) VALUES(1,'none')")
             return "none"
         return connection.execute("SELECT profile FROM history_profile WHERE id=1").fetchone()[0]
 
@@ -437,7 +435,11 @@ class SQLiteRepository:
                 "content_rowid='rowid'" + self._history_tokenizer() + ")"
             )
             self._backfill_history(connection)
-        connection.execute("UPDATE history_profile SET profile=? WHERE id=1", (self.history_profile,))
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS history_profile("
+            "id INTEGER PRIMARY KEY CHECK(id = 1), profile TEXT NOT NULL)"
+        )
+        connection.execute("INSERT OR REPLACE INTO history_profile(id,profile) VALUES(1,?)", (self.history_profile,))
 
     def _history_tokenizer_matches(self, connection: sqlite3.Connection) -> bool:
         """Whether the existing historical index was built under the current tokenizer.
@@ -603,12 +605,27 @@ class SQLiteRepository:
             raise StorageIntegrityError("a migrated head has no matching write receipt")
         self._bump_generation(db)
 
+    def _open_is_current(self, db: sqlite3.Connection) -> bool:
+        """Inspect one read snapshot without creating even the optional profile table."""
+        return (db.execute("PRAGMA user_version").fetchone()[0] == self.SCHEMA_VERSION
+                and self._recency_marked(db)
+                and self._stored_profile(db) == self.index_profile
+                and self._stored_history_profile(db) == self.history_profile
+                and (self.history_profile == "none" or self._history_tokenizer_matches(db)))
+
     def _migrate(self) -> None:
         connection = None
         try:
             self._probe_fts5()
             connection = self._connect()
             self._establish_wal(connection)
+            connection.execute("BEGIN")
+            current = self._open_is_current(connection)
+            connection.commit()
+            if current:
+                return
+            # Never upgrade a stale WAL snapshot. Read the version and all maintenance
+            # state afresh under the writer lock in case another opener got here first.
             connection.execute("BEGIN IMMEDIATE")
             version = connection.execute("PRAGMA user_version").fetchone()[0]
             if version > self.SCHEMA_VERSION:

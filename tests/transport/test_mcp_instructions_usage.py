@@ -529,6 +529,15 @@ def test_capture_treatment_matches_initialization_status_and_every_log_line(tmp_
     assert {(e["capture_policy"], e["instructions_digest"]) for e in _events(log)} == {(expected, digest)}
 
 
+def test_usage_recognizes_hooks_without_copying_their_context() -> None:
+    hooks = {"nexus_session_start", "nexus_recall", "nexus_pre_tool",
+             "codex_session_start", "codex_recall", "task_pre_tool_use"}
+    assert hooks <= usage_module.KNOWN_TOOLS
+    assert "arbitrary-client-input" not in usage_module.KNOWN_TOOLS
+    for hook in hooks:
+        assert usage_module._identifiers(hook, {"hookSpecificOutput": {"additionalContext": BODY}}) == {}
+
+
 def test_codex_project_launch_selects_explicit_before_any_hook_is_available(tmp_path: Path) -> None:
     from argparse import Namespace
     from nexus_memory.transport import mcp_server

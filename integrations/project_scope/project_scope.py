@@ -1,9 +1,11 @@
 """Resolve authorized local Git worktrees against an owner-managed registry."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 import fcntl
 import json
+import math
 import os
 from pathlib import Path
 import stat
@@ -22,6 +24,20 @@ class Project:
     common: Path
     id: str
     database: Path
+
+
+@dataclass(frozen=True)
+class ScopeDiagnosis:
+    """Strictly read-only inspection result for a workspace path."""
+
+    state: str  # "bound" | "device_drift" | "unenrolled" | "identity_changed" | "invalid"
+    checkout: Path | None = None
+    common: Path | None = None
+    project_id: str | None = None
+    database: Path | None = None
+    recorded_device: int | None = None
+    observed_device: int | None = None
+    message: str = ""
 
 
 def private_base(*, create: bool = False) -> Path:
@@ -110,15 +126,39 @@ def read_registry(base: Path) -> dict:
     return data
 
 
-def enroll(workspace: Path) -> str:
-    checkout, common = checkout_dirs(workspace)
-    if workspace.resolve() != common.parent or checkout != common.parent:
-        raise ScopeError('enroll the main checkout explicitly')
-    base = private_base(create=True)
+@contextmanager
+def registry_lock(base: Path, *, create: bool = False):
     lock = base / '.enroll.lock'
-    with os.fdopen(os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600), 'r+') as handle:
+    flags = os.O_RDWR | os.O_NOFOLLOW | (os.O_CREAT if create else 0)
+    with os.fdopen(os.open(lock, flags, 0o600), 'r+') as handle:
         private_file(lock)
         fcntl.flock(handle, fcntl.LOCK_EX)
+        yield
+
+
+def write_registry(base: Path, registry: dict) -> None:
+    with tempfile.NamedTemporaryFile(dir=base, mode='w', delete=False) as out:
+        try:
+            json.dump(registry, out, indent=2)
+            out.write('\n')
+            out.flush()
+            os.fsync(out.fileno())
+            os.replace(out.name, base / 'registry.json')
+        finally:
+            Path(out.name).unlink(missing_ok=True)
+
+
+def main_common(workspace: Path) -> Path:
+    checkout, common = checkout_dirs(workspace)
+    if workspace.resolve() != common.parent or checkout != common.parent:
+        raise ScopeError('specify the main checkout explicitly')
+    return common
+
+
+def enroll(workspace: Path) -> str:
+    common = main_common(workspace)
+    base = private_base(create=True)
+    with registry_lock(base, create=True):
         path = base / 'registry.json'
         registry = read_registry(base) if os.path.lexists(path) else {'version': 1, 'projects': {}}
         entries = registry['projects']
@@ -130,16 +170,173 @@ def enroll(workspace: Path) -> str:
             return entries[key]['id']
         project_id = str(uuid4())
         entries[key] = {'id': project_id, **observed}
-        with tempfile.NamedTemporaryFile(dir=base, mode='w', delete=False) as out:
-            try:
-                json.dump(registry, out, indent=2)
-                out.write('\n')
-                out.flush()
-                os.fsync(out.fileno())
-                os.replace(out.name, path)
-            finally:
-                Path(out.name).unlink(missing_ok=True)
+        write_registry(base, registry)
         return project_id
+
+
+def checked_database(base: Path, project_id: str, *, required: bool = False) -> Path:
+    database = base / (project_id + '.sqlite3')
+    for suffix in ('', '-wal', '-shm', '-journal'):
+        path = Path(str(database) + suffix)
+        if (required and not suffix) or os.path.lexists(path):
+            private_file(path)
+    return database
+
+
+def device_only_drift(entry: dict, observed: dict) -> bool:
+    for obj in (entry, observed):
+        birth = obj['birth_time']
+        if (type(obj['device']) is not int or obj['device'] < 0
+                or type(obj['inode']) is not int or obj['inode'] <= 0
+                or type(birth) not in (float, int) or not birth > 0
+                or (isinstance(birth, float) and not math.isfinite(birth))):
+            return False
+    return (entry['device'] != observed['device'] and entry['inode'] == observed['inode']
+            and entry['birth_time'] == observed['birth_time'])
+
+
+def recover(workspace: Path, expected_project_id: str) -> str:
+    """Confirm a device-only identity change without creating a project or store."""
+    base = private_base()
+    with registry_lock(base):
+        common = main_common(workspace)
+        registry = read_registry(base)
+        entry = registry['projects'].get(str(common))
+        if entry is None or entry['id'] != expected_project_id:
+            raise ScopeError('expected project does not match enrollment')
+        observed = identity(common)
+        if not device_only_drift(entry, observed):
+            raise ScopeError('recovery requires a device-only identity change')
+        checked_database(base, expected_project_id, required=True)
+        entry['device'] = observed['device']
+        write_registry(base, registry)
+        return expected_project_id
+
+
+def inspect_scope(workspace: Path) -> ScopeDiagnosis:
+    """Classify a workspace's enrollment state without creating files or mutating registry."""
+    try:
+        checkout, common = checkout_dirs(workspace)
+    except (ScopeError, OSError, subprocess.SubprocessError) as error:
+        return ScopeDiagnosis(state='invalid', message=str(error) or 'workspace is not a supported Git checkout')
+
+    try:
+        base = private_base(create=False)
+    except FileNotFoundError:
+        return ScopeDiagnosis(
+            state='unenrolled',
+            checkout=checkout,
+            common=common,
+            message='workspace is not enrolled in Nexus project scope',
+        )
+    except (ScopeError, OSError) as error:
+        return ScopeDiagnosis(
+            state='invalid',
+            checkout=checkout,
+            common=common,
+            message=str(error) or 'project storage is invalid',
+        )
+
+    registry_path = base / 'registry.json'
+    if not os.path.lexists(registry_path):
+        return ScopeDiagnosis(
+            state='unenrolled',
+            checkout=checkout,
+            common=common,
+            message='workspace is not enrolled in Nexus project scope',
+        )
+
+    try:
+        registry = read_registry(base)
+    except (ScopeError, OSError, ValueError) as error:
+        return ScopeDiagnosis(
+            state='invalid',
+            checkout=checkout,
+            common=common,
+            message=str(error) or 'project registry is invalid',
+        )
+
+    entry = registry['projects'].get(str(common))
+    if entry is None:
+        return ScopeDiagnosis(
+            state='unenrolled',
+            checkout=checkout,
+            common=common,
+            message='workspace is not enrolled in Nexus project scope',
+        )
+
+    try:
+        observed = identity(common)
+    except OSError as error:
+        return ScopeDiagnosis(
+            state='invalid',
+            checkout=checkout,
+            common=common,
+            project_id=entry['id'],
+            message=str(error) or 'could not stat Git common directory',
+        )
+
+    recorded_dev = entry.get('device') if isinstance(entry.get('device'), int) else None
+    observed_dev = observed.get('device') if isinstance(observed.get('device'), int) else None
+
+    if not any(entry.get(k) != v for k, v in observed.items()):
+        try:
+            database = checked_database(base, entry['id'], required=False)
+        except (ScopeError, OSError) as error:
+            return ScopeDiagnosis(
+                state='invalid',
+                checkout=checkout,
+                common=common,
+                project_id=entry['id'],
+                recorded_device=recorded_dev,
+                observed_device=observed_dev,
+                message=str(error) or 'project database is unsafe',
+            )
+        return ScopeDiagnosis(
+            state='bound',
+            checkout=checkout,
+            common=common,
+            project_id=entry['id'],
+            database=database,
+            recorded_device=recorded_dev,
+            observed_device=observed_dev,
+            message='project scope is bound',
+        )
+
+    if device_only_drift(entry, observed):
+        database: Path | None = None
+        try:
+            database = checked_database(base, entry['id'], required=False)
+        except (ScopeError, OSError) as error:
+            return ScopeDiagnosis(
+                state='invalid',
+                checkout=checkout,
+                common=common,
+                project_id=entry['id'],
+                recorded_device=recorded_dev,
+                observed_device=observed_dev,
+                message=str(error) or 'project database is unsafe',
+            )
+        return ScopeDiagnosis(
+            state='device_drift',
+            checkout=checkout,
+            common=common,
+            project_id=entry['id'],
+            database=database,
+            recorded_device=recorded_dev,
+            observed_device=observed_dev,
+            message=f'device-only drift detected ({recorded_dev} -> {observed_dev}); owner recovery required',
+        )
+
+    return ScopeDiagnosis(
+        state='identity_changed',
+        checkout=checkout,
+        common=common,
+        project_id=entry['id'],
+        recorded_device=recorded_dev,
+        observed_device=observed_dev,
+        message='checkout identity changed (inode or birth time mismatch); owner verification required',
+    )
 
 
 def resolve(workspace: Path) -> Project:
@@ -148,11 +345,7 @@ def resolve(workspace: Path) -> Project:
     entry = read_registry(base)['projects'].get(str(common))
     if entry is None or any(entry.get(k) != v for k, v in identity(common).items()):
         raise ScopeError('project is not enrolled or its checkout has changed')
-    database = base / (entry['id'] + '.sqlite3')
-    for suffix in ('', '-wal', '-shm', '-journal'):
-        path = Path(str(database) + suffix)
-        if os.path.lexists(path):
-            private_file(path)
+    database = checked_database(base, entry['id'])
     return Project(checkout, common, entry['id'], database)
 
 

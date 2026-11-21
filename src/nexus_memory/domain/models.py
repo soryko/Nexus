@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Literal
 
 from .errors import InvalidInput, InvalidReference
 
@@ -151,6 +152,14 @@ class VerifiedReference:
     mode: str
     checked_at: str
     evidence: tuple[str, ...] = EVIDENCE
+
+
+@dataclass(frozen=True, slots=True)
+class HeadComparison:
+    outcome: Literal["Matches at HEAD", "Changed at HEAD", "Missing at HEAD", "Cannot check"]
+    reference_commit_oid: str | None = None
+    head_commit_oid: str | None = None
+    note: str = "excludes working tree and index"
 
 
 @dataclass(frozen=True, slots=True)
