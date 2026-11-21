@@ -99,8 +99,12 @@ class Catalog:
             if not version and not db.execute('SELECT 1 FROM sqlite_schema').fetchone():
                 for statement in _SCHEMA.strip().rstrip(';').split(';'):
                     db.execute(statement)
-            elif version != 1 or not db.execute("SELECT 1 FROM sqlite_schema WHERE name='operations'").fetchone():
+            elif version not in (1, 2) or not db.execute("SELECT 1 FROM sqlite_schema WHERE name='operations'").fetchone():
                 raise UnsupportedSchema('unsupported catalog')
+            if version < 2:
+                db.execute('CREATE TABLE publications(publication_id TEXT PRIMARY KEY, session TEXT NOT NULL REFERENCES sessions, '
+                           'grant_id TEXT NOT NULL, epoch INTEGER NOT NULL, digest TEXT NOT NULL, enqueued_at TEXT NOT NULL)')
+                db.execute('PRAGMA user_version=2')
 
     @contextmanager
     def _transaction(self):

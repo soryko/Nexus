@@ -858,9 +858,13 @@ class SQLiteRepository:
                 return key
 
     def commit_prepared(self, command: PreparedMutation) -> WriteReceipt:
+        return self._apply_prepared(command, self._transaction())
+
+    def _apply_prepared(self, command, transaction) -> WriteReceipt:
+        """Share receipt/CAS/provenance logic with the broker-owned transaction."""
         scope, ctx = command.scope, command.context
         partition = (scope.namespace, scope.actor)
-        with self._transaction() as db:
+        with transaction as db:
             key, digest = command.key, command.digest
             if ctx is None:
                 retry = self._retry(db, scope, key, digest)
