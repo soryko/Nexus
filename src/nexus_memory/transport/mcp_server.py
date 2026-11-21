@@ -32,6 +32,7 @@ from nexus_memory.domain.models import (
 from nexus_memory.git import GitCli, bind_repository
 from nexus_memory.memory import MemoryService
 from nexus_memory.storage import SQLiteRepository
+from nexus_memory.transport.mcp_apps import INLINE_CARD_META, register_mcp_apps
 from nexus_memory.transport.usage import UnsafeUsageLog, UsageLog, UsageMiddleware
 
 Kind = Literal["observation", "decision", "constraint", "procedure", "failure"]
@@ -338,7 +339,9 @@ def create_server(
     usage: UsageLog | None = None,
     database: Path | Callable[[], Path | None] | None = None,
     activity_journal: ActivityJournal | Callable[[], ActivityJournal | None] | None = None,
+    enable_mcp_apps: bool = False,
 ) -> MCPServer:
+    card_meta = INLINE_CARD_META if enable_mcp_apps else None
     policy = capture_policy if instructions else _OFF
     treatment = policy.metadata()
     validation = SafeToolValidation()
@@ -389,6 +392,7 @@ def create_server(
     @server.tool(
         description="Retrieve the current or an immutable historical revision by exact identifier.",
         annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False),
+        meta=card_meta,
         structured_output=True,
     )
     def get(memory_id: str = Field(min_length=1), revision_id: str | None = None) -> MemoryOutput:
@@ -399,6 +403,7 @@ def create_server(
                      "Compares the exact path, file kind and object ID in the bound checkout's commit; "
                      "does not verify permissions, surrounding code, or a memory's truth or relevance."),
         annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False),
+        meta=card_meta,
         structured_output=True,
     )
     def compare_at_head(
@@ -549,6 +554,7 @@ def create_server(
             "diagnostic digest, never the path), and whether instructions and the usage log are on."
         ),
         annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False),
+        meta=card_meta,
         structured_output=True,
     )
     def status() -> StatusOutput:
@@ -582,6 +588,9 @@ def create_server(
             return _error(error.code, str(error))
         except Exception:
             return _error("internal_error", "operation failed")
+
+    if enable_mcp_apps:
+        register_mcp_apps(server, service, capture_policy=policy.name)
 
     if codex_checkout is not None:
         from nexus_memory.transport.codex import register_hooks
@@ -639,6 +648,8 @@ def _parser() -> argparse.ArgumentParser:
                         help="Do not send the server instructions (for a control run with the same build)")
     parser.add_argument("--usage-log", type=Path, default=None,
                         help="Append one content-free JSON line per tool call to this private file")
+    parser.add_argument("--mcp-apps", action="store_true",
+                        help="Expose SEP-1865 ui:// MCP App resources and tool metadata")
     return parser
 
 
@@ -734,7 +745,14 @@ def main(argv: list[str] | None = None) -> int:
         if hasattr(signal, "SIGTERM"):
             signal.signal(signal.SIGTERM, lambda signum, frame: _stop_and_exit(usage))
     try:
-        create_server(service, codex_checkout=codex_checkout, capture_policy=policy, usage=usage, database=db_path).run()
+        create_server(
+            service,
+            codex_checkout=codex_checkout,
+            capture_policy=policy,
+            usage=usage,
+            database=db_path,
+            enable_mcp_apps=args.mcp_apps,
+        ).run()
     finally:
         _write_stop(usage, "end_of_input")
         _close(usage)
