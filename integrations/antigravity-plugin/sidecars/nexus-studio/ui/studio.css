@@ -1,12 +1,19 @@
 :root {
   color-scheme: light dark;
-  --nx-bg: var(--background, #f6f8fa);
-  --nx-fg: var(--foreground, #171b21);
-  --nx-card: var(--card, #ffffff);
-  --nx-card-border: var(--card-border, #d8dee6);
-  --nx-border: var(--border, #cfd6e0);
-  --nx-muted: var(--muted-foreground, #5a6472);
-  --nx-sidebar: var(--sidebar, #eef2f6);
+  --background: #f6f8fa;
+  --foreground: #171b21;
+  --card: #ffffff;
+  --card-border: #d8dee6;
+  --border: #cfd6e0;
+  --muted-foreground: #5a6472;
+  --sidebar: #eef2f6;
+  --nx-bg: var(--background);
+  --nx-fg: var(--foreground);
+  --nx-card: var(--card);
+  --nx-card-border: var(--card-border);
+  --nx-border: var(--border);
+  --nx-muted: var(--muted-foreground);
+  --nx-sidebar: var(--sidebar);
   --nx-accent: #d99b38;
   --nx-accent-soft: rgba(217, 155, 56, 0.14);
   --nx-accent-border: rgba(217, 155, 56, 0.45);
@@ -24,13 +31,20 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --nx-bg: var(--background, #14171c);
-    --nx-fg: var(--foreground, #edf1f5);
-    --nx-card: var(--card, #1b2028);
-    --nx-card-border: var(--card-border, #2b323d);
-    --nx-border: var(--border, #353e4b);
-    --nx-muted: var(--muted-foreground, #98a2b0);
-    --nx-sidebar: var(--sidebar, #171b22);
+    --background: #14171c;
+    --foreground: #edf1f5;
+    --card: #1b2028;
+    --card-border: #2b323d;
+    --border: #353e4b;
+    --muted-foreground: #98a2b0;
+    --sidebar: #171b22;
+    --nx-bg: var(--background);
+    --nx-fg: var(--foreground);
+    --nx-card: var(--card);
+    --nx-card-border: var(--card-border);
+    --nx-border: var(--border);
+    --nx-muted: var(--muted-foreground);
+    --nx-sidebar: var(--sidebar);
     --nx-accent: #edb65c;
     --nx-accent-soft: rgba(237, 182, 92, 0.15);
     --nx-accent-border: rgba(237, 182, 92, 0.48);
@@ -64,6 +78,8 @@ body {
 
 .nx-app {
   min-height: 100vh;
+  background: var(--nx-bg);
+  color: var(--nx-fg);
   display: flex;
   flex-direction: column;
 }
@@ -149,6 +165,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.nx-alert-slot[hidden] {
+  display: none;
 }
 
 .nx-alert-slot.danger {

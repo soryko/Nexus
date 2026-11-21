@@ -471,7 +471,7 @@ function renderAtlasInspector() {
         'div',
         { className: 'nx-metrics-group' },
         pill(insp.kind, 'accent'),
-        pill(insp.is_current ? 'HEAD revision' : 'historical revision', insp.is_current ? 'ok' : 'warn'),
+        pill(insp.is_historical ? 'historical revision' : 'HEAD revision', insp.is_historical ? 'warn' : 'ok'),
         el('span', { className: 'nx-mono nx-muted', text: insp.memory_id }),
       ),
       el('div', { className: 'nx-metrics-group' }, attachBtn, state.attachNotice ? pill(state.attachNotice, 'ok') : null),
@@ -488,7 +488,7 @@ function renderAtlasInspector() {
     el('dt', { text: 'Revision' }),
     el('dd', { text: insp.revision_id }),
     el('dt', { text: 'Created' }),
-    el('dd', { text: shortDate(insp.created_at) }),
+    el('dd', { text: shortDate(insp.revision_created_at || insp.created_at) }),
   );
   if (insp.source_uri) meta.append(el('dt', { text: 'Source URI' }), el('dd', { text: insp.source_uri }));
   if (insp.snapshot) meta.append(el('dt', { text: 'Snapshot' }), el('dd', { text: insp.snapshot }));
@@ -577,7 +577,7 @@ function renderAtlasInspector() {
                 params: { memory_id: insp.memory_id, revision_id: entry.revision_id },
               });
               if (res.ok && res.data) {
-                state.compareRevision = res.data;
+                state.compareRevision = { ...res.data, revision_id: entry.revision_id };
                 renderAll();
               }
             },
@@ -605,13 +605,16 @@ function renderAtlasInspector() {
 
   if (state.compareRevision) {
     const cmp = state.compareRevision;
+    const diffLines = cmp.lines || cmp.diff_lines || [];
     pane.append(
       el(
         'div',
         { className: 'nx-ref-card' },
         el('div', { className: 'nx-title', text: `Revision Diff (${cmp.state})` }),
         el('div', { className: 'nx-muted', text: `Parent ${(cmp.parent_revision_id || 'none').slice(0, 8)} -> ${(cmp.revision_id || '').slice(0, 8)}` }),
-        ...(cmp.diff_lines || []).map((line) => el('div', { className: 'nx-mono', text: line })),
+        ...(diffLines.length > 0
+          ? diffLines.map((line) => el('div', { className: 'nx-mono', text: line }))
+          : [el('div', { className: 'nx-muted', text: '(no text difference between revisions)' })]),
       ),
     );
   }
