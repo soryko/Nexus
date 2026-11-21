@@ -22,6 +22,7 @@ from nexus_memory.lexical import is_code_shaped as _is_code_shaped
 from nexus_memory.domain.errors import (
     CursorExpired,
     IdempotencyConflict,
+    InvalidInput,
     InvalidQuery,
     MemoryNotFound,
     NexusError,
@@ -51,7 +52,8 @@ from nexus_memory.domain.models import (
 
 from nexus_memory.spaces.migration import inventory_partitions
 
-from .repository import write_observation
+from nexus_memory.domain.spaces import OperationRef
+from .repository import EXACT_COMMAND_VERSION, PreparedMutation, write_observation
 
 
 _MARKS_AND_PRIVATE_USE = frozenset(("Mn", "Mc", "Me", "Co"))
@@ -823,6 +825,86 @@ class SQLiteRepository:
         except sqlite3.Error as error:
             raise StorageIntegrityError("storage operation failed") from error
 
+    def _operation_retry(self, db: sqlite3.Connection, scope: Scope, operation: OperationRef,
+                         command_digest: str) -> WriteReceipt | None:
+        row = db.execute(
+            "SELECT r.memory_id,r.revision_id,r.operation_id,r.durable_seq,r.operation,k.command_digest "
+            "FROM operation_keys k JOIN receipts r ON (r.namespace,r.actor,r.idempotency_key) = "
+            "(k.namespace,k.actor,k.receipt_key) WHERE k.namespace=? AND k.actor=? AND k.family='exact' "
+            "AND k.writer_stream_id=? AND k.operation_key=?",
+            (scope.namespace, scope.actor, operation.writer_stream_id, operation.operation_key),
+        ).fetchone()
+        if observation := write_observation.get():
+            observation.replayed = row is not None
+        if row is None:
+            return None
+        if row[5] != command_digest:
+            raise IdempotencyConflict("operation was used for a different command")
+        return self._receipt(row[:5])
+
+    def receipt_for_operation(self, scope: Scope, operation: OperationRef, command_digest: str) -> WriteReceipt | None:
+        try:
+            with closing(self._connect()) as db:
+                return self._operation_retry(db, scope, operation, command_digest)
+        except sqlite3.Error as error:
+            raise StorageIntegrityError("operation receipt lookup failed") from error
+
+    @staticmethod
+    def _unused_receipt_key(db: sqlite3.Connection, scope: Scope) -> str:
+        while True:
+            key = str(uuid.uuid4())
+            if not db.execute("SELECT 1 FROM receipts WHERE namespace=? AND actor=? AND idempotency_key=?",
+                              (scope.namespace, scope.actor, key)).fetchone():
+                return key
+
+    def commit_prepared(self, command: PreparedMutation) -> WriteReceipt:
+        scope, ctx = command.scope, command.context
+        partition = (scope.namespace, scope.actor)
+        with self._transaction() as db:
+            key, digest = command.key, command.digest
+            if ctx is None:
+                retry = self._retry(db, scope, key, digest)
+            else:
+                if ctx.operation.operation_key != key or not db.execute(
+                    "SELECT 1 FROM space_partitions WHERE namespace=? AND actor=? AND space_id=?",
+                    (*partition, ctx.space_id),
+                ).fetchone():
+                    raise InvalidInput("operation context differs from destination or key")
+                retry = self._operation_retry(db, scope, ctx.operation, command.command_digest)
+            if retry is not None:
+                return retry
+            if command.replay is not None:
+                raise StorageIntegrityError("prepared receipt is absent at destination")
+            if ctx is not None:
+                key = self._unused_receipt_key(db, scope)
+                sources = ctx.publication_sources or ()
+                # No trusted cross-space resolver/fence exists at this layer.
+                if any(ref.space_id != ctx.space_id for ref in sources):
+                    raise InvalidInput("publication source outside destination")
+                for ref in sources:
+                    if self._head(db, scope, ref.memory_id)[0] != ref.revision_id:
+                        raise RevisionConflict("publication source changed")
+            if command.operation == "record":
+                receipt = self._record(db, scope, command.item, key, digest, command.references, command.digest_version)
+            elif command.operation == "revise":
+                receipt = self._revise(db, scope, command.target, command.expected, command.item, key, digest,
+                                       command.references, command.digest_version)
+            elif command.operation == "forget":
+                receipt = self._forget(db, scope, command.target, command.expected, key, digest)
+            else:
+                raise InvalidInput("unknown mutation")
+            if ctx is not None:
+                attribution = (ctx.principal_id, ctx.agent_id, ctx.session_id, ctx.run_id, ctx.source_event_id)
+                if command.operation != "forget":
+                    db.execute("INSERT INTO revision_provenance VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                               (*partition, receipt.memory_id, receipt.revision_id, *attribution,
+                                command.compat_json, command.sources_json, ctx.visibility_role))
+                db.execute("INSERT INTO operation_provenance VALUES(?,?,?,?,?,?,?,?)", (*partition, key, *attribution))
+                db.execute("INSERT INTO operation_keys VALUES(?,?,'exact',?,?,?,?,?)",
+                           (*partition, ctx.operation.writer_stream_id, ctx.operation.operation_key,
+                            EXACT_COMMAND_VERSION, command.command_digest, key))
+            return receipt
+
     def _store_references(self, db: sqlite3.Connection, scope: Scope, memory_id: str, revision_id: str,
                           references: tuple[VerifiedReference, ...]) -> None:
         for reference in references:
@@ -997,21 +1079,14 @@ class SQLiteRepository:
 
     def record(self, scope: Scope, item: MemoryInput, key: str, digest: str,
                references: tuple[VerifiedReference, ...] = (), digest_version: int = DIGEST_VERSION) -> WriteReceipt:
-        body = item.content.encode("utf-8")
-        body_digest = hashlib.sha256(body).digest()
-        with self._transaction() as db:
-            if retry := self._retry(db, scope, key, digest):
-                return retry  # the loser's verification result is discarded, never merged
-            memory_id, revision_id = self._ids()
-            blob_id = self._blob(db, scope, body, body_digest)
-            created_at = datetime.now(UTC).isoformat()
-            db.execute("INSERT INTO memories VALUES(?,?,?,?,0)", (scope.namespace, scope.actor, memory_id, revision_id))
-            db.execute("INSERT INTO revisions VALUES(?,?,?,?,?,?,?,?,?,?,?)", (scope.namespace, scope.actor, memory_id, revision_id, None, blob_id, item.kind, json.dumps(item.tags), item.source_uri, item.snapshot, created_at))
-            self._store_references(db, scope, memory_id, revision_id, references)
-            receipt = self._event_and_receipt(db, scope, key, digest, memory_id, revision_id, "record", digest_version)
-            self._index_add(db, scope, memory_id, revision_id, blob_id, item, created_at, receipt.durable_seq, False)
-            self._bump_generation(db)
-            return receipt
+        return self.commit_prepared(PreparedMutation(scope, "record", None, None, item, key, digest, digest_version, references))
+
+    def revise(self, scope: Scope, memory_id: str, expected_revision_id: str, item: MemoryInput, key: str, digest: str,
+               references: tuple[VerifiedReference, ...] = (), digest_version: int = DIGEST_VERSION) -> WriteReceipt:
+        return self.commit_prepared(PreparedMutation(scope, "revise", memory_id, expected_revision_id, item, key, digest, digest_version, references))
+
+    def forget(self, scope: Scope, memory_id: str, expected_revision_id: str, key: str, digest: str) -> WriteReceipt:
+        return self.commit_prepared(PreparedMutation(scope, "forget", memory_id, expected_revision_id, None, key, digest, DIGEST_VERSION))
 
     def _head(self, db: sqlite3.Connection, scope: Scope, memory_id: str) -> tuple[str, int]:
         row = db.execute("SELECT current_revision_id,tombstoned FROM memories WHERE namespace=? AND actor=? AND memory_id=?", (scope.namespace, scope.actor, memory_id)).fetchone()
@@ -1019,42 +1094,51 @@ class SQLiteRepository:
             raise MemoryNotFound("memory not found")
         return row
 
-    def revise(self, scope: Scope, memory_id: str, expected_revision_id: str, item: MemoryInput, key: str, digest: str,
+    def _record(self, db: sqlite3.Connection, scope: Scope, item: MemoryInput, key: str, digest: str,
                references: tuple[VerifiedReference, ...] = (), digest_version: int = DIGEST_VERSION) -> WriteReceipt:
         body = item.content.encode("utf-8")
         body_digest = hashlib.sha256(body).digest()
-        with self._transaction() as db:
-            if retry := self._retry(db, scope, key, digest):
-                return retry
-            head, _ = self._head(db, scope, memory_id)
-            if head != expected_revision_id:
-                raise RevisionConflict("current revision does not match expected revision")
-            revision_id = str(uuid.uuid4())
-            blob_id = self._blob(db, scope, body, body_digest)
-            created_at = datetime.now(UTC).isoformat()
-            db.execute("INSERT INTO revisions VALUES(?,?,?,?,?,?,?,?,?,?,?)", (scope.namespace, scope.actor, memory_id, revision_id, head, blob_id, item.kind, json.dumps(item.tags), item.source_uri, item.snapshot, created_at))
-            db.execute("UPDATE memories SET current_revision_id=? WHERE namespace=? AND actor=? AND memory_id=?", (revision_id, scope.namespace, scope.actor, memory_id))
-            self._store_references(db, scope, memory_id, revision_id, references)
-            receipt = self._event_and_receipt(db, scope, key, digest, memory_id, revision_id, "revise", digest_version)
-            self._index_remove(db, scope, memory_id)
-            self._index_add(db, scope, memory_id, revision_id, blob_id, item, created_at, receipt.durable_seq, True)
-            self._history_add(db, scope, memory_id, head)   # the outgoing head
-            self._bump_generation(db)
-            return receipt
+        memory_id, revision_id = self._ids()
+        blob_id = self._blob(db, scope, body, body_digest)
+        created_at = datetime.now(UTC).isoformat()
+        db.execute("INSERT INTO memories VALUES(?,?,?,?,0)", (scope.namespace, scope.actor, memory_id, revision_id))
+        db.execute("INSERT INTO revisions VALUES(?,?,?,?,?,?,?,?,?,?,?)", (scope.namespace, scope.actor, memory_id, revision_id, None, blob_id, item.kind, json.dumps(item.tags), item.source_uri, item.snapshot, created_at))
+        self._store_references(db, scope, memory_id, revision_id, references)
+        receipt = self._event_and_receipt(db, scope, key, digest, memory_id, revision_id, "record", digest_version)
+        self._index_add(db, scope, memory_id, revision_id, blob_id, item, created_at, receipt.durable_seq, False)
+        self._bump_generation(db)
+        return receipt
 
-    def forget(self, scope: Scope, memory_id: str, expected_revision_id: str, key: str, digest: str) -> WriteReceipt:
-        with self._transaction() as db:
-            if retry := self._retry(db, scope, key, digest):
-                return retry
-            head, _ = self._head(db, scope, memory_id)
-            if head != expected_revision_id:
-                raise RevisionConflict("current revision does not match expected revision")
-            db.execute("UPDATE memories SET tombstoned=1 WHERE namespace=? AND actor=? AND memory_id=?", (scope.namespace, scope.actor, memory_id))
-            receipt = self._event_and_receipt(db, scope, key, digest, memory_id, head, "forget")
-            self._index_remove(db, scope, memory_id)
-            self._history_remove_memory(db, scope, memory_id)
-            self._bump_generation(db)
-            return receipt
+    def _revise(self, db: sqlite3.Connection, scope: Scope, memory_id: str, expected_revision_id: str, item: MemoryInput, key: str, digest: str,
+               references: tuple[VerifiedReference, ...] = (), digest_version: int = DIGEST_VERSION) -> WriteReceipt:
+        body = item.content.encode("utf-8")
+        body_digest = hashlib.sha256(body).digest()
+        head, _ = self._head(db, scope, memory_id)
+        if head != expected_revision_id:
+            raise RevisionConflict("current revision does not match expected revision")
+        revision_id = str(uuid.uuid4())
+        blob_id = self._blob(db, scope, body, body_digest)
+        created_at = datetime.now(UTC).isoformat()
+        db.execute("INSERT INTO revisions VALUES(?,?,?,?,?,?,?,?,?,?,?)", (scope.namespace, scope.actor, memory_id, revision_id, head, blob_id, item.kind, json.dumps(item.tags), item.source_uri, item.snapshot, created_at))
+        db.execute("UPDATE memories SET current_revision_id=? WHERE namespace=? AND actor=? AND memory_id=?", (revision_id, scope.namespace, scope.actor, memory_id))
+        self._store_references(db, scope, memory_id, revision_id, references)
+        receipt = self._event_and_receipt(db, scope, key, digest, memory_id, revision_id, "revise", digest_version)
+        self._index_remove(db, scope, memory_id)
+        self._index_add(db, scope, memory_id, revision_id, blob_id, item, created_at, receipt.durable_seq, True)
+        self._history_add(db, scope, memory_id, head)   # the outgoing head
+        self._bump_generation(db)
+        return receipt
+
+    def _forget(self, db: sqlite3.Connection, scope: Scope, memory_id: str, expected_revision_id: str, key: str, digest: str) -> WriteReceipt:
+        head, _ = self._head(db, scope, memory_id)
+        if head != expected_revision_id:
+            raise RevisionConflict("current revision does not match expected revision")
+        db.execute("UPDATE memories SET tombstoned=1 WHERE namespace=? AND actor=? AND memory_id=?", (scope.namespace, scope.actor, memory_id))
+        receipt = self._event_and_receipt(db, scope, key, digest, memory_id, head, "forget")
+        self._index_remove(db, scope, memory_id)
+        self._history_remove_memory(db, scope, memory_id)
+        self._bump_generation(db)
+        return receipt
 
     def get(self, scope: Scope, memory_id: str, revision_id: str | None = None) -> MemoryView:
         db = None
