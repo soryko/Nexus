@@ -3,6 +3,14 @@ body { margin: 0; padding: 0 1rem 2rem; }
 header, main { max-width: 64rem; margin: 0 auto; }
 main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
 h1 { margin-bottom: .25rem; }
+[hidden] { display: none !important; }
+#space-atlas { max-width: 64rem; margin: auto; }
+#space-atlas form { margin-block: 1rem; }
+#space-atlas select, #space-atlas textarea, #space-atlas input { box-sizing: border-box; max-width: 100%; }
+#command-draft { display: block; width: 100%; min-height: 7rem; }
+#preview { white-space: pre-wrap; overflow-wrap: anywhere; }
+#path-details details { border-inline-start: .2rem solid GrayText; padding-inline-start: .8rem; margin-block: 1rem; overflow-wrap: anywhere; }
+#space-atlas :focus-visible { outline: 3px solid Highlight; outline-offset: 2px; }
 .groups { display: flex; flex-wrap: wrap; gap: .5rem; list-style: none; padding: 0; margin: 0; }
 .groups button { font-size: 1rem; padding: .5rem .9rem; border-radius: .5rem; cursor: pointer; }
 .groups button[aria-pressed="true"] { outline: 3px solid Highlight; }

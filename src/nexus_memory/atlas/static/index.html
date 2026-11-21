@@ -13,6 +13,17 @@
   <p id="status" role="status">Starting…</p>
   <p><button type="button" id="back" disabled>Back</button> <button type="button" id="refresh">Refresh</button></p>
 </header>
+<section id="space-atlas" hidden aria-label="Space inspector">
+  <label>Memory space <select id="space-choice"></select></label>
+  <form id="pack-find"><label>Pack ID <input id="pack-id" required autocomplete="off"></label><button>Inspect pack</button></form>
+  <section aria-label="Supported paths" id="path-details"></section>
+  <section id="owner-controls" hidden><h2>Graph curation</h2>
+    <form id="command-form"><label>Command <select id="command-family"><option value="curate">Curate</option><option value="correct">Correct revision</option></select></label>
+    <label>Operation key <input id="operation-key" required autocomplete="off"></label>
+    <label>Command draft <textarea id="command-draft" required></textarea></label>
+    <button>Preview command</button><pre id="preview"></pre><button type="button" id="publish" disabled>Publish preview</button></form>
+  </section>
+</section>
 <main>
   <section aria-labelledby="map-title">
     <h2 id="map-title">Project map</h2>

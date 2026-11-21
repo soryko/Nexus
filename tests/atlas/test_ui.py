@@ -919,3 +919,144 @@ def test_the_citation_filters_are_keyboard_reachable_and_fit_the_screen(enrolled
         _press(page, page.get_by_role("button", name="Reset filters"))
         expect(page.locator("#filters")).to_have_text("No filters: newest memories first.")
         _no_sideways_scroll(page)
+
+
+@contextmanager
+def _graph_server(brokers, owner=None):
+    from nexus_memory.atlas.graph_queries import GraphAtlasQueries
+    server = AtlasServer(graph=GraphAtlasQueries(brokers), owner=owner)
+    thread = threading.Thread(target=server.serve_forever); thread.start()
+    try:
+        yield server
+    finally:
+        server.shutdown(); server.server_close(); thread.join()
+
+
+@pytest.mark.parametrize('revoke',[False,True],ids=['switch','revoke'])
+def test_space_switch_discards_late_old_response(tmp_path, browser_page,revoke):
+    import json
+    from graph_case import batch, op
+    from test_graph_queries import mounted
+    from nexus_memory.atlas.owner import AtlasOwner
+    b = mounted(tmp_path)
+    from nexus_memory.storage.sqlite import SQLiteRepository
+    from nexus_memory.transport.broker import Broker
+    catalog = b.catalog
+    space = catalog.create_space('other','research',principal_id='local',operation=op('other'))
+    session = catalog.launch_context('local',operation=op('other-session'))
+    grant = catalog.bind_session(session,'local',space.space_id,alias='other',mode='read_only',operation=op('other-grant'))
+    _, path = catalog._resolve(grant,None,False); SQLiteRepository(path,owner_schema6=True)
+    other = Broker(catalog,grant)
+    b.drain(b.dispatch('curate', {'batch':json.loads(batch().to_json()),'operation_key':'seed'}))
+    handle = json.loads(b.drain(b.dispatch('recall', {'query':{'text':'Synthetic'}})))['pack_id']
+    page = browser_page
+    # Delay delivery only after the genuine response has been read and decoded.
+    page.add_init_script("""const original=window.fetch; window.fetch=async (...args)=>{
+      const res=await original(...args); if(window.hold && String(args[0]).includes(window.hold)){
+        const data=await res.json(); res.json=()=>new Promise(ok=>{window.releaseOld=()=>ok(data); document.body.dataset.held="yes"});
+      } return res; };""")
+    with _graph_server([b] if revoke else [b,other], AtlasOwner(b.catalog.path)) as server:
+        page.goto(server.public_address+'#k='+server.owner_key)
+        selector = page.get_by_label('Memory space'); expect(selector).to_have_value(b.binding.space_id)
+        page.get_by_label('Pack ID').fill(handle); inspect=page.get_by_role('button',name='Inspect pack'); inspect.click()
+        expect(page.locator('#path-details')).to_contain_text('paths.')
+        if revoke:
+            page.evaluate("window.hold='/spaces'"); page.get_by_role('button',name='Refresh').click()
+        else:
+            page.evaluate("window.hold='/packs/'"); inspect.click()
+        expect(page.locator('body')).to_have_attribute('data-held','yes')
+        page.get_by_label('Command draft').fill(batch().to_json()); page.get_by_label('Operation key').fill('old-key')
+        if revoke:
+            b.fence.revoke(b.grant.grant_id,expected_epoch=b.grant.epoch,operation=op('revoke'))
+            page.get_by_text('Preview command',exact=True).click()
+            expect(selector).to_have_value(''); assert selector.locator('option').count() == 0
+        else:
+            selector.select_option(other.binding.space_id)
+        page.evaluate('window.releaseOld()'); page.evaluate('new Promise(requestAnimationFrame)')
+        expect(selector).to_have_value('' if revoke else other.binding.space_id)
+        if revoke:
+            assert selector.locator('option').count() == 0
+            expect(page.locator('#owner-controls')).to_be_hidden()
+        for field in ['Pack ID','Operation key','Command draft']:
+            expect(page.get_by_label(field)).to_have_value('')
+        expect(page.locator('#path-details')).to_be_empty(); expect(page.locator('#preview')).to_be_empty()
+        expect(page.locator('#publish')).to_be_disabled()
+        assert handle not in page.content()
+
+
+def test_keyboard_git_identity(tmp_path, browser_page):
+    from test_graph_queries import mounted_lease
+    case, b, handle = mounted_lease(tmp_path)
+    page = browser_page; page.set_viewport_size({'width':360,'height':740})
+    with _graph_server([b]) as server:
+        page.goto(server.public_address+'#k='+server.launch_secret)
+        _tab_to(page,page.get_by_label('Pack ID')); page.keyboard.type(handle); page.keyboard.press('Enter')
+        _press(page,page.locator('#path-details summary').first)
+        ref = case.refs['definition']; button = page.get_by_role('button',name='Inspect revision '+ref.revision_id).first
+        _press(page,button); exact = button.locator('xpath=following-sibling::div')
+        for text in [ref.revision_id, case.bound.repository_id, case.R, case.path, case.sources['definition'].blob_oid]:
+            expect(exact.get_by_text(text,exact=False).first).to_be_visible()
+        _no_sideways_scroll(page)
+
+
+def test_scoped_paths_disclose_exact_support_by_keyboard(enrolled,browser_page):
+    page = browser_page; page.set_viewport_size({'width':360,'height':740})
+    claim = {'assertion_id':'edge','revision_id':'r1','space_id':'here'}
+    bundle = {'claim':claim,'path':[dict(claim=claim,step={'predicate':'CALLS','direction':'inverse'},subject='A',object='B')],
+              'support_groups':[['e1','e2']], 'applicability':{'kind':'unknown'},'validity':{'kind':'unbounded'},
+              'citations':[dict(evidence_id='e1',source={'revision_id':'source-revision'},span={'start':0,'end':5},text='proof')], 'contested':True}
+    def scoped(route):
+        if '/spaces' in route.request.url: data={'spaces':[dict(id='here',label='Here',mode='read_only',default=False)]}
+        elif '/packs/' in route.request.url: data={'status':'incomplete','limitations':['output_budget'],'bundles':[bundle]}
+        else: data={'assertion':claim,'support_groups':[['e1','e2'],['e3']],'sources':[]}
+        route.fulfill(json=data)
+    page.route('**/api/v2/**',scoped)
+    with _served(enrolled) as server:
+        page.goto(server.public_address+'#k='+server.launch_secret)
+        _tab_to(page,page.get_by_label('Pack ID')); page.keyboard.type('pack'); page.keyboard.press('Enter')
+        _press(page,page.locator('#path-details summary')); _press(page,page.get_by_role('button',name='Inspect revision r1'))
+        for text in ['CALLS (inverse)','source-revision','(e1 AND e2) OR (e3)','Contested','Truncated','unknown','Missing evidence']:
+            expect(page.locator('#path-details')).to_contain_text(text)
+        assert page.get_by_label('Command draft').is_hidden(); _no_sideways_scroll(page)
+
+
+def test_owner_stale_edit_preserves_draft(tmp_path,browser_page):
+    import json
+    from graph_case import batch
+    from test_graph_queries import mounted
+    from nexus_memory.atlas.graph_queries import GraphAtlasQueries
+    from nexus_memory.atlas.owner import AtlasOwner
+    from nexus_memory.spaces.admin import initialize
+    b = mounted(tmp_path); initialize(b.catalog)
+    server = AtlasServer(graph=GraphAtlasQueries([b]),owner=AtlasOwner(b.catalog.path))
+    thread = threading.Thread(target=server.serve_forever); thread.start()
+    try:
+        page = browser_page; page.goto(server.public_address+'#k='+server.owner_key)
+        key=page.get_by_label('Operation key'); draft=page.get_by_label('Command draft')
+        key.fill('first'); draft.fill(batch().to_json()); page.get_by_text('Preview command',exact=True).click()
+        expect(page.locator('#preview')).to_contain_text(b.binding.space_id)
+        token, digest, _ = server.owner.pending; server.owner.pending = token,digest,0
+        page.get_by_text('Publish preview',exact=True).click()
+        expect(page.locator('#status')).to_contain_text('Preview again'); expect(draft).to_have_value(batch().to_json())
+        expect(page.locator('#preview')).to_be_empty(); expect(page.locator('#publish')).to_be_disabled()
+        page.get_by_role('button',name='Refresh').click()
+        expect(page.locator('#status')).to_contain_text('Active space'); expect(draft).to_have_value(batch().to_json())
+        page.route('**/api/v2/spaces', lambda r:r.fulfill(status=503,json={'error':'request_unavailable'}))
+        page.get_by_role('button',name='Refresh').click(); expect(page.locator('#status')).to_contain_text('try again')
+        expect(draft).to_have_value(batch().to_json()); page.unroute('**/api/v2/spaces')
+        page.get_by_label('Pack ID').fill('absent'); page.get_by_role('button',name='Inspect pack').click()
+        expect(page.locator('#status')).to_contain_text('stale'); expect(draft).to_have_value(batch().to_json())
+        page.get_by_text('Preview command',exact=True).click()
+        with page.expect_response('**/owner/curate') as response:
+            page.get_by_text('Publish preview',exact=True).click()
+        receipt=response.value.json(); ref=receipt['assertion_revisions'][0]
+        replacement=json.loads(batch().assertions[0].to_json())
+        for side in ('subject','object'): replacement[side]['entity_id']=receipt['id_mappings'][replacement[side]['entity_id']]
+        command=json.dumps(dict(assertion_id=ref['assertion_id'],expected_revision_id=ref['revision_id'],replacement=replacement))
+        page.locator('#command-family').select_option('correct'); key.fill('second'); draft.fill(command)
+        page.get_by_text('Preview command',exact=True).click(); page.get_by_text('Publish preview',exact=True).click()
+        expect(page.locator('#preview')).to_be_empty(); key.fill('stale')
+        page.get_by_text('Preview command',exact=True).click(); page.get_by_text('Publish preview',exact=True).click()
+        expect(page.locator('#status')).to_contain_text('Revision conflict'); assert draft.input_value() == command
+    finally:
+        server.shutdown(); server.server_close(); thread.join()

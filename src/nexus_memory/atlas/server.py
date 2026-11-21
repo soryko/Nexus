@@ -21,9 +21,12 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 from nexus_memory.atlas.binding import AtlasBinding, BindingUnavailable
+from nexus_memory.atlas.graph_queries import ScopeLost
+from nexus_memory.atlas.owner import ApprovalInvalid
 from nexus_memory.atlas.queries import AtlasQueries
 from nexus_memory.domain.errors import (
-    CursorExpired,
+    FlowDenied, RevisionConflict, IdempotencyConflict, ResolutionConflict, StalePack,
+    AuthorityBusy, PublicationBusy, GrantRevoked, SpaceNotMounted, CursorExpired,
     MemoryNotFound,
     NexusError,
     StorageIntegrityError,
@@ -37,6 +40,8 @@ _STATIC = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/index.html": ("index.html", "text/html; charset=utf-8"),
     "/atlas.css": ("atlas.css", "text/css; charset=utf-8"),
+    "/spaces.js": ("spaces.js", "text/javascript; charset=utf-8"),
+    "/paths.js": ("paths.js", "text/javascript; charset=utf-8"),
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/graph.js": ("graph.js", "text/javascript; charset=utf-8"),
     "/connections.js": ("connections.js", "text/javascript; charset=utf-8"),
@@ -60,10 +65,20 @@ def _json_bytes(value) -> bytes:
 class AtlasServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, binding: AtlasBinding) -> None:
+    def __init__(self, binding: AtlasBinding | None = None, *, graph=None, owner=None) -> None:
+        if (binding is None) == (graph is None) or owner and graph is None:
+            raise ValueError('choose exactly one Atlas binding')
+        if graph and not owner and len(graph.mounts) > 1:
+            raise ValueError('Stage A viewer requires a single mount')
+        if owner and any(b.catalog.path != owner.catalog.path for b in graph.mounts.values()):
+            raise ValueError('owner catalog mismatch')
+        self.graph, self.owner = graph, owner
+        self.owner_key = secrets.token_urlsafe(32) if owner else None
+        self.owner_session = secrets.token_urlsafe(32)
+        self.csrf = secrets.token_urlsafe(32)
         super().__init__(("127.0.0.1", 0), _Handler)
         self.port = self.server_address[1]
-        self.queries = AtlasQueries(binding)
+        self.queries = AtlasQueries(binding) if binding else None
         self.launch_secret = secrets.token_urlsafe(32)
         self.public_address = f"http://127.0.0.1:{self.port}/"
         self._secret_used = False
@@ -78,7 +93,7 @@ class AtlasServer(ThreadingHTTPServer):
     def origins(self) -> set[str]:
         return {f"http://{host}" for host in self.hosts}
 
-    def write_launch_file(self, directory: Path) -> Path:
+    def write_launch_file(self, directory: Path, *, owner=False) -> Path:
         """A private page that sends the browser to the viewer with the secret in the fragment.
 
         Opening this file puts only its path on the opener's command line, and a fragment is
@@ -89,7 +104,10 @@ class AtlasServer(ThreadingHTTPServer):
         path = directory / "launch.html"
         descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(descriptor, "w") as handle:
-            url = f"http://127.0.0.1:{self.port}/#k={self.launch_secret}"
+            secret = self.owner_key if owner else self.launch_secret
+            if secret is None:
+                raise ValueError('owner launch unavailable')
+            url = f"http://127.0.0.1:{self.port}/#k={secret}"
             handle.write(f'<!doctype html><meta charset="utf-8"><title>Memory Atlas</title>'
                          f'<script>location.replace("{url}")</script><a href="{url}">Open Memory Atlas</a>')
         self._launch_file = path
@@ -97,17 +115,25 @@ class AtlasServer(ThreadingHTTPServer):
 
     def exchange(self, key: str) -> str | None:
         with self._lock:
-            if self._secret_used or not hmac.compare_digest(key.encode(), self.launch_secret.encode()):
-                return None
-            self._secret_used = True
+            if self.owner_key and hmac.compare_digest(key.encode(), self.owner_key.encode()):
+                from time import time
+                if time() >= self.owner.expires:
+                    return None
+                self.owner_key = None
+                session = self.owner_session
+            else:
+                if self._secret_used or not hmac.compare_digest(key.encode(), self.launch_secret.encode()):
+                    return None
+                self._secret_used = True
+                session = self._session
         if self._launch_file is not None:
             self._launch_file.unlink(missing_ok=True)
-        return f"{self._cookie_name}={self._session}; HttpOnly; Path=/; SameSite=Strict"
+        return f"{self._cookie_name}={session}; HttpOnly; Path=/; SameSite=Strict"
 
-    def has_session(self, cookie_header: str | None) -> bool:
+    def has_session(self, cookie_header: str | None, *, owner=False) -> bool:
         for part in (cookie_header or "").split(";"):
             name, _, value = part.strip().partition("=")
-            if name == self._cookie_name and hmac.compare_digest(value.encode(), self._session.encode()):
+            if name == self._cookie_name and hmac.compare_digest(value.encode(), (self.owner_session if owner else self._session).encode()):
                 return True
         return False
 
@@ -139,13 +165,13 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(status, _json_bytes({"error": code}))
 
     def _host_ok(self) -> bool:
-        return (self.headers.get("Host") or "").lower() in self.server.hosts
+        return len(self.headers.get_all("Host", [])) == 1 and self.headers["Host"] in self.server.hosts
 
     def _same_origin(self, required: bool) -> bool:
         origin = self.headers.get("Origin")
         if origin is None:
             return not required
-        return origin in self.server.origins
+        return self.headers.get_all('Origin') == ['http://' + self.headers['Host']]
 
     def do_GET(self) -> None:   # noqa: N802
         if not self._host_ok():
@@ -159,10 +185,15 @@ class _Handler(BaseHTTPRequestHandler):
         fetch_site = self.headers.get("Sec-Fetch-Site")
         if not self._same_origin(False) or fetch_site not in (None, "same-origin", "none"):
             return self._error(403, "forbidden")
-        if not self.server.has_session(self.headers.get("Cookie")):
-            return self._error(401, "unauthorized")
+        owner = self._owner_session()
+        if not owner and not self.server.has_session(self.headers.get("Cookie")):
+            return self._error(401, "scope_lost" if self.server.graph else "unauthorized")
         if self.server.failed:
             return self._error(503, "binding_unavailable")
+        if self.server.graph and (not self.server.owner or owner):
+            return self._scoped_get(route,owner)
+        if self.server.graph:
+            return self._error(403, "forbidden")
         handler = _ROUTES.get(route)
         if handler is None:
             return self._error(404, "not_found")
@@ -187,9 +218,69 @@ class _Handler(BaseHTTPRequestHandler):
             return self._error(500, "internal_error")
         self._send(200, _json_bytes(result))
 
+    def _owner_session(self):
+        from time import time
+        return (self.server.owner and time() < self.server.owner.expires and
+                self.server.has_session(self.headers.get('Cookie'),owner=True))
+
+    def _scoped_get(self, route, owner):
+        graph = self.server.graph
+        try:
+            if self.path == '/api/v2/spaces':
+                return self._send(200,_json_bytes({'spaces':graph.spaces(),'csrf':self.server.csrf if owner else None}))
+            if route.startswith('/api/v2/owner/'):
+                return self._error(405,'method_not_allowed')
+            if route == '/api/v2/proposals': return self._error(501,'unsupported_capability')
+            params = _take(parse_qs(self.path.partition('?')[2],strict_parsing=True,max_num_fields=1),{'space'})
+            sid = _identifier(params,'space')
+            parts = route.split('/')
+            if parts[:3] != ['', 'api','v2'] or not all(_IDENTIFIER.fullmatch(p) for p in parts[3:]): raise KeyError
+            if len(parts)==5 and parts[3]=='packs': value = graph.pack(sid,parts[4])
+            elif len(parts)==7 and parts[3]=='assertions' and parts[5]=='revisions':
+                value = graph.assertion(sid,parts[4],parts[6])
+            else: raise KeyError
+            self._send(200,_json_bytes(value))
+        except KeyError: self._error(404,'not_found')
+        except StalePack: self._error(409,'stale_pack')
+        except (ScopeLost, GrantRevoked, SpaceNotMounted): self._error(403,'scope_lost')
+        except (_Bad, ValueError): self._error(400,'invalid_request')
+        except Exception: self._error(503,'request_unavailable')
+
+    def _owner_post(self, action):
+        if not (self.headers.get_all('Origin') == ['http://'+self.headers['Host']] and
+                self.headers.get_all('X-Atlas-CSRF') == [self.server.csrf]):
+            return self._error(403,'forbidden')
+        if not self._owner_session():
+            return self._error(403,'scope_lost')
+        try:
+            if self.headers.get('Transfer-Encoding') or len(self.headers.get_all('Content-Length',[])) != 1:
+                raise _Bad
+            length = int(self.headers['Content-Length'])
+            if length > 1 << 20: return self._error(413,'body_too_large')
+            if length <= 0 or self.headers.get_content_type() != 'application/json': raise _Bad
+            body = json.loads(self.rfile.read(length))
+            if action == 'review': return self._error(501,'unsupported_capability')
+            # Stage A grants here are short-lived publication approvals, never a
+            # browser-selected grant file, store locator or receiving context.
+            if action == 'grants': action = 'preview'
+            if action not in ('curate','correct','preview'): return self._error(404,'not_found')
+            broker = self.server.graph.mounts.get(body['space'])
+            if broker is None: raise ScopeLost
+            value = self.server.owner.command(action,body,grant=broker.grant)
+            self._send(200,_json_bytes(value))
+        except (RevisionConflict, IdempotencyConflict, ResolutionConflict) as exc: self._error(409,exc.code)
+        except (ScopeLost, GrantRevoked, SpaceNotMounted): self._error(403,'scope_lost')
+        except ApprovalInvalid: self._error(403,'approval_invalid')
+        except (AuthorityBusy, PublicationBusy): self._error(503,'request_unavailable')
+        except FlowDenied: self._error(403,'forbidden')
+        except (ValueError, KeyError, TypeError, NexusError, _Bad): self._error(400,'invalid_request')
+        except Exception: self._error(500,'internal_error')
+
     def do_POST(self) -> None:   # noqa: N802
         if not self._host_ok():
             return self._error(403, "forbidden")
+        if self.path.startswith('/api/v2/owner/'):
+            return self._owner_post(self.path.removeprefix('/api/v2/owner/'))
         if self.path != "/session":
             return self._error(405, "method_not_allowed")
         if not self._same_origin(True):
@@ -303,11 +394,11 @@ _ROUTES = {
 }
 
 
-def serve(binding: AtlasBinding, open_browser: bool = True) -> None:
-    """Run the viewer until interrupted. Prints the address without the secret."""
-    server = AtlasServer(binding)
+def serve(binding: AtlasBinding | None = None, open_browser: bool = True, *, graph=None, owner=None) -> None:
+    """Serve a legacy binding or launcher-bound graph. Owner access is explicit."""
+    server = AtlasServer(binding, graph=graph, owner=owner)
     directory = Path(tempfile.mkdtemp(prefix="nexus-atlas-"))
-    launch = server.write_launch_file(directory)
+    launch = server.write_launch_file(directory, owner=owner is not None)
     print(f"Memory Atlas is running at {server.public_address}", flush=True)
     opened = open_browser and webbrowser.open(launch.as_uri())
     if not opened:
