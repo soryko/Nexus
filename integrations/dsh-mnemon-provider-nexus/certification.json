@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "stage": "A12",
+  "status": "partial",
+  "base_commit": "349d879",
+  "fixture_platform": "darwin-arm64",
+  "package_pins": {"node": "22.19.0", "pnpm": "10.13.1", "typescript": "5.9.3", "vitest": "3.2.7", "memory_spaces": "0.5.31", "mnemon": "0.5.50", "dsh": "0.2.1-rc.5", "cordis": "4.0.5"},
+  "checks": [
+    {"command": "python -m pytest -q tests/transport/test_dsh_bridge.py", "environment": "fresh frozen Python 3.13.14 environment, non-editable wheel, disposable catalog", "result": "passed", "tests": 5},
+    {"command": "pnpm install --frozen-lockfile --store-dir $NEXUS_FIXTURE_STORE && pnpm typecheck && pnpm build", "result": "passed"},
+    {"command": "pnpm test", "scope": "integrated SDK/conformance", "result": "passed", "tests": 19},
+    {"command": "pnpm test:packed", "scope": "external consumer with synthetic pinned audience, installed declarations and Python bridge", "result": "passed", "tests": 1},
+    {"command": "pnpm test:loader", "scope": "disposable real Loader, two read-only Sources with identical child and alias IDs", "result": "passed", "tests": 1}
+  ],
+  "uncertified": ["production host writable-audience audit", "fresh full host turn", "remote CI"]
+}

@@ -236,6 +236,8 @@ class _Handler(BaseHTTPRequestHandler):
             parts = route.split('/')
             if parts[:3] != ['', 'api','v2'] or not all(_IDENTIFIER.fullmatch(p) for p in parts[3:]): raise KeyError
             if len(parts)==5 and parts[3]=='packs': value = graph.pack(sid,parts[4])
+            elif len(parts)==7 and parts[3]=='memories' and parts[5]=='revisions':
+                value = graph.revision(sid,parts[4],parts[6])
             elif len(parts)==7 and parts[3]=='assertions' and parts[5]=='revisions':
                 value = graph.assertion(sid,parts[4],parts[6])
             else: raise KeyError

@@ -19,7 +19,7 @@ def register(catalog, principal, space_id, *, stream, receiving_context, mode='r
                                 operation=OperationRef(stream,'mount:'+key))
 
 
-def resume(catalog_path,file,project_id=None,checkout=None):
+def resume(catalog_path,file,project_id=None,checkout=None,*,broker_type=Broker):
     with os.fdopen(os.open(file,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)) as src:
         meta = os.fstat(src.fileno())
         if not stat.S_ISREG(meta.st_mode) or meta.st_uid != os.getuid() or meta.st_mode & 0o077 or meta.st_size>4096:
@@ -32,7 +32,7 @@ def resume(catalog_path,file,project_id=None,checkout=None):
         row = db.execute('select * from sessions where grant_id=?',(ticket['grant_id'],)).fetchone()
         if not row: raise GrantRevoked('grant unavailable')
         grant = catalog._grant(db,row)
-    broker = Broker(catalog,grant)
+    broker = broker_type(catalog,grant)
     if checkout is not None:
         from nexus_memory.git import GitCli
         from nexus_memory.git.cli import GitCliVerifier

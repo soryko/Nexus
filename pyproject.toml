@@ -13,6 +13,7 @@ requires-python = ">=3.12"
 dependencies = ["mcp==2.1.1"]
 
 [project.scripts]
+nexus-memory-bridge = "nexus_memory.transport.dsh_bridge:main"
 nexus-memory = "nexus_memory.transport.mcp_server:main"
 nexus-memory-admin = "nexus_memory.spaces.admin:main"
 nexus-memory-check = "nexus_memory.install_check:main"

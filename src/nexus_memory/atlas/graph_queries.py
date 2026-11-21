@@ -58,6 +58,10 @@ class GraphAtlasQueries:
             raise RequestUnavailable
         return json.loads(b.drain(env))
 
+    def revision(self, sid, mid, rid):
+        """Resolve an immutable provider receipt under the viewer's *current* grant."""
+        return self._read(sid, lambda b, _: asdict(b.memory.get(mid, rid)))
+
     def assertion(self, sid, aid, rid):
         def read(b, _):
             ref = AssertionRevisionRef(aid, rid)
