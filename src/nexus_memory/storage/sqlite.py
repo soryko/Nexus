@@ -49,6 +49,8 @@ from nexus_memory.domain.models import (
     WriteReceipt,
 )
 
+from nexus_memory.spaces.migration import inventory_partitions
+
 from .repository import write_observation
 
 
@@ -127,7 +129,9 @@ class _SnapshotConnection:
 
 
 class SQLiteRepository:
-    SCHEMA_VERSION = 4
+    SCHEMA_VERSION = 4  # Legacy constructor and read-only viewer contract.
+    OWNER_SCHEMA_VERSION = 5
+    _target_schema_version = SCHEMA_VERSION
     MINIMUM_SQLITE = (3, 51, 3)
     EXCERPT_LIMIT = 240
     SEARCH_PROFILES = ("exact", "stem", "dual", "split")
@@ -136,7 +140,8 @@ class SQLiteRepository:
     REFERENCE_COLUMNS = "repository_id,commit_oid,path,object_oid,entry_type,mode,checked_at"
 
     def __init__(self, path: str | Path, index_profile: str = "exact",
-                 history_profile: str = "none") -> None:
+                 history_profile: str = "none", *, owner_schema5: bool = False,
+                 configured_scope: Scope | None = None) -> None:
         """``index_profile`` selects how bodies are tokenised for search.
 
         ``exact`` is the shipped behaviour and the default; the other three exist so a
@@ -151,7 +156,16 @@ class SQLiteRepository:
         ``all`` indexes every superseded revision; ``window3`` keeps only the three most
         recent per memory. Like the search profile it is a property of the database, and
         a change to it drops and rebuilds the structure rather than altering it.
+
+        Only an owner/broker preparing or reopening a v2 store should set
+        ``owner_schema5=True``. Ordinary opens stop at schema 4 and refuse v2.
         """
+        if type(owner_schema5) is not bool:
+            raise ValueError("owner_schema5 must be a boolean")
+        if configured_scope is not None and not owner_schema5:
+            raise ValueError("configured_scope requires owner_schema5=True")
+        if owner_schema5:
+            self._target_schema_version = self.OWNER_SCHEMA_VERSION
         if sqlite3.sqlite_version_info < self.MINIMUM_SQLITE:
             raise UnsupportedRuntime("SQLite 3.51.3 or newer is required")
         if index_profile not in self.SEARCH_PROFILES:
@@ -161,6 +175,7 @@ class SQLiteRepository:
         self.path = str(path)
         self.index_profile = index_profile
         self.history_profile = history_profile
+        self._configured_scope = configured_scope
         self._migrate()
 
     #: Set only by ``open_readonly``. A read-only instance never migrates, repairs or
@@ -603,16 +618,37 @@ class SQLiteRepository:
             raise StorageIntegrityError("a migrated head has no matching write receipt")
         self._bump_generation(db)
 
+    def _apply_migration_005(self, connection: sqlite3.Connection) -> None:
+        # The dispatcher owns the entire transaction, including user_version. Never
+        # use executescript here: it can commit ahead of the first DDL statement.
+        for statement in self._script("005_space_identity.sql").split(";"):
+            if statement.strip():
+                connection.execute(statement)
+        store_id = str(uuid.uuid4())
+        connection.execute("INSERT INTO store_identity(id,store_id) VALUES(1,?)", (store_id,))
+        for scope in inventory_partitions(connection, self._configured_scope):
+            connection.execute("INSERT INTO space_partitions(store_id,namespace,actor,space_id) VALUES(?,?,?,?)",
+                               (store_id, scope.namespace, scope.actor, str(uuid.uuid4())))
+        connection.execute("INSERT INTO revision_provenance(namespace,actor,memory_id,revision_id) "
+                           "SELECT namespace,actor,memory_id,revision_id FROM revisions")
+        connection.execute("INSERT INTO operation_provenance(namespace,actor,receipt_key) "
+                           "SELECT namespace,actor,idempotency_key FROM receipts")
+
+    def _supported_version(self, connection: sqlite3.Connection) -> int:
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+        if version > self._target_schema_version:
+            raise UnsupportedSchema("database schema is newer than this application")
+        return version
+
     def _migrate(self) -> None:
         connection = None
         try:
             self._probe_fts5()
             connection = self._connect()
+            self._supported_version(connection)  # Refuse before changing journal mode.
             self._establish_wal(connection)
             connection.execute("BEGIN IMMEDIATE")
-            version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version > self.SCHEMA_VERSION:
-                raise UnsupportedSchema("database schema is newer than this application")
+            version = self._supported_version(connection)  # Recheck under the write lock.
             if version == 0:
                 for statement in self._script("001_initial.sql").split(";"):
                     if statement.strip():
@@ -633,6 +669,9 @@ class SQLiteRepository:
                     if statement.strip():
                         connection.execute(statement)
                 version = 4
+            if version == 4 and self._target_schema_version == self.OWNER_SCHEMA_VERSION:
+                self._apply_migration_005(connection)
+                version = 5
             connection.execute(f"PRAGMA user_version = {version}")
             self._repair_legacy_recency(connection)
             self._apply_profile(connection)
@@ -1651,7 +1690,7 @@ class SQLiteRepository:
                     (scope.namespace, scope.actor),
                 ).fetchone()
                 result = StoreStatus(
-                    "sqlite-wal-full", "available", "available", "unavailable", self.SCHEMA_VERSION,
+                    "sqlite-wal-full", "available", "available", "unavailable", self._target_schema_version,
                     sqlite3.sqlite_version, active, forgotten, revisions, pending, latest,
                 )
                 db.commit()
