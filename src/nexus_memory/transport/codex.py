@@ -16,6 +16,7 @@ from pydantic import Field
 
 from nexus_memory.domain.errors import RepositoryMismatch
 from nexus_memory.domain.models import SearchHit, SearchQuery
+from nexus_memory.transport.harnesses.codex import checkout_root, resolve_checkout as resolve_checkout
 from nexus_memory.git.identity import locate_without_git
 from nexus_memory.git.token import read_token
 from nexus_memory.lexical import is_code_shaped
@@ -123,27 +124,6 @@ def _recall_candidates(service: MemoryService, prompt: str) -> list[SearchHit] |
     if any(support != leaders[0][1] for _, support in leaders):
         return []
     return [hit for hit, _ in leaders[:3]]
-
-
-def checkout_root(cwd: Path) -> Path:
-    current = cwd.resolve(strict=True)
-    if not current.is_dir():
-        raise RepositoryMismatch("Codex cwd is not a checkout directory")
-    for directory in (current, *current.parents):
-        if (directory / ".git").exists():
-            if locate_without_git(directory) is not None:
-                return directory
-            break
-    raise RepositoryMismatch("Codex cwd is not a valid checkout")
-
-
-def resolve_checkout(project_root: Path, cwd: Path) -> Path:
-    """Allow linked worktrees, never an unrelated checkout or a fresh clone."""
-    allowed = checkout_root(project_root)
-    active = checkout_root(cwd)
-    if locate_without_git(allowed) != locate_without_git(active):
-        raise RepositoryMismatch("Codex cwd belongs to a different repository")
-    return active
 
 
 @dataclass

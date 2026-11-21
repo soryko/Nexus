@@ -18,7 +18,8 @@ def uid():
 
 
 class GraphService:
-    def __init__(self, repository, binding, *, git_binding=None):
+    def __init__(self, repository, binding, *, git_binding=None, prepare_only=False):
+        self.prepare_only = prepare_only
         self.git_binding = git_binding
         self.repository, self.binding = repository, binding
 
@@ -26,12 +27,14 @@ class GraphService:
         space = self.binding.space_id
         digest = canonical_command_digest(1,kind,args)
         key = (space,operation.writer_stream_id,operation.operation_key)
-        with self.repository.transaction(self.binding,write=True) as db:
+        def lookup(db):
             prior = db.execute("SELECT digest,receipt FROM graph_operations WHERE space_id=? AND family='graph-v1' AND writer=? AND key=?",key).fetchone()
             if prior:
                 if prior[0] != digest:
                     raise IdempotencyConflict('graph operation changed')
                 return GraphWriteReceipt.from_json(prior[1])
+
+        def commit(db):
             seq = db.execute('SELECT coalesce(max(seq),0)+1 FROM graph_events WHERE space_id=?',(space,)).fetchone()[0]
             op_id = uid()
             recorded_at = datetime.now(UTC).isoformat().replace('+00:00','Z')
@@ -45,6 +48,11 @@ class GraphService:
             db.execute("INSERT INTO graph_operations VALUES(?,'graph-v1',?,?,?,?,?)",(*key,digest,receipt.to_json(),seq))
             db.execute("INSERT INTO graph_projection_state VALUES(?,?,?,'ready') ON CONFLICT(space_id,generation) DO UPDATE SET watermark=excluded.watermark",(space,gen,seq))
             return receipt
+
+        if self.prepare_only:
+            return lambda admission: admission.mutate(commit, lookup)
+        with self.repository.transaction(self.binding,write=True) as db:
+            return lookup(db) or commit(db)
 
     def curate(self, batch, *, operation, derived_sources=None):
         args = json.loads(batch.to_json())
@@ -68,6 +76,10 @@ class GraphService:
                 if row:
                     if row[0] != canonical_command_digest(1,'curate',args):
                         raise IdempotencyConflict('graph operation changed')
+                    if self.prepare_only:
+                        def missing_receipt(db, seq):
+                            raise InvalidEvidence('prepared replay unavailable')
+                        return self._write('curate',args,operation,missing_receipt)
                     return GraphWriteReceipt.from_json(row[1])
             if not self.git_binding or not any(r.repository_id == self.git_binding[0].repository_id for r in self.binding.repository_bindings):
                 raise InvalidEvidence('repository unavailable')
@@ -77,9 +89,9 @@ class GraphService:
                 if capture.source != src:
                     raise InvalidEvidence('source mismatch')
                 captured[item] = capture.captured_bytes
+        if code:
+            self.git_binding[1].check_identity()
         def apply(db, seq):
-            if code:
-                self.git_binding[1].check_identity()
             writer = _Batch(db,self.binding,seq,captured)
             result = writer.apply(batch)
             for name, required in dependencies.items():

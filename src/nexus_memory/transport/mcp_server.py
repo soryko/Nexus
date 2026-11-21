@@ -572,6 +572,49 @@ def create_server(
     return server
 
 
+def create_v2_server(broker) -> MCPServer:
+    """Do not register legacy handlers here: every successful result is a drained byte string."""
+    from nexus_memory.transport.broker import ROUTES, failure
+    from inspect import Parameter, Signature
+    validation = SafeToolValidation()
+    server = MCPServer(name='nexus-memory', instructions=_EXPLICIT.text, middleware=[validation])
+    validation.bind(server)
+    shapes = {
+        'record': 'content idempotency_key kind? tags? source_uri? snapshot? references?',
+        'revise': 'memory_id expected_revision_id content idempotency_key kind? tags? source_uri? snapshot? references?',
+        'forget': 'memory_id expected_revision_id idempotency_key', 'get': 'memory_id revision_id?',
+        'history': 'memory_id limit? cursor?', 'status': '',
+        'search': 'query? advanced? tags_all? tags_any? kinds? limit? cursor? repository? reference_paths? reference_path_prefix? reference_commits?',
+        'curate': 'batch operation_key', 'correct': 'assertion_id expected_revision_id replacement operation_key expected_resolution_generation?',
+        'recall': 'query', 'traverse': 'query', 'explain': 'pack_id', 'read_pack': 'pack_id',
+    }
+    assert shapes.keys() == ROUTES
+    def register(name):
+        def invoke(**args):
+            result = broker.dispatch(name,{k:v for k,v in args.items() if v is not None})
+            if isinstance(result,OperationFailure):
+                return _operation_error(result)
+            try:
+                text = broker.drain(result).decode('utf-8')
+            except NexusError as exc:
+                return _operation_error(failure(exc))
+            return CallToolResult(content=[TextContent(type='text', text=text)])
+        params = []
+        for field in shapes[name].split():
+            key = field.rstrip('?')
+            annotation = (dict if key in ('batch','replacement') or key=='query' and name!='search' else
+                          list if key in ('tags','tags_all','tags_any','kinds','references','reference_paths','reference_commits') else
+                          int if key in ('limit','expected_resolution_generation') else bool if key=='advanced' else str)
+            optional = field.endswith('?')
+            params.append(Parameter(key,Parameter.KEYWORD_ONLY,annotation=annotation | None if optional else annotation,
+                                    default=None if optional else Parameter.empty))
+        invoke.__signature__ = Signature(params,return_annotation=CallToolResult)
+        server.tool(name=name, structured_output=False)(invoke)
+    for name in sorted(ROUTES):
+        register(name)
+    return server
+
+
 def _default_db() -> Path:
     if sys.platform == "win32":
         root = Path(os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA") or Path.home())
@@ -602,7 +645,10 @@ def _prepare_new_storage(path: Path) -> None:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="nexus-memory", description="Run the local Nexus Memory MCP server over stdio.")
-    parser.add_argument("--namespace", required=True, help="Trusted namespace bound for this server process")
+    parser.add_argument('--catalog', type=Path)
+    parser.add_argument('--grant-file', type=Path)
+    parser.add_argument('--project-id', help=argparse.SUPPRESS)
+    parser.add_argument("--namespace", help="Trusted namespace bound for this server process")
     parser.add_argument("--actor", default="local", help="Trusted actor bound for this server process (default: local)")
     parser.add_argument("--db", type=Path, default=None, help="SQLite database path")
     parser.add_argument("--repo", type=Path, default=None, help="Local Git checkout to bind for reference verification")
@@ -643,6 +689,25 @@ def _degraded(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
+    if args.catalog is not None or args.grant_file is not None:
+        if not (args.catalog and args.grant_file) or any((args.db,args.namespace,args.hook_unenrolled,args.repo_id,args.usage_log)):
+            parser.error('v2 requires --catalog and --grant-file, without legacy store options')
+        from nexus_memory.transport.harnesses.generic import resume
+        from nexus_memory.transport.harnesses.claude import ingress
+        try:
+            checkout = args.repo
+            if args.hook_project_root:
+                from nexus_memory.transport.codex import resolve_checkout
+                checkout = resolve_checkout(args.hook_project_root, Path.cwd())
+            broker = resume(args.catalog,args.grant_file,args.project_id,checkout)
+            with ingress(broker,checkout if args.hook_project_root else None):
+                create_v2_server(broker).run()
+            return 0
+        except Exception:
+            print('startup_error: v2 memory unavailable', file=sys.stderr)
+            return _degraded(args)
+    if not args.namespace or args.project_id:
+        parser.error('legacy launches require --namespace and no v2 project binding')
     if args.hook_unenrolled:
         if args.db is not None or args.repo is not None or args.repo_id is not None or args.hook_project_root is not None:
             parser.error("--hook-unenrolled takes no store or repository option")

@@ -47,6 +47,8 @@ def main():
         host = commands.add_parser(name)
         host.add_argument('runtime', type=Path)
         host.add_argument('--expected-project', type=Path)
+        host.add_argument('--catalog', type=Path)
+        host.add_argument('--grant-file', type=Path)
     args = parser.parse_args()
     os.umask(0o077)
     try:
@@ -57,6 +59,10 @@ def main():
             return run_atlas(args.checkout, not args.no_browser)
         if not args.runtime.is_absolute():
             raise ScopeError('runtime path must be absolute')
+        v2 = args.catalog is not None or args.grant_file is not None
+        if v2 and (not args.catalog or not args.grant_file or not args.catalog.is_absolute()
+                   or not args.grant_file.is_absolute() or args.command == 'antigravity'):
+            raise ScopeError('unsupported or incomplete scoped profile')
         plugin = Path.home().resolve(strict=True) / '.gemini/config/plugins/nexus-memory'
         is_plugin_launch = Path.cwd() == plugin or os.environ.get('PLUGIN_ROOT') == str(plugin)
         if args.command == 'antigravity' and is_plugin_launch:
@@ -83,7 +89,9 @@ def main():
             os.chdir(Path.home())
             os.execv(args.runtime, [str(args.runtime), '--namespace', 'unenrolled', '--hook-unenrolled'])
         options = ['--db', str(project.database), '--namespace', project.id, '--actor', 'local']
-        if args.command == 'codex':
+        if v2:
+            options = ['--catalog', str(args.catalog), '--grant-file', str(args.grant_file), '--project-id',project.id]
+        if args.command == 'codex' and not v2:
             options.extend(['--codex-project-root', str(project.common.parent)])
         elif hooks:
             options.extend(['--hook-project-root', str(project.common.parent)])

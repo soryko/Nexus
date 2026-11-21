@@ -99,10 +99,10 @@ class PublicationQueue:
                              (env.publication_id,)).fetchone()
         return row == (env.grant_id, env.epoch, sha256(env.payload).hexdigest(), env.enqueued_at)
 
-    def drain(self, publication_id):
+    def drain(self, publication_id, *, expected=None):
         with _lock:
             e = _entries.get(publication_id)
-            if e is None or e.queue is not self or e.envelope is None:
+            if e is None or e.queue is not self or e.envelope is None or (expected is not None and expected != e.envelope):
                 raise PublicationBusy('publication unavailable')
             try:
                 if not self._matches(e.envelope):

@@ -21,7 +21,15 @@ def enrollment(cwd):
     try:
         import project_scope
         try:
-            project_scope.resolve(Path(cwd))
+            project = project_scope.resolve(Path(cwd))
+            if project is None:
+                return "not-enrolled"
+            declared = os.environ.get("CLAUDE_PROJECT_DIR")
+            if declared and Path(declared) != Path(cwd):
+                # A subdirectory may corroborate the same checkout; another enrolled
+                # project (or another worktree) must not enable this hook.
+                if project_scope.resolve(Path(declared)).checkout != project.checkout:
+                    return "not-enrolled"
         except project_scope.ScopeError:
             return "not-enrolled"
         return "enrolled"

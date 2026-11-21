@@ -56,7 +56,7 @@ def _reader(path):
 
 def _version(db):
     version, = db.execute('PRAGMA user_version').fetchone()
-    if version not in range(1, 6):
+    if version not in range(1, 7):
         raise UnsupportedSchema('unsupported memory store')
     if not db.execute("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='memories'").fetchone():
         raise UnsupportedSchema('not a memory store')
@@ -78,7 +78,7 @@ def _binding(db, store_id, sid, ns, actor):
 
 def _bindings(path, store_id):
     with _reader(path) as db:
-        _check(_version(db) == 5)
+        _check(_version(db) in (5, 6))
         _check(db.execute('SELECT store_id FROM store_identity').fetchall() == [(store_id,)])
         result = []
         for sid, ns, actor, identity in db.execute('SELECT space_id,namespace,actor,store_id FROM space_partitions ORDER BY namespace,actor'):
@@ -169,7 +169,7 @@ class Catalog:
             dev, ino = _identity(path)
             with _reader(path) as source:
                 version = _version(source)
-                sid = _store_uuid(source) if version == 5 else op['allocation']
+                sid = _store_uuid(source) if version >= 5 else op['allocation']
             _check(expected_store_id in (None,sid))
             row = db.execute('SELECT * FROM stores WHERE store_id=? OR locator=? OR (dev=? AND ino=?)', (sid,str(path),dev,ino)).fetchone()
             if row:
@@ -330,7 +330,7 @@ class Catalog:
             path = Path(row['locator'])
             _check(row['state'] == 'active' and _identity(path) == (row['dev'], row['ino']))
             with _reader(path) as store:
-                _check(_version(store) == 5 and _store_uuid(store) == row['store_id'])
+                _check(_version(store) in (5, 6) and _store_uuid(store) == row['store_id'])
                 scope = row['namespace'], row['actor']
                 _check(store.execute('SELECT namespace,actor FROM space_partitions WHERE store_id=? AND space_id=?',
                                      (row['store_id'], sid)).fetchone() == scope)
