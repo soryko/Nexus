@@ -667,5 +667,59 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
             assert after_clear.structured_content["scope_state"] == "host_missing_roots"
 
         anyio.run(check_host_leases)
+
+        # 4. Atlas's own follow-up reads carry no host lease. A leased open_atlas grants lease-free
+        #    get/history/search/compare_at_head for that project only, for a bounded window.
+        guard_atlas = gw_mod.GuardedService(None)
+        now = [1000.0]
+        guard_atlas._clock = lambda: now[0]
+
+        def _call(name: str):
+            return guard_atlas.authorize(
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(name=name), session=NoRootsSession()),
+                _admit,
+            )
+
+        async def _leased(ws: Path, tc_id: str, name: str):
+            assert hooks_mod.pre_tool(_mcp_hook_payload(ws, tc_id, tool=name)) == {"decision": "allow"}
+            result = await _call(name)
+            hooks_mod.post_tool(_mcp_hook_payload(ws, tc_id, tool=name))
+            return result
+
+        def _denied(result) -> bool:
+            return getattr(result, "is_error", False) is True
+
+        atlas_reads = ("get", "history", "search", "compare_at_head")
+
+        async def check_atlas_grant() -> None:
+            # A bound project without open_atlas grants nothing: a lease-free read is refused.
+            assert await _leased(repo, "at-1", "search") == "admitted"
+            assert guard_atlas.project.checkout == repo
+            for name in atlas_reads:
+                assert _denied(await _call(name)), name
+
+            # A leased open_atlas admits Atlas's lease-free reads on the same project ...
+            assert await _leased(repo, "at-2", "open_atlas") == "admitted"
+            for name in atlas_reads:
+                assert await _call(name) == "admitted", name
+            # ... but never a write or another tool.
+            for name in ("record", "revise", "forget", "open_atlas"):
+                assert _denied(await _call(name)), name
+
+            # The window is fixed from open_atlas: use does not extend it, expiry ends it.
+            now[0] += gw_mod.ATLAS_UI_GRANT_SECONDS - 1
+            assert await _call("get") == "admitted"
+            now[0] += 2
+            for name in atlas_reads:
+                assert _denied(await _call(name)), name
+
+            # A grant does not follow the gateway to another project.
+            assert await _leased(repo, "at-3", "open_atlas") == "admitted"
+            assert await _leased(other, "at-4", "status") == "admitted"
+            assert guard_atlas.project.checkout == other
+            for name in atlas_reads:
+                assert _denied(await _call(name)), name
+
+        anyio.run(check_atlas_grant)
     finally:
         os.umask(prev_umask)

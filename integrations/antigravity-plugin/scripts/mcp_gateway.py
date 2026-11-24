@@ -38,13 +38,12 @@ from project_scope import (  # noqa: E402
 )
 
 LEASE_TTL_SECONDS = 10.0
-ATLAS_UI_TOOLS = frozenset({
-    "atlas_overview",
-    "atlas_search",
-    "atlas_inspect",
-    "atlas_history",
-    "atlas_compare_revision",
-})
+# The read-only tools the Atlas MCP App (tools/mcp_apps_ui/src/atlas.js) calls itself. Those calls
+# come from the app, not the model, so no PreToolUse hook writes a host lease for them. A leased
+# open_atlas grants them lease-free for its project only, for a fixed window that use does not
+# extend; reopening Atlas renews it. Writes and every other tool still need a lease or roots.
+ATLAS_UI_TOOLS = frozenset({"get", "history", "search", "compare_at_head"})
+ATLAS_UI_GRANT_SECONDS = 300.0
 
 
 def _configured_policy():
@@ -220,6 +219,14 @@ class GuardedService:
         self.changed = False
         self.generation = 0
         self.lock = anyio.Lock()
+        self._clock = time.monotonic
+        self._atlas_grant: tuple[str, float] | None = None  # (project id, expiry on _clock)
+
+    def _atlas_grant_admits(self, tool_name: str | None) -> bool:
+        if tool_name not in ATLAS_UI_TOOLS or self.project is None or self._atlas_grant is None:
+            return False
+        project_id, expires = self._atlas_grant
+        return project_id == self.project.id and self._clock() < expires
 
     def __getattr__(self, name: str) -> Any:
         if self.service is None:
@@ -299,7 +306,7 @@ class GuardedService:
                             )
                         return denied("project_scope_ambiguous", lease_msg)
                     if lease_state == "missing":
-                        if tool_name in ATLAS_UI_TOOLS and self.project is not None:
+                        if self._atlas_grant_admits(tool_name):
                             diag = inspect_scope(self.project.checkout)
                             if diag.state != "bound":
                                 raise ScopeError(diag.message or "project scope unavailable")
@@ -359,6 +366,8 @@ class GuardedService:
                     raise ScopeError("workspace differs from configured project")
 
                 self._bind_project(project)
+                if tool_name == "open_atlas":
+                    self._atlas_grant = (project.id, self._clock() + ATLAS_UI_GRANT_SECONDS)
             except Exception as error:
                 if self.project is not None and not host_lease_mode:
                     if not isinstance(error, ConcurrentRootsChange):
