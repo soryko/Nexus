@@ -24,6 +24,9 @@ const state = {
   atlasCursor: null, // cursor for the next page, as returned by the last search
   atlasPageCursor: null, // cursor that loaded the page on screen (null: first page)
   atlasPrevCursors: [],
+  // The search the cursors belong to, as actually sent. The store rejects a cursor whose query or
+  // kinds differ, so paging and background reloads repeat this, never the unsubmitted controls.
+  atlasApplied: { query: null, kinds: [] },
   selectedMemoryId: null,
   selectedRevisionId: null,
   inspection: null,
@@ -181,24 +184,26 @@ async function refreshStatusAndActivity({ loadAtlasIfBound = false } = {}) {
   renderAll();
 }
 
-async function loadAtlasList({ cursor = null, resetCursor = false } = {}) {
-  if (state.status?.state !== 'bound') return;
+// Returns true when the requested page was applied. `fromControls` is set only when the user
+// submits the search box or picks a kind; every other load repeats the applied search.
+async function loadAtlasList({ cursor = null, resetCursor = false, fromControls = false } = {}) {
+  if (state.status?.state !== 'bound') return false;
   const workspaceGen = state.workspaceGen;
   const searchGen = ++state.atlasSearchGen;
-  if (resetCursor) state.atlasPrevCursors = [];
-  const params = {
-    limit: 20,
-    query: state.atlasQuery.trim() || null,
-    kinds: state.atlasKind === 'all' ? [] : [state.atlasKind],
-    cursor,
-  };
+  const search = fromControls
+    ? { query: state.atlasQuery.trim() || null, kinds: state.atlasKind === 'all' ? [] : [state.atlasKind] }
+    : state.atlasApplied;
+  const params = { limit: 20, query: search.query, kinds: search.kinds, cursor };
   const [ovRes, srRes] = await Promise.all([
     apiPost('/api/overview'),
     apiPost('/api/search', { params }),
   ]);
-  if (workspaceGen !== state.workspaceGen || searchGen !== state.atlasSearchGen) return;
+  if (workspaceGen !== state.workspaceGen || searchGen !== state.atlasSearchGen) return false;
   if (ovRes.ok && ovRes.data) state.overview = ovRes.data;
-  if (srRes.ok && srRes.data) {
+  const applied = Boolean(srRes.ok && srRes.data);
+  if (applied) {
+    state.atlasApplied = search;
+    if (resetCursor) state.atlasPrevCursors = [];
     state.atlasHits = srRes.data.items || [];
     state.atlasCursor = srRes.data.cursor || null;
     state.atlasPageCursor = cursor;
@@ -207,6 +212,7 @@ async function loadAtlasList({ cursor = null, resetCursor = false } = {}) {
     }
   }
   renderAll();
+  return applied;
 }
 
 async function openMemory(memoryId, revisionId = null, { renderNow = true } = {}) {
@@ -214,6 +220,9 @@ async function openMemory(memoryId, revisionId = null, { renderNow = true } = {}
   // Opening another revision of the memory already shown keeps the revision chain loaded so far,
   // including older pages, instead of collapsing it back to the first page.
   const keptHistory = memoryId === state.selectedMemoryId && state.history ? state.history : null;
+  // A "Load older revisions" request still out belongs to the old selection; its guard drops the
+  // reply, so the flag must be cleared here or paging stays disabled for every later selection.
+  state.historyLoading = false;
   state.selectedMemoryId = memoryId;
   state.selectedRevisionId = revisionId;
   state.compareRevision = null;
@@ -713,7 +722,7 @@ function renderAtlasTab(container) {
   );
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    loadAtlasList({ resetCursor: true });
+    loadAtlasList({ resetCursor: true, fromControls: true });
   });
 
   const countMap = new Map(state.overview?.counts || []);
@@ -729,7 +738,7 @@ function renderAtlasTab(container) {
         attrs: { 'aria-pressed': state.atlasKind === k ? 'true' : 'false' },
         onClick: () => {
           state.atlasKind = k;
-          loadAtlasList({ resetCursor: true });
+          loadAtlasList({ resetCursor: true, fromControls: true });
         },
       });
     }),
@@ -771,17 +780,27 @@ function renderAtlasTab(container) {
           type: 'button',
           text: 'Previous',
           disabled: state.atlasPrevCursors.length === 0,
-          onClick: () => loadAtlasList({ cursor: state.atlasPrevCursors.pop() ?? null }),
+          // The page stack changes only once the page has actually loaded.
+          onClick: async () => {
+            const prev = state.atlasPrevCursors[state.atlasPrevCursors.length - 1] ?? null;
+            if (await loadAtlasList({ cursor: prev })) {
+              state.atlasPrevCursors.pop();
+              renderAll();
+            }
+          },
         }),
         el('button', {
           className: 'nx-btn',
           type: 'button',
           text: 'Next',
           disabled: !state.atlasCursor,
-          onClick: () => {
+          onClick: async () => {
             const next = state.atlasCursor;
-            state.atlasPrevCursors.push(state.atlasPageCursor);
-            loadAtlasList({ cursor: next });
+            const current = state.atlasPageCursor;
+            if (await loadAtlasList({ cursor: next })) {
+              state.atlasPrevCursors.push(current);
+              renderAll();
+            }
           },
         }),
       ),
@@ -935,6 +954,7 @@ async function init() {
       state.workspaceUris = Array.isArray(uris) ? uris : [];
       state.workspaceGen += 1;
       state.selectionGen += 1;
+      state.historyLoading = false;
       state.selectedMemoryId = null;
       state.selectedRevisionId = null;
       state.inspection = null;
