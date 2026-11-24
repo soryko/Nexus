@@ -513,6 +513,7 @@ function renderAtlasInspector() {
         type: 'button',
         text: 'Verify at HEAD',
         onClick: async () => {
+          const selectionGen = state.selectionGen;
           const res = await apiPost('/api/compare-at-head', {
             params: {
               memory_id: insp.memory_id,
@@ -520,6 +521,7 @@ function renderAtlasInspector() {
               reference_ordinal: idx,
             },
           });
+          if (selectionGen !== state.selectionGen) return;
           if (res.ok && res.data) {
             state.headVerdicts[idx] = res.data;
             renderAll();
@@ -581,9 +583,11 @@ function renderAtlasInspector() {
             type: 'button',
             text: 'Diff parent',
             onClick: async () => {
+              const selectionGen = state.selectionGen;
               const res = await apiPost('/api/compare-revision', {
                 params: { memory_id: insp.memory_id, revision_id: entry.revision_id },
               });
+              if (selectionGen !== state.selectionGen) return;
               if (res.ok && res.data) {
                 state.compareRevision = { ...res.data, revision_id: entry.revision_id };
                 renderAll();

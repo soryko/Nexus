@@ -13,6 +13,9 @@ const state = {
   query: "",
   kind: "all",
   selectedId: null,
+  // Bumped on every selection; get/history replies from an older selection are discarded so the
+  // highlighted entry, the displayed record and "Attach to Next Prompt" always agree.
+  selectionGen: 0,
   detail: null,
   history: null,
   statusText: "",
@@ -55,6 +58,7 @@ async function runSearch() {
 }
 
 async function selectMemory(memoryId, revisionId = null) {
+  const selectionGen = ++state.selectionGen;
   state.selectedId = memoryId;
   state.detail = null;
   state.history = null;
@@ -65,9 +69,11 @@ async function selectMemory(memoryId, revisionId = null) {
       app.callServerTool({ name: "get", arguments: getArgs }),
       app.callServerTool({ name: "history", arguments: { memory_id: memoryId, limit: 20 } }),
     ]);
+    if (selectionGen !== state.selectionGen) return;
     state.detail = memRes?.isError ? null : memRes?.structuredContent || null;
     state.history = histRes?.isError ? null : histRes?.structuredContent || null;
   } catch {
+    if (selectionGen !== state.selectionGen) return;
     state.statusText = "Failed to inspect memory";
   }
   render();
