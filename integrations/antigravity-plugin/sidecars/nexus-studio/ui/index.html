@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus Studio</title>
+  <link rel="stylesheet" href="/studio.css" />
+</head>
+<body>
+  <div id="studio-root" class="nx-app">
+    <header id="health-strip" class="nx-health-strip"></header>
+    <section id="alert-slot" class="nx-alert-slot" hidden></section>
+    <nav class="nx-tabs" role="tablist" aria-label="Nexus Studio Sections">
+      <button type="button" class="nx-tab" role="tab" data-tab="activity" aria-selected="true">Activity &amp; Health</button>
+      <button type="button" class="nx-tab" role="tab" data-tab="atlas" aria-selected="false">Memory Atlas</button>
+      <button type="button" class="nx-tab" role="tab" data-tab="setup" aria-selected="false">Automations &amp; Setup</button>
+    </nav>
+    <main id="tab-content" class="nx-main"></main>
+  </div>
+  <script src="/preload.js"></script>
+  <script src="/studio.js"></script>
+</body>
+</html>

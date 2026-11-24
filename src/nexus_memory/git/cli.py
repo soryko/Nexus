@@ -147,6 +147,16 @@ class GitCliVerifier:
             raise CommitNotFound("commit could not be resolved")
         return oid
 
+    def check_entry_object(self, entry: TreeEntry) -> None:
+        """ls-tree can list a missing blob. Inspect its header, never its body."""
+        if not HEX.fullmatch(entry.object_oid) or len(entry.object_oid) != self.width:
+            raise InvalidReference("invalid tree entry object id")
+        if entry.mode == "160000" and entry.entry_type == "commit":
+            return  # A gitlink names another repository's commit; do not follow it.
+        result = self.git._run(self.checkout, "cat-file", "-t", entry.object_oid)
+        if result.returncode or result.stdout.strip() != entry.entry_type.encode("ascii"):
+            raise VerificationUnavailable("tree entry object is unavailable")
+
     def tree_entries(self, commit_oid: str, path: str) -> tuple[TreeEntry, ...]:
         """Raw ``ls-tree --full-tree -z`` records for a pathspec against a fixed commit.
 

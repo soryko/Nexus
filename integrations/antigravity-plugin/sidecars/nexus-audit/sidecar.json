@@ -1,0 +1,21 @@
+{
+  "builtin": "schedule",
+  "args": [
+    "CRON_TZ=UTC 0 9 * * 1",
+    "agentapi",
+    "new-conversation",
+    "--",
+    "Run a read-only weekly Nexus Memory audit for this workspace: call status on nexus-memory_nexus-memory, check recent constraints and decisions via search + get, run compare_at_head on cited Git references to detect staleness, and summarize findings clearly without modifying any memories."
+  ],
+  "restart_policy": "always",
+  "display_name": "Weekly Nexus Memory Audit",
+  "description": "Weekly read-only Monday check verifying Nexus store binding, APFS scope health, and whether cited Git references still match HEAD.",
+  "agent_permissions": {
+    "access_grants": [
+      "mcp(nexus-memory_nexus-memory/status)",
+      "mcp(nexus-memory_nexus-memory/search)",
+      "mcp(nexus-memory_nexus-memory/get)",
+      "mcp(nexus-memory_nexus-memory/compare_at_head)"
+    ]
+  }
+}

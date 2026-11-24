@@ -87,6 +87,10 @@ def test_secret_is_exchanged_once_for_a_hardened_cookie(atlas) -> None:
 def test_wrong_secret_malformed_and_foreign_origin_are_refused(atlas) -> None:
     origin = f"http://127.0.0.1:{atlas.server.port}"
     assert atlas.request("POST", "/session", body={"key": "nope"}, origin=origin, cookie=False)[0] == 403
+    for key in ("é", "\ud800"):
+        status, headers, body = atlas.request("POST", "/session", body={"key": key}, origin=origin, cookie=False)
+        assert status == 403 and json.loads(body) == {"error": "forbidden"}
+        assert "set-cookie" not in headers
     assert atlas.request("POST", "/session", body={"key": 1}, origin=origin, cookie=False)[0] == 400
     assert atlas.request("POST", "/session", body={"key": atlas.server.launch_secret},
                          origin="http://evil.example", cookie=False)[0] == 403

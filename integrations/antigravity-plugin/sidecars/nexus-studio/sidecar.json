@@ -1,0 +1,23 @@
+{
+  "command": "node",
+  "args": [
+    "main.mjs"
+  ],
+  "restart_policy": "always",
+  "display_name": "Nexus Studio",
+  "description": "Read-only Nexus Memory workbench showing live content-free Activity & Health telemetry, Memory Atlas inspection, Git reference checks at HEAD, and APFS/setup diagnostics.",
+  "has_web_ui": true,
+  "agent_permissions": {
+    "allows_user_interactions": false
+  },
+  "ui_config": {
+    "display_name": "Nexus Studio",
+    "views": [
+      {
+        "entrypoint": "SIDECAR_UI_ENTRYPOINT_AUX_PANE",
+        "path": "/",
+        "title": "Nexus Studio"
+      }
+    ]
+  }
+}

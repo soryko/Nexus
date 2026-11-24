@@ -9,6 +9,7 @@ from nexus_memory.domain.errors import (
     CommitNotFound,
     InvalidInput,
     InvalidReference,
+    NexusError,
     PathNotInCommit,
     RepositoryMismatch,
     RepositoryUnbound,
@@ -22,6 +23,7 @@ from nexus_memory.domain.models import (
     REFERENCE_DIGEST_VERSION,
     REPOSITORY_BOUND,
     SUPPORTED_MODES,
+    HeadComparison,
     HistoryPage,
     RevisionHit,
     MemoryInput,
@@ -228,6 +230,37 @@ class MemoryService:
         if revision_id is not None:
             revision_id = self._identifier(revision_id, "revision_id")
         return self.repository.get(self.scope, memory_id, revision_id)
+
+    def compare_at_head(self, memory_id: str, revision_id: str, reference_ordinal: int) -> HeadComparison:
+        revision = self.get(memory_id, self._identifier(revision_id, "revision_id"))
+        if type(reference_ordinal) is not int or reference_ordinal < 0:
+            raise InvalidInput("reference_ordinal must be a nonnegative integer")
+        unavailable = HeadComparison("Cannot check")
+        if reference_ordinal >= len(revision.references):
+            return unavailable  # Neither source_uri nor snapshot is a verified reference.
+        ref = revision.references[reference_ordinal]
+        if (self.binding is None or self.verifier is None or ref.repository_id != self.binding.repository_id
+                or ref.entry_type != "blob" or ref.mode not in SUPPORTED_MODES):
+            return unavailable
+        try:
+            self.verifier.check_identity()
+            head = self._resolve_one("HEAD")
+            entries = self.verifier.tree_entries(head, ref.path)
+            if not entries:
+                result = HeadComparison("Missing at HEAD", ref.commit_oid, head)
+            elif len(entries) == 1 and entries[0].path == ref.path:
+                entry = entries[0]
+                self.verifier.check_entry_object(entry)
+                # Symlinks are blobs too. Ignore executable bits, not the file kind.
+                matches = (entry.entry_type == ref.entry_type and entry.mode in SUPPORTED_MODES
+                           and entry.object_oid == ref.object_oid)
+                result = HeadComparison("Matches at HEAD" if matches else "Changed at HEAD", ref.commit_oid, head)
+            else:
+                return unavailable  # Unexpected output is not evidence of absence.
+            self.verifier.check_identity()
+        except NexusError:
+            return unavailable
+        return result
 
     def search(self, query: SearchQuery) -> SearchPage:
         """Reference filters are answered from recorded evidence; nothing here reads a repository.
