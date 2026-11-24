@@ -1,6 +1,6 @@
 # Nexus project memory across Codex, Claude Code, Antigravity and DSH
 
-**Status: revision 2, proposed for owner approval, 24 November 2026.** Revision 1 is kept as [cross-host-project-memory.r1.md](cross-host-project-memory.r1.md). The changes come from a design review held with the owner the same day; the decision log is in §9. No implementation or rollout is authorized by this document.
+**Status: revision 2, approved by the owner on 24 November 2026.** Revision 1 is kept as [cross-host-project-memory.r1.md](cross-host-project-memory.r1.md). The changes come from a design review held with the owner the same day; the decision log is in §9. Approval authorizes what §1 lists (the §6 consolidation and isolated implementation and testing) and nothing in §8: no rollout is authorized by this document.
 
 ## 1. Outcome and approval boundary
 
@@ -106,4 +106,4 @@ Start with a disposable pilot, then one owner-selected repo in recall-only; offe
 | Migration | v1 stores migrate in place at rollout with a verified backup, starting in recall-only. DSH's single shared record stays untouched until Phase 2. |
 | Consolidation | Salvage branch first; one PR per branch with merge commits in the order in §6; no deletions. |
 
-**Decision requested:** approve this v1 scope, the consolidation in §6 and the isolated implementation gates; request changes; or hold. Approval does not turn on Nexus in any real repository.
+**Decision (24 November 2026):** approved: this v1 scope, the consolidation in §6 and the isolated implementation gates. PR #26 was already merged when approval was given, so consolidation resumes at `feat/claude-autonomous-memory`. Approval does not turn on Nexus in any real repository.
