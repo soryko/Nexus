@@ -38,6 +38,7 @@ const state = {
   // value belongs to a workspace or selection the user has left and must not be applied.
   workspaceGen: 0,
   selectionGen: 0,
+  atlasSearchGen: 0, // bumped by every Atlas list request; only the newest one is applied
 };
 
 function el(tag, opts = {}, ...children) {
@@ -119,12 +120,10 @@ function outcomeTone(outcome) {
 }
 
 function toWorkspaceFileUri(relPath) {
-  if (state.workspaceUris.length !== 1 || !relPath) return null;
-  let base = state.workspaceUris[0];
-  if (!base.startsWith('file://')) {
-    const cleanBase = base.replace(/\/+$/, '');
-    base = `file://${cleanBase.split('/').map(encodeURIComponent).join('/')}`;
-  }
+  // Reference paths are repository-relative: resolve them against the checkout root the worker
+  // verified, never the host workspace, which may be a subdirectory of the checkout.
+  const base = state.status?.checkout_uri;
+  if (!relPath || typeof base !== 'string' || !base.startsWith('file://')) return null;
   const cleanRel = relPath
     .split('/')
     .filter(Boolean)
@@ -185,6 +184,7 @@ async function refreshStatusAndActivity({ loadAtlasIfBound = false } = {}) {
 async function loadAtlasList({ cursor = null, resetCursor = false } = {}) {
   if (state.status?.state !== 'bound') return;
   const workspaceGen = state.workspaceGen;
+  const searchGen = ++state.atlasSearchGen;
   if (resetCursor) state.atlasPrevCursors = [];
   const params = {
     limit: 20,
@@ -196,7 +196,7 @@ async function loadAtlasList({ cursor = null, resetCursor = false } = {}) {
     apiPost('/api/overview'),
     apiPost('/api/search', { params }),
   ]);
-  if (workspaceGen !== state.workspaceGen) return;
+  if (workspaceGen !== state.workspaceGen || searchGen !== state.atlasSearchGen) return;
   if (ovRes.ok && ovRes.data) state.overview = ovRes.data;
   if (srRes.ok && srRes.data) {
     state.atlasHits = srRes.data.items || [];
@@ -652,7 +652,7 @@ function renderAtlasTab(container) {
 
   const searchInput = el('input', {
     className: 'nx-input',
-    attrs: { type: 'search', placeholder: 'Search current memories (BM25)...', value: state.atlasQuery },
+    attrs: { type: 'search', placeholder: 'Search current memories (BM25)...', value: state.atlasQuery, 'data-focus-key': 'atlas-search' },
   });
   searchInput.value = state.atlasQuery;
   searchInput.addEventListener('input', () => {
@@ -826,6 +826,12 @@ function renderAll() {
   }
 
   const main = document.getElementById('tab-content');
+  // Polling re-renders every few seconds; keep the control the user is typing in focused.
+  const active = document.activeElement;
+  const focusKey = active && main.contains(active) ? active.getAttribute('data-focus-key') : null;
+  const selection = focusKey && typeof active.selectionStart === 'number'
+    ? [active.selectionStart, active.selectionEnd, active.selectionDirection]
+    : null;
   main.replaceChildren();
   if (state.activeTab === 'activity') {
     renderActivityTab(main);
@@ -833,6 +839,19 @@ function renderAll() {
     renderAtlasTab(main);
   } else {
     renderSetupTab(main);
+  }
+  if (focusKey) {
+    const again = main.querySelector(`[data-focus-key="${focusKey}"]`);
+    if (again) {
+      again.focus();
+      if (selection) {
+        try {
+          again.setSelectionRange(...selection);
+        } catch {
+          // Not every input type supports a selection range.
+        }
+      }
+    }
   }
 }
 

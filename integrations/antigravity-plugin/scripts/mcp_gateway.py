@@ -44,6 +44,10 @@ LEASE_TTL_SECONDS = 10.0
 # extend; reopening Atlas renews it. Writes and every other tool still need a lease or roots.
 ATLAS_UI_TOOLS = frozenset({"get", "history", "search", "compare_at_head"})
 ATLAS_UI_GRANT_SECONDS = 300.0
+# An inline memory card's "Verify at HEAD" calls compare_at_head itself. A leased get or
+# compare_at_head grants that one check for the same memory and project, for the same window.
+CARD_GRANT_SOURCES = frozenset({"get", "compare_at_head"})
+CARD_GRANT_LIMIT = 64
 
 
 def _configured_policy():
@@ -241,12 +245,27 @@ class GuardedService:
         self.lock = anyio.Lock()
         self._clock = time.monotonic
         self._atlas_grant: tuple[str, float] | None = None  # (project id, expiry on _clock)
+        self._card_grants: dict[str, tuple[str, float]] = {}  # memory id -> (project id, expiry)
 
     def _atlas_grant_admits(self, tool_name: str | None) -> bool:
         if tool_name not in ATLAS_UI_TOOLS or self.project is None or self._atlas_grant is None:
             return False
         project_id, expires = self._atlas_grant
         return project_id == self.project.id and self._clock() < expires
+
+    def _card_grant_admits(self, tool_name: str | None, memory_id: str | None) -> bool:
+        if tool_name != "compare_at_head" or self.project is None or memory_id is None:
+            return False
+        grant = self._card_grants.get(memory_id)
+        return grant is not None and grant[0] == self.project.id and self._clock() < grant[1]
+
+    def _grant_card(self, project_id: str, memory_id: str) -> None:
+        now = self._clock()
+        self._card_grants = {k: v for k, v in self._card_grants.items() if v[1] > now}
+        self._card_grants.pop(memory_id, None)
+        self._card_grants[memory_id] = (project_id, now + ATLAS_UI_GRANT_SECONDS)
+        while len(self._card_grants) > CARD_GRANT_LIMIT:
+            del self._card_grants[next(iter(self._card_grants))]
 
     def __getattr__(self, name: str) -> Any:
         if self.service is None:
@@ -273,6 +292,12 @@ class GuardedService:
         else:
             name = getattr(params, "name", None)
         return name if isinstance(name, str) else None
+
+    def _memory_id_argument(self, ctx: Any) -> str | None:
+        params = getattr(ctx, "params", None)
+        arguments = params.get("arguments") if isinstance(params, dict) else getattr(params, "arguments", None)
+        value = arguments.get("memory_id") if isinstance(arguments, dict) else None
+        return value if isinstance(value, str) and value else None
 
     async def authorize(self, ctx: Any, call_next: Any) -> Any:
         if ctx.method == "notifications/roots/list_changed":
@@ -326,7 +351,9 @@ class GuardedService:
                             )
                         return denied("project_scope_ambiguous", lease_msg)
                     if lease_state == "missing":
-                        if self._atlas_grant_admits(tool_name):
+                        if self._atlas_grant_admits(tool_name) or self._card_grant_admits(
+                            tool_name, self._memory_id_argument(ctx)
+                        ):
                             diag = inspect_scope(self.project.checkout)
                             if diag.state != "bound":
                                 raise ScopeError(diag.message or "project scope unavailable")
@@ -388,6 +415,10 @@ class GuardedService:
                 self._bind_project(project)
                 if tool_name == "open_atlas":
                     self._atlas_grant = (project.id, self._clock() + ATLAS_UI_GRANT_SECONDS)
+                if host_lease_mode and tool_name in CARD_GRANT_SOURCES:
+                    memory_id = self._memory_id_argument(ctx)
+                    if memory_id is not None:
+                        self._grant_card(project.id, memory_id)
             except Exception as error:
                 if self.project is not None and not host_lease_mode:
                     if not isinstance(error, ConcurrentRootsChange):

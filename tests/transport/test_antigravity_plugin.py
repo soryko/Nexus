@@ -762,6 +762,44 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
                 hooks_mod.post_tool(_mcp_hook_payload(repo, f"ua-a-{case}", tool="get"))
 
         anyio.run(check_unattested)
+
+        # 6. An inline card's "Verify at HEAD" calls compare_at_head without a lease. A leased get
+        #    grants that one check, for that memory and project only, for the same bounded window.
+        guard_card = gw_mod.GuardedService(None)
+        clock = [5000.0]
+        guard_card._clock = lambda: clock[0]
+
+        def _card_call(name: str, memory_id: str):
+            return guard_card.authorize(
+                SimpleNamespace(
+                    method="tools/call",
+                    params=SimpleNamespace(name=name, arguments={"memory_id": memory_id}),
+                    session=NoRootsSession(),
+                ),
+                _admit,
+            )
+
+        async def _card_leased(ws: Path, tc_id: str, name: str, memory_id: str):
+            assert hooks_mod.pre_tool(_mcp_hook_payload(ws, tc_id, tool=name)) == {"decision": "allow"}
+            result = await _card_call(name, memory_id)
+            hooks_mod.post_tool(_mcp_hook_payload(ws, tc_id, tool=name))
+            return result
+
+        async def check_card_grant() -> None:
+            assert await _card_leased(repo, "cd-1", "get", "mem-a") == "admitted"
+            assert await _card_call("compare_at_head", "mem-a") == "admitted"
+            # Only that memory, and only compare_at_head.
+            assert _denied(await _card_call("compare_at_head", "mem-b"))
+            assert _denied(await _card_call("get", "mem-a"))
+            # Expiry ends it.
+            clock[0] += gw_mod.ATLAS_UI_GRANT_SECONDS + 1
+            assert _denied(await _card_call("compare_at_head", "mem-a"))
+            # A grant does not follow the gateway to another project.
+            assert await _card_leased(repo, "cd-2", "get", "mem-a") == "admitted"
+            assert await _card_leased(other, "cd-3", "status", "mem-a") == "admitted"
+            assert _denied(await _card_call("compare_at_head", "mem-a"))
+
+        anyio.run(check_card_grant)
     finally:
         os.umask(prev_umask)
 

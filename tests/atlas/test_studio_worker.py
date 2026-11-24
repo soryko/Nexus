@@ -290,3 +290,17 @@ def test_unenrolled_status_offers_a_shell_quoted_enroll_command(studio_env) -> N
 
     bound_or_empty = studio_env.worker.handle({"id": 91, "action": "status", "workspace": []})
     assert bound_or_empty["data"]["enroll_command"] is None
+
+
+
+def test_status_reports_the_checkout_root_for_a_subdirectory_workspace(studio_env) -> None:
+    # Reference paths are repository-relative, so file links must be built from the checkout
+    # root, not from a subdirectory the host opened as its workspace.
+    studio_env.scope_mod.enroll(studio_env.repo)
+    sub = studio_env.repo / "pkg"
+    sub.mkdir()
+    status = studio_env.worker.handle({"id": 95, "action": "status", "workspace": sub.as_uri()})
+    assert status["data"]["state"] == "bound"
+    assert status["data"]["checkout_uri"] == studio_env.repo.as_uri()
+    empty = studio_env.worker.handle({"id": 96, "action": "status", "workspace": []})
+    assert empty["data"]["checkout_uri"] is None

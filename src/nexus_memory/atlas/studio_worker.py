@@ -215,6 +215,7 @@ class StudioWorker:
                 "observed_device": None,
                 "recover_command": None,
                 "enroll_command": None,
+                "checkout_uri": None,
                 "overview": _zero_overview(),
                 "activity_health": _zero_health(),
             }
@@ -263,6 +264,7 @@ class StudioWorker:
                         "observed_device": diag.observed_device,
                         "recover_command": None,
                         "enroll_command": None,
+                        "checkout_uri": None,
                         "overview": _zero_overview(),
                         "activity_health": _zero_health(),
                     }
@@ -279,6 +281,9 @@ class StudioWorker:
             "observed_device": diag.observed_device,
             "recover_command": recover_command,
             "enroll_command": enroll_command,
+            # Repository-relative reference paths resolve against this, not the host workspace,
+            # which may be a subdirectory of the checkout.
+            "checkout_uri": diag.checkout.as_uri() if diag.checkout is not None else None,
             "overview": overview,
             "activity_health": activity_health,
         }
