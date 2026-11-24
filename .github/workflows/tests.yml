@@ -71,6 +71,28 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  stage-a:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0  # The rehearsal runs the historical v4 implementation.
+      - name: Run zero-model protocol and recovery drills
+        run: |
+          curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
+          export PATH="$HOME/.local/bin:$PATH"
+          uv sync --frozen
+          mkdir -p artifacts
+          uv run python tools/check_memory_v2.py > artifacts/stage-a-protocol.json
+          uv run python tools/rehearse_memory_v2.py > artifacts/stage-a-recovery.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: stage-a-fixtures
+          path: artifacts/stage-a-*.json
+          retention-days: 14
+
   suite:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
