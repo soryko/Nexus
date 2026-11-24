@@ -4,7 +4,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from scope import enrollment  # noqa: E402
+from scope import capture_policy, enrollment  # noqa: E402
 
 LINES = {
     "enrolled": "enrolment: ENROLLED (this checkout is an owner-enrolled Nexus project)",
@@ -15,6 +15,7 @@ LINES = {
 
 def main():
     print(LINES[enrollment(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())])
+    print(f"policy: {capture_policy()} (set NEXUS_CAPTURE_POLICY=explicit for ask-first capture; restart Claude Code after changing it)")
 
 
 if __name__ == "__main__":

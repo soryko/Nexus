@@ -35,6 +35,7 @@ def test_mcp_apps_disabled_by_default_preserves_plain_server(tmp_path: Path) -> 
                 "forget",
                 "search",
                 "history",
+                "spaces",
                 "status",
                 "compare_at_head",
             }

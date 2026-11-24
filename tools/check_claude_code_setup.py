@@ -52,7 +52,7 @@ def check(runtime: Path, launcher: Path) -> list[tuple[str, str]]:
         events = set(json.loads(hooks.read_text())["hooks"])
     except (OSError, ValueError, KeyError):
         events = set()
-    add(events == {"SessionStart", "UserPromptSubmit", "PreToolUse"}, f"plugin hooks cover {sorted(events)}")
+    add(events == {"SessionStart", "UserPromptSubmit", "PreToolUse", "Stop"}, f"plugin hooks cover {sorted(events)}")
     results.append(("INFO", "Claude trust for the plugin's hooks cannot be read from here: run /nexus-memory:status in Claude Code."))
     return results
 
