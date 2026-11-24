@@ -38,10 +38,15 @@ from project_scope import (  # noqa: E402
 )
 
 LEASE_TTL_SECONDS = 10.0
-# Antigravity puts the top-level conversation id in every tools/call request's _meta (documented
-# since CLI v1.4.4) and hands the same id to hooks as payload conversationId. A request consumes
-# only a lease from its own conversation, so a call whose hook never ran cannot take a lease
-# written for another conversation, which may be another project.
+# Antigravity puts the calling conversation's id in every tools/call request's _meta and hands the
+# same id to hooks as payload conversationId. Observed on Antigravity App 2.35.0 (2026-11-24,
+# benchmarks/agy_correlation/FINDINGS-2026-11-24.md): conversation_id equals the hook's
+# conversationId for top-level conversations and subagents alike; root_conversation_id names the
+# top-level conversation, so it differs inside a subagent and is only a fallback for hosts that
+# send nothing else (CLI v1.4.4 documents it). A request consumes only a lease from its own
+# conversation, so a call whose hook never ran cannot take a lease written for another
+# conversation, which may be another project.
+CONVERSATION_META = "antigravity.google/conversation_id"
 ROOT_CONVERSATION_META = "antigravity.google/root_conversation_id"
 # The read-only tools the Atlas MCP App (tools/mcp_apps_ui/src/atlas.js) calls itself. Those calls
 # come from the app, not the model, so no PreToolUse hook writes a host lease for them. A leased
@@ -306,13 +311,18 @@ class GuardedService:
         return name if isinstance(name, str) else None
 
     def _request_conversation(self, ctx: Any) -> str | None:
-        """The request's _meta root conversation id, or None (then no lease can be matched)."""
+        """The request's conversation id from _meta, or None (then no lease can be matched)."""
         params = getattr(ctx, "params", None)
         meta = params.get("_meta") if isinstance(params, dict) else getattr(params, "meta", None)
         if not isinstance(meta, dict):
             meta = getattr(ctx, "meta", None)
-        value = meta.get(ROOT_CONVERSATION_META) if isinstance(meta, dict) else None
-        return value if isinstance(value, str) and value else None
+        if not isinstance(meta, dict):
+            return None
+        for key in (CONVERSATION_META, ROOT_CONVERSATION_META):
+            value = meta.get(key)
+            if isinstance(value, str) and value:
+                return value
+        return None
 
     def _memory_id_argument(self, ctx: Any) -> str | None:
         params = getattr(ctx, "params", None)

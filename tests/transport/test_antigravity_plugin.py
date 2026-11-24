@@ -42,10 +42,11 @@ def _clean_env(home: Path) -> dict[str, str]:
     }
 
 
+CONVERSATION = "antigravity.google/conversation_id"
 ROOT_CONVERSATION = "antigravity.google/root_conversation_id"
-# What Antigravity puts in every tools/call request (documented since CLI v1.4.4); the hook side
-# carries the same id as payload conversationId.
-CONV_META = {ROOT_CONVERSATION: "conv-1"}
+# What Antigravity App 2.35.0 was observed to send on every tools/call (2026-11-24): both keys; the
+# hook side carries conversation_id's value as payload conversationId, also for subagents.
+CONV_META = {CONVERSATION: "conv-1", ROOT_CONVERSATION: "conv-1"}
 
 
 def _load_script_module(name: str):
@@ -856,11 +857,15 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
             hooks_mod.post_tool(unattested)
             _conv_hook(repo, "cv-5", "conv-A", mode="post")
 
-            # A subagent's hook names its own conversation while the request names the root one:
-            # they do not match, so it fails closed rather than guessing.
+            # A subagent: its hook and the request's conversation_id both name the subagent, while
+            # root_conversation_id names the parent. conversation_id is matched, so it works.
             _conv_hook(repo, "cv-6", "sub-of-A")
+            assert await _conv_call("get", {CONVERSATION: "sub-of-A", ROOT_CONVERSATION: "conv-A"}) == "admitted"
+            # An older host sending only the root id cannot match a subagent's lease: fail closed.
+            _conv_hook(repo, "cv-7", "sub-of-A")
             assert _denied(await _conv_call("get", {ROOT_CONVERSATION: "conv-A"}))
             _conv_hook(repo, "cv-6", "sub-of-A", mode="post")
+            _conv_hook(repo, "cv-7", "sub-of-A", mode="post")
 
         anyio.run(check_conversation_binding)
     finally:
@@ -894,6 +899,9 @@ def test_gateway_reads_the_root_conversation_from_a_raw_request(tmp_path: Path) 
     guard = gw_mod.GuardedService(None)
     raw = SimpleNamespace(params={"name": "get", "arguments": {}, "_meta": {ROOT_CONVERSATION: "conv-9", "progressToken": 3}})
     assert guard._request_conversation(raw) == "conv-9"
+    # conversation_id wins over root_conversation_id (they differ inside a subagent).
+    both = SimpleNamespace(params={"name": "get", "_meta": {CONVERSATION: "sub-1", ROOT_CONVERSATION: "conv-9"}})
+    assert guard._request_conversation(both) == "sub-1"
     assert guard._request_conversation(SimpleNamespace(params={"name": "get"})) is None
     assert guard._request_conversation(SimpleNamespace(params={"name": "get", "_meta": {ROOT_CONVERSATION: ""}})) is None
     assert guard._request_conversation(SimpleNamespace(params={"name": "get"}, meta={ROOT_CONVERSATION: "conv-7"})) == "conv-7"
