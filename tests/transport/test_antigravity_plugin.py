@@ -721,12 +721,13 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
             for name in atlas_reads:
                 assert _denied(await _call(name)), name
 
-            # A grant does not follow the gateway to another project.
+            # The grant stays with its own project when the gateway moves on: the Atlas opened on
+            # repo keeps reading repo, never the project the gateway was last bound to.
             assert await _leased(repo, "at-3", "open_atlas") == "admitted"
             assert await _leased(other, "at-4", "status") == "admitted"
             assert guard_atlas.project.checkout == other
-            for name in atlas_reads:
-                assert _denied(await _call(name)), name
+            assert await _call("search") == "admitted"
+            assert guard_atlas.project.checkout == repo
 
         anyio.run(check_atlas_grant)
 
@@ -802,10 +803,11 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
             # Expiry ends it.
             clock[0] += gw_mod.ATLAS_UI_GRANT_SECONDS + 1
             assert _denied(await _card_call("compare_at_head", "mem-a"))
-            # A grant does not follow the gateway to another project.
+            # The grant stays with the card's project when the gateway moves on.
             assert await _card_leased(repo, "cd-2", "get", "mem-a") == "admitted"
             assert await _card_leased(other, "cd-3", "status", "mem-a") == "admitted"
-            assert _denied(await _card_call("compare_at_head", "mem-a"))
+            assert await _card_call("compare_at_head", "mem-a") == "admitted"
+            assert guard_card.project.checkout == repo
 
         anyio.run(check_card_grant)
 
@@ -868,6 +870,42 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
             _conv_hook(repo, "cv-7", "sub-of-A", mode="post")
 
         anyio.run(check_conversation_binding)
+
+        # 8. One gateway serves every conversation. Atlas opened in conversation A on repo and in
+        #    conversation B on other: each app's lease-free reads reach its own project only, and a
+        #    request whose conversation is unknown or never opened Atlas is refused.
+        guard_ui = gw_mod.GuardedService(None)
+
+        def _ui_call(name: str, meta: dict | None, memory_id: str | None = None):
+            params = SimpleNamespace(meta=meta, name=name, arguments={"memory_id": memory_id} if memory_id else {})
+            return guard_ui.authorize(SimpleNamespace(method="tools/call", params=params, session=NoRootsSession()), _admit)
+
+        async def _ui_leased(ws: Path, tc_id: str, name: str, conversation: str, memory_id: str | None = None):
+            payload = _mcp_hook_payload(ws, tc_id, tool=name, conversation=conversation)
+            hooks_mod.pre_tool(payload)
+            result = await _ui_call(name, {CONVERSATION: conversation}, memory_id)
+            hooks_mod.post_tool(payload)
+            return result
+
+        async def check_ui_grants_per_conversation() -> None:
+            assert await _ui_leased(repo, "ui-1", "open_atlas", "conv-A") == "admitted"
+            assert await _ui_leased(other, "ui-2", "open_atlas", "conv-B") == "admitted"
+            assert guard_ui.project.checkout == other
+            # A's Atlas reads A's project even though B bound the gateway last.
+            assert await _ui_call("search", {CONVERSATION: "conv-A"}) == "admitted"
+            assert guard_ui.project.checkout == repo
+            assert await _ui_call("search", {CONVERSATION: "conv-B"}) == "admitted"
+            assert guard_ui.project.checkout == other
+            # No origin, or an origin that never opened Atlas: refused.
+            assert _denied(await _ui_call("search", None))
+            assert _denied(await _ui_call("search", {CONVERSATION: "conv-C"}))
+            # Card grants are per conversation too.
+            assert await _ui_leased(repo, "ui-3", "get", "conv-A", "mem-x") == "admitted"
+            assert await _ui_call("compare_at_head", {CONVERSATION: "conv-A"}, "mem-x") == "admitted"
+            assert guard_ui.project.checkout == repo
+            assert _denied(await _ui_call("compare_at_head", {CONVERSATION: "conv-C"}, "mem-x"))
+
+        anyio.run(check_ui_grants_per_conversation)
     finally:
         os.umask(prev_umask)
 

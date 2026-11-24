@@ -261,28 +261,50 @@ class GuardedService:
         self.generation = 0
         self.lock = anyio.Lock()
         self._clock = time.monotonic
-        self._atlas_grant: tuple[str, float] | None = None  # (project id, expiry on _clock)
-        self._card_grants: dict[str, tuple[str, float]] = {}  # memory id -> (project id, expiry)
+        # UI grants are keyed by the conversation that opened them and remember that conversation's
+        # project: one gateway serves every conversation, so the gateway's current project says
+        # nothing about which app a lease-free request came from.
+        self._atlas_grants: dict[str, tuple[Any, float]] = {}  # conversation -> (project, expiry)
+        self._card_grants: dict[tuple[str, str], tuple[Any, float]] = {}  # (conversation, memory) -> ...
 
-    def _atlas_grant_admits(self, tool_name: str | None) -> bool:
-        if tool_name not in ATLAS_UI_TOOLS or self.project is None or self._atlas_grant is None:
-            return False
-        project_id, expires = self._atlas_grant
-        return project_id == self.project.id and self._clock() < expires
-
-    def _card_grant_admits(self, tool_name: str | None, memory_id: str | None) -> bool:
-        if tool_name != "compare_at_head" or self.project is None or memory_id is None:
-            return False
-        grant = self._card_grants.get(memory_id)
-        return grant is not None and grant[0] == self.project.id and self._clock() < grant[1]
-
-    def _grant_card(self, project_id: str, memory_id: str) -> None:
+    def _prune(self, grants: dict) -> dict:
         now = self._clock()
-        self._card_grants = {k: v for k, v in self._card_grants.items() if v[1] > now}
-        self._card_grants.pop(memory_id, None)
-        self._card_grants[memory_id] = (project_id, now + ATLAS_UI_GRANT_SECONDS)
-        while len(self._card_grants) > CARD_GRANT_LIMIT:
-            del self._card_grants[next(iter(self._card_grants))]
+        return {k: v for k, v in grants.items() if v[1] > now}
+
+    def _ui_grant_project(self, ctx: Any, tool_name: str | None) -> Any:
+        """The project a lease-free UI request may use, or None when its origin has no grant."""
+        conversation = self._request_conversation(ctx)
+        if conversation is None:
+            return None
+        now = self._clock()
+        if tool_name in ATLAS_UI_TOOLS:
+            grant = self._atlas_grants.get(conversation)
+            if grant is not None and now < grant[1]:
+                return grant[0]
+        if tool_name == "compare_at_head":
+            memory_id = self._memory_id_argument(ctx)
+            grant = self._card_grants.get((conversation, memory_id)) if memory_id else None
+            if grant is not None and now < grant[1]:
+                return grant[0]
+        return None
+
+    def _grant_ui(self, ctx: Any, tool_name: str | None, project: Any) -> None:
+        conversation = self._request_conversation(ctx)
+        if conversation is None:
+            return
+        expires = self._clock() + ATLAS_UI_GRANT_SECONDS
+        if tool_name == "open_atlas":
+            self._atlas_grants = self._prune(self._atlas_grants)
+            self._atlas_grants[conversation] = (project, expires)
+        if tool_name in CARD_GRANT_SOURCES:
+            memory_id = self._memory_id_argument(ctx)
+            if memory_id is not None:
+                grants = self._prune(self._card_grants)
+                grants.pop((conversation, memory_id), None)
+                grants[(conversation, memory_id)] = (project, expires)
+                while len(grants) > CARD_GRANT_LIMIT:
+                    del grants[next(iter(grants))]
+                self._card_grants = grants
 
     def __getattr__(self, name: str) -> Any:
         if self.service is None:
@@ -382,13 +404,15 @@ class GuardedService:
                             )
                         return denied("project_scope_ambiguous", lease_msg)
                     if lease_state == "missing":
-                        if self._atlas_grant_admits(tool_name) or self._card_grant_admits(
-                            tool_name, self._memory_id_argument(ctx)
-                        ):
-                            diag = inspect_scope(self.project.checkout)
+                        granted = self._ui_grant_project(ctx, tool_name)
+                        if granted is not None:
+                            diag = inspect_scope(granted.checkout)
                             if diag.state != "bound":
                                 raise ScopeError(diag.message or "project scope unavailable")
-                            _verify_env_signals_agree(self.project.checkout)
+                            _verify_env_signals_agree(granted.checkout)
+                            if resolve(granted.checkout).id != granted.id:
+                                raise ScopeError("granted project no longer matches its checkout")
+                            self._bind_project(granted)
                             return await call_next(ctx)
                         if tool_name == "status":
                             return _diagnostic_status_result(
@@ -444,12 +468,8 @@ class GuardedService:
                     raise ScopeError("workspace differs from configured project")
 
                 self._bind_project(project)
-                if tool_name == "open_atlas":
-                    self._atlas_grant = (project.id, self._clock() + ATLAS_UI_GRANT_SECONDS)
-                if host_lease_mode and tool_name in CARD_GRANT_SOURCES:
-                    memory_id = self._memory_id_argument(ctx)
-                    if memory_id is not None:
-                        self._grant_card(project.id, memory_id)
+                if host_lease_mode:
+                    self._grant_ui(ctx, tool_name, project)
             except Exception as error:
                 if self.project is not None and not host_lease_mode:
                     if not isinstance(error, ConcurrentRootsChange):
