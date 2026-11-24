@@ -1,0 +1,13 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "nexus-correlation-probe",
+  "displayName": "Nexus Correlation Probe",
+  "version": "0.1.0",
+  "description": "Diagnostic only: logs identifiers (never content) from lifecycle hooks and MCP requests to find a key that ties a PreToolUse hook to its MCP tool call.",
+  "author": {
+    "name": "Sory Kora / Cerebros",
+    "url": "https://github.com/soryko/Nexus"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "keywords": ["diagnostic", "mcp", "hooks"]
+}
