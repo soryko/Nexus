@@ -10,6 +10,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # support isolated (-I
 from project_scope import ScopeError, enroll, host_project, resolve
 
 
+
+def capture_policy():
+    """The Claude hooks launch's capture policy: autonomous unless NEXUS_CAPTURE_POLICY=explicit.
+
+    The plugin's command hooks read the same variable, so the cue, the guard and the Stop check
+    agree. An unrecognised value falls back to explicit, the more conservative mode, and says so.
+    """
+    value = os.environ.get('NEXUS_CAPTURE_POLICY', '').strip().lower()
+    if value in ('', 'autonomous'):
+        return 'autonomous'
+    if value != 'explicit':
+        print('Nexus: unrecognised NEXUS_CAPTURE_POLICY; using explicit.', file=sys.stderr)
+    return 'explicit'
+
+
 def run_atlas(checkout, open_browser):
     """Serve the viewer. Needs the installed Nexus interpreter; never enrolls or writes."""
     if not checkout.is_absolute():
@@ -86,7 +101,8 @@ def main():
         if args.command == 'codex':
             options.extend(['--codex-project-root', str(project.common.parent)])
         elif hooks:
-            options.extend(['--hook-project-root', str(project.common.parent)])
+            options.extend(['--hook-project-root', str(project.common.parent),
+                            '--capture-policy', capture_policy()])
         else:
             options.extend(['--repo', str(project.checkout)])
         os.chdir(project.checkout)

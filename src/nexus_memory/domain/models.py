@@ -14,6 +14,11 @@ DIGEST_VERSION = 1
 # computes it; the frozen version-1 function is never edited.
 REFERENCE_DIGEST_VERSION = 2
 TAG = re.compile(r"[a-z0-9][a-z0-9._/-]{0,63}\Z")
+# A space is a project-local topic bucket that the agent names and creates itself. It is stored
+# as one ordinary tag, so it needs no schema change, revise carries it like any other tag, and
+# it never crosses the namespace boundary. Prefix plus the longest slug is exactly TAG's limit.
+SPACE_PREFIX = "space/"
+SPACE = re.compile(r"[a-z0-9][a-z0-9._-]{0,57}\Z")
 
 # Object formats git can report, with the OID width each one produces. Recorded at bind,
 # never assumed: a fixed 40-hex rule would reject every SHA-256 repository.
@@ -186,6 +191,11 @@ class MemoryInput:
             raise InvalidInput("tags must be strings") from error
         if len(normalized) > 16 or any(not TAG.fullmatch(tag) for tag in normalized):
             raise InvalidInput("invalid tags")
+        spaces = [tag[len(SPACE_PREFIX):] for tag in normalized if tag.startswith(SPACE_PREFIX)]
+        if len(spaces) > 1:
+            raise InvalidInput("a memory belongs to at most one space")
+        if spaces and not SPACE.fullmatch(spaces[0]):
+            raise InvalidInput("invalid space")
         if self.source_uri is not None:
             _valid_utf8(self.source_uri, "source_uri", 2048)
         if self.snapshot is not None:
@@ -233,6 +243,40 @@ class StoreStatus:
     latest_durable_seq: int
     repository_id: str | None = None
     verification: str = "unavailable"
+
+
+def space_tag(space: object) -> str:
+    """The tag for a space name, normalized the way tags are."""
+    if not isinstance(space, str):
+        raise InvalidInput("space must be a string")
+    name = space.strip().lower()
+    if not SPACE.fullmatch(name):
+        raise InvalidInput("space must be a slug of lowercase letters, digits, '.', '_' or '-', at most 58 characters")
+    return SPACE_PREFIX + name
+
+
+def with_space(tags: tuple[str, ...], space: str | None) -> tuple[str, ...]:
+    """Tags with the given space replacing any space tag already present; unchanged when space is None."""
+    if space is None:
+        return tuple(tags)
+    tag = space_tag(space)
+    kept = tuple(t for t in tags if not (isinstance(t, str) and t.strip().lower().startswith(SPACE_PREFIX)))
+    return (*kept, tag)
+
+
+def space_of(tags: tuple[str, ...]) -> str | None:
+    for tag in tags:
+        if tag.startswith(SPACE_PREFIX):
+            return tag[len(SPACE_PREFIX):]
+    return None
+
+
+@dataclass(frozen=True, slots=True)
+class SpaceSummary:
+    """One space in the bound scope: live (unforgotten) memories filed in it and the newest write."""
+    space: str
+    memories: int
+    last_updated: str
 
 
 REPOSITORY_ANY = "any"

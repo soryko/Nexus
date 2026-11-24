@@ -87,6 +87,24 @@ files you want to run. Rollback: `claude plugin uninstall nexus-memory@nexus-loc
 Restart Claude (the Code tab: start a new session). If a hook-trust prompt appears, read it and approve it
 yourself; `/hooks` lists the plugin's hooks.
 
+## Capture policy (autonomous by default)
+
+The `claude-hooks` launch and the plugin's command hooks read one variable, `NEXUS_CAPTURE_POLICY`:
+
+- **unset or `autonomous` (default):** the session cue tells the model to search before architectural decisions
+  and to record or revise durable decisions, constraints, procedures and root-caused failures on its own judgment,
+  filed in topic spaces it names itself (`spaces`, and `space` on `record`/`revise`/`search`). The pre-tool guard
+  only checks the request comes from the enrolled checkout. A Stop hook asks, at most once per prompt and three
+  times per session, whether an editing or deciding turn produced something durable; the model records it or
+  replies `NO_MEMORY`. `forget` stays explicit-only.
+- **`explicit`:** the earlier behaviour: candidate IDs only, broader search only on a prompt starting with
+  `Nexus explore:`, saves only on request, and no Stop check. Any unrecognised value also means explicit.
+
+Set it where Claude Code is started (for the desktop app, in the environment it inherits), then start a new
+session: the server and the hooks must see the same value. `/nexus-memory:status` prints the policy in effect.
+The launcher and runtime from this change are both needed for autonomous mode; an older runtime ignores the
+requested policy on a hooked launch and keeps its guard, so the model is told to search but is refused.
+
 ## Verify
 
 Run `claude mcp list` once from an enrolled project and once from a directory that is not enrolled: the server
