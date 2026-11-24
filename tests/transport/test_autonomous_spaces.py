@@ -10,7 +10,7 @@ import pytest
 from mcp import Client, StdioServerParameters
 
 from nexus_memory.domain.errors import InvalidInput
-from nexus_memory.domain.models import MemoryInput, space_tag, with_space
+from nexus_memory.domain.models import MemoryInput, space_of, space_tag, spaces_of, with_space
 from nexus_memory.transport.codex import AUTONOMOUS_CUE, SESSION_CUE
 from test_codex_integration import PROJECT, repository
 
@@ -30,10 +30,44 @@ def test_space_rules_in_the_domain() -> None:
     for bad in ("", "a/b", "Ünïcode", "-lead", "x" * 59):
         with pytest.raises(InvalidInput):
             space_tag(bad)
-    with pytest.raises(InvalidInput):
-        MemoryInput("c", tags=("space/a", "space/b"))
-    with pytest.raises(InvalidInput):
-        MemoryInput("c", tags=("space/a/b",))
+    # Tags valid before spaces existed stay valid; only well-formed space tags are spaces.
+    assert MemoryInput("c", tags=("space/a", "space/b")).tags == ("space/a", "space/b")
+    assert MemoryInput("c", tags=("space/a/b",)).tags == ("space/a/b",)
+    assert spaces_of(("space/a/b", "x", "space/b", "space/a")) == ("b", "a")
+    assert space_of(("space/a/b",)) is None
+    assert with_space(("space/a/b", "space/old", "x"), "new") == ("space/a/b", "x", "space/new")
+
+
+def test_tags_written_before_spaces_still_retry_and_revise(tmp_path: Path) -> None:
+    repo = repository(tmp_path / "repo")
+    legacy = ["space/auth/api", "space/auth", "space/release"]
+
+    async def run() -> None:
+        async with Client(server(tmp_path / "db.sqlite3", repo, "--capture-policy", "autonomous")) as client:
+            arguments = {"content": "Keys rotate", "idempotency_key": "k1", "tags": legacy}
+            first = await client.call_tool("record", arguments)
+            assert not first.is_error
+            retry = await client.call_tool("record", arguments)
+            assert retry.structured_content == first.structured_content  # the original receipt, not invalid_input
+
+            memory_id = first.structured_content["memory_id"]
+            stored = (await client.call_tool("get", {"memory_id": memory_id})).structured_content
+            kept = await client.call_tool("revise", {
+                "memory_id": memory_id, "expected_revision_id": stored["revision_id"], "idempotency_key": "k2",
+                "content": "Keys rotate daily", "kind": stored["kind"], "tags": stored["tags"]})
+            assert not kept.is_error
+            listed = (await client.call_tool("spaces", {})).structured_content["spaces"]
+            assert sorted((s["space"], s["memories"]) for s in listed) == [("auth", 1), ("release", 1)]
+
+            moved = await client.call_tool("revise", {
+                "memory_id": memory_id, "expected_revision_id": kept.structured_content["revision_id"],
+                "idempotency_key": "k3", "content": "Keys rotate daily", "kind": stored["kind"],
+                "tags": stored["tags"], "space": "security"})
+            assert not moved.is_error
+            current = (await client.call_tool("get", {"memory_id": memory_id})).structured_content
+            assert current["tags"] == ["space/auth/api", "space/security"]
+
+    anyio.run(run)
 
 
 def test_spaces_are_created_by_recording_listed_and_searchable(tmp_path: Path) -> None:

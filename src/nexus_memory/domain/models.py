@@ -191,11 +191,10 @@ class MemoryInput:
             raise InvalidInput("tags must be strings") from error
         if len(normalized) > 16 or any(not TAG.fullmatch(tag) for tag in normalized):
             raise InvalidInput("invalid tags")
-        spaces = [tag[len(SPACE_PREFIX):] for tag in normalized if tag.startswith(SPACE_PREFIX)]
-        if len(spaces) > 1:
-            raise InvalidInput("a memory belongs to at most one space")
-        if spaces and not SPACE.fullmatch(spaces[0]):
-            raise InvalidInput("invalid space")
+        # No space rule here: tags valid before spaces existed (space/auth/api, two space/ tags)
+        # must stay valid, or an identical retry and a tag-preserving revise of a stored record
+        # would fail. One space per memory is enforced by the space argument (with_space); a tag
+        # that is not a well-formed space tag is an ordinary tag.
         if self.source_uri is not None:
             _valid_utf8(self.source_uri, "source_uri", 2048)
         if self.snapshot is not None:
@@ -255,20 +254,39 @@ def space_tag(space: object) -> str:
     return SPACE_PREFIX + name
 
 
+def _space_name(tag: object) -> str | None:
+    """The space a tag files a memory in, or None when it is not a well-formed space tag."""
+    if not isinstance(tag, str):
+        return None
+    normalized = tag.strip().lower()
+    if not normalized.startswith(SPACE_PREFIX):
+        return None
+    name = normalized[len(SPACE_PREFIX):]
+    return name if SPACE.fullmatch(name) else None
+
+
 def with_space(tags: tuple[str, ...], space: str | None) -> tuple[str, ...]:
-    """Tags with the given space replacing any space tag already present; unchanged when space is None."""
+    """Tags with the given space replacing any space already present; unchanged when space is None.
+
+    Only well-formed space tags are replaced. Anything else under the prefix (space/auth/api,
+    written before spaces existed) is an ordinary tag and is kept.
+    """
     if space is None:
         return tuple(tags)
     tag = space_tag(space)
-    kept = tuple(t for t in tags if not (isinstance(t, str) and t.strip().lower().startswith(SPACE_PREFIX)))
+    kept = tuple(t for t in tags if _space_name(t) is None)
     return (*kept, tag)
 
 
+def spaces_of(tags: tuple[str, ...]) -> tuple[str, ...]:
+    """Every space the tags file a memory in, in tag order. More than one only for tags written directly."""
+    return tuple(name for name in map(_space_name, tags) if name is not None)
+
+
 def space_of(tags: tuple[str, ...]) -> str | None:
-    for tag in tags:
-        if tag.startswith(SPACE_PREFIX):
-            return tag[len(SPACE_PREFIX):]
-    return None
+    """The first space the tags file a memory in, or None."""
+    found = spaces_of(tags)
+    return found[0] if found else None
 
 
 @dataclass(frozen=True, slots=True)

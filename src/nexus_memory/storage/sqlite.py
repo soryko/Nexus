@@ -48,7 +48,7 @@ from nexus_memory.domain.models import (
     StoreStatus,
     VerifiedReference,
     WriteReceipt,
-    space_of,
+    spaces_of,
 )
 
 from .repository import write_observation
@@ -1661,14 +1661,15 @@ class SQLiteRepository:
         counts: dict[str, list] = {}
         for tags_json, created_at in rows:
             try:
-                name = space_of(tuple(json.loads(tags_json)))
+                names = spaces_of(tuple(json.loads(tags_json)))
             except (ValueError, TypeError):
                 continue
-            if name is None:
-                continue
-            entry = counts.setdefault(name, [0, created_at])
-            entry[0] += 1
-            entry[1] = max(entry[1], created_at)
+            # A memory tagged directly with two spaces counts in both, as the space filter in
+            # search finds it in both; malformed space/ tags from before spaces count in none.
+            for name in dict.fromkeys(names):
+                entry = counts.setdefault(name, [0, created_at])
+                entry[0] += 1
+                entry[1] = max(entry[1], created_at)
         ordered = sorted(counts.items(), key=lambda item: (item[1][1], item[0]), reverse=True)
         return tuple(SpaceSummary(name, count, latest) for name, (count, latest) in ordered)
 
