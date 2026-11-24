@@ -1,0 +1,40 @@
+diff --git a/src/click/core.py b/src/click/core.py
+index 939ad81..18431cd 100644
+--- a/src/click/core.py
++++ b/src/click/core.py
+@@ -2834,7 +2834,10 @@ class Option(Parameter):
+             envvar = f"{ctx.auto_envvar_prefix}_{self.name.upper()}"
+             rv = os.environ.get(envvar)
+ 
+-        return rv
++            if rv:
++                return rv
++
++        return None
+ 
+     def value_from_envvar(self, ctx: Context) -> t.Optional[t.Any]:
+         rv: t.Optional[t.Any] = self.resolve_envvar_value(ctx)
+diff --git a/tests/test_options.py b/tests/test_options.py
+index 3beff11..9cf4e01 100644
+--- a/tests/test_options.py
++++ b/tests/test_options.py
+@@ -164,6 +164,19 @@ def test_empty_envvar(runner):
+     assert result.output == "mypath: None\n"
+ 
+ 
++def test_empty_envvar_auto_prefix(runner):
++    @click.command()
++    @click.option("--mypath", type=click.Path(exists=True), envvar="MYPATH")
++    def cli(mypath):
++        click.echo(f"mypath: {mypath}")
++
++    result = runner.invoke(
++        cli, [], auto_envvar_prefix="AUTO", env={"AUTO_MYPATH": ""}
++    )
++    assert result.exit_code == 0
++    assert result.output == "mypath: None\n"
++
++
+ def test_multiple_envvar(runner):
+     @click.command()
+     @click.option("--arg", multiple=True)

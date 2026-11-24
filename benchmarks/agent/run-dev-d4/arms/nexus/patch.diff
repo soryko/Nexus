@@ -1,0 +1,37 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index 48670ba..0915d38 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -85,6 +85,7 @@ filterwarnings = [
+ ]
+ markers = [
+     "stress: high-iteration stress tests for race conditions (deselect with '-m \"not stress\"')",
++    "integration: tests that exercise Click against other components and need no extra setup",
+ ]
+ addopts = "-m 'not stress'"
+ 
+diff --git a/tests/test_integration_marker.py b/tests/test_integration_marker.py
+new file mode 100644
+index 0000000..9f96bfa
+--- /dev/null
++++ b/tests/test_integration_marker.py
+@@ -0,0 +1,19 @@
++from __future__ import annotations
++
++import pytest
++
++import click
++
++
++@pytest.mark.integration
++def test_integration_marker(runner):
++    """A test using the registered ``integration`` marker collects and runs."""
++
++    @click.command()
++    def cli():
++        click.echo("integrated")
++
++    result = runner.invoke(cli)
++
++    assert result.exit_code == 0
++    assert result.output == "integrated\n"

@@ -1,0 +1,367 @@
+{
+ "schedule": "benchmarks/agent/schedule-heldout-a1.json",
+ "schedule_digest": "1a960a7465fa36a0bb54c2d81c3663bd6b92c5157020c92fe71178c75af30282",
+ "seed": 20260912,
+ "started_utc": "2026-09-12T13:11:54.326256+00:00",
+ "finished_utc": "2026-09-12T14:17:58.325748+00:00",
+ "config": {
+  "source_clone": "/Users/soko/Cerebros/nexus-a1-fixtures/click",
+  "pytest_python": "/Users/soko/Cerebros/nexus-a1-fixtures/.venv-click/bin/python",
+  "venv_python": "/Users/soko/Cerebros/nexus-memory/.venv-sqlite/bin/python",
+  "nexus_server": "/Users/soko/Cerebros/nexus-memory/.venv-sqlite/bin/nexus-memory",
+  "forwarder_port": 8899,
+  "corpus_size": 13,
+  "max_turns": 30,
+  "wall_clock_s": 600,
+  "capture_max_turns": 60,
+  "capture_wall_clock_s": 1200,
+  "memory_probe_query": "click option parameter",
+  "repo": "/Users/soko/Cerebros/nexus-memory",
+  "bench": "/Users/soko/Cerebros/nexus-memory/benchmarks/agent",
+  "store_master": "/Users/soko/Cerebros/nexus-a1-fixtures/heldout-corpus/nexus-heldout.db",
+  "corpus_digest": "9ae2a9f268dd894d",
+  "namespace": "a1-dev",
+  "actor": "agent",
+  "notes_file": "notes-heldout-a1.md",
+  "prompts": "prompts-a1.json",
+  "config_source": "/Users/soko/Cerebros/nexus-memory/benchmarks/agent/a1-config.json"
+ },
+ "rows_skipped_already_done": [
+  [
+   "h1",
+   1
+  ]
+ ],
+ "rows": [
+  {
+   "task": "h1",
+   "attempt": 2,
+   "order": [
+    "nexus",
+    "notes",
+    "baseline"
+   ],
+   "exit": 0,
+   "wall_clock_s": 405.5,
+   "log": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/heldout-exec-run/run-h1/attempt2/run.log",
+   "arms": {
+    "nexus": {
+     "terminal": "max_turns",
+     "checks": "18 failed, 619 passed in 0.62s",
+     "store_unchanged": true
+    },
+    "notes": {
+     "terminal": "max_turns",
+     "checks": "18 failed, 619 passed in 0.70s",
+     "store_unchanged": null
+    },
+    "baseline": {
+     "terminal": "max_turns",
+     "checks": "18 failed, 619 passed in 0.69s",
+     "store_unchanged": null
+    }
+   },
+   "master_store_unchanged": true
+  },
+  {
+   "task": "h1",
+   "attempt": 3,
+   "order": [
+    "notes",
+    "nexus",
+    "baseline"
+   ],
+   "exit": 0,
+   "wall_clock_s": 454.7,
+   "log": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/heldout-exec-run/run-h1/attempt3/run.log",
+   "arms": {
+    "notes": {
+     "terminal": "max_turns",
+     "checks": "18 failed, 619 passed in 0.76s",
+     "store_unchanged": null
+    },
+    "nexus": {
+     "terminal": "max_turns",
+     "checks": "18 failed, 619 passed in 0.60s",
+     "store_unchanged": true
+    },
+    "baseline": {
+     "terminal": "max_turns",
+     "checks": "18 failed, 619 passed in 0.65s",
+     "store_unchanged": null
+    }
+   },
+   "master_store_unchanged": true
+  },
+  {
+   "task": "h2",
+   "attempt": 1,
+   "order": [
+    "nexus",
+    "notes",
+    "baseline"
+   ],
+   "exit": 0,
+   "wall_clock_s": 489.5,
+   "log": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/heldout-exec-run/run-h2/attempt1/run.log",
+   "arms": {
+    "nexus": {
+     "terminal": "max_turns",
+     "checks": "2 failed, 88 passed in 0.08s",
+     "store_unchanged": true
+    },
+    "notes": {
+     "terminal": "max_turns",
+     "checks": "90 passed in 0.06s",
+     "store_unchanged": null
+    },
+    "baseline": {
+     "terminal": "max_turns",
+     "checks": "90 passed in 0.07s",
+     "store_unchanged": null
+    }
+   },
+   "master_store_unchanged": true
+  },
+  {
+   "task": "h2",
+   "attempt": 2,
+   "order": [
+    "nexus",
+    "baseline",
+    "notes"
+   ],
+   "exit": 0,
+   "wall_clock_s": 448.2,
+   "log": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/heldout-exec-run/run-h2/attempt2/run.log",
+   "arms": {
+    "nexus": {
+     "terminal": "max_turns",
+     "checks": "2 failed, 88 passed in 0.07s",
+     "store_unchanged": true
+    },
+    "baseline": {
+     "terminal": "max_turns",
+     "checks": "90 passed in 0.06s",
+     "store_unchanged": null
+    },
+    "notes": {
+     "terminal": "max_turns",
+     "checks": "90 passed in 0.07s",
+     "store_unchanged": null
+    }
+   },
+   "master_store_unchanged": true
+  },
+  {
+   "task": "h2",
+   "attempt": 3,
+   "order": [
+    "baseline",
+    "notes",
+    "nexus"
+   ],
+   "exit": 0,
+   "wall_clock_s": 386.5,
+   "log": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/heldout-exec-run/run-h2/attempt3/run.log",
+   "arms": {
+    "baseline": {
+     "terminal": "max_turns",
+     "checks": "90 passed in 0.09s",
+     "store_unchanged": null
+    },
+    "notes": {
+     "terminal": "completed",
+     "checks": "90 passed in 0.06s",
+     "store_unchanged": null
+    },
+    "nexus": {
+     "terminal": "max_turns",
+     "checks": "90 passed in 0.07s",
+     "store_unchanged": true
+    }
+   },
+   "master_store_unchanged": true
+  },
+  {
+   "task": "h3",
+   "attempt": 1,
+   "order": [
+    "nexus",
+    "baseline",
+    "notes"
+   ],
+   "exit": 0,
+   "wall_clock_s": 264.1,
+   "log": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/heldout-exec-run/run-h3/attempt1/run.log",
+   "arms": {
+    "nexus": {
+     "terminal": "max_turns",
+     "checks": "10 failed, 766 passed in 0.43s",
+     "store_unchanged": true
+    },
+    "baseline": {
+     "terminal": "max_turns",
+     "checks": "10 failed, 766 passed in 0.46s",
+     "store_unchanged": null
+    },
+    "notes": {
+     "terminal": "max_turns",
+     "checks": "10 failed, 766 passed in 0.57s",
+     "store_unchanged": null
+    }
+   },
+   "master_store_unchanged": true
+  },
+  {
+   "task": "h3",
+   "attempt": 2,
+   "order": [
+    "nexus",
+    "baseline",
+    "notes"
+   ],
+   "exit": 0,
+   "wall_clock_s": 313.6,
+   "log": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/heldout-exec-run/run-h3/attempt2/run.log",
+   "arms": {
+    "nexus": {
+     "terminal": "max_turns",
+     "checks": "10 failed, 766 passed in 0.45s",
+     "store_unchanged": true
+    },
+    "baseline": {
+     "terminal": "max_turns",
+     "checks": "10 failed, 766 passed in 0.43s",
+     "store_unchanged": null
+    },
+    "notes": {
+     "terminal": "max_turns",
+     "checks": "10 failed, 766 passed in 0.42s",
+     "store_unchanged": null
+    }
+   },
+   "master_store_unchanged": true
+  },
+  {
+   "task": "h3",
+   "attempt": 3,
+   "order": [
+    "baseline",
+    "notes",
+    "nexus"
+   ],
+   "exit": 0,
+   "wall_clock_s": 349.4,
+   "log": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/heldout-exec-run/run-h3/attempt3/run.log",
+   "arms": {
+    "baseline": {
+     "terminal": "max_turns",
+     "checks": "10 failed, 766 passed in 0.45s",
+     "store_unchanged": null
+    },
+    "notes": {
+     "terminal": "max_turns",
+     "checks": "10 failed, 766 passed in 0.42s",
+     "store_unchanged": null
+    },
+    "nexus": {
+     "terminal": "max_turns",
+     "checks": "10 failed, 766 passed in 0.43s",
+     "store_unchanged": true
+    }
+   },
+   "master_store_unchanged": true
+  },
+  {
+   "task": "h4",
+   "attempt": 1,
+   "order": [
+    "notes",
+    "nexus",
+    "baseline"
+   ],
+   "exit": 0,
+   "wall_clock_s": 277.2,
+   "log": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/heldout-exec-run/run-h4/attempt1/run.log",
+   "arms": {
+    "notes": {
+     "terminal": "completed",
+     "checks": "10 passed in 0.01s",
+     "store_unchanged": null
+    },
+    "nexus": {
+     "terminal": "max_turns",
+     "checks": "10 passed in 0.01s",
+     "store_unchanged": true
+    },
+    "baseline": {
+     "terminal": "completed",
+     "checks": "10 passed in 0.02s",
+     "store_unchanged": null
+    }
+   },
+   "master_store_unchanged": true
+  },
+  {
+   "task": "h4",
+   "attempt": 2,
+   "order": [
+    "nexus",
+    "baseline",
+    "notes"
+   ],
+   "exit": 0,
+   "wall_clock_s": 357.2,
+   "log": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/heldout-exec-run/run-h4/attempt2/run.log",
+   "arms": {
+    "nexus": {
+     "terminal": "max_turns",
+     "checks": "10 passed in 0.02s",
+     "store_unchanged": true
+    },
+    "baseline": {
+     "terminal": "completed",
+     "checks": "10 passed in 0.03s",
+     "store_unchanged": null
+    },
+    "notes": {
+     "terminal": "completed",
+     "checks": "10 passed in 0.02s",
+     "store_unchanged": null
+    }
+   },
+   "master_store_unchanged": true
+  },
+  {
+   "task": "h4",
+   "attempt": 3,
+   "order": [
+    "baseline",
+    "notes",
+    "nexus"
+   ],
+   "exit": 0,
+   "wall_clock_s": 218.0,
+   "log": "/private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/heldout-exec-run/run-h4/attempt3/run.log",
+   "arms": {
+    "baseline": {
+     "terminal": "max_turns",
+     "checks": "10 passed in 0.02s",
+     "store_unchanged": null
+    },
+    "notes": {
+     "terminal": "completed",
+     "checks": "10 passed in 0.01s",
+     "store_unchanged": null
+    },
+    "nexus": {
+     "terminal": "completed",
+     "checks": "10 passed in 0.01s",
+     "store_unchanged": true
+    }
+   },
+   "master_store_unchanged": true
+  }
+ ]
+}

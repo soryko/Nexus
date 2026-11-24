@@ -1,0 +1,50 @@
+diff --git a/src/click/_utils.py b/src/click/_utils.py
+index 05ee2e9..c83a58e 100644
+--- a/src/click/_utils.py
++++ b/src/click/_utils.py
+@@ -18,6 +18,13 @@ class Sentinel(enum.Enum):
+     def __repr__(self) -> str:
+         return f"{self.__class__.__name__}.{self.name}"
+ 
++    def __reduce_ex__(self, proto: int) -> t.Any:
++        # An enum member is normally pickled by its value, but sentinel values are
++        # plain ``object()`` instances. Unpickling one produces a fresh object
++        # that is not equal to any member, so reconstruction from the value fails.
++        # Pickle by name instead, which round-trips to the exact member.
++        return getattr, (self.__class__, self.name)
++
+ 
+ UNSET: t.Literal[Sentinel.UNSET] = Sentinel.UNSET
+ """Sentinel used to indicate that a value is not set."""
+diff --git a/tests/test_utils/test_sentinel.py b/tests/test_utils/test_sentinel.py
+index 1dd5b15..4fdbc52 100644
+--- a/tests/test_utils/test_sentinel.py
++++ b/tests/test_utils/test_sentinel.py
+@@ -1,7 +1,26 @@
++import copy
++import pickle
+ from decimal import Decimal
+ from fractions import Fraction
+ 
+-from click._utils import UNSET
++import pytest
++
++from click._utils import Sentinel, UNSET
++
++
++@pytest.mark.parametrize("member", list(Sentinel))
++@pytest.mark.parametrize("protocol", range(pickle.HIGHEST_PROTOCOL + 1))
++def test_sentinel_pickle_roundtrip(member, protocol):
++    # Enum members are normally pickled by their value, but sentinel values are
++    # plain ``object()`` instances. Unpickling used to build a fresh object that
++    # matched no member, raising ``ValueError: ... is not a valid Sentinel``.
++    assert pickle.loads(pickle.dumps(member, protocol)) is member
++
++
++@pytest.mark.parametrize("member", list(Sentinel))
++def test_sentinel_copy_roundtrip(member):
++    assert copy.copy(member) is member
++    assert copy.deepcopy(member) is member
+ 
+ 
+ def test_unset_sentinel():

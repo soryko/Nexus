@@ -1,0 +1,63 @@
+A1 HELD-OUT RESULT
+corpus 13 memories, digest 9ae2a9f268dd894d; mix declaration 21a44b688ed3f65f
+scorer a1-scorer-4; functional a1-functional-2
+
+====================================================================================================
+PER TASK, PER ARM  (the primary reporting; §5 forbids collapsing these into one score)
+====================================================================================================
+
+--- h1   memory declared OUTDATED for this task ---
+  arm           func  contrib   compl  unk  deliv B  outd  irrel  calls    wall      in    out  terminals
+  baseline       0/3        3     0.0    0        0     0      0  32.67   89.57 28098.67  12493  max_turns
+  nexus          0/3        3     0.0    1  5264.67     2   4.67  38.67  112.27 35327.67 16317.33  max_turns
+  notes          0/3        3     0.0    0     6591     2      6  36.33   197.8 31901.33 17219.33  max_turns
+
+--- h2   memory declared UNNECESSARY for this task ---
+  arm           func  contrib   compl  unk  deliv B  outd  irrel  calls    wall      in    out  terminals
+  baseline       3/3        3    0.47    0        0     0      0  42.33   126.4   18398 14680.33  max_turns
+  nexus          1/3        3    0.28 0.67  3851.33     0   9.67  39.67   114.0   25377 13480.33  max_turns
+  notes          3/3        3     0.5    0     8788     0     11  37.67   174.4 21328.33 15863.33  completed,max_turns
+
+--- h3   memory declared UNNECESSARY for this task ---
+  arm           func  contrib   compl  unk  deliv B  outd  irrel  calls    wall      in    out  terminals
+  baseline       0/3        3     0.0    0        0     0      0  36.67   70.53   25299   8454  max_turns
+  nexus          0/3        3     0.0    1     4839     0      9     43    89.6 38801.33 13228.33  max_turns
+  notes          0/3        3     0.0    0     6591     0     11  39.67   121.4   28107 12269.33  max_turns
+
+--- h4   memory declared USEFUL for this task ---
+  arm           func  contrib   compl  unk  deliv B  outd  irrel  calls    wall      in    out  terminals
+  baseline       3/3        3     0.8    0        0     0      0  33.67   89.33 12150.67   9923  completed,max_turns
+  nexus          3/3        3    0.78    0  2057.67     0   4.33     34  123.53 20844.33 11725.67  completed,max_turns
+  notes          3/3        3    0.78    0     6591     0     11  19.33   44.67 11262.67   6145  completed
+
+====================================================================================================
+PAIRED CONTRASTS, per task, functional pass-rate (§5: reported separately, never merged)
+====================================================================================================
+  task     nexus - baseline    notes - baseline       nexus - notes
+  h1     0.00 - 0.00 = +0.00  0.00 - 0.00 = +0.00  0.00 - 0.00 = +0.00
+  h2     0.33 - 1.00 = -0.67  1.00 - 1.00 = +0.00  0.33 - 1.00 = -0.67
+  h3     0.00 - 0.00 = +0.00  0.00 - 0.00 = +0.00  0.00 - 0.00 = +0.00
+  h4     1.00 - 1.00 = +0.00  1.00 - 1.00 = +0.00  1.00 - 1.00 = +0.00
+
+  SIGN COUNT over tasks:
+    nexus - baseline    nexus favoured on 0 task(s), baseline on 1, tied on 3
+    notes - baseline    notes favoured on 0 task(s), baseline on 0, tied on 4
+    nexus - notes       nexus favoured on 0 task(s), notes on 1, tied on 3
+
+====================================================================================================
+EXCLUSIONS AND TRUNCATION, per arm (§5.3)
+====================================================================================================
+  baseline  contributing 12/12   excluded 0   truncated (max_turns/timeout) 10
+  nexus     contributing 12/12   excluded 0   truncated (max_turns/timeout) 11
+  notes     contributing 12/12   excluded 0   truncated (max_turns/timeout) 8
+  Exclusions are balanced at zero across arms; no arm is disadvantaged by environment failure.
+
+====================================================================================================
+ATTEMPT-LEVEL SPREAD (§5: a property of run-to-run variability, never a test of the comparison)
+====================================================================================================
+  h1     baseline=...   nexus=...   notes=...
+  h2     baseline=PPP   nexus=..P   notes=PPP
+  h3     baseline=...   nexus=...   notes=...
+  h4     baseline=PPP   nexus=PPP   notes=PPP
+
+full record -> /private/tmp/claude-501/-Users-soko-Cerebros-nexus-memory/59108fe1-1dd8-4a3d-96ad-a17a7d6747af/scratchpad/heldout-exec-run/report.json

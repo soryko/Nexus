@@ -1,0 +1,43 @@
+diff --git a/repro_tmp.py b/repro_tmp.py
+new file mode 100644
+index 0000000..335957a
+--- /dev/null
++++ b/repro_tmp.py
+@@ -0,0 +1,22 @@
++import click
++from click.testing import CliRunner
++
++@click.command()
++@click.argument("method", type=click.Choice(["foo","bar","baz"]), nargs=-1)
++def cli_variadic(method): pass
++
++@click.command()
++@click.argument("method", type=click.Choice(["foo","bar","baz"]), required=False)
++def cli_optional(method): pass
++
++@click.command()
++@click.argument("d", type=click.DateTime())
++def cli_date(d): pass
++
++@click.command()
++@click.argument("d", type=click.DateTime(), required=False)
++def cli_date_opt(d): pass
++
++r = CliRunner()
++for c in (cli_variadic, cli_optional, cli_date, cli_date_opt):
++    print(r.invoke(c, ["--help"]).output.splitlines()[0])
+diff --git a/src/click/core.py b/src/click/core.py
+index d2db291..02fc946 100644
+--- a/src/click/core.py
++++ b/src/click/core.py
+@@ -3573,7 +3573,9 @@ class Argument(Parameter):
+             var = self.name.upper()
+         if self.deprecated:
+             var += "!"
+-        if not self.required:
++        # A type may already render brackets around its own metavar, such as
++        # Choice or DateTime. Don't add a second pair for optional arguments.
++        if not self.required and not var.startswith("["):
+             var = f"[{var}]"
+         if self.nargs != 1:
+             var += "..."
