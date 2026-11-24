@@ -209,15 +209,16 @@ def pre_tool(payload: dict) -> dict:
     try:
         if _targets_other_mcp_server(payload):
             return {"decision": "allow"}
-        if any(os.environ.get(key) for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR")):
-            return {"decision": "allow"}
         ws = payload.get("workspacePaths")
-        if not isinstance(ws, list) or len(ws) != 1 or not isinstance(ws[0], str) or not ws[0].strip():
-            return {"decision": "allow"}
+        # A Nexus call this hook cannot attest to one workspace still leaves an entry: an
+        # unattested one, which makes the gateway fail closed until this call's PostToolUse clears
+        # it. Writing nothing would let the call consume another workspace's pending lease.
+        target: Path | None = None
+        if (not any(os.environ.get(key) for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"))
+                and isinstance(ws, list) and len(ws) == 1 and isinstance(ws[0], str) and ws[0].strip()):
+            target = Path(ws[0])
 
-        target = Path(ws[0])
-        diag = inspect_scope(target)
-        create_allowed = diag.state == "bound"
+        create_allowed = target is not None and inspect_scope(target).state == "bound"
         lease_path = _lease_file_path(create_allowed=create_allowed)
         if lease_path is None:
             return {"decision": "allow"}
@@ -248,7 +249,11 @@ def pre_tool(payload: dict) -> dict:
                 and now - float(item["ts"]) <= LEASE_TTL_SECONDS
                 and (not tc_id or item.get("id") != tc_id)
             ]
-            active.append({"id": tc_id or uuid4().hex, "workspace": str(target), "ts": now})
+            entry_id = tc_id or uuid4().hex
+            if target is None:
+                active.append({"id": entry_id, "workspace": "", "attested": False, "ts": now})
+            else:
+                active.append({"id": entry_id, "workspace": str(target), "ts": now})
             active = active[-32:]
             file.seek(0)
             json.dump(active, file)

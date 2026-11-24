@@ -172,15 +172,32 @@ def _consume_host_lease(lease_ttl: float = LEASE_TTL_SECONDS) -> tuple[str, str 
             raw = []
         entries = raw if isinstance(raw, list) else []
         now = time.time()
-        active = [
+        live = [
             item
             for item in entries
             if isinstance(item, dict)
             and isinstance(item.get("ts"), (int, float))
-            and isinstance(item.get("workspace"), str)
-            and item["workspace"].strip()
             and now - float(item["ts"]) <= lease_ttl
         ]
+        unattested = [item for item in live if item.get("attested") is False]
+        active = [
+            item
+            for item in live
+            if item.get("attested") is not False
+            and isinstance(item.get("workspace"), str)
+            and item["workspace"].strip()
+        ]
+        if unattested:
+            # A Nexus call is in flight whose hook could not name one workspace. This request may
+            # be that call, so no pending lease can be taken as evidence for it: fail closed.
+            file.seek(0)
+            json.dump(active + unattested, file)
+            file.truncate()
+            return (
+                "ambiguous",
+                None,
+                "A Nexus tool call without a single attested workspace is in flight; retry in a single workspace.",
+            )
         if not active:
             file.seek(0)
             json.dump([], file)

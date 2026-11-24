@@ -721,5 +721,46 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
                 assert _denied(await _call(name)), name
 
         anyio.run(check_atlas_grant)
+
+        # 5. A Nexus call whose hook cannot attest one workspace (multi-root, no workspace, Git
+        #    environment overrides) must not consume another workspace's lease: its hook leaves an
+        #    unattested entry, and the gateway fails closed while one is pending.
+        guard_un = gw_mod.GuardedService(None)
+
+        def _get_call():
+            return guard_un.authorize(
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="get"), session=NoRootsSession()),
+                _admit,
+            )
+
+        def _payload(paths: list[str], tc_id: str) -> dict:
+            payload = _mcp_hook_payload(repo, tc_id, tool="get")
+            payload["workspacePaths"] = paths
+            return payload
+
+        async def check_unattested() -> None:
+            for case, unattested in (
+                ("multi-root", _payload([str(other), str(repo)], "ua-b1")),
+                ("no-workspace", _payload([], "ua-b2")),
+                ("git-env", _payload([str(other)], "ua-b3")),
+            ):
+                assert hooks_mod.pre_tool(_mcp_hook_payload(repo, f"ua-a-{case}", tool="get")) == {"decision": "allow"}
+                if case == "git-env":
+                    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+                assert hooks_mod.pre_tool(unattested) == {"decision": "allow"}
+                monkeypatch.delenv("GIT_DIR", raising=False)
+
+                # B's request arrives first: refused, never run against repo's store.
+                denied_b = await _get_call()
+                assert denied_b.is_error is True, case
+                assert "project_scope_ambiguous" in denied_b.content[0].text, case
+
+                # Once B's PostToolUse clears its entry, A's own lease admits A's call.
+                assert hooks_mod.post_tool(unattested) == {}
+                assert await _get_call() == "admitted", case
+                assert guard_un.project.checkout == repo
+                hooks_mod.post_tool(_mcp_hook_payload(repo, f"ua-a-{case}", tool="get"))
+
+        anyio.run(check_unattested)
     finally:
         os.umask(prev_umask)
