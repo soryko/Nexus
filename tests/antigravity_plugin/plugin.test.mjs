@@ -103,6 +103,7 @@ test('launch.mjs serves degraded diagnostic MCP server when runtime is unavailab
     assert.equal(statusRes.result.isError, false);
     assert.equal(statusRes.result.structuredContent.scope_state, 'runtime_unavailable');
     assert.equal(statusRes.result.structuredContent.durable_storage, 'unavailable');
+    assert.equal(statusRes.result.structuredContent.capture_policy, 'autonomous');
 
     proc.stdin.write(
       `${JSON.stringify({
@@ -120,14 +121,22 @@ test('launch.mjs serves degraded diagnostic MCP server when runtime is unavailab
   }
 });
 
-test('hook.mjs fails open cleanly when runtime is unavailable', () => {
-  const res = spawnSync(process.execPath, [HOOK_JS, 'recall'], {
-    input: JSON.stringify({ workspacePaths: ['/tmp'], lastUserInput: 'explain decision' }),
-    encoding: 'utf-8',
-    env: { ...process.env, NEXUS_PYTHON: '/nonexistent/python', PLUGIN_ROOT },
-  });
-  assert.equal(res.status, 0);
-  assert.deepEqual(JSON.parse(res.stdout), { injectSteps: [] });
+test('hook.mjs fails open cleanly across all hook modes when runtime is unavailable', () => {
+  const cases = [
+    ['recall', { workspacePaths: ['/tmp'], lastUserInput: 'explain decision' }, { injectSteps: [] }],
+    ['pre-tool', { workspacePaths: ['/tmp'], toolCall: { id: '1', name: 'call_mcp_tool', args: {} } }, { decision: 'allow' }],
+    ['post-tool', { workspacePaths: ['/tmp'], toolCall: { id: '1', name: 'call_mcp_tool', args: {} } }, {}],
+    ['stop', { workspacePaths: ['/tmp'], terminationReason: 'NO_TOOL_CALL', fullyIdle: true }, {}],
+  ];
+  for (const [mode, inputPayload, expected] of cases) {
+    const res = spawnSync(process.execPath, [HOOK_JS, mode], {
+      input: JSON.stringify(inputPayload),
+      encoding: 'utf-8',
+      env: { ...process.env, NEXUS_PYTHON: '/nonexistent/python', PLUGIN_ROOT },
+    });
+    assert.equal(res.status, 0);
+    assert.deepEqual(JSON.parse(res.stdout), expected);
+  }
 });
 
 test('Nexus Studio enforces POST-only + X-Sidecar-Token auth and serves real seeded read-only views', async (t) => {

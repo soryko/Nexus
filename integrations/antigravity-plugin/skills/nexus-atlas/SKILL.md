@@ -10,7 +10,7 @@ Nexus exposes two complementary read-only inspection surfaces (neither mutates m
 1. **Nexus Studio Sidecar (`nexus-studio`)**: Persistent side-pane workbench with three tabs:
    - **Activity & Health**: Live reverse-chronological feed from `<store>.activity.sqlite3` (`session_start`, `recall`, MCP read/write outcomes, scope/runtime errors) with strict allowlist privacy (no prompt prose, queries, memory bodies, or paths).
    - **Memory Atlas (Read-Only)**: Lexical BM25 search, kind filters, full revision text, immutable revision chain + diff inspection, related/neighborhood links, on-demand **Verify at HEAD**, **Open File** in Antigravity's aux pane, and **Attach to Next Prompt**.
-   - **Automations & Setup**: Python/SQLite runtime floor checks, explicit-only capture status, APFS drift diagnostics, and setup status for the optional weekly read-only audit automation.
+   - **Automations & Setup**: Python/SQLite runtime floor checks, autonomous + `Stop`-nudge capture status (`forget` explicit-only; `NEXUS_CAPTURE_POLICY=explicit` opt-out), APFS drift diagnostics, and setup status for the optional weekly read-only audit automation.
 2. **Embedded MCP App (`open_atlas`)**: Side-pane and full-page fallback view rendered inside MCP hosts when calling `open_atlas` (or opening Nexus Atlas from the `+` menu / sidebar).
 
 ## Navigation Rules

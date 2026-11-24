@@ -13,6 +13,37 @@
         "command": "node ./scripts/hook.mjs recall",
         "timeout": 5
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": ".*mcp.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hook.mjs pre-tool",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*mcp.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hook.mjs post-tool",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node ./scripts/hook.mjs stop",
+        "timeout": 5
+      }
     ]
   }
 }

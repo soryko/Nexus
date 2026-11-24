@@ -12,7 +12,8 @@ Local, append-only project memory backed by SQLite, lexical BM25 retrieval, cont
 
 ## Privacy & Capture Policy
 
-- **Explicit-only writes**: No autonomous background memory extraction and no `Stop` continuation hook. Save, revise, or forget records only when explicitly requested.
+- **Autonomous + `Stop`-nudge capture (`forget` stays explicit-only)**: The agent proactively records or revises verified architectural decisions, non-obvious constraints, procedures, and root-caused failures (checking `search` first), backed by a bounded `Stop`-hook nudge on edit/decision turns (`NEXUS_CAPTURE_POLICY=explicit` restores explicit-only mode). `forget` always requires explicit user request.
+- **Host-attested workspace binding**: On Antigravity surfaces whose global plugin MCP client omits MCP `roots`, `PreToolUse` / `PostToolUse` hooks write a 10-second `0600` host workspace lease so MCP calls resolve the active enrolled checkout fail-closed without per-repo config.
 - **Read-only UI**: Nexus Studio and MCP App views never write memories, enroll repositories, or mutate `.git`.
 - **Content-free telemetry**: `<store>.activity.sqlite3` logs only allowlisted event kinds, opaque UUIDs, counts, and error codes—never prompt text, queries, memory bodies, or filesystem paths.
 
@@ -31,7 +32,7 @@ Local, append-only project memory backed by SQLite, lexical BM25 retrieval, cont
    ```bash
    python3 -I scripts/launcher.py recover /path/to/repo --expected-project-id <UUID>
    ```
-5. On Antigravity surfaces whose global plugin MCP client does not advertise `roots` (`host_missing_roots`), Nexus Studio and hooks still receive workspace paths natively. To also pin MCP tools to one enrolled repository, add a workspace-scoped `.agents/mcp_config.json`:
+5. On Antigravity surfaces whose global plugin MCP client does not advertise `roots` and does not invoke `PreToolUse` hooks (`host_missing_roots`), Nexus Studio and hooks still receive workspace paths natively. To pin MCP tools directly to one enrolled repository, add a workspace-scoped `.agents/mcp_config.json`:
    ```json
    {
      "mcpServers": {

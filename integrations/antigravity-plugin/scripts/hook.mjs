@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * agy-node entrypoint for Antigravity SessionStart and PreInvocation hooks.
+ * agy-node entrypoint for Antigravity lifecycle hooks (SessionStart, PreInvocation,
+ * PreToolUse, PostToolUse, Stop).
  * Never auto-bootstraps venvs inside the 5s hook timeout budget; fails open with
- * `{"injectSteps":[]}` if no verified runtime is available yet.
+ * mode-appropriate safe JSON if no verified runtime is available yet.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -14,6 +15,17 @@ import { resolveRuntime } from './runtime.mjs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = process.env.PLUGIN_ROOT || resolve(__dirname, '..');
 const PLUGIN_DATA = process.env.PLUGIN_DATA || '';
+const VALID_MODES = new Set(['start', 'recall', 'pre-tool', 'post-tool', 'stop']);
+
+function fallbackOutput(mode) {
+  if (mode === 'pre-tool') {
+    return '{"decision":"allow"}\n';
+  }
+  if (mode === 'post-tool' || mode === 'stop') {
+    return '{}\n';
+  }
+  return '{"injectSteps":[]}\n';
+}
 
 function main() {
   const mode = process.argv[2];
@@ -24,8 +36,8 @@ function main() {
     stdinText = '';
   }
 
-  if (mode !== 'start' && mode !== 'recall') {
-    process.stdout.write('{"injectSteps":[]}\n');
+  if (!VALID_MODES.has(mode)) {
+    process.stdout.write(fallbackOutput(mode));
     return;
   }
 
@@ -36,7 +48,7 @@ function main() {
   });
 
   if (!runtime.ok) {
-    process.stdout.write('{"injectSteps":[]}\n');
+    process.stdout.write(fallbackOutput(mode));
     return;
   }
 
@@ -53,7 +65,7 @@ function main() {
     process.stdout.write(res.stdout);
     return;
   }
-  process.stdout.write('{"injectSteps":[]}\n');
+  process.stdout.write(fallbackOutput(mode));
 }
 
 main();

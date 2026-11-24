@@ -209,3 +209,15 @@ def test_mcp_server_activity_middleware_logs_opaque_outcomes_only(tmp_path: Path
     raw = journal.path.read_bytes()
     assert b"sensitive architectural note xyz" not in raw
     assert b"architectural" not in raw
+
+
+def test_stop_capture_activity_event_is_categorized_as_write(tmp_path: Path) -> None:
+    path = tmp_path / "stop.activity.sqlite3"
+    journal = ActivityJournal(path)
+    seq = journal.record_event("stop_capture", "nudged", session_id="s1")
+    assert seq == 1
+    assert category_for_kind("stop_capture", "nudged") == "write"
+    events = ActivityJournal.open_readonly(path).list_events(limit=10, category="write")
+    assert len(events) == 1
+    assert events[0].kind == "stop_capture"
+    assert events[0].outcome == "nudged"

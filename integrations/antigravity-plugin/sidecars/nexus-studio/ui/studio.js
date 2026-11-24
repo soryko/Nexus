@@ -239,7 +239,7 @@ function renderHealthStrip() {
   });
 
   const subtitle = st?.project_id
-    ? `scope ${st.project_id.slice(0, 8)} · SQLite ${st.sqlite_version || '?'} · explicit capture`
+    ? `scope ${st.project_id.slice(0, 8)} · SQLite ${st.sqlite_version || '?'} · ${st.capture_policy === 'explicit' ? 'explicit capture' : 'autonomous capture'}`
     : 'Read-only workbench';
 
   strip.replaceChildren(
@@ -726,7 +726,7 @@ function renderSetupTab(container) {
       el('dt', { text: 'Package version' }),
       el('dd', { text: st.service_version || '0.2.0' }),
       el('dt', { text: 'Capture policy' }),
-      el('dd', { text: 'explicit-only (no autonomous stop hook)' }),
+      el('dd', { text: st.capture_policy === 'explicit' ? 'explicit-only' : 'autonomous + stop-hook nudge (forget explicit-only)' }),
       el('dt', { text: 'UI mode' }),
       el('dd', { text: 'read-only (POST + X-Sidecar-Token)' }),
     ),
