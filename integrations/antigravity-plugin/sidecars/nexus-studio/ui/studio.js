@@ -42,6 +42,8 @@ const state = {
   workspaceGen: 0,
   selectionGen: 0,
   atlasSearchGen: 0, // bumped by every Atlas list request; only the newest one is applied
+  refreshGen: 0, // bumped by every status/activity refresh; only the newest one is applied
+  refreshInFlight: false,
 };
 
 function el(tag, opts = {}, ...children) {
@@ -157,10 +159,22 @@ async function apiPost(path, payload = {}) {
 }
 
 async function refreshStatusAndActivity({ loadAtlasIfBound = false } = {}) {
-  // A refresh that finishes after a workspace change belongs to the old workspace: apply nothing.
+  // A refresh that finishes after a workspace change, or after a newer refresh started (a category
+  // click overlapping the poll), belongs to an older view: apply nothing.
   const workspaceGen = state.workspaceGen;
+  const refreshGen = ++state.refreshGen;
+  const stale = () => workspaceGen !== state.workspaceGen || refreshGen !== state.refreshGen;
+  state.refreshInFlight = true;
+  try {
+    await applyRefresh(loadAtlasIfBound, stale);
+  } finally {
+    if (refreshGen === state.refreshGen) state.refreshInFlight = false;
+  }
+}
+
+async function applyRefresh(loadAtlasIfBound, stale) {
   const statusRes = await apiPost('/api/status');
-  if (workspaceGen !== state.workspaceGen) return;
+  if (stale()) return;
   if (statusRes.ok && statusRes.data) {
     state.status = statusRes.data;
     state.overview = statusRes.data.overview || { total: 0, counts: [], generation: 0 };
@@ -168,7 +182,7 @@ async function refreshStatusAndActivity({ loadAtlasIfBound = false } = {}) {
   if (state.status?.state === 'bound') {
     const cat = state.activityCategory === 'all' ? null : state.activityCategory;
     const actRes = await apiPost('/api/activity', { params: { limit: 60, category: cat } });
-    if (workspaceGen !== state.workspaceGen) return;
+    if (stale()) return;
     if (actRes.ok && actRes.data) {
       state.activityEvents = actRes.data.events || [];
       if (actRes.data.health) state.status.activity_health = actRes.data.health;
@@ -180,12 +194,21 @@ async function refreshStatusAndActivity({ loadAtlasIfBound = false } = {}) {
     state.activityEvents = [];
     state.atlasHits = [];
     state.inspection = null;
+    state.inspectionGen = null;
   }
   renderAll();
 }
 
 // Returns true when the requested page was applied. `fromControls` is set only when the user
 // submits the search box or picks a kind; every other load repeats the applied search.
+async function retryRuntime() {
+  const workspaceGen = state.workspaceGen;
+  const res = await apiPost('/api/retry-runtime');
+  if (workspaceGen !== state.workspaceGen) return; // the workspace changed meanwhile
+  if (res.ok && res.data) state.status = res.data;
+  renderAll();
+}
+
 async function loadAtlasList({ cursor = null, resetCursor = false, fromControls = false } = {}) {
   if (state.status?.state !== 'bound') return false;
   const workspaceGen = state.workspaceGen;
@@ -229,6 +252,16 @@ async function openMemory(memoryId, revisionId = null, { renderNow = true } = {}
   state.selectedRevisionId = revisionId;
   state.compareRevision = null;
   state.headVerdicts = {};
+  // Retire the previous inspector at once: its buttons must not act while the new selection loads.
+  state.inspection = null;
+  state.inspectionGen = null;
+  state.neighborhood = null;
+  state.related = null;
+  if (!keptHistory) {
+    state.history = null;
+    state.historyFor = null;
+  }
+  if (renderNow) renderAll();
   const [inspRes, histRes, nbrRes, relRes] = await Promise.all([
     apiPost('/api/inspect', { params: { memory_id: memoryId, revision_id: revisionId } }),
     keptHistory ? Promise.resolve({ ok: true, data: keptHistory }) : apiPost('/api/history', { params: { memory_id: memoryId, limit: 20 } }),
@@ -237,6 +270,7 @@ async function openMemory(memoryId, revisionId = null, { renderNow = true } = {}
   ]);
   if (selectionGen !== state.selectionGen) return;
   state.inspection = inspRes.ok ? inspRes.data : null;
+  state.inspectionGen = state.inspection ? selectionGen : null;
   state.history = histRes.ok ? histRes.data : null;
   state.historyFor = state.history ? memoryId : null;
   state.neighborhood = nbrRes.ok ? nbrRes.data : null;
@@ -355,11 +389,7 @@ function renderAlertBanner() {
           className: 'nx-btn primary',
           type: 'button',
           text: 'Retry Runtime Probe',
-          onClick: async () => {
-            const res = await apiPost('/api/retry-runtime');
-            if (res.ok && res.data) state.status = res.data;
-            renderAll();
-          },
+          onClick: retryRuntime,
         }),
       ),
     );
@@ -480,9 +510,12 @@ function renderAtlasInspector() {
   const pane = el('div', { className: 'nx-atlas-inspector' });
   const insp = state.inspection;
   if (!insp) {
-    pane.append(el('div', { className: 'nx-muted', text: 'Select a memory from the list to inspect its revision text, history, relations, and Git references.' }));
+    pane.append(el('div', { className: 'nx-muted', text: state.selectedMemoryId ? 'Loading memory...' : 'Select a memory from the list to inspect its revision text, history, relations, and Git references.' }));
     return pane;
   }
+  // Every action below belongs to the inspection on screen; once another one replaces it (or a new
+  // selection retires it) these handlers do nothing and their replies are dropped.
+  const shownGen = state.inspectionGen;
 
   const attachBtn = el('button', {
     className: 'nx-btn primary',
@@ -551,6 +584,7 @@ function renderAtlasInspector() {
         type: 'button',
         text: 'Verify at HEAD',
         onClick: async () => {
+          if (shownGen === null || shownGen !== state.inspectionGen) return;
           const selectionGen = state.selectionGen;
           const res = await apiPost('/api/compare-at-head', {
             params: {
@@ -559,7 +593,7 @@ function renderAtlasInspector() {
               reference_ordinal: idx,
             },
           });
-          if (selectionGen !== state.selectionGen) return;
+          if (selectionGen !== state.selectionGen || shownGen !== state.inspectionGen) return;
           if (res.ok && res.data) {
             state.headVerdicts[idx] = res.data;
             renderAll();
@@ -621,11 +655,12 @@ function renderAtlasInspector() {
             type: 'button',
             text: 'Diff parent',
             onClick: async () => {
-              const selectionGen = state.selectionGen;
+              if (shownGen === null || shownGen !== state.inspectionGen) return;
+          const selectionGen = state.selectionGen;
               const res = await apiPost('/api/compare-revision', {
                 params: { memory_id: insp.memory_id, revision_id: entry.revision_id },
               });
-              if (selectionGen !== state.selectionGen) return;
+              if (selectionGen !== state.selectionGen || shownGen !== state.inspectionGen) return;
               if (res.ok && res.data) {
                 state.compareRevision = { ...res.data, revision_id: entry.revision_id };
                 renderAll();
@@ -848,11 +883,7 @@ function renderSetupTab(container) {
         className: 'nx-btn primary',
         type: 'button',
         text: 'Re-verify Runtime',
-        onClick: async () => {
-          const res = await apiPost('/api/retry-runtime');
-          if (res.ok && res.data) state.status = res.data;
-          renderAll();
-        },
+        onClick: retryRuntime,
       }),
     ),
   );
@@ -938,7 +969,9 @@ for (const tabBtn of document.querySelectorAll('.nx-tab')) {
 function startPolling() {
   if (state.pollingTimer) clearInterval(state.pollingTimer);
   state.pollingTimer = setInterval(() => {
-    if (document.visibilityState === 'visible') {
+    // Never start a poll over a refresh still out: on a slow host each poll would supersede the
+    // last and nothing would ever be applied.
+    if (document.visibilityState === 'visible' && !state.refreshInFlight) {
       refreshStatusAndActivity();
     }
   }, 4000);
@@ -961,6 +994,7 @@ async function init() {
       state.selectedMemoryId = null;
       state.selectedRevisionId = null;
       state.inspection = null;
+      state.inspectionGen = null;
       state.history = null;
       state.historyFor = null;
       state.neighborhood = null;

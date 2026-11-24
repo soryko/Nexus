@@ -416,6 +416,9 @@ app.ontoolinput = ({ arguments: args } = {}) => {
 app.ontoolresult = (result) => {
   const sc = result?.structuredContent;
   if (!sc || typeof sc !== "object") return;
+  // A tool result from the host is newer than any search or page the user still has in flight.
+  state.searchGen += 1;
+  state.loadingMore = false;
   state.overview = sc;
   if (Array.isArray(sc.hits)) {
     state.hits = sc.hits;
