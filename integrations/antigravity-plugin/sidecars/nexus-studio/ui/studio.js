@@ -21,7 +21,8 @@ const state = {
   atlasQuery: '',
   atlasKind: 'all',
   atlasHits: [],
-  atlasCursor: null,
+  atlasCursor: null, // cursor for the next page, as returned by the last search
+  atlasPageCursor: null, // cursor that loaded the page on screen (null: first page)
   atlasPrevCursors: [],
   selectedMemoryId: null,
   selectedRevisionId: null,
@@ -200,6 +201,7 @@ async function loadAtlasList({ cursor = null, resetCursor = false } = {}) {
   if (srRes.ok && srRes.data) {
     state.atlasHits = srRes.data.items || [];
     state.atlasCursor = srRes.data.cursor || null;
+    state.atlasPageCursor = cursor;
     if (state.atlasHits.length > 0 && !state.selectedMemoryId) {
       await openMemory(state.atlasHits[0].memory_id, state.atlasHits[0].revision_id, { renderNow: false });
     }
@@ -308,10 +310,8 @@ function renderAlertBanner() {
   ];
 
   if (st.recover_command) children.push(codeBox(st.recover_command));
-  if (st.state === 'unenrolled' && state.workspaceUris.length === 1) {
-    const cleanPath = state.workspaceUris[0].replace(/^file:\/\//, '');
-    children.push(codeBox(`python3 -I ~/.gemini/config/plugins/nexus-memory/scripts/launcher.py enroll "${decodeURIComponent(cleanPath)}"`));
-  }
+  // The worker shell-quotes this command; never assemble one from a workspace path here.
+  if (st.enroll_command) children.push(codeBox(st.enroll_command));
   if (st.state === 'runtime_unavailable') {
     children.push(
       el(
@@ -715,6 +715,33 @@ function renderAtlasTab(container) {
     }
   }
 
+  if (state.atlasPrevCursors.length > 0 || state.atlasCursor) {
+    listPane.append(
+      el(
+        'div',
+        { className: 'nx-metrics-group nx-card-pad' },
+        el('button', {
+          className: 'nx-btn',
+          type: 'button',
+          text: 'Previous',
+          disabled: state.atlasPrevCursors.length === 0,
+          onClick: () => loadAtlasList({ cursor: state.atlasPrevCursors.pop() ?? null }),
+        }),
+        el('button', {
+          className: 'nx-btn',
+          type: 'button',
+          text: 'Next',
+          disabled: !state.atlasCursor,
+          onClick: () => {
+            const next = state.atlasCursor;
+            state.atlasPrevCursors.push(state.atlasPageCursor);
+            loadAtlasList({ cursor: next });
+          },
+        }),
+      ),
+    );
+  }
+
   container.append(
     form,
     kindFilter,
@@ -853,6 +880,7 @@ async function init() {
       state.headVerdicts = {};
       state.atlasHits = [];
       state.atlasCursor = null;
+      state.atlasPageCursor = null;
       state.atlasPrevCursors = [];
       await refreshStatusAndActivity({ loadAtlasIfBound: state.activeTab === 'atlas' });
     });

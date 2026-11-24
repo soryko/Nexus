@@ -214,6 +214,7 @@ class StudioWorker:
                 "recorded_device": None,
                 "observed_device": None,
                 "recover_command": None,
+                "enroll_command": None,
                 "overview": _zero_overview(),
                 "activity_health": _zero_health(),
             }
@@ -223,14 +224,21 @@ class StudioWorker:
             self._evict(diag.checkout)
 
         recover_command = None
+        enroll_command = None
+        launcher = Path(self.scope_module.__file__).resolve().with_name("launcher.py")
         # recover accepts only the main checkout (main_common): the common Git directory's parent,
         # not diag.checkout, which may be a linked worktree.
         if diag.state == "device_drift" and diag.common is not None and diag.project_id is not None:
-            launcher = Path(self.scope_module.__file__).resolve().with_name("launcher.py")
             recover_command = (
                 f"{shlex.quote(sys.executable)} -I {shlex.quote(str(launcher))} "
                 f"recover {shlex.quote(str(diag.common.parent))} "
                 f"--expected-project-id {shlex.quote(diag.project_id)}"
+            )
+        # Built here with shlex.quote, never by the page: the path is pasted into a shell.
+        if diag.state == "unenrolled" and diag.common is not None:
+            enroll_command = (
+                f"{shlex.quote(sys.executable)} -I {shlex.quote(str(launcher))} "
+                f"enroll {shlex.quote(str(diag.common.parent))}"
             )
 
         store_initialized = False
@@ -254,6 +262,7 @@ class StudioWorker:
                         "recorded_device": diag.recorded_device,
                         "observed_device": diag.observed_device,
                         "recover_command": None,
+                        "enroll_command": None,
                         "overview": _zero_overview(),
                         "activity_health": _zero_health(),
                     }
@@ -269,6 +278,7 @@ class StudioWorker:
             "recorded_device": diag.recorded_device,
             "observed_device": diag.observed_device,
             "recover_command": recover_command,
+            "enroll_command": enroll_command,
             "overview": overview,
             "activity_health": activity_health,
         }

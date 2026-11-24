@@ -16,6 +16,9 @@ const state = {
   // Bumped on every selection; get/history replies from an older selection are discarded so the
   // highlighted entry, the displayed record and "Attach to Next Prompt" always agree.
   selectionGen: 0,
+  // Bumped by every new search; a "Load more" page from an older search is discarded.
+  searchGen: 0,
+  loadingMore: false,
   detail: null,
   history: null,
   statusText: "",
@@ -31,14 +34,21 @@ function firstLine(text) {
   return (String(text || "").split("\n").find((l) => l.trim()) || "(empty)").slice(0, 140);
 }
 
-async function runSearch() {
-  state.statusText = "Searching...";
-  render();
+function searchArgs() {
   const args = { limit: 20 };
   if (state.query.trim()) args.query = state.query.trim();
   if (state.kind !== "all") args.kinds = [state.kind];
+  return args;
+}
+
+async function runSearch() {
+  const searchGen = ++state.searchGen;
+  state.loadingMore = false;
+  state.statusText = "Searching...";
+  render();
   try {
-    const res = await app.callServerTool({ name: "search", arguments: args });
+    const res = await app.callServerTool({ name: "search", arguments: searchArgs() });
+    if (searchGen !== state.searchGen) return;
     if (res?.isError || !res?.structuredContent) {
       state.statusText = "Search failed";
       render();
@@ -52,7 +62,32 @@ async function runSearch() {
       return;
     }
   } catch {
+    if (searchGen !== state.searchGen) return;
     state.statusText = "Search unavailable";
+  }
+  render();
+}
+
+async function loadMore() {
+  if (!state.cursor || state.loadingMore) return;
+  const searchGen = state.searchGen;
+  state.loadingMore = true;
+  render();
+  try {
+    const res = await app.callServerTool({ name: "search", arguments: { ...searchArgs(), cursor: state.cursor } });
+    if (searchGen !== state.searchGen) return;
+    if (!res?.isError && res?.structuredContent) {
+      state.hits = state.hits.concat(res.structuredContent.hits || []);
+      state.cursor = res.structuredContent.cursor || null;
+      state.statusText = `${state.hits.length} result(s)`;
+    } else {
+      state.statusText = "Could not load more";
+    }
+  } catch {
+    if (searchGen !== state.searchGen) return;
+    state.statusText = "Could not load more";
+  } finally {
+    if (searchGen === state.searchGen) state.loadingMore = false;
   }
   render();
 }
@@ -108,6 +143,12 @@ function renderListPane() {
         : null,
     );
     list.append(item);
+  }
+  if (state.cursor) {
+    const more = el("button", { className: "nx-btn", type: "button", text: state.loadingMore ? "Loading..." : "Load more" });
+    more.disabled = state.loadingMore;
+    more.addEventListener("click", loadMore);
+    list.append(more);
   }
   return list;
 }

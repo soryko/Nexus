@@ -273,3 +273,20 @@ def test_studio_worker_cli_ndjson_roundtrip(studio_env) -> None:
     assert resp["id"] == "ping-1"
     assert resp["ok"] is True
     assert resp["data"]["state"] == "unenrolled"
+
+
+def test_unenrolled_status_offers_a_shell_quoted_enroll_command(studio_env) -> None:
+    # The command is built by the worker with shlex.quote, never by the page, so a checkout whose
+    # name holds shell metacharacters round-trips through a shell as the literal path.
+    hostile = studio_env.repo.parent / "repo$backup $(touch pwned)'q"
+    hostile.mkdir()
+    hostile = hostile.resolve()
+    _git(hostile, "init", "-q")
+    status = studio_env.worker.handle({"id": 90, "action": "status", "workspace": str(hostile)})
+    assert status["data"]["state"] == "unenrolled"
+    argv = shlex.split(status["data"]["enroll_command"])
+    assert argv[3] == "enroll" and Path(argv[4]) == hostile
+    assert studio_env.scope_mod.main_common(Path(argv[4])) == hostile / ".git"
+
+    bound_or_empty = studio_env.worker.handle({"id": 91, "action": "status", "workspace": []})
+    assert bound_or_empty["data"]["enroll_command"] is None
