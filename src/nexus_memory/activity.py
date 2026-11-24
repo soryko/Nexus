@@ -43,6 +43,7 @@ _SAFE_OP_ID_RE = re.compile(r"^[A-Za-z0-9_.:/-]{1,64}$")
 ALLOWED_KINDS = frozenset({
     "session_start",
     "recall",
+    "stop_capture",
     "tool_status",
     "tool_search",
     "tool_get",
@@ -80,6 +81,8 @@ _NON_ERROR_OUTCOMES = frozenset({
     "bound",
     "committed",
     "replayed",
+    "nudged",
+    "skipped",
     "Matches at HEAD",
     "Changed at HEAD",
     "Missing at HEAD",
@@ -143,7 +146,7 @@ def category_for_kind(kind: str, outcome: str = "ok") -> str:
         return "error"
     if kind == "recall":
         return "recall"
-    if kind in ("tool_record", "tool_revise", "tool_forget"):
+    if kind in ("tool_record", "tool_revise", "tool_forget", "stop_capture"):
         return "write"
     return "read"
 

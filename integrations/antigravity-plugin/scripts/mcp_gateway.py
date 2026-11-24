@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import importlib.metadata
 import json
 import os
 import shlex
 import sqlite3
 import sys
+import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
@@ -22,11 +24,33 @@ from nexus_memory.git.cli import GitCli
 from nexus_memory.git.identity import bind_repository
 from nexus_memory.memory import MemoryService
 from nexus_memory.storage import SQLiteRepository
-from nexus_memory.transport.mcp_server import create_server
+from nexus_memory.transport.mcp_server import _AUTONOMOUS, _EXPLICIT, create_server
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
-from project_scope import ScopeDiagnosis, ScopeError, resolve, inspect_scope  # noqa: E402
+from project_scope import (  # noqa: E402
+    ScopeDiagnosis,
+    ScopeError,
+    inspect_scope,
+    private_base,
+    private_file,
+    resolve,
+)
+
+LEASE_TTL_SECONDS = 10.0
+ATLAS_UI_TOOLS = frozenset({
+    "atlas_overview",
+    "atlas_search",
+    "atlas_inspect",
+    "atlas_history",
+    "atlas_compare_revision",
+})
+
+
+def _configured_policy():
+    if os.environ.get("NEXUS_CAPTURE_POLICY", "").strip().lower() == "explicit":
+        return _EXPLICIT
+    return _AUTONOMOUS
 
 
 def _service_version() -> str:
@@ -100,7 +124,7 @@ def _diagnostic_status_result(
         "enroll_command": enroll_command,
         "sqlite_version": sqlite3.sqlite_version,
         "service_version": _service_version(),
-        "capture_policy": "explicit",
+        "capture_policy": _configured_policy().name,
     }
     return types.CallToolResult(
         is_error=False,
@@ -125,8 +149,65 @@ class ConcurrentRootsChange(ScopeError):
     """The roots changed while a call was resolving them: refuse this call, retry on the next."""
 
 
+def _lease_file_path() -> Path | None:
+    override = os.environ.get("NEXUS_AGY_LEASE_FILE")
+    if override:
+        path = Path(override)
+        return path if path.is_absolute() else None
+    try:
+        return private_base(create=False) / ".agy_host_leases.json"
+    except (FileNotFoundError, ScopeError, OSError):
+        return None
+
+
+def _consume_host_lease(lease_ttl: float = LEASE_TTL_SECONDS) -> tuple[str, str | None, str | None]:
+    lease_path = _lease_file_path()
+    if lease_path is None or not os.path.lexists(lease_path):
+        return ("missing", None, None)
+    with os.fdopen(os.open(lease_path, os.O_RDWR | os.O_NOFOLLOW, 0o600), "r+") as file:
+        private_file(lease_path)
+        fcntl.flock(file, fcntl.LOCK_EX)
+        try:
+            raw = json.load(file)
+        except ValueError:
+            raw = []
+        entries = raw if isinstance(raw, list) else []
+        now = time.time()
+        active = [
+            item
+            for item in entries
+            if isinstance(item, dict)
+            and isinstance(item.get("ts"), (int, float))
+            and isinstance(item.get("workspace"), str)
+            and item["workspace"].strip()
+            and now - float(item["ts"]) <= lease_ttl
+        ]
+        if not active:
+            file.seek(0)
+            json.dump([], file)
+            file.truncate()
+            return ("missing", None, None)
+
+        distinct = {os.path.realpath(item["workspace"]) for item in active}
+        if len(distinct) > 1:
+            file.seek(0)
+            json.dump(active, file)
+            file.truncate()
+            return (
+                "ambiguous",
+                None,
+                "Multiple workspaces have concurrent MCP tool calls in flight; retry in a single workspace.",
+            )
+
+        popped = active.pop(0)
+        file.seek(0)
+        json.dump(active, file)
+        file.truncate()
+        return ("ok", popped["workspace"], None)
+
+
 class GuardedService:
-    """Keep the original tool handlers; admit every call against fresh client roots."""
+    """Keep the original tool handlers; admit every call against fresh client roots or host leases."""
 
     def __init__(self, expected: Path | None, *, pinned_workspace: Path | None = None) -> None:
         self.expected = expected
@@ -135,6 +216,7 @@ class GuardedService:
         self.service: MemoryService | None = None
         self.journal: ActivityJournal | None = None
         self.database_path: Path | None = None
+        self._services_by_project: dict[str, tuple[Any, MemoryService, ActivityJournal, Path]] = {}
         self.changed = False
         self.generation = 0
         self.lock = anyio.Lock()
@@ -143,6 +225,19 @@ class GuardedService:
         if self.service is None:
             raise ScopeError("project scope is unbound")
         return getattr(self.service, name)
+
+    def _bind_project(self, project: Any) -> None:
+        cached = self._services_by_project.get(project.id)
+        if cached is None or cached[0] != project:
+            store = SQLiteRepository(project.database)
+            scope = Scope(project.id, "local")
+            git = GitCli() if GitCli.available() else None
+            binding, verifier = bind_repository(store, scope, project.checkout, None, git)
+            service = MemoryService(store, scope, binding, verifier)
+            journal = ActivityJournal(ActivityJournal.path_for_store(project.database))
+            cached = (project, service, journal, project.database)
+            self._services_by_project[project.id] = cached
+        self.project, self.service, self.journal, self.database_path = cached
 
     def _tool_name(self, ctx: Any) -> str | None:
         params = getattr(ctx, "params", None)
@@ -162,6 +257,7 @@ class GuardedService:
         async with self.lock:
             if self.changed:
                 return denied()
+            host_lease_mode = False
             try:
                 epoch = self.generation
                 _refuse_git_env_overrides()
@@ -193,21 +289,41 @@ class GuardedService:
                         raise ScopeError("workspace must be an absolute local directory")
                     raw_path = str(self.pinned_workspace)
                 else:
-                    if self.project is None and tool_name == "status":
-                        return _diagnostic_status_result(
-                            scope_state="host_missing_roots",
-                            message=(
-                                "MCP client did not advertise roots capability; global plugin MCP stays "
-                                "fail-closed without attested roots (Nexus Studio and hooks still receive "
-                                "workspace URIs natively). For hosts without MCP roots, add a workspace-scoped "
-                                ".agents/mcp_config.json launching `launch.mjs mcp --workspace /abs/path/to/repo`."
-                            ),
-                        )
-                    raise ScopeError("client did not advertise roots")
+                    host_lease_mode = True
+                    lease_state, leased_path, lease_msg = _consume_host_lease()
+                    if lease_state == "ambiguous":
+                        if tool_name == "status":
+                            return _diagnostic_status_result(
+                                scope_state="ambiguous",
+                                message=lease_msg or "Multiple workspace roots are active.",
+                            )
+                        return denied("project_scope_ambiguous", lease_msg)
+                    if lease_state == "missing":
+                        if tool_name in ATLAS_UI_TOOLS and self.project is not None:
+                            diag = inspect_scope(self.project.checkout)
+                            if diag.state != "bound":
+                                raise ScopeError(diag.message or "project scope unavailable")
+                            _verify_env_signals_agree(self.project.checkout)
+                            return await call_next(ctx)
+                        if tool_name == "status":
+                            return _diagnostic_status_result(
+                                scope_state="host_missing_roots",
+                                message=(
+                                    "MCP client did not advertise roots capability; global plugin MCP stays "
+                                    "fail-closed without attested roots or an active host tool lease "
+                                    "(Nexus Studio and hooks still receive workspace URIs natively). For hosts "
+                                    "without MCP roots or hooks, add a workspace-scoped .agents/mcp_config.json "
+                                    "launching `launch.mjs mcp --workspace /abs/path/to/repo`."
+                                ),
+                            )
+                        raise ScopeError("client did not advertise roots")
+                    if leased_path is None:
+                        raise ScopeError("host tool lease unavailable")
+                    raw_path = leased_path
 
                 diag = inspect_scope(Path(raw_path))
                 if diag.state != "bound":
-                    if self.project is not None:
+                    if self.project is not None and not host_lease_mode:
                         self.changed = True
                         raise ScopeError(diag.message or "project scope changed")
                     if tool_name == "status":
@@ -234,7 +350,7 @@ class GuardedService:
                 if has_roots_cap and self.pinned_workspace is not None:
                     if resolve(self.pinned_workspace).id != project.id:
                         raise ScopeError("pinned workspace disagrees with client root")
-                if self.project is not None and self.project != project:
+                if self.project is not None and self.project != project and not host_lease_mode:
                     self.changed = True
                     raise ScopeError("project changed")
                 if epoch != self.generation:
@@ -242,17 +358,9 @@ class GuardedService:
                 if self.expected is not None and resolve(self.expected).id != project.id:
                     raise ScopeError("workspace differs from configured project")
 
-                if self.service is None:
-                    store = SQLiteRepository(project.database)
-                    scope = Scope(project.id, "local")
-                    git = GitCli() if GitCli.available() else None
-                    binding, verifier = bind_repository(store, scope, project.checkout, None, git)
-                    self.service = MemoryService(store, scope, binding, verifier)
-                    self.journal = ActivityJournal(ActivityJournal.path_for_store(project.database))
-                    self.database_path = project.database
-                    self.project = project
+                self._bind_project(project)
             except Exception as error:
-                if self.project is not None:
+                if self.project is not None and not host_lease_mode:
                     if not isinstance(error, ConcurrentRootsChange):
                         self.changed = True
                     return denied()
@@ -280,6 +388,7 @@ def main(argv: list[str] | None = None) -> int:
     guard = GuardedService(args.expected_project, pinned_workspace=args.workspace)
     server = create_server(
         guard,
+        capture_policy=_configured_policy(),
         database=lambda: guard.database_path,
         activity_journal=lambda: guard.journal,
         enable_mcp_apps=True,

@@ -192,10 +192,16 @@ class StudioWorker:
         return diag, diag.checkout
 
     def _status(self, workspace: object) -> dict[str, Any]:
+        capture_policy = (
+            "explicit"
+            if os.environ.get("NEXUS_CAPTURE_POLICY", "").strip().lower() == "explicit"
+            else "autonomous"
+        )
         base_info = {
             "service_version": _service_version(),
             "python_version": platform.python_version(),
             "sqlite_version": sqlite3.sqlite_version,
+            "capture_policy": capture_policy,
         }
         kind, path, message = _normalize_workspace(workspace)
         if kind != "ok" or path is None:

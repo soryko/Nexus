@@ -29,7 +29,7 @@ function startDegradedMcpServer(runtimeResult) {
     recover_command: null,
     enroll_command: null,
     service_version: '0.2.0',
-    capture_policy: 'explicit',
+    capture_policy: process.env.NEXUS_CAPTURE_POLICY === 'explicit' ? 'explicit' : 'autonomous',
     probes: (runtimeResult.probes || []).slice(0, 8),
   };
 
