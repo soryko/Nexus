@@ -219,7 +219,9 @@ async function openMemory(memoryId, revisionId = null, { renderNow = true } = {}
   const selectionGen = ++state.selectionGen;
   // Opening another revision of the memory already shown keeps the revision chain loaded so far,
   // including older pages, instead of collapsing it back to the first page.
-  const keptHistory = memoryId === state.selectedMemoryId && state.history ? state.history : null;
+  // Reuse only a chain that was loaded for this very memory: the selection can already point at a
+  // new memory whose own history has not arrived yet.
+  const keptHistory = state.history && state.historyFor === memoryId ? state.history : null;
   // A "Load older revisions" request still out belongs to the old selection; its guard drops the
   // reply, so the flag must be cleared here or paging stays disabled for every later selection.
   state.historyLoading = false;
@@ -236,6 +238,7 @@ async function openMemory(memoryId, revisionId = null, { renderNow = true } = {}
   if (selectionGen !== state.selectionGen) return;
   state.inspection = inspRes.ok ? inspRes.data : null;
   state.history = histRes.ok ? histRes.data : null;
+  state.historyFor = state.history ? memoryId : null;
   state.neighborhood = nbrRes.ok ? nbrRes.data : null;
   state.related = relRes.ok ? relRes.data : null;
   if (renderNow) renderAll();
@@ -245,7 +248,7 @@ async function loadOlderRevisions() {
   const history = state.history;
   if (!history?.cursor || state.historyLoading) return;
   const selectionGen = state.selectionGen;
-  const memoryId = state.selectedMemoryId;
+  const memoryId = state.historyFor;
   state.historyLoading = true;
   renderAll();
   try {
@@ -959,6 +962,7 @@ async function init() {
       state.selectedRevisionId = null;
       state.inspection = null;
       state.history = null;
+      state.historyFor = null;
       state.neighborhood = null;
       state.related = null;
       state.compareRevision = null;

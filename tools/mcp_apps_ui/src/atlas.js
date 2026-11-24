@@ -58,12 +58,13 @@ async function runSearch() {
   try {
     const res = await app.callServerTool({ name: "search", arguments: searchArgs(search) });
     if (searchGen !== state.searchGen) return;
-    state.applied = search;
     if (res?.isError || !res?.structuredContent) {
       state.statusText = "Search failed";
       render();
       return;
     }
+    // The applied search changes only together with the hits and cursor it produced.
+    state.applied = search;
     state.hits = res.structuredContent.hits || [];
     state.cursor = res.structuredContent.cursor || null;
     state.statusText = `${state.hits.length} result(s)`;
@@ -105,7 +106,8 @@ async function loadMore() {
 async function selectMemory(memoryId, revisionId = null) {
   const selectionGen = ++state.selectionGen;
   // Viewing another revision of the memory already shown keeps the chain loaded so far.
-  const keptHistory = memoryId === state.selectedId && state.history ? state.history : null;
+  // Reuse only a chain loaded for this very memory (see Studio's openMemory for the race).
+  const keptHistory = state.history && state.historyFor === memoryId ? state.history : null;
   state.selectedId = memoryId;
   state.detail = null;
   state.history = keptHistory;
@@ -122,6 +124,7 @@ async function selectMemory(memoryId, revisionId = null) {
     if (selectionGen !== state.selectionGen) return;
     state.detail = memRes?.isError ? null : memRes?.structuredContent || null;
     state.history = histRes?.isError ? null : histRes?.structuredContent || null;
+    state.historyFor = state.history ? memoryId : null;
   } catch {
     if (selectionGen !== state.selectionGen) return;
     state.statusText = "Failed to inspect memory";
@@ -138,7 +141,7 @@ async function loadOlderRevisions() {
   try {
     const res = await app.callServerTool({
       name: "history",
-      arguments: { memory_id: state.selectedId, limit: 20, cursor: history.cursor },
+      arguments: { memory_id: state.historyFor, limit: 20, cursor: history.cursor },
     });
     if (selectionGen !== state.selectionGen) return;
     if (!res?.isError && res?.structuredContent) {
