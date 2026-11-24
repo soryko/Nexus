@@ -63,7 +63,7 @@ def _linked_admin(marker: Path) -> Path | None:
     line = marker.read_text(errors="surrogateescape").strip()
     if not line.startswith("gitdir:"):
         raise _unavailable()
-    return Path(line.removeprefix("gitdir:").strip()).resolve(strict=True)
+    return (marker.parent / line.removeprefix("gitdir:").strip()).resolve(strict=True)
 
 
 class AtlasBinding:
@@ -116,51 +116,52 @@ class AtlasBinding:
 
     def full_check(self) -> None:
         """Re-resolve the checkout with Git and compare it with what was pinned."""
-        with self._lock:
-            fresh = self._resolved()
-            if (fresh.id, fresh.database, fresh.common, fresh.checkout) != (
-                    self._project.id, self._project.database, self._project.common, self._project.checkout):
-                raise _unavailable()
-            self._project = fresh
-            self._pin_matching()
-            SQLiteRepository.open_readonly(fresh.database)  # schema version and retirement
-
-    def _pin_matching(self) -> None:
-        before = (self._common_id, self._marker, self._admin, self._store)
-        self._pin()
-        if (self._common_id, self._marker, self._admin, self._store) != before:
-            raise _unavailable()
+        self._validate(force_full=True)
 
     def check(self) -> None:
-        """Quick check: no subprocess, only the filesystem facts pinned at launch."""
+        """Only re-run the resolver if the registry has changed."""
+        self._validate(force_full=False)
+
+    def _validate(self, *, force_full: bool) -> None:
         project = self._project
         try:
-            common = os.stat(project.common)
-            if (common.st_dev, common.st_ino, getattr(common, "st_birthtime", None)) != self._common_id:
-                raise _unavailable()
-            marker = project.checkout / ".git"
-            admin = self._admin_path
-            if (_stamped(marker) if admin else _identity(marker)) != self._marker:
-                raise _unavailable()
-            if admin and (_linked_admin(marker) != admin
-                          or (_identity(admin), _stamped(admin / "gitdir")) != self._admin):
-                raise _unavailable()
-            _private(project.database, self._store)
-            for suffix in _SIDECARS:
-                path = Path(str(project.database) + suffix)
-                if os.path.lexists(path):
-                    info = os.lstat(path)
-                    if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
-                            or info.st_uid != os.getuid() or info.st_mode & 0o077):
+            with self._lock:
+                registry = _stamped(self._registry_path)
+                refresh = force_full or registry != self._registry
+                if refresh:
+                    fresh = self._resolved()
+                    if (fresh.id, fresh.database, fresh.common, fresh.checkout) != (
+                            project.id, project.database, project.common, project.checkout):
                         raise _unavailable()
-            if _stamped(self._registry_path) != self._registry:
-                # Another project enrolling rewrites the registry. That is not a reason to
-                # stop serving this one; only a changed answer for this project is.
-                self.full_check()
-        except NexusError:
-            raise
+                self._check_launch_pins()
+                if refresh:
+                    SQLiteRepository.open_readonly(project.database)  # schema version and retirement
+                    if _stamped(self._registry_path) != registry:
+                        raise _unavailable()
+                    self._registry = registry
         except OSError as error:
             raise _unavailable() from error
+
+    def _check_launch_pins(self) -> None:
+        project = self._project
+        common = os.stat(project.common)
+        if (common.st_dev, common.st_ino, getattr(common, "st_birthtime", None)) != self._common_id:
+            raise _unavailable()
+        marker = project.checkout / ".git"
+        admin = self._admin_path
+        if (_stamped(marker) if admin else _identity(marker)) != self._marker:
+            raise _unavailable()
+        if admin and (_linked_admin(marker) != admin
+                      or (_identity(admin), _stamped(admin / "gitdir")) != self._admin):
+            raise _unavailable()
+        _private(project.database, self._store)
+        for suffix in _SIDECARS:
+            path = Path(str(project.database) + suffix)
+            if os.path.lexists(path):
+                info = os.lstat(path)
+                if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                        or info.st_uid != os.getuid() or info.st_mode & 0o077):
+                    raise _unavailable()
 
     def reader(self) -> SQLiteRepository:
         """A read-only repository, opened between two quick checks."""

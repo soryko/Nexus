@@ -223,6 +223,6 @@ and were not re-measured here; recompute them with the pilot's reporter before f
 
 - Apply the launcher change (section 2) on the PR #17 branch, and the usage patch (section 3) on
   the cue branch.
-- Widen the `nexus_pre_tool` server match for the plugin name (section 4a) and drop the `xfail`.
+- Resolved since Phase 0: the engine and Claude matcher now recognize the exact Nexus plugin/server pairs (see `docs/hook-engine-phase1.md`); the strict `xfail` is a passing regression test.
 - Run 4c in the Codex trust UI (interactive; not scriptable).
 - Decide how Claude resets recall dedupe on `/clear` now that SessionStart cannot call the engine.

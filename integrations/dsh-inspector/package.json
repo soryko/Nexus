@@ -1,0 +1,28 @@
+{
+  "name": "@local/dsh-nexus-inspector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Open the exact saved Nexus revision from a chat receipt.",
+  "engines": { "dsh": "0.2.2-alpha.2" },
+  "dependencies": {
+    "zod": "4.4.3",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.2-alpha.2",
+    "@deepseek-ai/dsh-tool-executor-native": "0.2.2-alpha.2"
+  },
+  "exports": {
+    ".": "./host.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": ["host.js", "projection.js", "descriptor.js", "client.js", "cordis.patch.yml", "locale/*.json", "icon.svg"],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": ["@deepseek-ai/dsh-api-gateway", "@deepseek-ai/dsh-client-ui-chat", "@deepseek-ai/dsh-client-ui-sidebar-right"]
+    }
+  }
+}

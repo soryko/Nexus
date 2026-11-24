@@ -18,7 +18,7 @@ server's launch cwd against that repository's common Git directory, then binds
 reference verification to the **active checkout**. Do not configure MCP `cwd` to
 the main checkout: let Codex supply the task directory. Wrong projects and fresh
 clones fail before storage is opened. Linked worktrees share the scope but verify
-their own HEAD. The normal seven-tool server is unchanged without this option.
+their own HEAD. Without this option the server exposes the ordinary memory tools, not the Codex hooks.
 
 Install this host-specific configuration in the trusted project's
 `.codex/config.toml` (replace example paths):

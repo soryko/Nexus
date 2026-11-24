@@ -36,10 +36,11 @@ def test_stdio_tools_enforce_contract_and_lifecycle(tmp_path: Path) -> None:
         async with Client(_server(tmp_path / "state" / "memory.sqlite3")) as client:
             listed = await client.list_tools()
             tools = {tool.name: tool for tool in listed.tools}
-            assert set(tools) == {"record", "get", "revise", "forget", "search", "history", "status"}
+            assert set(tools) == {"record", "get", "revise", "forget", "search", "history", "status", "compare_at_head"}
 
             expected_properties = {
                 "record": {"content", "idempotency_key", "kind", "tags", "source_uri", "snapshot", "references"},
+                "compare_at_head": {"memory_id", "revision_id", "reference_ordinal"},
                 "get": {"memory_id", "revision_id"},
                 "revise": {
                     "memory_id", "expected_revision_id", "content", "idempotency_key",
@@ -78,6 +79,16 @@ def test_stdio_tools_enforce_contract_and_lifecycle(tmp_path: Path) -> None:
             assert not recorded.is_error
             assert recorded.structured_content == retried.structured_content
             first = recorded.structured_content
+
+            args = {"memory_id": first["memory_id"], "revision_id": first["revision_id"], "reference_ordinal": 0}
+            assert tools["compare_at_head"].annotations.read_only_hint
+            comparison = await client.call_tool("compare_at_head", args)
+            assert comparison.structured_content == {
+                "outcome": "Cannot check", "reference_commit_oid": None, "head_commit_oid": None,
+                "note": "excludes working tree and index",
+            }
+            for injected in ({"path": "file.txt"}, {"commit": "main"}, {"repo": "/tmp"}):
+                assert (await client.call_tool("compare_at_head", {**args, **injected})).is_error
 
             fetched = await client.call_tool("get", {"memory_id": first["memory_id"]})
             assert not fetched.is_error

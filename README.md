@@ -148,7 +148,7 @@ keeping apart because only the last one is evidence the service is doing somethi
 | Milestone | What it means | How you know |
 | --- | --- | --- |
 | **Installation verified** | the environment can serve MCP at all | `nexus-memory-check` passes |
-| **Client connected** | your agent reached that server | the client lists the seven tools |
+| **Client connected** | your agent reached that server | the client lists the expected tools for its installed version |
 | **Fact reused** | a memory written in one session was found and used in a later one | you searched for it in a new session and it changed what you did |
 
 The first two are setup steps you do once. The third is a habit.

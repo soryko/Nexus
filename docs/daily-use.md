@@ -37,6 +37,13 @@ shapes carry their weight:
 A good body says three things: **what is true**, **when it applies**, and **what supports it**.
 That third part is what makes a memory checkable a month later.
 
+When a new decision changes only part of an older one, use a plain note that says
+**what changed, what still applies, and which revision supports each rule**.
+For example (fictional revision labels): “Interactive workers now use gold (F3@1).
+Batch workers still use blue (T5@1).” If the source does not establish the batch
+rule, say it is unknown instead. Do not extend a rule to other workers by analogy.
+These citations are prose, not verified Git references.
+
 Keep the distinction between *executed* and *proposed* explicit. "The integration suite passed
 on commit abc123" and "run the integration suite after changing this" are different claims with
 different lifetimes, and a body that blurs them will mislead you later.
@@ -72,6 +79,14 @@ noticing, not a quota to fill.
 > and the `search` reference filters still match on them, because both read evidence the
 > original write stored and neither re-verifies anything. Do not add `--repo` casually — it
 > changes what a scope can attest to.
+
+**Compare a recorded file with HEAD (on demand).** On a server that supports
+`compare_at_head`, get the exact revision and choose the zero-based ordinal in its
+`references` list. Pass its `memory_id`, `revision_id` and `reference_ordinal` to the
+comparison. There is no path or checkout argument. “Matches” means the entry type
+and object match at the same path in that checkout's inspected HEAD commit; it
+**excludes the working tree and index**. “Cannot check” is not “missing”. Neither
+result verifies that the note itself is true. This is not part of automatic search.
 
 ## 2. Consult — briefly, and on purpose
 

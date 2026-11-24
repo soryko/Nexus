@@ -1,0 +1,96 @@
+{
+  "counts": {
+    "A": {
+      "reads": 32,
+      "irrelevant": 15,
+      "read_abstentions": 2
+    },
+    "A/none": {
+      "reads": 4,
+      "irrelevant": 4,
+      "read_abstentions": 2
+    },
+    "B": {
+      "reads": 23,
+      "irrelevant": 7,
+      "read_abstentions": 5
+    },
+    "B/none": {
+      "reads": 0,
+      "irrelevant": 0,
+      "read_abstentions": 4
+    },
+    "A/decision": {
+      "reads": 7,
+      "irrelevant": 3,
+      "read_abstentions": 0
+    },
+    "B/decision": {
+      "reads": 5,
+      "irrelevant": 1,
+      "read_abstentions": 0
+    },
+    "A/receipt": {
+      "reads": 8,
+      "irrelevant": 4,
+      "read_abstentions": 0
+    },
+    "B/receipt": {
+      "reads": 8,
+      "irrelevant": 4,
+      "read_abstentions": 0
+    },
+    "A/mixed": {
+      "reads": 8,
+      "irrelevant": 1,
+      "read_abstentions": 0
+    },
+    "B/mixed": {
+      "reads": 7,
+      "irrelevant": 0,
+      "read_abstentions": 0
+    },
+    "A/paraphrase": {
+      "reads": 5,
+      "irrelevant": 3,
+      "read_abstentions": 0
+    },
+    "B/paraphrase": {
+      "reads": 3,
+      "irrelevant": 2,
+      "read_abstentions": 1
+    }
+  },
+  "lost_evidence": {
+    "c19": [
+      "r05"
+    ]
+  },
+  "required_receipts_lost": 1,
+  "answer_regressions": [],
+  "pending_answer_pairs": [
+    "c01",
+    "c02",
+    "c03",
+    "c04",
+    "c05",
+    "c06",
+    "c07",
+    "c08",
+    "c09",
+    "c10",
+    "c11",
+    "c12",
+    "c13",
+    "c14",
+    "c15",
+    "c16",
+    "c17",
+    "c18",
+    "c19",
+    "c20"
+  ],
+  "incomplete_pairs": [],
+  "quiet_gate": "fail",
+  "cost_gate": "inconclusive: no authorized query/answer calls"
+}

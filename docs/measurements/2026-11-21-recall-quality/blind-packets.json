@@ -1,0 +1,495 @@
+[
+  {
+    "id": "08f3441491122a798a1a330e",
+    "prompt": "Which capture policy governs dock and cabin launches now?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r02",
+        "text": "Lumen capture policy requires operator permission for a dock launch. A cabin launch may still opt into automatic saving."
+      }
+    ]
+  },
+  {
+    "id": "0d8d89f706dd8b71a11298a8",
+    "prompt": "What installer success was insufficient under the rollback policy?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r03",
+        "text": "Lumen rollback policy: reverse the rollout if the mirror loses a stamp; a successful installer check does not waive this condition."
+      }
+    ]
+  },
+  {
+    "id": "0f4052e96e926a66bfb38768",
+    "prompt": "When does the mirror rollback policy require reversal?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r03",
+        "text": "Lumen rollback policy: reverse the rollout if the mirror loses a stamp; a successful installer check does not waive this condition."
+      },
+      {
+        "label": "r05",
+        "text": "Lumen mirror receipt: replay validation failed on the second stamp; the mirror lost that stamp."
+      }
+    ]
+  },
+  {
+    "id": "171a3412259e7366df541aea",
+    "prompt": "What installer success was insufficient under the rollback policy?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r03",
+        "text": "Lumen rollback policy: reverse the rollout if the mirror loses a stamp; a successful installer check does not waive this condition."
+      },
+      {
+        "label": "r02",
+        "text": "Lumen capture policy requires operator permission for a dock launch. A cabin launch may still opt into automatic saving."
+      }
+    ]
+  },
+  {
+    "id": "2ac56117f2109418551adde5",
+    "prompt": "Did the reflected copy drop its second imprint?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": []
+  },
+  {
+    "id": "2c5ade58ec799bbab99bca40",
+    "prompt": "Why did Lumen choose explicit capture?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r01",
+        "text": "Lumen explicit capture prevents draft notes becoming durable without operator consent."
+      },
+      {
+        "label": "r02",
+        "text": "Lumen capture policy requires operator permission for a dock launch. A cabin launch may still opt into automatic saving."
+      }
+    ]
+  },
+  {
+    "id": "3852e561c10a422b9d7b3cc6",
+    "prompt": "Why select copper tape for the archive?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r07",
+        "text": "Lumen archive selects copper tape because the depot has no optical reader."
+      }
+    ]
+  },
+  {
+    "id": "389d4e66a7cda47d9961b558",
+    "prompt": "What else could Lumen improve?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": []
+  },
+  {
+    "id": "3df51c97d0234ba4a358937b",
+    "prompt": "Who manufactured the optical reader purchased last week?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r07",
+        "text": "Lumen archive selects copper tape because the depot has no optical reader."
+      }
+    ]
+  },
+  {
+    "id": "3f87ea9ac1e40ccd4acabab9",
+    "prompt": "Which capture policy governs dock and cabin launches now?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r02",
+        "text": "Lumen capture policy requires operator permission for a dock launch. A cabin launch may still opt into automatic saving."
+      },
+      {
+        "label": "r06",
+        "text": "Lumen cabin receipt: autonomous saving wrote only the approved cabin sample during the opt-in check."
+      }
+    ]
+  },
+  {
+    "id": "4b3fd92d2b4c0bfb718d35df",
+    "prompt": "When does the mirror rollback policy require reversal?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r03",
+        "text": "Lumen rollback policy: reverse the rollout if the mirror loses a stamp; a successful installer check does not waive this condition."
+      }
+    ]
+  },
+  {
+    "id": "4b9fd26439e8625768d6be14",
+    "prompt": "Which stamp did mirror replay validation lose?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r05",
+        "text": "Lumen mirror receipt: replay validation failed on the second stamp; the mirror lost that stamp."
+      },
+      {
+        "label": "r03",
+        "text": "Lumen rollback policy: reverse the rollout if the mirror loses a stamp; a successful installer check does not waive this condition."
+      }
+    ]
+  },
+  {
+    "id": "50253d49a1261ec8be768ce1",
+    "prompt": "Did the reflected copy drop its second imprint?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r05",
+        "text": "Lumen mirror receipt: replay validation failed on the second stamp; the mirror lost that stamp."
+      }
+    ]
+  },
+  {
+    "id": "5326c19fc00efdcbc3f4a950",
+    "prompt": "What passed after the installer change?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r04",
+        "text": "Lumen installer receipt: the clean Linux installation smoke passed all eight checks after the installer change."
+      },
+      {
+        "label": "r08",
+        "text": "Lumen installer artwork check passed on a square icon; no installation was performed."
+      }
+    ]
+  },
+  {
+    "id": "561aeefefa4dc0ef56ca2e85",
+    "prompt": "What passed after the installer change?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r04",
+        "text": "Lumen installer receipt: the clean Linux installation smoke passed all eight checks after the installer change."
+      },
+      {
+        "label": "r08",
+        "text": "Lumen installer artwork check passed on a square icon; no installation was performed."
+      }
+    ]
+  },
+  {
+    "id": "667ed406a2d5f9e4568cf815",
+    "prompt": "Who manufactured the optical reader purchased last week?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r07",
+        "text": "Lumen archive selects copper tape because the depot has no optical reader."
+      }
+    ]
+  },
+  {
+    "id": "6a4e4e0e54ea639964401977",
+    "prompt": "Contrast the installer smoke with the artwork check.",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r08",
+        "text": "Lumen installer artwork check passed on a square icon; no installation was performed."
+      },
+      {
+        "label": "r04",
+        "text": "Lumen installer receipt: the clean Linux installation smoke passed all eight checks after the installer change."
+      }
+    ]
+  },
+  {
+    "id": "6b65f27458c0672ef9e4150d",
+    "prompt": "Next?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": []
+  },
+  {
+    "id": "6d7c0fba8a48b02553fe8e48",
+    "prompt": "Which stamp did mirror replay validation lose?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r05",
+        "text": "Lumen mirror receipt: replay validation failed on the second stamp; the mirror lost that stamp."
+      },
+      {
+        "label": "r03",
+        "text": "Lumen rollback policy: reverse the rollout if the mirror loses a stamp; a successful installer check does not waive this condition."
+      }
+    ]
+  },
+  {
+    "id": "78ffb0b12854a6247c154db8",
+    "prompt": "Why pick magnetic media instead of optical at the depot?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r07",
+        "text": "Lumen archive selects copper tape because the depot has no optical reader."
+      }
+    ]
+  },
+  {
+    "id": "8cf7ab401b7bc9b944c2a73f",
+    "prompt": "How was the surviving cabin exception exercised during the opt-in check?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r06",
+        "text": "Lumen cabin receipt: autonomous saving wrote only the approved cabin sample during the opt-in check."
+      },
+      {
+        "label": "r02",
+        "text": "Lumen capture policy requires operator permission for a dock launch. A cabin launch may still opt into automatic saving."
+      }
+    ]
+  },
+  {
+    "id": "8ff47b9963619c783fdf0f08",
+    "prompt": "Did the installer artwork check install anything?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r08",
+        "text": "Lumen installer artwork check passed on a square icon; no installation was performed."
+      },
+      {
+        "label": "r03",
+        "text": "Lumen rollback policy: reverse the rollout if the mirror loses a stamp; a successful installer check does not waive this condition."
+      }
+    ]
+  },
+  {
+    "id": "9629e3ba58de5da75788ffe1",
+    "prompt": "Which departure needs consent before saving notes?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r01",
+        "text": "Lumen explicit capture prevents draft notes becoming durable without operator consent."
+      }
+    ]
+  },
+  {
+    "id": "97076aaa21fae956537c5fa3",
+    "prompt": "What did the cabin opt-in check write?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r06",
+        "text": "Lumen cabin receipt: autonomous saving wrote only the approved cabin sample during the opt-in check."
+      },
+      {
+        "label": "r02",
+        "text": "Lumen capture policy requires operator permission for a dock launch. A cabin launch may still opt into automatic saving."
+      }
+    ]
+  },
+  {
+    "id": "9a9ffee4b4535d72ba1e8d43",
+    "prompt": "Why reverse the mirror rollout after validation?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r03",
+        "text": "Lumen rollback policy: reverse the rollout if the mirror loses a stamp; a successful installer check does not waive this condition."
+      },
+      {
+        "label": "r05",
+        "text": "Lumen mirror receipt: replay validation failed on the second stamp; the mirror lost that stamp."
+      }
+    ]
+  },
+  {
+    "id": "a6aeb8bec20e63b93749c710",
+    "prompt": "Why pick magnetic media instead of optical at the depot?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r07",
+        "text": "Lumen archive selects copper tape because the depot has no optical reader."
+      }
+    ]
+  },
+  {
+    "id": "ac69dd95a10f6639f041a4d2",
+    "prompt": "Which departure needs consent before saving notes?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r01",
+        "text": "Lumen explicit capture prevents draft notes becoming durable without operator consent."
+      },
+      {
+        "label": "r06",
+        "text": "Lumen cabin receipt: autonomous saving wrote only the approved cabin sample during the opt-in check."
+      }
+    ]
+  },
+  {
+    "id": "b467d212f76d90e6d99fd8d8",
+    "prompt": "How heavy is a nectarine?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": []
+  },
+  {
+    "id": "b8ceb18e0a24d5c1962adbd3",
+    "prompt": "Suggest a Lumen team outing.",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": []
+  },
+  {
+    "id": "be1033e042794a94c31a5da5",
+    "prompt": "How heavy is a nectarine?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": []
+  },
+  {
+    "id": "c2a23c9ac8a31dd503c8dd16",
+    "prompt": "How was the surviving cabin exception exercised during the opt-in check?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r06",
+        "text": "Lumen cabin receipt: autonomous saving wrote only the approved cabin sample during the opt-in check."
+      },
+      {
+        "label": "r02",
+        "text": "Lumen capture policy requires operator permission for a dock launch. A cabin launch may still opt into automatic saving."
+      }
+    ]
+  },
+  {
+    "id": "c3d24608f159419f541d0dd8",
+    "prompt": "Contrast the installer smoke with the artwork check.",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r08",
+        "text": "Lumen installer artwork check passed on a square icon; no installation was performed."
+      },
+      {
+        "label": "r04",
+        "text": "Lumen installer receipt: the clean Linux installation smoke passed all eight checks after the installer change."
+      }
+    ]
+  },
+  {
+    "id": "c502de9a3ea321cdfea05ae4",
+    "prompt": "What did the cabin opt-in check write?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r06",
+        "text": "Lumen cabin receipt: autonomous saving wrote only the approved cabin sample during the opt-in check."
+      },
+      {
+        "label": "r02",
+        "text": "Lumen capture policy requires operator permission for a dock launch. A cabin launch may still opt into automatic saving."
+      }
+    ]
+  },
+  {
+    "id": "d442588783c8b23eb173fb80",
+    "prompt": "Why reverse the mirror rollout after validation?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r03",
+        "text": "Lumen rollback policy: reverse the rollout if the mirror loses a stamp; a successful installer check does not waive this condition."
+      },
+      {
+        "label": "r05",
+        "text": "Lumen mirror receipt: replay validation failed on the second stamp; the mirror lost that stamp."
+      }
+    ]
+  },
+  {
+    "id": "d65030c2ecc8b5c6c4d0d84f",
+    "prompt": "Why did Lumen choose explicit capture?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r01",
+        "text": "Lumen explicit capture prevents draft notes becoming durable without operator consent."
+      },
+      {
+        "label": "r02",
+        "text": "Lumen capture policy requires operator permission for a dock launch. A cabin launch may still opt into automatic saving."
+      }
+    ]
+  },
+  {
+    "id": "d7063b1f350ae5d34969658d",
+    "prompt": "What else could Lumen improve?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r09",
+        "text": "Lumen planning calendar reserves Friday for a costume exchange."
+      },
+      {
+        "label": "r01",
+        "text": "Lumen explicit capture prevents draft notes becoming durable without operator consent."
+      }
+    ]
+  },
+  {
+    "id": "d8cd08491ed002eb02053d81",
+    "prompt": "Suggest a Lumen team outing.",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r09",
+        "text": "Lumen planning calendar reserves Friday for a costume exchange."
+      },
+      {
+        "label": "r01",
+        "text": "Lumen explicit capture prevents draft notes becoming durable without operator consent."
+      }
+    ]
+  },
+  {
+    "id": "d92739aa91f63cb8d8d23a75",
+    "prompt": "Next?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": []
+  },
+  {
+    "id": "f632d7013f57b0353aad504a",
+    "prompt": "Why select copper tape for the archive?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r07",
+        "text": "Lumen archive selects copper tape because the depot has no optical reader."
+      }
+    ]
+  },
+  {
+    "id": "fdf4485947d0c9352f62b56f",
+    "prompt": "Did the installer artwork check install anything?",
+    "instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+    "evidence": [
+      {
+        "label": "r08",
+        "text": "Lumen installer artwork check passed on a square icon; no installation was performed."
+      },
+      {
+        "label": "r03",
+        "text": "Lumen rollback policy: reverse the rollout if the mirror loses a stamp; a successful installer check does not waive this condition."
+      }
+    ]
+  }
+]

@@ -1,0 +1,68 @@
+[
+  {
+    "id": "receipt",
+    "prompt": "Receipt banner flashes violet after an acknowledged save. Which lane should I select for the next receipt check?",
+    "body": "For a receipt banner that flashes violet after acknowledgement, the Nexus UI rehearsal uses lane juniper-43; the fixture emits duplicate banners in the ordinary lane.",
+    "answer": "juniper-43",
+    "kind": "decision",
+    "event_type": "human-decision",
+    "evidence": "UI rehearsal lead selected juniper-43 for the violet receipt banner after the ordinary lane emitted duplicate banners.",
+    "usefulness": "Same symptom, concrete lane and a reason to reuse it.",
+    "expect_recall": true
+  },
+  {
+    "id": "cursor",
+    "prompt": "Cursor pagination turns amber on page two. Which rehearsal marker goes with that symptom?",
+    "body": "When cursor pagination turns amber on page two, the Nexus paging rehearsal uses marker larch-86; the default marker exercises page one instead.",
+    "answer": "larch-86",
+    "kind": "procedure",
+    "event_type": "verification",
+    "evidence": "Paging rehearsal reproduced amber on page two; larch-86 exercised page two, while the default marker exercised page one.",
+    "usefulness": "Captures a specific verified workaround instead of a standalone pass.",
+    "expect_recall": true
+  },
+  {
+    "id": "atlas",
+    "prompt": "Atlas timeline tiles display stripes after refresh. Which review label should I attach?",
+    "body": "For striped Atlas timeline tiles after refresh, the Nexus UI rehearsal uses review label heron-71 so the renderer team can route the trace.",
+    "answer": "heron-71",
+    "kind": "decision",
+    "event_type": "human-decision",
+    "evidence": "For stripes in Atlas timeline tiles after refresh, the rehearsal lead approved review label heron-71 for renderer trace routing.",
+    "usefulness": "An actionable routing decision with a recognizable trigger.",
+    "expect_recall": true
+  },
+  {
+    "id": "scope",
+    "prompt": "Workspace fingerprint pulses magenta during enrollment. What enrollment lane belongs to that symptom?",
+    "body": "A magenta workspace fingerprint during enrollment is constrained to lane basalt-24 in the Nexus rehearsal, because the enrollment fixture models a replaced scope.",
+    "answer": "basalt-24",
+    "kind": "constraint",
+    "event_type": "bounded-file-read",
+    "evidence": "Private rehearsal card: a magenta workspace fingerprint marks the replaced scope simulation; the only enrollment lane for it is basalt-24.",
+    "usefulness": "Names a condition and an applicable constraint.",
+    "expect_recall": true
+  },
+  {
+    "id": "refs",
+    "prompt": "Reference badges show scalloped edges in an object review. Which review bucket should take this case?",
+    "body": "Reference badges with scalloped edges go into bucket copper-59 during the Nexus object review rehearsal; the bucket isolates the synthetic stale badge case.",
+    "answer": "copper-59",
+    "kind": "decision",
+    "event_type": "human-decision",
+    "evidence": "Object review lead assigned scalloped reference badges to copper-59 to isolate the synthetic stale badge case.",
+    "usefulness": "Ties an observable symptom to a durable review decision.",
+    "expect_recall": true
+  },
+  {
+    "id": "checkpoint",
+    "prompt": "Frozen drumbeat follows a restart. Which route should I use?",
+    "body": "Whenever the SQLite write-ahead log stalls after recovery, Nexus durability rehearsal assigns kestrel-38 to separate the blocked writer from the read probe.",
+    "answer": "kestrel-38",
+    "kind": "procedure",
+    "event_type": "verification",
+    "evidence": "Durability rehearsal: the SQLite write-ahead log stalled after recovery; kestrel-38 isolated the blocked writer from the read probe.",
+    "usefulness": "Useful in technical terms; the variant question deliberately shares no lexical cue.",
+    "expect_recall": false
+  }
+]

@@ -1,0 +1,206 @@
+{
+  "date": "2026-11-04",
+  "result": "Both automatic handoffs passed on these tasks.",
+  "writer_receipt": "2026-11-04-native-codex-claude-handoff.json",
+  "models": {
+    "codex": "Codex CLI 0.163.0 (requested gpt-6.1-sol)",
+    "claude": "Claude Code 2.1.316 (reported claude-sonnet-5-5)"
+  },
+  "reader_prompts": {
+    "codex": "Harborquill5437d1 dispatch: Three rehearsal shipments go out today. Fill in the dispatch ticket with the total number of manifests to retain across all three and the verification code. Mark any unknown field UNKNOWN.",
+    "claude": "Lanternfold634a67 intake: A rehearsal batch failed inspection. Fill in the floor ticket with the label color to apply and the verification code. Mark any unknown field UNKNOWN."
+  },
+  "design": "Six fresh native CLI sessions in the same empty Git checkout. Positive arms reused the original two writer records. Empty-store controls used a separate isolated registry and SQLite database with identical task prompts and enabled hooks. Model tools and passive MCP wire traces were recorded separately. The working tree contained no decision or transcript files. No model was instructed to consult memory in the user prompt.",
+  "configuration": {
+    "codex": "Two installed Nexus MCP hook definitions. In the enabled runs the native hooks/list response confirmed both hashes matched existing approvals and both hooks were trusted in a disposable Codex profile. The first cold profile had configured hooks without matching path-specific trust and issued no lifecycle calls; retained as codex-enabled (untrusted) in observations.",
+    "claude": "Ordinary Claude config provides scoped MCP with no Nexus prompt hook. For both enabled arms only, a per-invocation native UserPromptSubmit MCP hook called the installed hook build on a second scoped endpoint. The model fetched through the ordinary Claude endpoint. No permanent Claude setup or pilot changes.",
+    "hook_docs": "https://code.claude.com/docs/en/hooks#mcp-tool-hook-fields"
+  },
+  "stores": {
+    "populated": "9d0749fe-7808-4a09-94ef-057229a52974",
+    "empty": "30090b6d-2d45-4b0a-bb1e-047b756644f4",
+    "pilot_before_after_hashes": {
+      "p1-claude-auto.sqlite3": "5768bc617161e29641f110af5759fb06ebc891a9ded6a718aa057c74595df440",
+      "usage.jsonl": "974f8bd497fafb6edc00750b9354c4897060a06297901e2afbd19120e9c32e9e"
+    },
+    "pilot_wal_present_at_snapshots": false
+  },
+  "observations": [
+    {
+      "arm": "claude-enabled",
+      "reader": "claude",
+      "reader_session": "7d6670e4-c339-4a48-82f6-d1a62e8ace10",
+      "source_writer_session": "01a1a5de-a82d-7641-9f4b-c852d34be833",
+      "automatic_recall_observed": true,
+      "candidates_in_return_order": [
+        {
+          "memory_id": "bf415100-05c8-41da-9efd-3d03ff3978c7",
+          "revision_id": "dc29c46f-221e-4d21-ac6a-0b77f8ad7b32"
+        },
+        {
+          "memory_id": "0469175c-8691-43a5-8ff4-a4fe06cd2c91",
+          "revision_id": "07c8af67-da33-42b0-8d3d-d2bf45a73b00"
+        }
+      ],
+      "model_tool_calls": [
+        "mcp__nexus_memory__get",
+        "mcp__nexus_memory__get",
+        "bash"
+      ],
+      "denied_tools": [],
+      "successful_gets": [
+        {
+          "memory_id": "bf415100-05c8-41da-9efd-3d03ff3978c7",
+          "revision_id": "dc29c46f-221e-4d21-ac6a-0b77f8ad7b32"
+        },
+        {
+          "memory_id": "0469175c-8691-43a5-8ff4-a4fe06cd2c91",
+          "revision_id": "07c8af67-da33-42b0-8d3d-d2bf45a73b00"
+        }
+      ],
+      "answer": "The first memory matches the Lanternfold634a67 batch. The second one is about Harborquill5437d1, so I ignored it.\n\n**Floor ticket: Lanternfold634a67**\n- **Label color:** amber\n- **Verification code:** 00c56821c59ad0ea4a\n- **Other fields:** UNKNOWN. The ticket gave no other fields, and I found nothing else in memory.\n\nThe answer comes from a single stored memory. I didn't check it against the repository, because the shell tool wasn't available.",
+      "grade": "Correct action or total and exact code",
+      "native_trace_sha256": "1a77586306cefed89dbe433f5c0121d5c5201db6bc01cad3f55559321b6ae369",
+      "mcp_trace_sha256": {
+        "claude-enabled-nexus_recall-wire.jsonl": "557593efeafb3c681f1d254920f10fbe5765243e3fa4fed9e0f1b0fa26d54d01",
+        "claude-enabled-nexus_memory-wire.jsonl": "973401fb5592414d8568926b2d7c93192bba99d1c445a1bfc6b4040b8a24fe7a"
+      }
+    },
+    {
+      "arm": "codex-enabled-trusted",
+      "reader": "codex",
+      "reader_session": "01a1a5e5-fd1b-7450-ab07-289e9506deac",
+      "source_writer_session": "5b28baa4-a5f6-4af9-83d4-5ad8ce4e3588",
+      "automatic_recall_observed": true,
+      "candidates_in_return_order": [
+        {
+          "memory_id": "0469175c-8691-43a5-8ff4-a4fe06cd2c91",
+          "revision_id": "07c8af67-da33-42b0-8d3d-d2bf45a73b00"
+        },
+        {
+          "memory_id": "bf415100-05c8-41da-9efd-3d03ff3978c7",
+          "revision_id": "dc29c46f-221e-4d21-ac6a-0b77f8ad7b32"
+        }
+      ],
+      "model_tool_calls": [
+        "get",
+        "get"
+      ],
+      "denied_tools": [],
+      "successful_gets": [
+        {
+          "memory_id": "0469175c-8691-43a5-8ff4-a4fe06cd2c91",
+          "revision_id": "07c8af67-da33-42b0-8d3d-d2bf45a73b00"
+        },
+        {
+          "memory_id": "bf415100-05c8-41da-9efd-3d03ff3978c7",
+          "revision_id": "dc29c46f-221e-4d21-ac6a-0b77f8ad7b32"
+        }
+      ],
+      "answer": "Harborquill5437d1 dispatch ticket\n\n- Total manifests to retain: **6**\n- Verification code: **57f30ac93e197c3025**",
+      "grade": "Correct action or total and exact code",
+      "native_trace_sha256": "e617f5900cdf4652694cf7c0c8e251a74060eee8138ce8793b4753d1d27860de",
+      "mcp_trace_sha256": {
+        "codex-enabled-trusted-nexus_memory-wire.jsonl": "cd323be7495caf732c682bfe85448928bda8b2624cb8dcd5e7b1a456f93c7daf"
+      }
+    },
+    {
+      "arm": "claude-baseline",
+      "reader": "claude",
+      "reader_session": "41042921-a80f-48f6-b23b-805a9f06e92c",
+      "source_writer_session": "01a1a5de-a82d-7641-9f4b-c852d34be833",
+      "automatic_recall_observed": false,
+      "candidates_in_return_order": [],
+      "model_tool_calls": [
+        "mcp__nexus_memory__search",
+        "mcp__nexus_memory__status",
+        "mcp__nexus_memory__get"
+      ],
+      "denied_tools": [
+        "mcp__nexus_memory__status"
+      ],
+      "successful_gets": [
+        {
+          "memory_id": "bf415100-05c8-41da-9efd-3d03ff3978c7",
+          "revision_id": "dc29c46f-221e-4d21-ac6a-0b77f8ad7b32"
+        }
+      ],
+      "answer": "**Floor ticket: Lanternfold634a67**\n\n| Field | Value |\n|---|---|\n| Label color to apply | **Amber** |\n| Verification code | **00c56821c59ad0ea4a** |\n\nBoth values come from a stored decision memory for Lanternfold634a67. It says to use an amber label for rejected rehearsal batches. I didn't find a ticket file in the repo, so the table above is the ticket. You gave me no other fields, so none are marked UNKNOWN.",
+      "grade": "Correct action or total and exact code",
+      "native_trace_sha256": "b0b4710bda57d77a730b9647d718b2b07ebc28740b8bbf38a22f709fb0f62cb8",
+      "mcp_trace_sha256": {
+        "claude-baseline-nexus_memory-wire.jsonl": "ab82d495c0d7f9e22bea535eb475fece771b180fda4c0f917b817a0e7fea1600"
+      }
+    },
+    {
+      "arm": "codex-enabled",
+      "reader": "codex",
+      "reader_session": "01a1a5e4-7343-7212-9a8f-e74982448395",
+      "source_writer_session": "5b28baa4-a5f6-4af9-83d4-5ad8ce4e3588",
+      "automatic_recall_observed": false,
+      "candidates_in_return_order": [],
+      "model_tool_calls": [
+        "search"
+      ],
+      "denied_tools": [],
+      "successful_gets": [],
+      "answer": "Dispatch ticket \u2014 Harborquill5437d1\n\n- Total manifests to retain: 6\n- Verification code: 57f30ac93e197c3025",
+      "grade": "Correct action or total and exact code",
+      "native_trace_sha256": "058b8e0a53b4b796dcaadccc10e6d6e072b83bc978336b7758825d1c84eb10ff",
+      "mcp_trace_sha256": {
+        "codex-enabled-nexus_memory-wire.jsonl": "fa6484bb65e68a75e7dcde4cd0411024102af8ab28b259d0b1039dbe3822d30b"
+      }
+    },
+    {
+      "arm": "claude-empty",
+      "reader": "claude",
+      "reader_session": "31b5a085-8c0a-495a-8a11-d2c6c9db4e5d",
+      "source_writer_session": "01a1a5de-a82d-7641-9f4b-c852d34be833",
+      "automatic_recall_observed": true,
+      "candidates_in_return_order": [],
+      "model_tool_calls": [
+        "mcp__nexus_recall__search",
+        "mcp__nexus_recall__codex_recall",
+        "Bash",
+        "mcp__nexus_memory__search",
+        "mcp__nexus_memory__search"
+      ],
+      "denied_tools": [
+        "mcp__nexus_recall__search"
+      ],
+      "successful_gets": [],
+      "answer": "I couldn't find the label color or the verification code, so the ticket is not filled in from real data.\n\nI checked the places I could reach:\n- **Memory search:** \"Lanternfold634a67\" and \"rehearsal batch label color verification code\" both returned nothing.\n- **Recall adapter:** It returned no candidates.\n- **Checkout:** I couldn't read it. Bash is disabled in this session, and I have no file-reading tool. The directory only has one commit, \"Initialize disposable handoff checkout\".\n- **Recall search:** That call was denied in don't-ask mode. I didn't try to work around the denial.\n\nThe ticket as it stands:\n\n```\nBatch:             Lanternfold634a67\nLabel color:       UNKNOWN\nVerification code: UNKNOWN\n```\n\nI didn't guess a color or invent a code. To fix this, you could paste the inspection result or the label-color rules and the code source. You could also enable a file-reading tool or Bash so I can look through the checkout.",
+      "grade": "Both fields unknown",
+      "native_trace_sha256": "3f8fc0002078838630e7bd42fcfba9a93cb97c21b4e5035fefa966acbc1d3958",
+      "mcp_trace_sha256": {
+        "claude-empty-nexus_recall-wire.jsonl": "3531b9435465a8f8d24176e01486be335fcaea91e39f482601ea59b868a14d02",
+        "claude-empty-nexus_memory-wire.jsonl": "4e8253d284485d18ac271374126fc4a158ae260b2211ee8e89252eea750dd206"
+      }
+    },
+    {
+      "arm": "codex-empty",
+      "reader": "codex",
+      "reader_session": "01a1a5e5-febe-7020-b2cd-ae93a0e977c9",
+      "source_writer_session": "5b28baa4-a5f6-4af9-83d4-5ad8ce4e3588",
+      "automatic_recall_observed": true,
+      "candidates_in_return_order": [],
+      "model_tool_calls": [
+        "search",
+        "search",
+        "search",
+        "search",
+        "list_mcp_resources",
+        "list_mcp_resource_templates"
+      ],
+      "denied_tools": [],
+      "successful_gets": [],
+      "answer": "Harborquill5437d1 dispatch ticket\n\n- Rehearsal shipments: 3\n- Total manifests to retain: UNKNOWN\n- Verification code: UNKNOWN\n\nNo matching shipment records were available to verify the missing fields.",
+      "grade": "Both fields unknown",
+      "native_trace_sha256": "4d7dbb8a54d9a4847be076415eb3da43b2c467a836328069ddfccbb8fd7f5295",
+      "mcp_trace_sha256": {
+        "codex-empty-nexus_memory-wire.jsonl": "2bbe18e7ab0e804c5c28a8a7a6fd2ae77447c2005d195f962dd031e10f05d990"
+      }
+    }
+  ],
+  "limits": "One task per direction with an exact project token and a verification-code field. Both positive hooks surfaced both records, and each model fetched the unrelated one as well. Both populated no-hook readers independently searched and succeeded. These trials demonstrate automatic delivery and decision use, and cannot establish incremental benefit or ordinary-task reliability."
+}

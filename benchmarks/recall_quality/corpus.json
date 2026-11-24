@@ -1,0 +1,113 @@
+[
+  {
+    "id": "r01",
+    "kind": "decision",
+    "revisions": [
+      "Lumen explicit capture prevents draft notes becoming durable without operator consent."
+    ],
+    "scope": "pilot",
+    "forgotten": false,
+    "receipt": false
+  },
+  {
+    "id": "r02",
+    "kind": "constraint",
+    "revisions": [
+      "Lumen capture policy permits automatic saving for every launch.",
+      "Lumen capture policy requires operator permission for a dock launch. A cabin launch may still opt into automatic saving."
+    ],
+    "scope": "pilot",
+    "forgotten": false,
+    "receipt": false
+  },
+  {
+    "id": "r03",
+    "kind": "decision",
+    "revisions": [
+      "Lumen rollback policy: reverse the rollout if the mirror loses a stamp; a successful installer check does not waive this condition."
+    ],
+    "scope": "pilot",
+    "forgotten": false,
+    "receipt": false
+  },
+  {
+    "id": "r04",
+    "kind": "observation",
+    "revisions": [
+      "Lumen installer receipt: the clean Linux installation smoke passed all eight checks after the installer change."
+    ],
+    "scope": "pilot",
+    "forgotten": false,
+    "receipt": true
+  },
+  {
+    "id": "r05",
+    "kind": "failure",
+    "revisions": [
+      "Lumen mirror receipt: replay validation failed on the second stamp; the mirror lost that stamp."
+    ],
+    "scope": "pilot",
+    "forgotten": false,
+    "receipt": true
+  },
+  {
+    "id": "r06",
+    "kind": "observation",
+    "revisions": [
+      "Lumen cabin receipt: autonomous saving wrote only the approved cabin sample during the opt-in check."
+    ],
+    "scope": "pilot",
+    "forgotten": false,
+    "receipt": true
+  },
+  {
+    "id": "r07",
+    "kind": "decision",
+    "revisions": [
+      "Lumen archive selects copper tape because the depot has no optical reader."
+    ],
+    "scope": "pilot",
+    "forgotten": false,
+    "receipt": false
+  },
+  {
+    "id": "r08",
+    "kind": "observation",
+    "revisions": [
+      "Lumen installer artwork check passed on a square icon; no installation was performed."
+    ],
+    "scope": "pilot",
+    "forgotten": false,
+    "receipt": true
+  },
+  {
+    "id": "r09",
+    "kind": "observation",
+    "revisions": [
+      "Lumen planning calendar reserves Friday for a costume exchange."
+    ],
+    "scope": "pilot",
+    "forgotten": false,
+    "receipt": false
+  },
+  {
+    "id": "r10",
+    "kind": "failure",
+    "revisions": [
+      "Lumen mirror receipt: OLDORCHID forgotten lookalike passed."
+    ],
+    "scope": "pilot",
+    "forgotten": true,
+    "receipt": true
+  },
+  {
+    "id": "r11",
+    "kind": "observation",
+    "revisions": [
+      "Lumen installer receipt: BLUEQUARTZ foreign lookalike skipped."
+    ],
+    "scope": "foreign",
+    "forgotten": false,
+    "receipt": true
+  }
+]

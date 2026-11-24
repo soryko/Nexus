@@ -18,7 +18,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "mcp__nexus-memory__.*",
+        "matcher": "^mcp__(nexus-memory|plugin_nexus_nexus-memory|plugin_nexus-memory_nexus-memory)__.*$",
         "hooks": [
           {"type": "mcp_tool", "server": "nexus-memory", "tool": "nexus_pre_tool", "timeout": 2,
            "input": {"session_id": "${session_id}", "cwd": "${cwd}", "tool_name": "${tool_name}", "tool_input": "${tool_input}"}}

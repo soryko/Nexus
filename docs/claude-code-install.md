@@ -9,7 +9,7 @@ this prompt.`) when it offers new candidates; and a task guard before Nexus tool
 enrolled, one line per session and then silence. Nothing here enrolls a project or writes a memory.
 
 **Everything below is run by you.** It changes live client configuration, so none of it is done for you.
-Steps 1–2 only add files; steps 3–5 change what Claude launches. Each has a rollback.
+Step 1 adds a runtime; step 2 updates the installed launcher and resolver; steps 3–5 change what Claude launches. Each has a rollback.
 
 > **Pilot note.** The `p1-claude-auto` pilot does **not** use the user-scope entry: each of its ~40 `~/Repos`
 > projects has its own local-scope `nexus-memory` entry (a different runtime and database), which overrides the
@@ -30,20 +30,24 @@ python3 tools/install.py --venv "$nexus_runtime"
 "$nexus_runtime/bin/nexus-memory-check"        # expect: PASS: 9/9 checks
 ```
 
-## 2. Install the launcher (one file; back it up first)
+## 2. Install the matching launcher and resolver; verify the project
 
-The new command is `claude-hooks`. The existing `claude` command is unchanged, so anything still using
-`launcher.py claude <old runtime>` keeps working.
+Use the project UUID from your original enrollment receipt or a trusted backup. Do not use the result of the check itself as the expected UUID. Close sessions that use this launcher before replacing the files.
+
+Set `main_checkout` to the absolute checkout path and `project_id` to the expected UUID.
 
 ```bash
 scope_bin="$HOME/.local/share/nexus-memory/project-scopes-v1/bin"
-cp -p "$scope_bin/launcher.py" "$HOME/.local/share/nexus-memory/project-scopes-v1/launcher.py.before-claude-hooks"
-cp integrations/project_scope/launcher.py "$scope_bin/.launcher.py.new" && chmod 600 "$scope_bin/.launcher.py.new" \
-  && mv "$scope_bin/.launcher.py.new" "$scope_bin/launcher.py"
-python3 tools/check_claude_code_setup.py --runtime "$nexus_runtime/bin/nexus-memory" --launcher "$scope_bin/launcher.py"
+backup=$(mktemp -d "$scope_bin/before-scope-update.XXXXXX") || exit 1
+for f in project_scope.py launcher.py; do cp -p "$scope_bin/$f" "$backup/$f" || exit 1; done
+for f in project_scope.py launcher.py; do
+  install -m 600 "integrations/project_scope/$f" "$scope_bin/$f.new" && mv "$scope_bin/$f.new" "$scope_bin/$f" || exit 1
+done
+python3 tools/check_claude_code_setup.py --runtime "$nexus_runtime/bin/nexus-memory" \
+  --launcher "$scope_bin/launcher.py" --checkout "${main_checkout:?}" --expected-project-id "${project_id:?}"
 ```
 
-Expect four `PASS` lines. Rollback: copy the `.before-claude-hooks` file back.
+A binding failure is not fixed by restarting Claude. If you independently confirmed this is the same main checkout and volume after device renumbering, the owner can explicitly run `python3 -I "$scope_bin/launcher.py" recover "$main_checkout" --expected-project-id "$project_id"`, then rerun the doctor. If checkout continuity is uncertain, stop; do not edit the registry or enroll a replacement. To roll back the software, restore both backed-up scripts; that does not undo a registry change.
 
 ## 3. Note what Claude launches today (read-only), and keep a copy of the file it lives in
 
@@ -105,7 +109,7 @@ that matches a stored memory shows IDs in the injected context. In an unenrolled
 
 ## Observed (2026-11-12, one machine, as run by the owner)
 
-Steps 1–5 were run as written, with the scope change in step 5. Observed: `nexus-memory-check` passed 9/9 on
+The then-current steps 1–5 were run with the scope change in step 5, before the expected-project check and recovery command were added. Observed: `nexus-memory-check` passed 9/9 on
 Python 3.14.7 with SQLite 3.53.4; the readiness check printed four `PASS` lines; after step 4 `claude mcp list`
 showed `nexus-memory` as connected with the `claude-hooks` command; `claude plugin install … --scope local` printed
 success with no confirmation prompt; `claude plugin list` showed the plugin enabled at local scope; and in a new

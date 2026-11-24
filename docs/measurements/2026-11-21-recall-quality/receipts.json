@@ -1,0 +1,3260 @@
+[
+  {
+    "case": "c01",
+    "class": "none",
+    "arm": "A",
+    "blind_id": "d7063b1f350ae5d34969658d",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"else\" OR \"could\" OR \"lumen\" OR \"improve\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r09",
+      "r01",
+      "r07",
+      "r08"
+    ],
+    "offered_ids": [
+      "r09",
+      "r01"
+    ],
+    "body_read_ids": [
+      "r09",
+      "r01"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "bd4d7d6155a56c71e3ff302879772b8e18cb20ce967c6e305dbd9599b7885766",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "bd4d7d6155a56c71e3ff302879772b8e18cb20ce967c6e305dbd9599b7885766",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"else\" OR \"could\" OR \"lumen\" OR \"improve\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.793584
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r09",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 1.102167
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r01",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.541833
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [],
+      "answer": "Unknown; no supporting evidence.",
+      "answerable": false
+    }
+  },
+  {
+    "case": "c01",
+    "class": "none",
+    "arm": "B",
+    "blind_id": "389d4e66a7cda47d9961b558",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"else\" OR \"could\" OR \"lumen\" OR \"improve\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r09",
+      "r01",
+      "r07",
+      "r08"
+    ],
+    "offered_ids": [],
+    "body_read_ids": [],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "bd4d7d6155a56c71e3ff302879772b8e18cb20ce967c6e305dbd9599b7885766",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "bd4d7d6155a56c71e3ff302879772b8e18cb20ce967c6e305dbd9599b7885766",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"else\" OR \"could\" OR \"lumen\" OR \"improve\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.749792
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [],
+      "answer": "Unknown; no supporting evidence.",
+      "answerable": false
+    }
+  },
+  {
+    "case": "c02",
+    "class": "none",
+    "arm": "A",
+    "blind_id": "d92739aa91f63cb8d8d23a75",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"next\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [],
+    "offered_ids": [],
+    "body_read_ids": [],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"next\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.545875
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [],
+      "answer": "Unknown; no supporting evidence.",
+      "answerable": false
+    }
+  },
+  {
+    "case": "c02",
+    "class": "none",
+    "arm": "B",
+    "blind_id": "6b65f27458c0672ef9e4150d",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"next\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [],
+    "offered_ids": [],
+    "body_read_ids": [],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"next\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.569958
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [],
+      "answer": "Unknown; no supporting evidence.",
+      "answerable": false
+    }
+  },
+  {
+    "case": "c03",
+    "class": "none",
+    "arm": "A",
+    "blind_id": "be1033e042794a94c31a5da5",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"heavy\" OR \"nectarine\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [],
+    "offered_ids": [],
+    "body_read_ids": [],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"heavy\" OR \"nectarine\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.609833
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [],
+      "answer": "Unknown; no supporting evidence.",
+      "answerable": false
+    }
+  },
+  {
+    "case": "c03",
+    "class": "none",
+    "arm": "B",
+    "blind_id": "b467d212f76d90e6d99fd8d8",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"heavy\" OR \"nectarine\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [],
+    "offered_ids": [],
+    "body_read_ids": [],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"heavy\" OR \"nectarine\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.778834
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [],
+      "answer": "Unknown; no supporting evidence.",
+      "answerable": false
+    }
+  },
+  {
+    "case": "c04",
+    "class": "none",
+    "arm": "A",
+    "blind_id": "d8cd08491ed002eb02053d81",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"suggest\" OR \"lumen\" OR \"team\" OR \"outing\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r09",
+      "r01",
+      "r07",
+      "r08"
+    ],
+    "offered_ids": [
+      "r09",
+      "r01"
+    ],
+    "body_read_ids": [
+      "r09",
+      "r01"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "c9801d6ddda8f9122b1a51b100e7e598494ef1869649bf56c37eff358f15ca17",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "c9801d6ddda8f9122b1a51b100e7e598494ef1869649bf56c37eff358f15ca17",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"suggest\" OR \"lumen\" OR \"team\" OR \"outing\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 1.261417
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r09",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.739958
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r01",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.4695
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [],
+      "answer": "Unknown; no supporting evidence.",
+      "answerable": false
+    }
+  },
+  {
+    "case": "c04",
+    "class": "none",
+    "arm": "B",
+    "blind_id": "b8ceb18e0a24d5c1962adbd3",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"suggest\" OR \"lumen\" OR \"team\" OR \"outing\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r09",
+      "r01",
+      "r07",
+      "r08"
+    ],
+    "offered_ids": [],
+    "body_read_ids": [],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "c9801d6ddda8f9122b1a51b100e7e598494ef1869649bf56c37eff358f15ca17",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "c9801d6ddda8f9122b1a51b100e7e598494ef1869649bf56c37eff358f15ca17",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"suggest\" OR \"lumen\" OR \"team\" OR \"outing\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.80825
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [],
+      "answer": "Unknown; no supporting evidence.",
+      "answerable": false
+    }
+  },
+  {
+    "case": "c05",
+    "class": "decision",
+    "arm": "A",
+    "blind_id": "d65030c2ecc8b5c6c4d0d84f",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"why\" OR \"did\" OR \"lumen\" OR \"choose\" OR \"explicit\" OR \"capture\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r01",
+      "r02",
+      "r09",
+      "r07"
+    ],
+    "offered_ids": [
+      "r01",
+      "r02"
+    ],
+    "body_read_ids": [
+      "r01",
+      "r02"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "1e600aefad43b8855ae233d1861ab40ccb5670839620751170120fce2f885b05",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "1e600aefad43b8855ae233d1861ab40ccb5670839620751170120fce2f885b05",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"why\" OR \"did\" OR \"lumen\" OR \"choose\" OR \"explicit\" OR \"capture\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.750583
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r01",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.706958
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r02",
+          "revision": 2
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.428541
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r01"
+      ],
+      "answer": "Prevent unapproved draft notes from becoming durable.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c05",
+    "class": "decision",
+    "arm": "B",
+    "blind_id": "2c5ade58ec799bbab99bca40",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"why\" OR \"did\" OR \"lumen\" OR \"choose\" OR \"explicit\" OR \"capture\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r01",
+      "r02",
+      "r09",
+      "r07"
+    ],
+    "offered_ids": [
+      "r01",
+      "r02"
+    ],
+    "body_read_ids": [
+      "r01",
+      "r02"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "1e600aefad43b8855ae233d1861ab40ccb5670839620751170120fce2f885b05",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "1e600aefad43b8855ae233d1861ab40ccb5670839620751170120fce2f885b05",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"why\" OR \"did\" OR \"lumen\" OR \"choose\" OR \"explicit\" OR \"capture\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 4.205416
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r01",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 1.842792
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r02",
+          "revision": 2
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 4.31525
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r01"
+      ],
+      "answer": "Prevent unapproved draft notes from becoming durable.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c06",
+    "class": "decision",
+    "arm": "A",
+    "blind_id": "3f87ea9ac1e40ccd4acabab9",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"which\" OR \"capture\" OR \"policy\" OR \"governs\" OR \"dock\" OR \"cabin\" OR \"launches\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r02",
+      "r06",
+      "r01",
+      "r03"
+    ],
+    "offered_ids": [
+      "r02",
+      "r06"
+    ],
+    "body_read_ids": [
+      "r02",
+      "r06"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "2ea3d84be5f9702f7a53c4c078781ed425492a89a76438019b330bc5ace57072",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "2ea3d84be5f9702f7a53c4c078781ed425492a89a76438019b330bc5ace57072",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"which\" OR \"capture\" OR \"policy\" OR \"governs\" OR \"dock\" OR \"cabin\" OR \"launches\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.754042
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r02",
+          "revision": 2
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.763
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r06",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.479833
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r02"
+      ],
+      "answer": "Dock needs permission; cabin may opt into automatic saving.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c06",
+    "class": "decision",
+    "arm": "B",
+    "blind_id": "08f3441491122a798a1a330e",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"which\" OR \"capture\" OR \"policy\" OR \"governs\" OR \"dock\" OR \"cabin\" OR \"launches\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r02",
+      "r06",
+      "r01",
+      "r03"
+    ],
+    "offered_ids": [
+      "r02"
+    ],
+    "body_read_ids": [
+      "r02"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "2ea3d84be5f9702f7a53c4c078781ed425492a89a76438019b330bc5ace57072",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "2ea3d84be5f9702f7a53c4c078781ed425492a89a76438019b330bc5ace57072",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"which\" OR \"capture\" OR \"policy\" OR \"governs\" OR \"dock\" OR \"cabin\" OR \"launches\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.788041
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r02",
+          "revision": 2
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.356958
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r02"
+      ],
+      "answer": "Dock needs permission; cabin may opt into automatic saving.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c07",
+    "class": "decision",
+    "arm": "A",
+    "blind_id": "f632d7013f57b0353aad504a",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"why\" OR \"select\" OR \"copper\" OR \"tape\" OR \"archive\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r07"
+    ],
+    "offered_ids": [
+      "r07"
+    ],
+    "body_read_ids": [
+      "r07"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "29a0e4381372c740d05492255b51b2c352aa5e0af53711c148d0aa3043e3a0de",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "29a0e4381372c740d05492255b51b2c352aa5e0af53711c148d0aa3043e3a0de",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"why\" OR \"select\" OR \"copper\" OR \"tape\" OR \"archive\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.678375
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r07",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.630375
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r07"
+      ],
+      "answer": "The depot has no optical reader.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c07",
+    "class": "decision",
+    "arm": "B",
+    "blind_id": "3852e561c10a422b9d7b3cc6",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"why\" OR \"select\" OR \"copper\" OR \"tape\" OR \"archive\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r07"
+    ],
+    "offered_ids": [
+      "r07"
+    ],
+    "body_read_ids": [
+      "r07"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "29a0e4381372c740d05492255b51b2c352aa5e0af53711c148d0aa3043e3a0de",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "29a0e4381372c740d05492255b51b2c352aa5e0af53711c148d0aa3043e3a0de",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"why\" OR \"select\" OR \"copper\" OR \"tape\" OR \"archive\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.802583
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r07",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.375834
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r07"
+      ],
+      "answer": "The depot has no optical reader.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c08",
+    "class": "decision",
+    "arm": "A",
+    "blind_id": "0f4052e96e926a66bfb38768",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"when\" OR \"does\" OR \"mirror\" OR \"rollback\" OR \"policy\" OR \"require\" OR \"reversal\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r03",
+      "r05",
+      "r02"
+    ],
+    "offered_ids": [
+      "r03",
+      "r05"
+    ],
+    "body_read_ids": [
+      "r03",
+      "r05"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "91cf444058d32636a344e359490554821b12e688795f7aaf3cb189f3c4c709c1",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "91cf444058d32636a344e359490554821b12e688795f7aaf3cb189f3c4c709c1",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"when\" OR \"does\" OR \"mirror\" OR \"rollback\" OR \"policy\" OR \"require\" OR \"reversal\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.849666
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r03",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.701959
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r05",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.407458
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r03"
+      ],
+      "answer": "Reverse if the mirror loses a stamp even if installer checks passed.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c08",
+    "class": "decision",
+    "arm": "B",
+    "blind_id": "4b3fd92d2b4c0bfb718d35df",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"when\" OR \"does\" OR \"mirror\" OR \"rollback\" OR \"policy\" OR \"require\" OR \"reversal\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r03",
+      "r05",
+      "r02"
+    ],
+    "offered_ids": [
+      "r03"
+    ],
+    "body_read_ids": [
+      "r03"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "91cf444058d32636a344e359490554821b12e688795f7aaf3cb189f3c4c709c1",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "91cf444058d32636a344e359490554821b12e688795f7aaf3cb189f3c4c709c1",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"when\" OR \"does\" OR \"mirror\" OR \"rollback\" OR \"policy\" OR \"require\" OR \"reversal\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.921209
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r03",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.42225
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r03"
+      ],
+      "answer": "Reverse if the mirror loses a stamp even if installer checks passed.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c09",
+    "class": "receipt",
+    "arm": "A",
+    "blind_id": "5326c19fc00efdcbc3f4a950",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"passed\" OR \"after\" OR \"installer\" OR \"change\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r04",
+      "r08",
+      "r03"
+    ],
+    "offered_ids": [
+      "r04",
+      "r08"
+    ],
+    "body_read_ids": [
+      "r04",
+      "r08"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "621736e13f7e18202fcd8698cec00445984c5c4316302ea27d8566539080f36f",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "621736e13f7e18202fcd8698cec00445984c5c4316302ea27d8566539080f36f",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"passed\" OR \"after\" OR \"installer\" OR \"change\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.817584
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r04",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.667292
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r08",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.493375
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r04"
+      ],
+      "answer": "Clean Linux installation smoke, eight checks passed.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c09",
+    "class": "receipt",
+    "arm": "B",
+    "blind_id": "561aeefefa4dc0ef56ca2e85",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"passed\" OR \"after\" OR \"installer\" OR \"change\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r04",
+      "r08",
+      "r03"
+    ],
+    "offered_ids": [
+      "r04",
+      "r08"
+    ],
+    "body_read_ids": [
+      "r04",
+      "r08"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "621736e13f7e18202fcd8698cec00445984c5c4316302ea27d8566539080f36f",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "621736e13f7e18202fcd8698cec00445984c5c4316302ea27d8566539080f36f",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"passed\" OR \"after\" OR \"installer\" OR \"change\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 1.463333
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r04",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 1.10975
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r08",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 2.294167
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r04"
+      ],
+      "answer": "Clean Linux installation smoke, eight checks passed.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c10",
+    "class": "receipt",
+    "arm": "A",
+    "blind_id": "4b9fd26439e8625768d6be14",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"which\" OR \"stamp\" OR \"did\" OR \"mirror\" OR \"replay\" OR \"validation\" OR \"lose\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r05",
+      "r03"
+    ],
+    "offered_ids": [
+      "r05",
+      "r03"
+    ],
+    "body_read_ids": [
+      "r05",
+      "r03"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "1ea3f859cc34948d97f061c38a822c1e257ff6ea6563b792a1bf990c542116a4",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "1ea3f859cc34948d97f061c38a822c1e257ff6ea6563b792a1bf990c542116a4",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"which\" OR \"stamp\" OR \"did\" OR \"mirror\" OR \"replay\" OR \"validation\" OR \"lose\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.92
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r05",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.656125
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r03",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.39425
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r05"
+      ],
+      "answer": "Replay failed on the second stamp.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c10",
+    "class": "receipt",
+    "arm": "B",
+    "blind_id": "6d7c0fba8a48b02553fe8e48",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"which\" OR \"stamp\" OR \"did\" OR \"mirror\" OR \"replay\" OR \"validation\" OR \"lose\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r05",
+      "r03"
+    ],
+    "offered_ids": [
+      "r05",
+      "r03"
+    ],
+    "body_read_ids": [
+      "r05",
+      "r03"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "1ea3f859cc34948d97f061c38a822c1e257ff6ea6563b792a1bf990c542116a4",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "1ea3f859cc34948d97f061c38a822c1e257ff6ea6563b792a1bf990c542116a4",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"which\" OR \"stamp\" OR \"did\" OR \"mirror\" OR \"replay\" OR \"validation\" OR \"lose\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.861792
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r05",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.427333
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r03",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.484875
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r05"
+      ],
+      "answer": "Replay failed on the second stamp.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c11",
+    "class": "receipt",
+    "arm": "A",
+    "blind_id": "c502de9a3ea321cdfea05ae4",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"did\" OR \"cabin\" OR \"opt-in\" OR \"check\" OR \"write\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r06",
+      "r02",
+      "r08",
+      "r03"
+    ],
+    "offered_ids": [
+      "r06",
+      "r02"
+    ],
+    "body_read_ids": [
+      "r06",
+      "r02"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "2753fbc6f39e40c93d5e25a4329c70e8cfd12769fbef0e281a7f881386ba8f63",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "2753fbc6f39e40c93d5e25a4329c70e8cfd12769fbef0e281a7f881386ba8f63",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"did\" OR \"cabin\" OR \"opt-in\" OR \"check\" OR \"write\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.880917
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r06",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.711125
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r02",
+          "revision": 2
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.48325
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r06"
+      ],
+      "answer": "Only the approved cabin sample.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c11",
+    "class": "receipt",
+    "arm": "B",
+    "blind_id": "97076aaa21fae956537c5fa3",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"did\" OR \"cabin\" OR \"opt-in\" OR \"check\" OR \"write\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r06",
+      "r02",
+      "r08",
+      "r03"
+    ],
+    "offered_ids": [
+      "r06",
+      "r02"
+    ],
+    "body_read_ids": [
+      "r06",
+      "r02"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "2753fbc6f39e40c93d5e25a4329c70e8cfd12769fbef0e281a7f881386ba8f63",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "2753fbc6f39e40c93d5e25a4329c70e8cfd12769fbef0e281a7f881386ba8f63",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"did\" OR \"cabin\" OR \"opt-in\" OR \"check\" OR \"write\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.880417
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r06",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.426208
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r02",
+          "revision": 2
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.399583
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r06"
+      ],
+      "answer": "Only the approved cabin sample.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c12",
+    "class": "receipt",
+    "arm": "A",
+    "blind_id": "fdf4485947d0c9352f62b56f",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"did\" OR \"installer\" OR \"artwork\" OR \"check\" OR \"install\" OR \"anything\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r08",
+      "r03",
+      "r06",
+      "r04"
+    ],
+    "offered_ids": [
+      "r08",
+      "r03"
+    ],
+    "body_read_ids": [
+      "r08",
+      "r03"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "90c86108382e4e1cf602062641f0bb1b011dcdefd898b17b9c725d420c2378ce",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "90c86108382e4e1cf602062641f0bb1b011dcdefd898b17b9c725d420c2378ce",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"did\" OR \"installer\" OR \"artwork\" OR \"check\" OR \"install\" OR \"anything\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.783375
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r08",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.752292
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r03",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.514667
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r08"
+      ],
+      "answer": "No; it only checked a square icon and passed.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c12",
+    "class": "receipt",
+    "arm": "B",
+    "blind_id": "8ff47b9963619c783fdf0f08",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"did\" OR \"installer\" OR \"artwork\" OR \"check\" OR \"install\" OR \"anything\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r08",
+      "r03",
+      "r06",
+      "r04"
+    ],
+    "offered_ids": [
+      "r08",
+      "r03"
+    ],
+    "body_read_ids": [
+      "r08",
+      "r03"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "90c86108382e4e1cf602062641f0bb1b011dcdefd898b17b9c725d420c2378ce",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "90c86108382e4e1cf602062641f0bb1b011dcdefd898b17b9c725d420c2378ce",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"did\" OR \"installer\" OR \"artwork\" OR \"check\" OR \"install\" OR \"anything\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.887166
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r08",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.487583
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r03",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.420958
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r08"
+      ],
+      "answer": "No; it only checked a square icon and passed.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c13",
+    "class": "mixed",
+    "arm": "A",
+    "blind_id": "9a9ffee4b4535d72ba1e8d43",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"why\" OR \"reverse\" OR \"mirror\" OR \"rollout\" OR \"after\" OR \"validation\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r03",
+      "r05",
+      "r04"
+    ],
+    "offered_ids": [
+      "r03",
+      "r05"
+    ],
+    "body_read_ids": [
+      "r03",
+      "r05"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "1d443ff1e84b596b0a29d26d0dc08031e260b42347405e3b74109b399a0319b1",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "1d443ff1e84b596b0a29d26d0dc08031e260b42347405e3b74109b399a0319b1",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"why\" OR \"reverse\" OR \"mirror\" OR \"rollout\" OR \"after\" OR \"validation\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.923792
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r03",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.756583
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r05",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.492042
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r03",
+        "r05"
+      ],
+      "answer": "The second stamp was lost in failed replay; policy requires reversal on stamp loss.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c13",
+    "class": "mixed",
+    "arm": "B",
+    "blind_id": "d442588783c8b23eb173fb80",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"why\" OR \"reverse\" OR \"mirror\" OR \"rollout\" OR \"after\" OR \"validation\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r03",
+      "r05",
+      "r04"
+    ],
+    "offered_ids": [
+      "r03",
+      "r05"
+    ],
+    "body_read_ids": [
+      "r03",
+      "r05"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "1d443ff1e84b596b0a29d26d0dc08031e260b42347405e3b74109b399a0319b1",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "1d443ff1e84b596b0a29d26d0dc08031e260b42347405e3b74109b399a0319b1",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"why\" OR \"reverse\" OR \"mirror\" OR \"rollout\" OR \"after\" OR \"validation\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.757625
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r03",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.416708
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r05",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.382666
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r03",
+        "r05"
+      ],
+      "answer": "The second stamp was lost in failed replay; policy requires reversal on stamp loss.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c14",
+    "class": "mixed",
+    "arm": "A",
+    "blind_id": "171a3412259e7366df541aea",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"installer\" OR \"success\" OR \"insufficient\" OR \"under\" OR \"rollback\" OR \"policy\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r03",
+      "r02",
+      "r04",
+      "r08"
+    ],
+    "offered_ids": [
+      "r03",
+      "r02"
+    ],
+    "body_read_ids": [
+      "r03",
+      "r02"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "09cba8b273d311fb29c657755de2dfb32ab134767168242b6d66277150d5be45",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "09cba8b273d311fb29c657755de2dfb32ab134767168242b6d66277150d5be45",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"installer\" OR \"success\" OR \"insufficient\" OR \"under\" OR \"rollback\" OR \"policy\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.8295
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r03",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.691917
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r02",
+          "revision": 2
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.461459
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r03",
+        "r04"
+      ],
+      "answer": "Clean Linux smoke passed eight checks, but cannot waive the stamp-loss rule.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c14",
+    "class": "mixed",
+    "arm": "B",
+    "blind_id": "0d8d89f706dd8b71a11298a8",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"installer\" OR \"success\" OR \"insufficient\" OR \"under\" OR \"rollback\" OR \"policy\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r03",
+      "r02",
+      "r04",
+      "r08"
+    ],
+    "offered_ids": [
+      "r03"
+    ],
+    "body_read_ids": [
+      "r03"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "09cba8b273d311fb29c657755de2dfb32ab134767168242b6d66277150d5be45",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "09cba8b273d311fb29c657755de2dfb32ab134767168242b6d66277150d5be45",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"installer\" OR \"success\" OR \"insufficient\" OR \"under\" OR \"rollback\" OR \"policy\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.659833
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r03",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.310833
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r03",
+        "r04"
+      ],
+      "answer": "Clean Linux smoke passed eight checks, but cannot waive the stamp-loss rule.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c15",
+    "class": "mixed",
+    "arm": "A",
+    "blind_id": "8cf7ab401b7bc9b944c2a73f",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"surviving\" OR \"cabin\" OR \"exception\" OR \"exercised\" OR \"during\" OR \"opt-in\" OR \"check\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r06",
+      "r02",
+      "r08",
+      "r03"
+    ],
+    "offered_ids": [
+      "r06",
+      "r02"
+    ],
+    "body_read_ids": [
+      "r06",
+      "r02"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "b0e2d5121472f2fc1063d3d68ebd576dea2c1d20c168377b6739c9c7d956a214",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "b0e2d5121472f2fc1063d3d68ebd576dea2c1d20c168377b6739c9c7d956a214",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"surviving\" OR \"cabin\" OR \"exception\" OR \"exercised\" OR \"during\" OR \"opt-in\" OR \"check\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.740792
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r06",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.727959
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r02",
+          "revision": 2
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.531875
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r02",
+        "r06"
+      ],
+      "answer": "Cabin may opt into automatic saving; only the approved cabin sample was written.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c15",
+    "class": "mixed",
+    "arm": "B",
+    "blind_id": "c2a23c9ac8a31dd503c8dd16",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"surviving\" OR \"cabin\" OR \"exception\" OR \"exercised\" OR \"during\" OR \"opt-in\" OR \"check\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r06",
+      "r02",
+      "r08",
+      "r03"
+    ],
+    "offered_ids": [
+      "r06",
+      "r02"
+    ],
+    "body_read_ids": [
+      "r06",
+      "r02"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "b0e2d5121472f2fc1063d3d68ebd576dea2c1d20c168377b6739c9c7d956a214",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "b0e2d5121472f2fc1063d3d68ebd576dea2c1d20c168377b6739c9c7d956a214",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"surviving\" OR \"cabin\" OR \"exception\" OR \"exercised\" OR \"during\" OR \"opt-in\" OR \"check\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.82125
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r06",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.349625
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r02",
+          "revision": 2
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.313042
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r02",
+        "r06"
+      ],
+      "answer": "Cabin may opt into automatic saving; only the approved cabin sample was written.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c16",
+    "class": "mixed",
+    "arm": "A",
+    "blind_id": "c3d24608f159419f541d0dd8",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"contrast\" OR \"installer\" OR \"smoke\" OR \"artwork\" OR \"check\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r08",
+      "r04",
+      "r03",
+      "r06"
+    ],
+    "offered_ids": [
+      "r08",
+      "r04"
+    ],
+    "body_read_ids": [
+      "r08",
+      "r04"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "ea45c97ba0c3054317c2b98eafd2d2007f9e848b59c9ece65d5b7b62d3444935",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "ea45c97ba0c3054317c2b98eafd2d2007f9e848b59c9ece65d5b7b62d3444935",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"contrast\" OR \"installer\" OR \"smoke\" OR \"artwork\" OR \"check\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.754834
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r08",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.793083
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r04",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.450375
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r04",
+        "r08"
+      ],
+      "answer": "Clean Linux installation passed eight checks; the square icon check passed without installing anything.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c16",
+    "class": "mixed",
+    "arm": "B",
+    "blind_id": "6a4e4e0e54ea639964401977",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"contrast\" OR \"installer\" OR \"smoke\" OR \"artwork\" OR \"check\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r08",
+      "r04",
+      "r03",
+      "r06"
+    ],
+    "offered_ids": [
+      "r08",
+      "r04"
+    ],
+    "body_read_ids": [
+      "r08",
+      "r04"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "ea45c97ba0c3054317c2b98eafd2d2007f9e848b59c9ece65d5b7b62d3444935",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "ea45c97ba0c3054317c2b98eafd2d2007f9e848b59c9ece65d5b7b62d3444935",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"contrast\" OR \"installer\" OR \"smoke\" OR \"artwork\" OR \"check\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.938417
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r08",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.368042
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r04",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.332792
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r04",
+        "r08"
+      ],
+      "answer": "Clean Linux installation passed eight checks; the square icon check passed without installing anything.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c17",
+    "class": "paraphrase",
+    "arm": "A",
+    "blind_id": "ac69dd95a10f6639f041a4d2",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"which\" OR \"departure\" OR \"needs\" OR \"consent\" OR \"before\" OR \"saving\" OR \"notes\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r01",
+      "r06",
+      "r02"
+    ],
+    "offered_ids": [
+      "r01",
+      "r06"
+    ],
+    "body_read_ids": [
+      "r01",
+      "r06"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "12796f732c3c059444a87beb88642bde459ebfd9dac3d17db793ea167bd8c096",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "12796f732c3c059444a87beb88642bde459ebfd9dac3d17db793ea167bd8c096",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"which\" OR \"departure\" OR \"needs\" OR \"consent\" OR \"before\" OR \"saving\" OR \"notes\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.802541
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r01",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.707709
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r06",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.464
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r02"
+      ],
+      "answer": "Dock launch needs operator permission.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c17",
+    "class": "paraphrase",
+    "arm": "B",
+    "blind_id": "9629e3ba58de5da75788ffe1",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"which\" OR \"departure\" OR \"needs\" OR \"consent\" OR \"before\" OR \"saving\" OR \"notes\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r01",
+      "r06",
+      "r02"
+    ],
+    "offered_ids": [
+      "r01"
+    ],
+    "body_read_ids": [
+      "r01"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "12796f732c3c059444a87beb88642bde459ebfd9dac3d17db793ea167bd8c096",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "12796f732c3c059444a87beb88642bde459ebfd9dac3d17db793ea167bd8c096",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"which\" OR \"departure\" OR \"needs\" OR \"consent\" OR \"before\" OR \"saving\" OR \"notes\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.825166
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r01",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.330208
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r02"
+      ],
+      "answer": "Dock launch needs operator permission.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c18",
+    "class": "paraphrase",
+    "arm": "A",
+    "blind_id": "78ffb0b12854a6247c154db8",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"why\" OR \"pick\" OR \"magnetic\" OR \"media\" OR \"instead\" OR \"optical\" OR \"depot\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r07"
+    ],
+    "offered_ids": [
+      "r07"
+    ],
+    "body_read_ids": [
+      "r07"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "59fa6e2cfd9de1e8fe8f76ad804d5082b10707c10d900fbce60b0969b5d2d9aa",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "59fa6e2cfd9de1e8fe8f76ad804d5082b10707c10d900fbce60b0969b5d2d9aa",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"why\" OR \"pick\" OR \"magnetic\" OR \"media\" OR \"instead\" OR \"optical\" OR \"depot\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.902667
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r07",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.801583
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r07"
+      ],
+      "answer": "Copper tape chosen because no optical reader is available.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c18",
+    "class": "paraphrase",
+    "arm": "B",
+    "blind_id": "a6aeb8bec20e63b93749c710",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"why\" OR \"pick\" OR \"magnetic\" OR \"media\" OR \"instead\" OR \"optical\" OR \"depot\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r07"
+    ],
+    "offered_ids": [
+      "r07"
+    ],
+    "body_read_ids": [
+      "r07"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "59fa6e2cfd9de1e8fe8f76ad804d5082b10707c10d900fbce60b0969b5d2d9aa",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "59fa6e2cfd9de1e8fe8f76ad804d5082b10707c10d900fbce60b0969b5d2d9aa",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"why\" OR \"pick\" OR \"magnetic\" OR \"media\" OR \"instead\" OR \"optical\" OR \"depot\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.9455
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r07",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.581667
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r07"
+      ],
+      "answer": "Copper tape chosen because no optical reader is available.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c19",
+    "class": "paraphrase",
+    "arm": "A",
+    "blind_id": "50253d49a1261ec8be768ce1",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"did\" OR \"reflected\" OR \"copy\" OR \"drop\" OR \"its\" OR \"second\" OR \"imprint\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r05"
+    ],
+    "offered_ids": [
+      "r05"
+    ],
+    "body_read_ids": [
+      "r05"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "818e4a7ee33a3253fc7dbece344b17bd7ba0f8bca458187af355183f4675647b",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "818e4a7ee33a3253fc7dbece344b17bd7ba0f8bca458187af355183f4675647b",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"did\" OR \"reflected\" OR \"copy\" OR \"drop\" OR \"its\" OR \"second\" OR \"imprint\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.824625
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r05",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.744541
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r05"
+      ],
+      "answer": "Yes; mirror replay failed because the second stamp was lost.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c19",
+    "class": "paraphrase",
+    "arm": "B",
+    "blind_id": "2ac56117f2109418551adde5",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"did\" OR \"reflected\" OR \"copy\" OR \"drop\" OR \"its\" OR \"second\" OR \"imprint\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r05"
+    ],
+    "offered_ids": [],
+    "body_read_ids": [],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "818e4a7ee33a3253fc7dbece344b17bd7ba0f8bca458187af355183f4675647b",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "818e4a7ee33a3253fc7dbece344b17bd7ba0f8bca458187af355183f4675647b",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"did\" OR \"reflected\" OR \"copy\" OR \"drop\" OR \"its\" OR \"second\" OR \"imprint\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.844333
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [
+        "r05"
+      ],
+      "answer": "Yes; mirror replay failed because the second stamp was lost.",
+      "answerable": true
+    }
+  },
+  {
+    "case": "c20",
+    "class": "paraphrase",
+    "arm": "A",
+    "blind_id": "3df51c97d0234ba4a358937b",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"who\" OR \"manufactured\" OR \"optical\" OR \"reader\" OR \"purchased\" OR \"last\" OR \"week\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r07"
+    ],
+    "offered_ids": [
+      "r07"
+    ],
+    "body_read_ids": [
+      "r07"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "59fa6e2cfd9de1e8fe8f76ad804d5082b10707c10d900fbce60b0969b5d2d9aa",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "59fa6e2cfd9de1e8fe8f76ad804d5082b10707c10d900fbce60b0969b5d2d9aa",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"who\" OR \"manufactured\" OR \"optical\" OR \"reader\" OR \"purchased\" OR \"last\" OR \"week\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.672417
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r07",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.738416
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [],
+      "answer": "Unknown; no supporting evidence.",
+      "answerable": false
+    }
+  },
+  {
+    "case": "c20",
+    "class": "paraphrase",
+    "arm": "B",
+    "blind_id": "667ed406a2d5f9e4568cf815",
+    "query_method": "installed local terms",
+    "query": [
+      {
+        "query": "\"who\" OR \"manufactured\" OR \"optical\" OR \"reader\" OR \"purchased\" OR \"last\" OR \"week\"",
+        "advanced": true,
+        "limit": 4
+      }
+    ],
+    "hit_ids": [
+      "r07"
+    ],
+    "offered_ids": [
+      "r07"
+    ],
+    "body_read_ids": [
+      "r07"
+    ],
+    "complete": true,
+    "safety": "pass",
+    "controls_before": {
+      "explicit": [
+        "59fa6e2cfd9de1e8fe8f76ad804d5082b10707c10d900fbce60b0969b5d2d9aa",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "controls_after": {
+      "explicit": [
+        "59fa6e2cfd9de1e8fe8f76ad804d5082b10707c10d900fbce60b0969b5d2d9aa",
+        "d66b5c47d3f4af46d750f4091355b6396bac9ee3d7acdbd34904a745ce78644b",
+        "a2503ceb4f77f8bbd5587555a5a998fb09a2dac889e6935b63569c715b192cc2"
+      ],
+      "exact": "77156857f55c6248fbf2f75826f9df56c9732d0ff5bed0c7353f44b15d680695",
+      "generation": 12
+    },
+    "calls": [
+      {
+        "name": "search",
+        "arguments": {
+          "query": "\"who\" OR \"manufactured\" OR \"optical\" OR \"reader\" OR \"purchased\" OR \"last\" OR \"week\"",
+          "advanced": true,
+          "limit": 4
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.7755
+      },
+      {
+        "name": "get",
+        "arguments": {
+          "label": "r07",
+          "revision": 1
+        },
+        "tokens": null,
+        "status": "success",
+        "latency_ms": 0.345375
+      }
+    ],
+    "observed_answer": null,
+    "observed_citation": null,
+    "config_hash": "5d79926a1ace325b7718287bbf54072373c498d176a1884e54d151017e48835f",
+    "expected": {
+      "required": [],
+      "answer": "Unknown; no supporting evidence.",
+      "answerable": false
+    }
+  }
+]

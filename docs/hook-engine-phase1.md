@@ -16,7 +16,7 @@ Labels: **measured** / **observed** = I ran it; **tested** = covered by a test i
 |---|---|---|
 | SessionStart (`startup|resume|clear|compact`) | `command` → `hooks/session_start.py` | Prints the fixed cue (the same text as `SESSION_CUE` in the engine; a test keeps them identical) **only for an enrolled project**, decided read-only by the installed project-scope resolver. Unenrolled or undeterminable: prints nothing. |
 | UserPromptSubmit | `mcp_tool` → `nexus_recall` | ID-only recall. |
-| PreToolUse, matcher `mcp__nexus-memory__.*` | `mcp_tool` → `nexus_pre_tool` | Task guard. Inputs `session_id`, `cwd`, `tool_name`, `tool_input`. |
+| PreToolUse, exact servers `nexus-memory`, `plugin_nexus_nexus-memory`, `plugin_nexus-memory_nexus-memory` | `mcp_tool` → `nexus_pre_tool` | Task guard. Inputs `session_id`, `cwd`, `tool_name`, `tool_input`. |
 
 All hooks have `timeout: 2`. Also: `skills/nexus-memory/SKILL.md` (consultation policy) and
 `commands/status.md`, print-only.

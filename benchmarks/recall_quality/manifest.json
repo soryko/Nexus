@@ -1,0 +1,52 @@
+{
+  "protocol": "lumen-v1",
+  "sha256": {
+    "cases.json": "25d549d079261ae317ba2b2bf12cacaad1295415d38b40aab8d9485f984f217a",
+    "corpus.json": "0f89a1eda94dffdca83c7fcc5190d7e111ae8ee1fcc0a20d1e6fb502a37341bf",
+    "key.json": "3d775f004860675ecef83b80071150d3d8624dec3bcf697e98840c6fa12667d4",
+    "fixture.py": "8691e8e33ba0869306d65f9eca8327d16b2903514efe59d0266059e3caeadeb3",
+    "run.py": "cb4d92666bb06779041cada43325f5f9ce2a017e816062b5ea816eb1e077526c",
+    "policy.py": "69690b7ea25570bb4a382cd7d91a55fb59d3d6f106ee185d2378a8895cab8763",
+    "score.py": "31b8fa9d5718291ffcdcc56e09e8d3ee15edc133b89b13cd20e97aa818e5ae71",
+    "judge.py": "21c8c810b00f96e1afde39c40bab0f8aa104ce7131dd4861095f6dde732cced2",
+    "route.mjs": "1043e59eec5f9a044ac45f1733ed87ed09628101d8b2d7aa7312871e074fb8c9",
+    "token_ledger.py": "2cf1deefb2148d6488d86048b5b826b8f11ce83d9151a6ab198b0abdd130691a",
+    "../../src/nexus_memory/storage/sqlite.py": "0dd21ba2b57eb994fae871f63d1fb3d130dad5f08157d10a6a1f96805e3a47b5",
+    "../../src/nexus_memory/memory/service.py": "7282990ef5d93205712113a73a5ff1da54a66004381045b339d5d6cf0aa0a343"
+  },
+  "route_config_sha256": "3bbb17d9b5fc1b89e65bbcaa6d6c01a081e50341faa6685a0d52a8928acc273e",
+  "arms": {
+    "A": "Installed local extractor; installed get and injection policy.",
+    "B": "Same query and ranked hits; require two distinct non-stopwords in excerpt; no replacement reads.",
+    "C": "Reuse A trace and answer; same search and admission as D.",
+    "D": "One budgeted model query; no repairs. Same advanced lexical search and read cap as C."
+  },
+  "hit_limit": 4,
+  "read_limit": 2,
+  "record_bytes": 1200,
+  "query_bytes": 256,
+  "query_terms": 12,
+  "query_input_bytes": 4096,
+  "recall_injection_bytes": 2500,
+  "operation_timeout_ms": 10000,
+  "answer_evidence_bytes": 1200,
+  "external_calls_authorized": 0,
+  "conditional_budget": {
+    "requires_separate_approval": true,
+    "model": "deepseek-v4-pro",
+    "temperature": 0,
+    "query_input_tokens": 256,
+    "query_output_tokens": 64,
+    "answer_input_tokens": 1024,
+    "answer_output_tokens": 180,
+    "provider_timeout_seconds": 45,
+    "fresh_session_each_call": true,
+    "retries": 0,
+    "max_AB_answers": 40,
+    "max_CD_calls": 60,
+    "combined_unique_calls_with_A_reuse": 80,
+    "query_instruction": "Return one advanced lexical OR query of quoted literal terms from the prompt, max 12 terms and 256 UTF-8 bytes. No prose."
+  },
+  "answer_instructions": "Using only supplied evidence, answer in one line and cite the supporting record labels in brackets. If the evidence is insufficient say unknown; do not guess.",
+  "decision": "Any safety failure disqualifies. B must strictly reduce irrelevant reads and preserve every prior required item and correct action/citation. No useful reads fails. Missing route/endpoint/pairs/usage or budget overrun is inconclusive for affected comparison. Never replace a case. Retain A on failure or tie; replicate on new cases after a complete pass."
+}

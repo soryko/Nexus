@@ -1,0 +1,102 @@
+[
+  {
+    "id": "c01",
+    "class": "none",
+    "prompt": "What else could Lumen improve?"
+  },
+  {
+    "id": "c02",
+    "class": "none",
+    "prompt": "Next?"
+  },
+  {
+    "id": "c03",
+    "class": "none",
+    "prompt": "How heavy is a nectarine?"
+  },
+  {
+    "id": "c04",
+    "class": "none",
+    "prompt": "Suggest a Lumen team outing."
+  },
+  {
+    "id": "c05",
+    "class": "decision",
+    "prompt": "Why did Lumen choose explicit capture?"
+  },
+  {
+    "id": "c06",
+    "class": "decision",
+    "prompt": "Which capture policy governs dock and cabin launches now?"
+  },
+  {
+    "id": "c07",
+    "class": "decision",
+    "prompt": "Why select copper tape for the archive?"
+  },
+  {
+    "id": "c08",
+    "class": "decision",
+    "prompt": "When does the mirror rollback policy require reversal?"
+  },
+  {
+    "id": "c09",
+    "class": "receipt",
+    "prompt": "What passed after the installer change?"
+  },
+  {
+    "id": "c10",
+    "class": "receipt",
+    "prompt": "Which stamp did mirror replay validation lose?"
+  },
+  {
+    "id": "c11",
+    "class": "receipt",
+    "prompt": "What did the cabin opt-in check write?"
+  },
+  {
+    "id": "c12",
+    "class": "receipt",
+    "prompt": "Did the installer artwork check install anything?"
+  },
+  {
+    "id": "c13",
+    "class": "mixed",
+    "prompt": "Why reverse the mirror rollout after validation?"
+  },
+  {
+    "id": "c14",
+    "class": "mixed",
+    "prompt": "What installer success was insufficient under the rollback policy?"
+  },
+  {
+    "id": "c15",
+    "class": "mixed",
+    "prompt": "How was the surviving cabin exception exercised during the opt-in check?"
+  },
+  {
+    "id": "c16",
+    "class": "mixed",
+    "prompt": "Contrast the installer smoke with the artwork check."
+  },
+  {
+    "id": "c17",
+    "class": "paraphrase",
+    "prompt": "Which departure needs consent before saving notes?"
+  },
+  {
+    "id": "c18",
+    "class": "paraphrase",
+    "prompt": "Why pick magnetic media instead of optical at the depot?"
+  },
+  {
+    "id": "c19",
+    "class": "paraphrase",
+    "prompt": "Did the reflected copy drop its second imprint?"
+  },
+  {
+    "id": "c20",
+    "class": "paraphrase",
+    "prompt": "Who manufactured the optical reader purchased last week?"
+  }
+]

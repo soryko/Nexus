@@ -1,0 +1,136 @@
+{
+  "c01": {
+    "required": [],
+    "answer": "Unknown; no supporting evidence.",
+    "answerable": false
+  },
+  "c02": {
+    "required": [],
+    "answer": "Unknown; no supporting evidence.",
+    "answerable": false
+  },
+  "c03": {
+    "required": [],
+    "answer": "Unknown; no supporting evidence.",
+    "answerable": false
+  },
+  "c04": {
+    "required": [],
+    "answer": "Unknown; no supporting evidence.",
+    "answerable": false
+  },
+  "c05": {
+    "required": [
+      "r01"
+    ],
+    "answer": "Prevent unapproved draft notes from becoming durable.",
+    "answerable": true
+  },
+  "c06": {
+    "required": [
+      "r02"
+    ],
+    "answer": "Dock needs permission; cabin may opt into automatic saving.",
+    "answerable": true
+  },
+  "c07": {
+    "required": [
+      "r07"
+    ],
+    "answer": "The depot has no optical reader.",
+    "answerable": true
+  },
+  "c08": {
+    "required": [
+      "r03"
+    ],
+    "answer": "Reverse if the mirror loses a stamp even if installer checks passed.",
+    "answerable": true
+  },
+  "c09": {
+    "required": [
+      "r04"
+    ],
+    "answer": "Clean Linux installation smoke, eight checks passed.",
+    "answerable": true
+  },
+  "c10": {
+    "required": [
+      "r05"
+    ],
+    "answer": "Replay failed on the second stamp.",
+    "answerable": true
+  },
+  "c11": {
+    "required": [
+      "r06"
+    ],
+    "answer": "Only the approved cabin sample.",
+    "answerable": true
+  },
+  "c12": {
+    "required": [
+      "r08"
+    ],
+    "answer": "No; it only checked a square icon and passed.",
+    "answerable": true
+  },
+  "c13": {
+    "required": [
+      "r03",
+      "r05"
+    ],
+    "answer": "The second stamp was lost in failed replay; policy requires reversal on stamp loss.",
+    "answerable": true
+  },
+  "c14": {
+    "required": [
+      "r03",
+      "r04"
+    ],
+    "answer": "Clean Linux smoke passed eight checks, but cannot waive the stamp-loss rule.",
+    "answerable": true
+  },
+  "c15": {
+    "required": [
+      "r02",
+      "r06"
+    ],
+    "answer": "Cabin may opt into automatic saving; only the approved cabin sample was written.",
+    "answerable": true
+  },
+  "c16": {
+    "required": [
+      "r04",
+      "r08"
+    ],
+    "answer": "Clean Linux installation passed eight checks; the square icon check passed without installing anything.",
+    "answerable": true
+  },
+  "c17": {
+    "required": [
+      "r02"
+    ],
+    "answer": "Dock launch needs operator permission.",
+    "answerable": true
+  },
+  "c18": {
+    "required": [
+      "r07"
+    ],
+    "answer": "Copper tape chosen because no optical reader is available.",
+    "answerable": true
+  },
+  "c19": {
+    "required": [
+      "r05"
+    ],
+    "answer": "Yes; mirror replay failed because the second stamp was lost.",
+    "answerable": true
+  },
+  "c20": {
+    "required": [],
+    "answer": "Unknown; no supporting evidence.",
+    "answerable": false
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "scope": "Synthetic note-reading check; one call per arm, not a retrieval trial.",
+  "protocol_sha256": "16628ee0921ab2cb3f67cef83ad1cc3d3cfd22cea0e500bd34d1d9956d3b113b",
+  "provider": "deepseek",
+  "temperature": 0,
+  "max_tokens": 300,
+  "reasoning": "off",
+  "runs": [
+    {
+      "arm": "implicit",
+      "model": "deepseek-v4-pro",
+      "prompt": "Answer only from each case. Return one JSON object mapping case IDs to strings of the form \"value revision\". Use \"unknown NONE\" if not determined. No commentary.\na: T5@1: all workers use blue. F3@1 changes only interactive workers to gold. Batch worker color?\nb: P1@2: all channels use tin. K4@1 changes only postal channels to zinc. Postal channel material?\nc: W3@1: all exports use tab. J4@2 changes only nightly exports to pipe. Delimiter for a daytime export?\nd: A3@1 covers inbound traffic only: slate. Q2@1 changes only inbound bulk traffic to teal. Color for outbound bulk traffic?\ne: L8@3: all regions use ash. M1@1 changes only the east region to elm. Material in the eastern region?\nf: B1@2: all imports use clay. Z4@1 changes only compressed imports to wax. Material for an import without compression?",
+      "response": "```json\n{\n  \"a\": \"blue T5@1\",\n  \"b\": \"tin P1@2\",\n  \"c\": \"tab W3@1\",\n  \"d\": \"unknown NONE\",\n  \"e\": \"elm M1@1\",\n  \"f\": \"clay B1@2\"\n}\n```",
+      "usage": {
+        "prompt_tokens": 218,
+        "completion_tokens": 71,
+        "total_tokens": 289,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 218
+      }
+    },
+    {
+      "arm": "explicit",
+      "model": "deepseek-v4-pro",
+      "prompt": "Answer only from each case. Return one JSON object mapping case IDs to strings of the form \"value revision\". Use \"unknown NONE\" if not determined. No commentary.\na: T5@1: all workers use blue. F3@1 changes only interactive workers to gold. Batch workers still use blue under T5@1. Batch worker color?\nb: P1@2: all channels use tin. K4@1 changes only postal channels to zinc. Digital channels retain tin under P1@2. Postal channel material?\nc: W3@1: all exports use tab. J4@2 changes only nightly exports to pipe. Daytime exports retain tab under W3@1. Delimiter for a daytime export?\nd: A3@1 covers inbound traffic only: slate. Q2@1 changes only inbound bulk traffic to teal. Inbound non-bulk traffic retains slate under A3@1. Color for outbound bulk traffic?\ne: L8@3: all regions use ash. M1@1 changes only the east region to elm. The west region retains ash under L8@3. Material in the eastern region?\nf: B1@2: all imports use clay. Z4@1 changes only compressed imports to wax. Uncompressed imports remain clay under B1@2. Material for an import without compression?",
+      "response": "```json\n{\n  \"a\": \"blue T5@1\",\n  \"b\": \"zinc K4@1\",\n  \"c\": \"tab W3@1\",\n  \"d\": \"unknown NONE\",\n  \"e\": \"elm M1@1\",\n  \"f\": \"clay B1@2\"\n}\n```",
+      "usage": {
+        "prompt_tokens": 287,
+        "completion_tokens": 72,
+        "total_tokens": 359,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 287
+      }
+    }
+  ]
+}

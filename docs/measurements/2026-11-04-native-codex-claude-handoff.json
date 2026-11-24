@@ -1,0 +1,67 @@
+{
+  "date": "2026-11-04",
+  "result": "pass",
+  "clients": {
+    "codex": "Codex CLI 0.163.0 (requested gpt-6.1-sol)",
+    "claude": "Claude Code 2.1.316 (reported claude-sonnet-5-5)"
+  },
+  "conditions": "Four fresh native CLI invocations. Codex used ephemeral sessions and Claude disabled session persistence. Only the installed project-scoped Nexus MCP endpoint was configured. Tests used an empty Git checkout, a private temporary registry and separate SQLite store. Readers were explicitly asked to search and fetch. Hooks were disabled. No transcript or answer files were placed in the test checkout.",
+  "handoffs": [
+    {
+      "writer": "codex",
+      "writer_session": "01a1a5de-a82d-7641-9f4b-c852d34be833",
+      "reader": "claude",
+      "reader_session": "caec8707-24ee-43c4-815f-01e7d838afd0",
+      "reader_prompt": "What decision did the other agent save for Lanternfold634a67? Use Nexus search for that topic and then Nexus get with the memory ID and revision ID from search. Return the exact full content, memory_id and revision_id from get, as JSON with those three fields. If absent, say ABSENT. Use only those two Nexus tools. Do not read files, use other sources or save anything.",
+      "tool_sequence": [
+        "record",
+        "search",
+        "get"
+      ],
+      "search_hit_count": 1,
+      "writer_durable_sequence": 2,
+      "verified_reader_answer": {
+        "content": "Lanternfold634a67: use an amber label for rejected rehearsal batches. Verification code 00c56821c59ad0ea4a.",
+        "memory_id": "bf415100-05c8-41da-9efd-3d03ff3978c7",
+        "revision_id": "dc29c46f-221e-4d21-ac6a-0b77f8ad7b32"
+      },
+      "writer_trace_sha256": "4eec0341076fcc5036840d43d7fc8eeb1e49039153100add1e41b31316eb0c9e",
+      "reader_trace_sha256": "d43de4a0727238561c3a288cb715b787af7246804c6b78a44afa1dd180d82019"
+    },
+    {
+      "writer": "claude",
+      "writer_session": "5b28baa4-a5f6-4af9-83d4-5ad8ce4e3588",
+      "reader": "codex",
+      "reader_session": "01a1a5df-3589-73d3-91e0-6314652c0369",
+      "reader_prompt": "What decision did the other agent save for Harborquill5437d1? Use Nexus search for that topic and then Nexus get with the memory ID and revision ID from search. Return the exact full content, memory_id and revision_id from get, as JSON with those three fields. If absent, say ABSENT. Use only those two Nexus tools. Do not read files, use other sources or save anything.",
+      "tool_sequence": [
+        "record",
+        "search",
+        "get"
+      ],
+      "search_hit_count": 1,
+      "writer_durable_sequence": 1,
+      "verified_reader_answer": {
+        "content": "Harborquill5437d1: retain two manifests for each rehearsal shipment. Verification code 57f30ac93e197c3025.",
+        "memory_id": "0469175c-8691-43a5-8ff4-a4fe06cd2c91",
+        "revision_id": "07c8af67-da33-42b0-8d3d-d2bf45a73b00"
+      },
+      "writer_trace_sha256": "157659e00fbac209259570773d891c26335adf451c7a8cd760dff8332772357e",
+      "reader_trace_sha256": "c2f2e346df3fd8d8c839b74ea3b8abebd8b68d89bc4855615c32a833fe801ba7"
+    }
+  ],
+  "test_store": {
+    "scope": "9d0749fe-7808-4a09-94ef-057229a52974",
+    "current_decisions": 2,
+    "record_receipts": 2
+  },
+  "claude_pilot": {
+    "database_and_usage_log_sha256_before_and_after": {
+      "p1-claude-auto.sqlite3": "5768bc617161e29641f110af5759fb06ebc891a9ded6a718aa057c74595df440",
+      "usage.jsonl": "974f8bd497fafb6edc00750b9354c4897060a06297901e2afbd19120e9c32e9e"
+    },
+    "wal_present_at_either_snapshot": false,
+    "fixture_topics_or_ids_found_in_pilot": false
+  },
+  "trace_note": "Both Codex sessions emitted a startup warning about an unrelated malformed local test_generator role. Both completed their turns and Nexus calls successfully."
+}

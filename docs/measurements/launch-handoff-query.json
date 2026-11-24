@@ -1,0 +1,14 @@
+{
+  "prompt": "Return just a short literal keyword search query for a project memory store to answer this task. No quotes or commentary.\nBoth launches request --capture-policy autonomous with instructions enabled. A Codex launch supplies --codex-project-root but no hook actually fires; a Claude pilot launch has no project-root adapter. Which capture guidance should each receive? Cite the controlling commit for each. Use only the supplied evidence; say unknown if missing.",
+  "response": "--capture-policy autonomous instructions enabled Codex launch --codex-project-root hook fires Claude pilot launch project-root adapter capture guidance controlling commit",
+  "usage": {
+    "prompt_tokens": 91,
+    "completion_tokens": 28,
+    "total_tokens": 119,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 91
+  }
+}

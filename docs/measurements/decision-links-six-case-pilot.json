@@ -1,0 +1,124 @@
+{
+  "protocol": "Answer each independent case from its own visible evidence only. Do not infer precedence from IDs, revision numbers, or order. If not determined, answer unknown NONE. Otherwise answer value and the single controlling revision ID. Exactly six lines in order, no numbering.",
+  "cases": [
+    [
+      "Quartz index: X4@1=amber; K7@2=mint. Which mode?",
+      "K7@2 replaces X4@1 for Quartz indexing.",
+      "K7@2 --supersedes[Quartz indexing]--> X4@1",
+      "mint K7@2"
+    ],
+    [
+      "River packaging: P8@3=linen; N2@1=felt. Which material?",
+      "P8@3 replaces N2@1 for River packaging.",
+      "P8@3 --supersedes[River packaging]--> N2@1",
+      "linen P8@3"
+    ],
+    [
+      "T5@1: all workers use blue. F3@1: use gold. What does a batch worker use?",
+      "F3@1 replaces T5@1 only for interactive workers.",
+      "F3@1 --supersedes[interactive workers only]--> T5@1",
+      "blue T5@1"
+    ],
+    [
+      "Q2@1: export delimiter tab. J9@1: import delimiter comma. What delimiter for export?",
+      "No approved replacement.",
+      "No approved replacement.",
+      "tab Q2@1"
+    ],
+    [
+      "U4@2=red; H7@1=tan. Both apply to loader. Which wins?",
+      "U4@1 replaced H7@1, but that approval does not cover U4@2; review pending.",
+      "U4@1 --supersedes[loader]--> H7@1; status: stale; U4@2 not approved; review pending.",
+      "unknown NONE"
+    ],
+    [
+      "Which delimiter does the outbound relay use? Visible: D2@1 sets the inbound delimiter to pipe.",
+      "No applicable relationship.",
+      "No applicable relationship.",
+      "unknown NONE"
+    ]
+  ],
+  "columns": [
+    "question and visible facts",
+    "notes rendering",
+    "link rendering",
+    "exact answer"
+  ],
+  "gate": "Links must score strictly higher and preserve the exception; a tie stops. No live access-control test.",
+  "settings": {
+    "provider": "deepseek",
+    "model": "deepseek-v4-pro",
+    "temperature": 0,
+    "max_tokens": 300,
+    "reasoning": "off"
+  },
+  "results": [
+    {
+      "arm": "notes",
+      "model": "deepseek-v4-pro",
+      "status": "success",
+      "response": "1. mint; K7@2  \n2. linen; P8@3  \n3. unknown NONE  \n4. tab; Q2@1  \n5. unknown NONE  \n6. unknown NONE",
+      "usage": {
+        "prompt_tokens": 275,
+        "completion_tokens": 44,
+        "total_tokens": 319,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 275
+      },
+      "exact": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "error": "",
+      "contentCorrect": [
+        true,
+        true,
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "arm": "links",
+      "model": "deepseek-v4-pro",
+      "status": "success",
+      "response": "1. mint; K7@2  \n2. linen; P8@3  \n3. unknown NONE  \n4. tab; Q2@1  \n5. unknown NONE  \n6. unknown NONE",
+      "usage": {
+        "prompt_tokens": 298,
+        "completion_tokens": 44,
+        "total_tokens": 342,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 298
+      },
+      "exact": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "error": "",
+      "contentCorrect": [
+        true,
+        true,
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  ],
+  "scoringNote": "Raw exact-format scores retained. Secondary content scores ignore leading numbering, semicolons and edge whitespace only. Both arms gave identical answers."
+}

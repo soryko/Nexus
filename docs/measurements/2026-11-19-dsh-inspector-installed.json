@@ -1,0 +1,34 @@
+{
+  "outcome": "pass",
+  "chrome": "157.0.8103.79",
+  "original": "  Amber checkpoint: café\n\t<saved literally>\n",
+  "originSeq": 4,
+  "receiptSeq": 6,
+  "session": "session-inspector-rehearsal",
+  "memoryId": "e5fa62b8-9844-4f26-8fd0-b72c9c81a3d0",
+  "savedRevision": "dec8d041-cda6-4f61-a378-d1cff79b85a4",
+  "currentRevision": "f9fbded6-3d8f-4491-af00-e9f344352a33",
+  "calls": [
+    {
+      "name": "mcp__nexus__get",
+      "arguments": {
+        "memory_id": "e5fa62b8-9844-4f26-8fd0-b72c9c81a3d0",
+        "revision_id": "dec8d041-cda6-4f61-a378-d1cff79b85a4"
+      },
+      "isError": false
+    }
+  ],
+  "exactText": true,
+  "returnedFocus": true,
+  "loopbackPort": 51680,
+  "installedSha256": {
+    "host.js": "2f040a4b4714601b9284b5b736d3e7c73d1ad76f194740b9c1bfdc937526f728",
+    "client.js": "c610f8a424f77e1927e144a6fa3b6ba00636ff5f99887cf16c312e783432906b",
+    "projection.js": "1927dcdcc72c70c6348750eead070d2fa716d5ff204c98a4932e1490283a37cb",
+    "descriptor.js": "b78960cafb09ba21ed1ec076dcc20aa24baccc14c74b50a18e895d12eee95036"
+  },
+  "archiveSha256": "dbac05ea87f203e3732498c7bc619157b73d39e2442fc094c46fa6a0007e7248",
+  "dshCommit": "f3803c96974ad4a94195fb97e5c637e9c2a3afe3",
+  "fixtureSeeded": true,
+  "listenerClosed": true
+}

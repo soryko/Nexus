@@ -1,0 +1,18 @@
+{
+ "source_clone": "/Users/soko/Cerebros/nexus-a1-fixtures/click",
+ "pytest_python": "/Users/soko/Cerebros/nexus-a1-fixtures/.venv-click/bin/python",
+ "venv_python": "/Users/soko/Cerebros/nexus-memory/.venv-sqlite/bin/python",
+ "nexus_server": "/Users/soko/Cerebros/nexus-memory/.venv-sqlite/bin/nexus-memory",
+ "forwarder_port": 8899,
+ "corpus_size": 13,
+ "max_turns": 30,
+ "wall_clock_s": 600,
+ "memory_probe_query": "click option parameter",
+ "capture_max_turns": 60,
+ "capture_wall_clock_s": 1200,
+ "store_master": "/Users/soko/Cerebros/nexus-a1-fixtures/heldout-corpus/nexus-heldout.db",
+ "corpus_digest": "9ae2a9f268dd894d",
+ "notes_file": "notes-heldout-a1.md",
+ "prompts": "prompts-calib-a2.json",
+ "config_version": "calib-v2"
+}

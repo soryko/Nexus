@@ -122,6 +122,14 @@ class ReceiptOutput(BaseModel):
     operation: str
 
 
+class HeadComparisonOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    outcome: Literal["Matches at HEAD", "Changed at HEAD", "Missing at HEAD", "Cannot check"]
+    reference_commit_oid: str | None
+    head_commit_oid: str | None
+    note: str
+
+
 class ReferenceArg(BaseModel):
     """A repository-relative path at an optional commit spec, verified against the bound repository.
 
@@ -378,6 +386,20 @@ def create_server(
     )
     def get(memory_id: str = Field(min_length=1), revision_id: str | None = None) -> MemoryOutput:
         return _run(lambda: service.get(memory_id, revision_id), MemoryOutput)
+
+    @server.tool(
+        description=("Compare at HEAD, only on explicit user request: excludes working tree and index. "
+                     "Compares the exact path, file kind and object ID in the bound checkout's commit; "
+                     "does not verify permissions, surrounding code, or a memory's truth or relevance."),
+        annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False),
+        structured_output=True,
+    )
+    def compare_at_head(
+        memory_id: str = Field(min_length=1),
+        revision_id: str = Field(min_length=1),
+        reference_ordinal: int = Field(ge=0, strict=True, description="Zero-based index in get's references for this revision"),
+    ) -> HeadComparisonOutput:
+        return _run(lambda: service.compare_at_head(memory_id, revision_id, reference_ordinal), HeadComparisonOutput)
 
     @server.tool(
         description=(

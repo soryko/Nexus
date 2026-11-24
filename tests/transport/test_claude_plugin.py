@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -38,7 +39,11 @@ def test_hook_wiring_events_tools_inputs_and_timeouts() -> None:
     assert (pre["type"], pre["server"], pre["tool"]) == ("mcp_tool", "nexus-memory", "nexus_pre_tool")
     # Only listed inputs arrive; the engine denies without session_id and cwd.
     assert set(pre["input"]) == {"session_id", "cwd", "tool_name", "tool_input"}
-    assert config["PreToolUse"][0]["matcher"] == "mcp__nexus-memory__.*"
+    matcher = re.compile(config["PreToolUse"][0]["matcher"])
+    for server in ("nexus-memory", "plugin_nexus_nexus-memory", "plugin_nexus-memory_nexus-memory"):
+        assert matcher.search(f"mcp__{server}__search")
+    for server in ("plugin_other_nexus-memory", "plugin_nexus_other", "nexus-memory-alt"):
+        assert not matcher.search(f"mcp__{server}__search")
 
 
 def run_session_start(env: dict | None = None, cwd: str = "/") -> dict:
@@ -113,4 +118,5 @@ def test_skill_and_command_carry_the_policy_and_cannot_enrol() -> None:
         assert needle in skill
     command = (PLUGIN / "commands" / "status.md").read_text()
     assert "allowed-tools: Bash(python3 -I:*)" in command
+    assert SESSION_CUE.split(".", 1)[0] in command
     assert "mcp__" not in command and "launcher" not in command

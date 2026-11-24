@@ -1,0 +1,25 @@
+{
+  "task": "Both launches request --capture-policy autonomous with instructions enabled. A Codex launch supplies --codex-project-root but no hook actually fires; a Claude pilot launch has no project-root adapter. Which capture guidance should each receive? Cite the controlling commit for each. Use only the supplied evidence; say unknown if missing.",
+  "key": {
+    "Codex": [
+      "explicit",
+      "1264c6e"
+    ],
+    "Claude": [
+      "autonomous",
+      "1264c6e"
+    ]
+  },
+  "scoring": "For each launch score policy and commit independently by meaning. Report formatting separately (two labeled lines requested; cosmetic punctuation immaterial).",
+  "model": "deepseek-v4-pro",
+  "temperature": 0,
+  "outputCap": 180,
+  "evidenceCapBytes": 1200,
+  "retrieval": "One model-generated literal query, top 2 hits, fetch both in rank order; no query repair. Query generation is additional cost.",
+  "records": [
+    "b54bbc3: The initial server sent shared autonomous capture guidance at startup when instructions were enabled.",
+    "1264c6e: Launch-bound capture policy: supplying the Codex project root selects explicit capture before hook execution. The unhooked Claude pilot can opt into autonomous guidance.",
+    "701f4b0: The usage log records a stop event when the client ends the server with SIGTERM.",
+    "bad9612: The host-neutral spelling --hook-project-root aliases --codex-project-root."
+  ]
+}

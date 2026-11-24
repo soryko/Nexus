@@ -1,0 +1,94 @@
+{
+  "retrieval": {
+    "hits": [
+      {
+        "memory_id": "806cfc14-92f8-43e7-affc-c10b0c008951",
+        "revision_id": "0ce5b9f7-4410-4080-b437-185003b16493",
+        "kind": "observation",
+        "tags": [],
+        "created_at": "2026-11-19T19:38:58.357622+00:00",
+        "excerpt": "…Launch-bound capture policy: supplying the Codex project root selects explicit capture before hook execution. The…",
+        "lexical_rank": -3.552581722123157,
+        "match_reasons": [
+          "body_terms"
+        ],
+        "has_earlier_revisions": false,
+        "references": []
+      },
+      {
+        "memory_id": "8337b3ee-54f0-456d-b918-4ee654ba802a",
+        "revision_id": "47396249-b8e1-4200-bd27-bfaebb2325de",
+        "kind": "observation",
+        "tags": [],
+        "created_at": "2026-11-19T19:38:58.315983+00:00",
+        "excerpt": "b54bbc3: The initial server sent shared autonomous capture guidance at startup when instructions were enabled.",
+        "lexical_rank": -1.7802817291281696,
+        "match_reasons": [
+          "body_terms"
+        ],
+        "has_earlier_revisions": false,
+        "references": []
+      }
+    ],
+    "views": [
+      {
+        "memory_id": "806cfc14-92f8-43e7-affc-c10b0c008951",
+        "revision_id": "0ce5b9f7-4410-4080-b437-185003b16493",
+        "parent_revision_id": null,
+        "content": "1264c6e: Launch-bound capture policy: supplying the Codex project root selects explicit capture before hook execution. The unhooked Claude pilot can opt into autonomous guidance.",
+        "kind": "observation",
+        "tags": [],
+        "source_uri": null,
+        "snapshot": null,
+        "created_at": "2026-11-19T19:38:58.357622+00:00",
+        "current_revision_id": "0ce5b9f7-4410-4080-b437-185003b16493",
+        "references": []
+      },
+      {
+        "memory_id": "8337b3ee-54f0-456d-b918-4ee654ba802a",
+        "revision_id": "47396249-b8e1-4200-bd27-bfaebb2325de",
+        "parent_revision_id": null,
+        "content": "b54bbc3: The initial server sent shared autonomous capture guidance at startup when instructions were enabled.",
+        "kind": "observation",
+        "tags": [],
+        "source_uri": null,
+        "snapshot": null,
+        "created_at": "2026-11-19T19:38:58.315983+00:00",
+        "current_revision_id": "47396249-b8e1-4200-bd27-bfaebb2325de",
+        "references": []
+      }
+    ]
+  },
+  "runs": [
+    {
+      "arm": "notes",
+      "prompt": "Both launches request --capture-policy autonomous with instructions enabled. A Codex launch supplies --codex-project-root but no hook actually fires; a Claude pilot launch has no project-root adapter. Which capture guidance should each receive? Cite the controlling commit for each. Use only the supplied evidence; say unknown if missing.\nRespond in two labeled lines.\nEvidence:\nb54bbc3: The initial server sent shared autonomous capture guidance at startup when instructions were enabled.\n1264c6e: Launch-bound capture policy: supplying the Codex project root selects explicit capture before hook execution. The unhooked Claude pilot can opt into autonomous guidance.\n701f4b0: The usage log records a stop event when the client ends the server with SIGTERM.\nbad9612: The host-neutral spelling --hook-project-root aliases --codex-project-root.",
+      "response": "b54bbc3: shared autonomous capture guidance at startup when instructions are enabled.  \n1264c6e: Codex project root selects explicit capture before hook execution; unhooked Claude pilot can opt into autonomous guidance.",
+      "usage": {
+        "prompt_tokens": 175,
+        "completion_tokens": 44,
+        "total_tokens": 219,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 175
+      }
+    },
+    {
+      "arm": "nexus",
+      "prompt": "Both launches request --capture-policy autonomous with instructions enabled. A Codex launch supplies --codex-project-root but no hook actually fires; a Claude pilot launch has no project-root adapter. Which capture guidance should each receive? Cite the controlling commit for each. Use only the supplied evidence; say unknown if missing.\nRespond in two labeled lines.\nEvidence:\n1264c6e: Launch-bound capture policy: supplying the Codex project root selects explicit capture before hook execution. The unhooked Claude pilot can opt into autonomous guidance.\nb54bbc3: The initial server sent shared autonomous capture guidance at startup when instructions were enabled.",
+      "response": "Codex: explicit capture before hook execution (1264c6e).  \nClaude pilot: autonomous guidance (1264c6e).",
+      "usage": {
+        "prompt_tokens": 131,
+        "completion_tokens": 29,
+        "total_tokens": 160,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 131
+      }
+    }
+  ]
+}

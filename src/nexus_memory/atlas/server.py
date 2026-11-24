@@ -97,7 +97,7 @@ class AtlasServer(ThreadingHTTPServer):
 
     def exchange(self, key: str) -> str | None:
         with self._lock:
-            if self._secret_used or not hmac.compare_digest(key.encode(), self.launch_secret.encode()):
+            if self._secret_used or not key.isascii() or not hmac.compare_digest(key, self.launch_secret):
                 return None
             self._secret_used = True
         if self._launch_file is not None:

@@ -69,20 +69,21 @@ def test_aliases_share_session_state_and_guarantees_with_new_names(tmp_path) -> 
     anyio.run(run)
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Observed 2026-11-05 (docs/hook-engine-phase0.md): Claude Code names a plugin's MCP tools "
-    "mcp__plugin_<plugin>_<server>__<tool>. nexus_pre_tool only recognises nexus_memory / "
-    "nexus-memory / nexus_recall as the server, so a plugin-launched Nexus is not gated. "
-    "Phase 1 must widen the match once the plugin name is fixed; then remove this marker."))
-def test_plugin_launched_server_name_is_gated(tmp_path) -> None:
+@pytest.mark.parametrize(("namespace", "expected"), [
+    ("plugin_nexus_nexus-memory", "deny"),
+    ("plugin_nexus-memory_nexus-memory", "deny"),
+    ("plugin_other_nexus-memory", None),
+    ("plugin_nexus_other", None),
+])
+def test_plugin_launched_server_name_is_gated(tmp_path, namespace, expected) -> None:
     repo = repository(tmp_path / "repo")
 
     async def run() -> None:
         async with Client(server(tmp_path / "db.sqlite3", repo, repo)) as client:
             r = await client.call_tool("nexus_pre_tool", {
-                "cwd": str(repo), "session_id": "p", "tool_name": "mcp__plugin_nexus_nexus-memory__search",
+                "cwd": str(repo), "session_id": "p", "tool_name": f"mcp__{namespace}__search",
                 "tool_input": {"query": "x"}})
-            decision = r.structured_content.get("hookSpecificOutput", {}).get("permissionDecision")
-            assert decision == "deny"
+            assert not r.is_error
+            assert r.structured_content.get("hookSpecificOutput", {}).get("permissionDecision") == expected
 
     anyio.run(run)

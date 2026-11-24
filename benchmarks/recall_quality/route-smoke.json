@@ -1,0 +1,38 @@
+{
+  "cases": [
+    {
+      "id": "route-smoke",
+      "prompt": "Please inspect the ceramic kiln.",
+      "responses": [
+        {
+          "hits": [
+            {
+              "memory_id": "fixture-quartz",
+              "revision_id": "quartz-v1"
+            },
+            {
+              "memory_id": "fixture-amber",
+              "revision_id": "amber-v1"
+            },
+            {
+              "memory_id": "fixture-cobalt",
+              "revision_id": "cobalt-v1"
+            }
+          ]
+        },
+        {
+          "memory_id": "fixture-quartz",
+          "revision_id": "quartz-v1",
+          "current_revision_id": "quartz-v1",
+          "content": "Quartz tile cooled slowly."
+        },
+        {
+          "memory_id": "fixture-amber",
+          "revision_id": "amber-v1",
+          "current_revision_id": "amber-v2",
+          "content": "Retired glaze note."
+        }
+      ]
+    }
+  ]
+}
