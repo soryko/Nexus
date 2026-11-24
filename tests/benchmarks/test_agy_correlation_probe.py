@@ -123,3 +123,21 @@ def test_log_never_holds_prompt_or_argument_text(tmp_path: Path) -> None:
     text = log.read_text()
     assert "PRIVATE" not in text
     assert "AGY_API_TOKEN" in text  # named, never valued
+
+
+def test_conversation_key_is_found_from_root_conversation_meta(tmp_path: Path) -> None:
+    # Antigravity documents _meta["antigravity.google/root_conversation_id"] on tools/call and
+    # conversationId on hooks: shared by a conversation's calls, so not one-to-one per call.
+    log = tmp_path / "log.jsonl"
+    root = "antigravity.google/root_conversation_id"
+    for tc in ("tc-a", "tc-b"):
+        _hook(log, "PreToolUse", _pre_payload(tc, conversation="conv-alpha"))
+    _session(log, [{root: "conv-alpha"}, {root: "conv-alpha"}])
+    for tc in ("tc-c",):
+        _hook(log, "PreToolUse", _pre_payload(tc, conversation="conv-bravo"))
+    _session(log, [{root: "conv-bravo"}])
+    report = _analyzer().analyze(_analyzer().load(log))
+    assert report["verdict"] == "conversation_key_found"
+    key = next(k for k in report["per_call_keys"] if k["request_path"] == f"request._meta.{root}")
+    assert key["hook_path"] == "hook.conversationId" and key["scope"] == "conversation"
+    assert key["distinct_across_conversations"] is True and key["conversations_seen"] == 2

@@ -230,6 +230,11 @@ def pre_tool(payload: dict) -> dict:
         tc = payload.get("toolCall")
         raw_id = tc.get("id") if isinstance(tc, dict) else None
         tc_id = raw_id if isinstance(raw_id, str) and raw_id else ""
+        # The gateway admits a request only on a lease from the same conversation: Antigravity sends
+        # the hook payload conversationId and the request _meta root_conversation_id. Without it the
+        # lease can never be consumed, which is the fail-closed outcome wanted.
+        raw_conversation = payload.get("conversationId")
+        conversation = raw_conversation if isinstance(raw_conversation, str) and raw_conversation else None
         now = time.time()
 
         with os.fdopen(os.open(lease_path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600), "r+") as file:
@@ -251,9 +256,9 @@ def pre_tool(payload: dict) -> dict:
             ]
             entry_id = tc_id or uuid4().hex
             if target is None:
-                active.append({"id": entry_id, "workspace": "", "attested": False, "ts": now})
+                active.append({"id": entry_id, "workspace": "", "attested": False, "conversation": conversation, "ts": now})
             else:
-                active.append({"id": entry_id, "workspace": str(target), "ts": now})
+                active.append({"id": entry_id, "workspace": str(target), "conversation": conversation, "ts": now})
             active = active[-32:]
             file.seek(0)
             json.dump(active, file)

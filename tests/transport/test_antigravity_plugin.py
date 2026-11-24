@@ -42,6 +42,12 @@ def _clean_env(home: Path) -> dict[str, str]:
     }
 
 
+ROOT_CONVERSATION = "antigravity.google/root_conversation_id"
+# What Antigravity puts in every tools/call request (documented since CLI v1.4.4); the hook side
+# carries the same id as payload conversationId.
+CONV_META = {ROOT_CONVERSATION: "conv-1"}
+
+
 def _load_script_module(name: str):
     import importlib.util
 
@@ -107,7 +113,7 @@ def test_mcp_gateway_status_diagnostics_and_bound_apps(tmp_path: Path, monkeypat
 
         async def check_unenrolled() -> None:
             res_status = await guard_un.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="status"), session=FakeSession([unenrolled])),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name="status"), session=FakeSession([unenrolled])),
                 lambda _ctx: None,
             )
             assert res_status.is_error is False
@@ -116,7 +122,7 @@ def test_mcp_gateway_status_diagnostics_and_bound_apps(tmp_path: Path, monkeypat
             assert not (home / ".local/share/nexus-memory").exists()
 
             res_search = await guard_un.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="search"), session=FakeSession([unenrolled])),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name="search"), session=FakeSession([unenrolled])),
                 lambda _ctx: None,
             )
             assert res_search.is_error is True
@@ -135,7 +141,7 @@ def test_mcp_gateway_status_diagnostics_and_bound_apps(tmp_path: Path, monkeypat
 
         async def check_drift() -> None:
             res_status = await guard_drift.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="status"), session=FakeSession([repo])),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name="status"), session=FakeSession([repo])),
                 lambda _ctx: None,
             )
             assert res_status.is_error is False
@@ -144,7 +150,7 @@ def test_mcp_gateway_status_diagnostics_and_bound_apps(tmp_path: Path, monkeypat
             assert pid in res_status.structured_content["recover_command"]
 
             res_get = await guard_drift.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="get"), session=FakeSession([repo])),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name="get"), session=FakeSession([repo])),
                 lambda _ctx: None,
             )
             assert res_get.is_error is True
@@ -532,14 +538,14 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
 
         async def check_neutral_no_roots() -> None:
             st = await guard_neutral.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="status"), session=NoRootsSession()),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name="status"), session=NoRootsSession()),
                 _admit,
             )
             assert st.is_error is False
             assert st.structured_content["scope_state"] == "host_missing_roots"
 
             denied_search = await guard_neutral.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="search"), session=NoRootsSession()),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name="search"), session=NoRootsSession()),
                 _admit,
             )
             assert denied_search.is_error is True
@@ -554,7 +560,7 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
 
         async def check_pinned() -> None:
             ok_call = await guard_pinned.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="status"), session=NoRootsSession()),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name="status"), session=NoRootsSession()),
                 _admit,
             )
             assert ok_call == "admitted"
@@ -562,7 +568,7 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
 
             # Disagreeing client root must fail closed even on pinned connection
             mismatch = await guard_pinned.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="status"), session=WithRootsSession([other])),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name="status"), session=WithRootsSession([other])),
                 _admit,
             )
             assert mismatch.is_error is True
@@ -579,7 +585,7 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
 
         async def check_pinned_drift() -> None:
             st = await guard_pinned_drift.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="status"), session=NoRootsSession()),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name="status"), session=NoRootsSession()),
                 _admit,
             )
             assert st.is_error is False
@@ -595,8 +601,9 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
 
         guard_leased = gw_mod.GuardedService(None)
 
-        def _mcp_hook_payload(ws: Path, tc_id: str, *, server: str = "nexus-memory_nexus-memory", tool: str = "status", name: str = "call_mcp_tool") -> dict:
+        def _mcp_hook_payload(ws: Path, tc_id: str, *, server: str = "nexus-memory_nexus-memory", tool: str = "status", name: str = "call_mcp_tool", conversation: str = "conv-1") -> dict:
             return {
+                "conversationId": conversation,
                 "workspacePaths": [str(ws)],
                 "toolCall": {
                     "id": tc_id,
@@ -609,7 +616,7 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
             # Other MCP servers never write a Nexus workspace lease
             assert hooks_mod.pre_tool(_mcp_hook_payload(repo, "other-1", server="github-mcp-server", tool="get_me")) == {"decision": "allow"}
             st_no_lease = await guard_leased.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="status"), session=NoRootsSession()),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name="status"), session=NoRootsSession()),
                 _admit,
             )
             assert st_no_lease.is_error is False
@@ -618,7 +625,7 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
             # PreToolUse lease on repo admits status and record
             assert hooks_mod.pre_tool(_mcp_hook_payload(repo, "tc-1", tool="status")) == {"decision": "allow"}
             ok_repo = await guard_leased.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="status"), session=NoRootsSession()),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name="status"), session=NoRootsSession()),
                 _admit,
             )
             assert ok_repo == "admitted"
@@ -626,7 +633,7 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
 
             assert hooks_mod.pre_tool(_mcp_hook_payload(repo, "tc-2", tool="record")) == {"decision": "allow"}
             ok_rec = await guard_leased.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="record"), session=NoRootsSession()),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name="record"), session=NoRootsSession()),
                 _admit,
             )
             assert ok_rec == "admitted"
@@ -634,7 +641,7 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
             # Subsequent PreToolUse lease on enrolled `other` switches cleanly on shared gateway
             assert hooks_mod.pre_tool(_mcp_hook_payload(other, "tc-3", tool="status")) == {"decision": "allow"}
             ok_other = await guard_leased.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="status"), session=NoRootsSession()),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name="status"), session=NoRootsSession()),
                 _admit,
             )
             assert ok_other == "admitted"
@@ -644,13 +651,13 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
             assert hooks_mod.pre_tool(_mcp_hook_payload(repo, "tc-4", tool="search")) == {"decision": "allow"}
             assert hooks_mod.pre_tool(_mcp_hook_payload(other, "tc-5", tool="search")) == {"decision": "allow"}
             ambig_search = await guard_leased.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="search"), session=NoRootsSession()),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name="search"), session=NoRootsSession()),
                 _admit,
             )
             assert ambig_search.is_error is True
             assert "project_scope_ambiguous" in ambig_search.content[0].text
             ambig_status = await guard_leased.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="status"), session=NoRootsSession()),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name="status"), session=NoRootsSession()),
                 _admit,
             )
             assert ambig_status.is_error is False
@@ -660,7 +667,7 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
             assert hooks_mod.post_tool(_mcp_hook_payload(repo, "tc-4", tool="search")) == {}
             assert hooks_mod.post_tool(_mcp_hook_payload(other, "tc-5", tool="search")) == {}
             after_clear = await guard_leased.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="status"), session=NoRootsSession()),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name="status"), session=NoRootsSession()),
                 _admit,
             )
             assert after_clear.is_error is False
@@ -676,7 +683,7 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
 
         def _call(name: str):
             return guard_atlas.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name=name), session=NoRootsSession()),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name=name), session=NoRootsSession()),
                 _admit,
             )
 
@@ -729,7 +736,7 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
 
         def _get_call():
             return guard_un.authorize(
-                SimpleNamespace(method="tools/call", params=SimpleNamespace(name="get"), session=NoRootsSession()),
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=CONV_META, name="get"), session=NoRootsSession()),
                 _admit,
             )
 
@@ -773,7 +780,7 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
             return guard_card.authorize(
                 SimpleNamespace(
                     method="tools/call",
-                    params=SimpleNamespace(name=name, arguments={"memory_id": memory_id}),
+                    params=SimpleNamespace(meta=CONV_META, name=name, arguments={"memory_id": memory_id}),
                     session=NoRootsSession(),
                 ),
                 _admit,
@@ -800,6 +807,62 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
             assert _denied(await _card_call("compare_at_head", "mem-a"))
 
         anyio.run(check_card_grant)
+
+        # 7. A request may only consume a lease from its own conversation: the hook records
+        #    payload conversationId, the request carries _meta root_conversation_id. A call whose
+        #    hook never ran therefore cannot take another conversation's lease (another project).
+        guard_conv = gw_mod.GuardedService(None)
+
+        def _conv_call(name: str, meta: dict | None):
+            return guard_conv.authorize(
+                SimpleNamespace(method="tools/call", params=SimpleNamespace(meta=meta, name=name), session=NoRootsSession()),
+                _admit,
+            )
+
+        def _conv_hook(ws: Path, tc_id: str, conversation: str, *, mode: str = "pre") -> None:
+            payload = _mcp_hook_payload(ws, tc_id, tool="get", conversation=conversation)
+            (hooks_mod.pre_tool if mode == "pre" else hooks_mod.post_tool)(payload)
+
+        async def check_conversation_binding() -> None:
+            # Conversation A's hook leases repo; B's request (its own hook never ran) is refused.
+            _conv_hook(repo, "cv-1", "conv-A")
+            assert _denied(await _conv_call("get", {ROOT_CONVERSATION: "conv-B"}))
+            # Without the request metadata nothing can be matched: refused, and status says why.
+            assert _denied(await _conv_call("get", None))
+            missing = await _conv_call("status", None)
+            assert missing.structured_content["scope_state"] == "host_missing_roots"
+            # A's own request takes A's lease.
+            assert await _conv_call("get", {ROOT_CONVERSATION: "conv-A"}) == "admitted"
+            assert guard_conv.project.checkout == repo
+            _conv_hook(repo, "cv-1", "conv-A", mode="post")
+
+            # Concurrent conversations on different projects each get their own lease.
+            _conv_hook(repo, "cv-2", "conv-A")
+            _conv_hook(other, "cv-3", "conv-B")
+            assert await _conv_call("get", {ROOT_CONVERSATION: "conv-B"}) == "admitted"
+            assert guard_conv.project.checkout == other
+            assert await _conv_call("get", {ROOT_CONVERSATION: "conv-A"}) == "admitted"
+            assert guard_conv.project.checkout == repo
+            _conv_hook(repo, "cv-2", "conv-A", mode="post")
+            _conv_hook(other, "cv-3", "conv-B", mode="post")
+
+            # An unattested call blocks only its own conversation.
+            unattested = _mcp_hook_payload(repo, "cv-4", tool="get", conversation="conv-B")
+            unattested["workspacePaths"] = [str(repo), str(other)]
+            hooks_mod.pre_tool(unattested)
+            _conv_hook(repo, "cv-5", "conv-A")
+            assert await _conv_call("get", {ROOT_CONVERSATION: "conv-A"}) == "admitted"
+            assert _denied(await _conv_call("get", {ROOT_CONVERSATION: "conv-B"}))
+            hooks_mod.post_tool(unattested)
+            _conv_hook(repo, "cv-5", "conv-A", mode="post")
+
+            # A subagent's hook names its own conversation while the request names the root one:
+            # they do not match, so it fails closed rather than guessing.
+            _conv_hook(repo, "cv-6", "sub-of-A")
+            assert _denied(await _conv_call("get", {ROOT_CONVERSATION: "conv-A"}))
+            _conv_hook(repo, "cv-6", "sub-of-A", mode="post")
+
+        anyio.run(check_conversation_binding)
     finally:
         os.umask(prev_umask)
 
@@ -823,3 +886,14 @@ def test_gateway_launcher_commands_name_the_main_checkout(tmp_path: Path) -> Non
         result = gw_mod._diagnostic_status_result(scope_state=state, message=state, diag=diag)
         argv = shlex.split(result.structured_content[key])
         assert Path(argv[4]) == main, (state, argv)
+
+
+def test_gateway_reads_the_root_conversation_from_a_raw_request(tmp_path: Path) -> None:
+    # The MCP runner hands middleware the raw params dict, with _meta as sent on the wire.
+    gw_mod = _load_script_module("mcp_gateway")
+    guard = gw_mod.GuardedService(None)
+    raw = SimpleNamespace(params={"name": "get", "arguments": {}, "_meta": {ROOT_CONVERSATION: "conv-9", "progressToken": 3}})
+    assert guard._request_conversation(raw) == "conv-9"
+    assert guard._request_conversation(SimpleNamespace(params={"name": "get"})) is None
+    assert guard._request_conversation(SimpleNamespace(params={"name": "get", "_meta": {ROOT_CONVERSATION: ""}})) is None
+    assert guard._request_conversation(SimpleNamespace(params={"name": "get"}, meta={ROOT_CONVERSATION: "conv-7"})) == "conv-7"

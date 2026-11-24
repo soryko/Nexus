@@ -38,6 +38,11 @@ from project_scope import (  # noqa: E402
 )
 
 LEASE_TTL_SECONDS = 10.0
+# Antigravity puts the top-level conversation id in every tools/call request's _meta (documented
+# since CLI v1.4.4) and hands the same id to hooks as payload conversationId. A request consumes
+# only a lease from its own conversation, so a call whose hook never ran cannot take a lease
+# written for another conversation, which may be another project.
+ROOT_CONVERSATION_META = "antigravity.google/root_conversation_id"
 # The read-only tools the Atlas MCP App (tools/mcp_apps_ui/src/atlas.js) calls itself. Those calls
 # come from the app, not the model, so no PreToolUse hook writes a host lease for them. A leased
 # open_atlas grants them lease-free for its project only, for a fixed window that use does not
@@ -166,7 +171,11 @@ def _lease_file_path() -> Path | None:
         return None
 
 
-def _consume_host_lease(lease_ttl: float = LEASE_TTL_SECONDS) -> tuple[str, str | None, str | None]:
+def _consume_host_lease(
+    conversation: str | None, lease_ttl: float = LEASE_TTL_SECONDS
+) -> tuple[str, str | None, str | None]:
+    if conversation is None:
+        return ("missing", None, None)
     lease_path = _lease_file_path()
     if lease_path is None or not os.path.lexists(lease_path):
         return ("missing", None, None)
@@ -186,10 +195,13 @@ def _consume_host_lease(lease_ttl: float = LEASE_TTL_SECONDS) -> tuple[str, str 
             and isinstance(item.get("ts"), (int, float))
             and now - float(item["ts"]) <= lease_ttl
         ]
-        unattested = [item for item in live if item.get("attested") is False]
+        # Entries of other conversations are kept for their own requests but never considered here.
+        others = [item for item in live if item.get("conversation") != conversation]
+        mine = [item for item in live if item.get("conversation") == conversation]
+        unattested = [item for item in mine if item.get("attested") is False]
         active = [
             item
-            for item in live
+            for item in mine
             if item.get("attested") is not False
             and isinstance(item.get("workspace"), str)
             and item["workspace"].strip()
@@ -198,7 +210,7 @@ def _consume_host_lease(lease_ttl: float = LEASE_TTL_SECONDS) -> tuple[str, str 
             # A Nexus call is in flight whose hook could not name one workspace. This request may
             # be that call, so no pending lease can be taken as evidence for it: fail closed.
             file.seek(0)
-            json.dump(active + unattested, file)
+            json.dump(others + active + unattested, file)
             file.truncate()
             return (
                 "ambiguous",
@@ -207,14 +219,14 @@ def _consume_host_lease(lease_ttl: float = LEASE_TTL_SECONDS) -> tuple[str, str 
             )
         if not active:
             file.seek(0)
-            json.dump([], file)
+            json.dump(others, file)
             file.truncate()
             return ("missing", None, None)
 
         distinct = {os.path.realpath(item["workspace"]) for item in active}
         if len(distinct) > 1:
             file.seek(0)
-            json.dump(active, file)
+            json.dump(others + active, file)
             file.truncate()
             return (
                 "ambiguous",
@@ -224,7 +236,7 @@ def _consume_host_lease(lease_ttl: float = LEASE_TTL_SECONDS) -> tuple[str, str 
 
         popped = active.pop(0)
         file.seek(0)
-        json.dump(active, file)
+        json.dump(others + active, file)
         file.truncate()
         return ("ok", popped["workspace"], None)
 
@@ -293,6 +305,15 @@ class GuardedService:
             name = getattr(params, "name", None)
         return name if isinstance(name, str) else None
 
+    def _request_conversation(self, ctx: Any) -> str | None:
+        """The request's _meta root conversation id, or None (then no lease can be matched)."""
+        params = getattr(ctx, "params", None)
+        meta = params.get("_meta") if isinstance(params, dict) else getattr(params, "meta", None)
+        if not isinstance(meta, dict):
+            meta = getattr(ctx, "meta", None)
+        value = meta.get(ROOT_CONVERSATION_META) if isinstance(meta, dict) else None
+        return value if isinstance(value, str) and value else None
+
     def _memory_id_argument(self, ctx: Any) -> str | None:
         params = getattr(ctx, "params", None)
         arguments = params.get("arguments") if isinstance(params, dict) else getattr(params, "arguments", None)
@@ -342,7 +363,7 @@ class GuardedService:
                     raw_path = str(self.pinned_workspace)
                 else:
                     host_lease_mode = True
-                    lease_state, leased_path, lease_msg = _consume_host_lease()
+                    lease_state, leased_path, lease_msg = _consume_host_lease(self._request_conversation(ctx))
                     if lease_state == "ambiguous":
                         if tool_name == "status":
                             return _diagnostic_status_result(

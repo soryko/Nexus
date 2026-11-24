@@ -6,9 +6,11 @@ The gateway needs one of two things to stop a request from consuming another cal
 
 * a per-call key: a value present in the PreToolUse hook payload for a call and in the MCP
   tools/call request for that same call, and in no other call's request; or
-* a per-session key: a value present in every hook of one conversation and in the MCP server
-  process (environment, initialize or request metadata) serving that conversation, and
-  different between conversations.
+* a conversation key: a value present in the hooks of one conversation and in every tools/call
+  request of that conversation (for example hook ``conversationId`` and request
+  ``_meta["antigravity.google/root_conversation_id"]``), different between conversations; or
+* a per-session key: a value present in the hooks and in the MCP server process (environment or
+  initialize) serving that conversation.
 
 This script only reports what the log shows. A key found once, in one session, is a lead, not an
 established host contract: confirm it across sessions, concurrent conversations and a restart.
@@ -109,13 +111,18 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         calls_hit = [c for c, _ in hits]
         hooks_hit = [h for _, h in hits]
         one_to_one = len(set(calls_hit)) == len(hits) == len(set(hooks_hit))
+        # Each call matched by at least one pre-hook, every matching hook for a call agreeing on
+        # the value: a key shared by a conversation's calls rather than unique to each call.
+        covers_every_call = len(set(calls_hit)) == len(calls) > 0
         per_call_keys.append({
             "hook_path": hpath,
             "request_path": rpath,
             "calls_matched": len(set(calls_hit)),
             "calls_total": len(calls),
             "one_to_one": one_to_one,
-            "covers_every_call": one_to_one and len(set(calls_hit)) == len(calls) > 0,
+            "covers_every_call": one_to_one and covers_every_call,
+            "scope": "call" if one_to_one else "conversation",
+            "every_call_matched": covers_every_call,
         })
 
     # Per-session: values the server process carries (env at start, initialize ids/meta) that also
@@ -169,12 +176,30 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         })
 
     usable_per_call = [k for k in per_call_keys if k["covers_every_call"] and k["request_path"] != "request.rpc_id"]
+    # A conversation key must be request metadata (not the host's JSON-RPC counter) and must not
+    # also match calls from another conversation: check the values differ across conversations.
+    conversation_keys = []
+    for key in per_call_keys:
+        if key["scope"] != "conversation" or not key["every_call_matched"] or key["request_path"] == "request.rpc_id":
+            continue
+        values_by_conversation: dict[str, set[str]] = defaultdict(set)
+        for hook in pre_hooks:
+            ids = hook_ids(hook)
+            conversation = ids.get("hook.conversationId")
+            if conversation and key["hook_path"] in ids:
+                values_by_conversation[conversation].add(ids[key["hook_path"]])
+        values = [v for vs in values_by_conversation.values() for v in vs]
+        key["distinct_across_conversations"] = len(values) == len(set(values))
+        key["conversations_seen"] = len(values_by_conversation)
+        conversation_keys.append(key)
     if not calls:
         verdict = "no_probe_calls"
     elif not pre_hooks:
         verdict = "no_pre_tool_hooks"
     elif usable_per_call:
         verdict = "per_call_key_found"
+    elif any(k["distinct_across_conversations"] for k in conversation_keys):
+        verdict = "conversation_key_found"
     elif unique_session:
         verdict = "session_key_found"
     else:
@@ -207,8 +232,10 @@ def main(argv: list[str]) -> int:
     print(f"verdict: {report['verdict']}")
     print(f"counts: {report['counts']}")
     for key in report["per_call_keys"]:
-        print(f"per-call candidate: {key['hook_path']} == {key['request_path']} "
-              f"({key['calls_matched']}/{key['calls_total']} calls, one_to_one={key['one_to_one']})")
+        print(f"{key['scope']} candidate: {key['hook_path']} == {key['request_path']} "
+              f"({key['calls_matched']}/{key['calls_total']} calls, one_to_one={key['one_to_one']}"
+              + (f", conversations={key.get('conversations_seen')}, distinct={key.get('distinct_across_conversations')}" if key['scope'] == 'conversation' else "")
+              + ")")
     for key in report["session_keys"]:
         print(f"session candidate: {key['hook_path']} == {key['server_path']}")
     if report["shared_env_leads"]:
