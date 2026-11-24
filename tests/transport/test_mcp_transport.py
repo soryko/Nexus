@@ -36,14 +36,14 @@ def test_stdio_tools_enforce_contract_and_lifecycle(tmp_path: Path) -> None:
         async with Client(_server(tmp_path / "state" / "memory.sqlite3")) as client:
             listed = await client.list_tools()
             tools = {tool.name: tool for tool in listed.tools}
-            assert set(tools) == {"record", "get", "revise", "forget", "search", "history", "status"}
+            assert set(tools) == {"record", "get", "revise", "forget", "search", "history", "spaces", "status"}
 
             expected_properties = {
-                "record": {"content", "idempotency_key", "kind", "tags", "source_uri", "snapshot", "references"},
+                "record": {"content", "idempotency_key", "kind", "tags", "source_uri", "snapshot", "references", "space"},
                 "get": {"memory_id", "revision_id"},
                 "revise": {
                     "memory_id", "expected_revision_id", "content", "idempotency_key",
-                    "kind", "tags", "source_uri", "snapshot", "references",
+                    "kind", "tags", "source_uri", "snapshot", "references", "space",
                 },
                 "forget": {"memory_id", "expected_revision_id", "idempotency_key"},
                 "search": {
@@ -51,8 +51,10 @@ def test_stdio_tools_enforce_contract_and_lifecycle(tmp_path: Path) -> None:
                     # B2b reference filters. They are query fields, not binding arguments: none of
                     # them names a repository, a commit scope or a path root.
                     "repository", "reference_paths", "reference_path_prefix", "reference_commits",
+                    "space",  # shorthand for tags_all space/<slug>
                 },
                 "history": {"memory_id", "limit", "cursor"},
+                "spaces": set(),
                 "status": set(),
             }
             for name, tool in tools.items():

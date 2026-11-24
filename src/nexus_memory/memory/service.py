@@ -31,6 +31,7 @@ from nexus_memory.domain.models import (
     Scope,
     SearchPage,
     SearchQuery,
+    SpaceSummary,
     StoreStatus,
     TreeEntry,
     VerifiedReference,
@@ -281,6 +282,9 @@ class MemoryService:
         if cursor is not None:
             cursor = self._identifier(cursor, "cursor")
         return self.repository.history(self.scope, memory_id, limit, cursor)
+
+    def spaces(self) -> tuple[SpaceSummary, ...]:
+        return self.repository.spaces(self.scope)
 
     def status(self) -> StoreStatus:
         stored = self.repository.status(self.scope)

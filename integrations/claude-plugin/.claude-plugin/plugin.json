@@ -1,5 +1,5 @@
 {
   "name": "nexus-memory",
-  "version": "0.1.0",
-  "description": "Hooks-only read path for Nexus Memory: ID-only recall on prompt submit and a task guard before Nexus tool calls. Uses an existing nexus-memory MCP server; bundles no server and enrols nothing."
+  "version": "0.2.0",
+  "description": "Hooks for Nexus Memory: a session cue, candidate recall on prompt submit, a project guard before Nexus tool calls, and a Stop check that asks the model to record durable knowledge. Autonomous by default; NEXUS_CAPTURE_POLICY=explicit restores ask-first behaviour. Uses an existing nexus-memory MCP server; bundles no server and enrols nothing."
 }

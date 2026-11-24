@@ -44,9 +44,11 @@ from nexus_memory.domain.models import (
     SearchHit,
     SearchPage,
     SearchQuery,
+    SpaceSummary,
     StoreStatus,
     VerifiedReference,
     WriteReceipt,
+    spaces_of,
 )
 
 from .repository import write_observation
@@ -1634,6 +1636,42 @@ class SQLiteRepository:
             raise
         except (sqlite3.Error, UnicodeError, ValueError) as error:
             raise StorageIntegrityError("storage operation failed") from error
+
+    def spaces(self, scope: Scope) -> tuple[SpaceSummary, ...]:
+        """Spaces in use by live memories, read from authoritative current revisions.
+
+        Read from revisions rather than head_index so a pending projection cannot hide a space
+        or keep a forgotten one alive. Ordered by most recent write, then name.
+        """
+        db = None
+        try:
+            db = self._connect()
+            with closing(db):
+                db.execute("BEGIN")
+                rows = db.execute(
+                    "SELECT r.tags_json,r.created_at FROM memories m JOIN revisions r"
+                    " ON r.namespace=m.namespace AND r.actor=m.actor AND r.memory_id=m.memory_id"
+                    " AND r.revision_id=m.current_revision_id"
+                    " WHERE m.namespace=? AND m.actor=? AND m.tombstoned=0",
+                    (scope.namespace, scope.actor),
+                ).fetchall()
+                db.commit()
+        except sqlite3.Error as error:
+            raise StorageIntegrityError("storage operation failed") from error
+        counts: dict[str, list] = {}
+        for tags_json, created_at in rows:
+            try:
+                names = spaces_of(tuple(json.loads(tags_json)))
+            except (ValueError, TypeError):
+                continue
+            # A memory tagged directly with two spaces counts in both, as the space filter in
+            # search finds it in both; malformed space/ tags from before spaces count in none.
+            for name in dict.fromkeys(names):
+                entry = counts.setdefault(name, [0, created_at])
+                entry[0] += 1
+                entry[1] = max(entry[1], created_at)
+        ordered = sorted(counts.items(), key=lambda item: (item[1][1], item[0]), reverse=True)
+        return tuple(SpaceSummary(name, count, latest) for name, (count, latest) in ordered)
 
     def status(self, scope: Scope) -> StoreStatus:
         db = None

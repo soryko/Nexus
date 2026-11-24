@@ -92,3 +92,24 @@ def test_a_relative_runtime_is_refused(tmp_path):
     home, repo, _ = world(tmp_path)
     result = run(repo, home, 'claude-hooks', 'runtime', PWD=str(repo))
     assert result.returncode == 1 and result.stdout == ''
+
+
+def test_claude_hooks_defaults_to_autonomous_and_honours_an_explicit_opt_out(tmp_path):
+    home, repo, fake = world(tmp_path)
+    for env, expected, warned in (({}, 'autonomous', False), ({'NEXUS_CAPTURE_POLICY': 'explicit'}, 'explicit', False),
+                                  ({'NEXUS_CAPTURE_POLICY': ' Autonomous '}, 'autonomous', False),
+                                  ({'NEXUS_CAPTURE_POLICY': 'bogus'}, 'explicit', True)):
+        result = run(repo, home, 'claude-hooks', str(fake), PWD=str(repo), **env)
+        assert result.returncode == 0, result.stderr
+        _, args = parse(result.stdout)
+        assert args[args.index('--capture-policy') + 1] == expected, env
+        assert ('NEXUS_CAPTURE_POLICY' in result.stderr) == warned
+
+
+def test_codex_and_plain_claude_launches_pass_no_capture_policy(tmp_path):
+    home, repo, fake = world(tmp_path)
+    for command in ('codex', 'claude'):
+        assert run(repo, home, 'enroll', str(repo)).returncode == 0
+        result = run(repo, home, command, str(fake), PWD=str(repo))
+        _, args = parse(result.stdout)
+        assert '--capture-policy' not in args, command

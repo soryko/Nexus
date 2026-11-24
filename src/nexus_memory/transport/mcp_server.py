@@ -27,6 +27,8 @@ from nexus_memory.domain.models import (
     SearchQuery,
     StoreStatus,
     WriteReceipt,
+    space_tag,
+    with_space,
 )
 from nexus_memory.git import GitCli, bind_repository
 from nexus_memory.memory import MemoryService
@@ -91,10 +93,10 @@ def _launch_policy(args: argparse.Namespace) -> _InstructionPolicy:
         return _OFF
     # A hook-enabled launch (--hook-project-root, formerly --codex-project-root) opts into explicit
     # capture before initialization, including when SessionStart and recall hooks never run.
-    hooked = getattr(args, "hook_project_root", None) or getattr(args, "codex_project_root", None)
-    if args.capture_policy == "autonomous" and hooked is None:
-        return _AUTONOMOUS
-    return _EXPLICIT
+    # A hook-enabled launch used to force explicit capture. It now honours the requested policy:
+    # the launcher chooses it (the Claude hooks launch defaults to autonomous, Codex stays explicit),
+    # and the hook guard and session cue follow the same choice.
+    return _AUTONOMOUS if args.capture_policy == "autonomous" else _EXPLICIT
 
 
 def _service_version() -> str:
@@ -193,6 +195,18 @@ class StatusOutput(BaseModel):
     usage_log: Literal["off", "on", "failing"]
     usage_events_written: int | None
     usage_write_failures: int | None
+
+
+class SpaceOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    space: str
+    memories: int
+    last_updated: str
+
+
+class SpacesOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    spaces: list[SpaceOutput]
 
 
 class SearchHitOutput(BaseModel):
@@ -363,10 +377,14 @@ def create_server(
         source_uri: str | None = Field(default=None, max_length=2048),
         snapshot: str | None = Field(default=None, max_length=256),
         references: list[ReferenceArg] = Field(default_factory=list, max_length=MAX_REFERENCES),
+        space: str | None = Field(default=None, max_length=58, description=(
+            "Topic space to file this memory in: a short lowercase slug such as auth or release. "
+            "Shorthand for the tag space/<slug>; replaces any space tag in tags. A memory has at most one space. "
+            "Call spaces first and reuse one that fits; name a new space only when none does.")),
     ) -> ReceiptOutput:
         return _run(
             lambda: service.record(
-                MemoryInput(content, kind, tags, source_uri, snapshot, _references(references)), idempotency_key
+                MemoryInput(content, kind, with_space(tags, space), source_uri, snapshot, _references(references)), idempotency_key
             ),
             ReceiptOutput,
         )
@@ -399,12 +417,16 @@ def create_server(
         source_uri: str | None = Field(default=None, max_length=2048),
         snapshot: str | None = Field(default=None, max_length=256),
         references: list[ReferenceArg] = Field(default_factory=list, max_length=MAX_REFERENCES),
+        space: str | None = Field(default=None, max_length=58, description=(
+            "Topic space to file this memory in: a short lowercase slug such as auth or release. "
+            "Shorthand for the tag space/<slug>; replaces any space tag in tags. A memory has at most one space. "
+            "Call spaces first and reuse one that fits; name a new space only when none does.")),
     ) -> ReceiptOutput:
         return _run(
             lambda: service.revise(
                 memory_id,
                 expected_revision_id,
-                MemoryInput(content, kind, tags, source_uri, snapshot, _references(references)),
+                MemoryInput(content, kind, with_space(tags, space), source_uri, snapshot, _references(references)),
                 idempotency_key,
             ),
             ReceiptOutput,
@@ -485,11 +507,14 @@ def create_server(
         reference_path_prefix: str | None = Field(default=None, description="at most 1024 bytes"),
         reference_commits: tuple[str, ...] | None = Field(
             default=None, description=f"at most {MAX_REFERENCE_FILTER_VALUES} object ids"),
+        space: str | None = Field(default=None, max_length=58,
+                                  description="Only memories filed in this space; shorthand for tags_all space/<slug>"),
     ) -> SearchOutput:
         return _run(
             lambda: service.search(
                 SearchQuery(
-                    query, advanced, tags_all, tags_any, tuple(kinds), limit, cursor,
+                    query, advanced, (*tags_all, space_tag(space)) if space is not None else tags_all,
+                    tags_any, tuple(kinds), limit, cursor,
                     repository, reference_paths, reference_path_prefix, reference_commits,
                 )
             ),
@@ -549,10 +574,27 @@ def create_server(
         except Exception:
             return _error("internal_error", "operation failed")
 
+    @server.tool(
+        description=(
+            "List the topic spaces live memories in this project are filed in, with how many memories each holds "
+            "and when one was last written, most recent first. Spaces are created implicitly by recording with "
+            "space; check this list first so related memories share one space instead of near-duplicate names."
+        ),
+        annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False),
+        structured_output=True,
+    )
+    def spaces() -> SpacesOutput:
+        try:
+            return SpacesOutput(spaces=[SpaceOutput.model_validate(asdict(item)) for item in service.spaces()])
+        except NexusError as error:
+            return _error(error.code, str(error))
+        except Exception:
+            return _error("internal_error", "operation failed")
+
     if codex_checkout is not None:
         from nexus_memory.transport.codex import register_hooks
 
-        register_hooks(server, service, codex_checkout)
+        register_hooks(server, service, codex_checkout, autonomous=capture_policy.name == "autonomous")
     return server
 
 
