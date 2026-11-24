@@ -104,15 +104,20 @@ async function loadMore() {
 
 async function selectMemory(memoryId, revisionId = null) {
   const selectionGen = ++state.selectionGen;
+  // Viewing another revision of the memory already shown keeps the chain loaded so far.
+  const keptHistory = memoryId === state.selectedId && state.history ? state.history : null;
   state.selectedId = memoryId;
   state.detail = null;
-  state.history = null;
+  state.history = keptHistory;
+  state.historyLoading = false;
   render();
   try {
     const getArgs = revisionId ? { memory_id: memoryId, revision_id: revisionId } : { memory_id: memoryId };
     const [memRes, histRes] = await Promise.all([
       app.callServerTool({ name: "get", arguments: getArgs }),
-      app.callServerTool({ name: "history", arguments: { memory_id: memoryId, limit: 20 } }),
+      keptHistory
+        ? Promise.resolve({ structuredContent: keptHistory })
+        : app.callServerTool({ name: "history", arguments: { memory_id: memoryId, limit: 20 } }),
     ]);
     if (selectionGen !== state.selectionGen) return;
     state.detail = memRes?.isError ? null : memRes?.structuredContent || null;
@@ -120,6 +125,31 @@ async function selectMemory(memoryId, revisionId = null) {
   } catch {
     if (selectionGen !== state.selectionGen) return;
     state.statusText = "Failed to inspect memory";
+  }
+  render();
+}
+
+async function loadOlderRevisions() {
+  const history = state.history;
+  if (!history?.cursor || state.historyLoading) return;
+  const selectionGen = state.selectionGen;
+  state.historyLoading = true;
+  render();
+  try {
+    const res = await app.callServerTool({
+      name: "history",
+      arguments: { memory_id: state.selectedId, limit: 20, cursor: history.cursor },
+    });
+    if (selectionGen !== state.selectionGen) return;
+    if (!res?.isError && res?.structuredContent) {
+      const page = res.structuredContent;
+      state.history = { ...page, entries: [...history.entries, ...(page.entries || [])] };
+    }
+  } catch {
+    if (selectionGen !== state.selectionGen) return;
+    state.statusText = "Could not load older revisions";
+  } finally {
+    if (selectionGen === state.selectionGen) state.historyLoading = false;
   }
   render();
 }
@@ -272,6 +302,12 @@ function renderDetailPane() {
       );
     }
     pane.append(el("div", { className: "nx-muted", text: `Revision Chain (${state.history.entries.length})` }), histList);
+    if (state.history.cursor) {
+      const older = el("button", { className: "nx-btn", type: "button", text: state.historyLoading ? "Loading..." : "Load older revisions" });
+      older.disabled = Boolean(state.historyLoading);
+      older.addEventListener("click", loadOlderRevisions);
+      pane.append(older);
+    }
   }
 
   return pane;

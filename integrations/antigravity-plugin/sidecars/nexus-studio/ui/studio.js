@@ -211,13 +211,16 @@ async function loadAtlasList({ cursor = null, resetCursor = false } = {}) {
 
 async function openMemory(memoryId, revisionId = null, { renderNow = true } = {}) {
   const selectionGen = ++state.selectionGen;
+  // Opening another revision of the memory already shown keeps the revision chain loaded so far,
+  // including older pages, instead of collapsing it back to the first page.
+  const keptHistory = memoryId === state.selectedMemoryId && state.history ? state.history : null;
   state.selectedMemoryId = memoryId;
   state.selectedRevisionId = revisionId;
   state.compareRevision = null;
   state.headVerdicts = {};
   const [inspRes, histRes, nbrRes, relRes] = await Promise.all([
     apiPost('/api/inspect', { params: { memory_id: memoryId, revision_id: revisionId } }),
-    apiPost('/api/history', { params: { memory_id: memoryId, limit: 20 } }),
+    keptHistory ? Promise.resolve({ ok: true, data: keptHistory }) : apiPost('/api/history', { params: { memory_id: memoryId, limit: 20 } }),
     apiPost('/api/neighborhood', { params: { memory_id: memoryId, revision_id: revisionId, limit: 20 } }),
     apiPost('/api/related', { params: { memory_id: memoryId, limit: 10 } }),
   ]);
@@ -227,6 +230,25 @@ async function openMemory(memoryId, revisionId = null, { renderNow = true } = {}
   state.neighborhood = nbrRes.ok ? nbrRes.data : null;
   state.related = relRes.ok ? relRes.data : null;
   if (renderNow) renderAll();
+}
+
+async function loadOlderRevisions() {
+  const history = state.history;
+  if (!history?.cursor || state.historyLoading) return;
+  const selectionGen = state.selectionGen;
+  const memoryId = state.selectedMemoryId;
+  state.historyLoading = true;
+  renderAll();
+  try {
+    const res = await apiPost('/api/history', { params: { memory_id: memoryId, limit: 20, cursor: history.cursor } });
+    if (selectionGen !== state.selectionGen) return;
+    if (res.ok && res.data) {
+      state.history = { ...res.data, entries: [...history.entries, ...(res.data.entries || [])] };
+    }
+  } finally {
+    if (selectionGen === state.selectionGen) state.historyLoading = false;
+  }
+  renderAll();
 }
 
 async function jumpToMemoryFromActivity(memoryId) {
@@ -617,6 +639,15 @@ function renderAtlasInspector() {
       );
     }
     pane.append(chain);
+    if (state.history.cursor) {
+      pane.append(el('button', {
+        className: 'nx-btn',
+        type: 'button',
+        text: state.historyLoading ? 'Loading...' : 'Load older revisions',
+        disabled: Boolean(state.historyLoading),
+        onClick: loadOlderRevisions,
+      }));
+    }
   }
 
   if (state.compareRevision) {
