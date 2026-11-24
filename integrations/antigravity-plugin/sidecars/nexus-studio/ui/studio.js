@@ -622,15 +622,30 @@ function renderAtlasInspector() {
   if (state.compareRevision) {
     const cmp = state.compareRevision;
     const diffLines = cmp.lines || cmp.diff_lines || [];
+    // Only an "ok" comparison with no lines means the texts are identical. "too_large" skipped the
+    // comparison entirely and "root" has no parent, so neither may be reported as "no difference".
+    let diffBody;
+    if (cmp.state === 'too_large') {
+      diffBody = [el('div', { className: 'nx-muted', text: 'Not compared: a revision is too large to diff here, so this says nothing about whether the texts differ.' })];
+    } else if (cmp.state === 'root') {
+      diffBody = [el('div', { className: 'nx-muted', text: 'First revision: there is nothing to compare it with.' })];
+    } else if (diffLines.length > 0) {
+      diffBody = diffLines.map((line) => el('div', { className: 'nx-mono', text: line }));
+      if (cmp.truncated) {
+        diffBody.push(el('div', { className: 'nx-muted', text: `Diff truncated: only the first ${diffLines.length} lines are shown.` }));
+      }
+    } else if (cmp.state === 'ok') {
+      diffBody = [el('div', { className: 'nx-muted', text: '(no text difference between revisions)' })];
+    } else {
+      diffBody = [el('div', { className: 'nx-muted', text: `Comparison unavailable (${cmp.state || 'unknown state'}).` })];
+    }
     pane.append(
       el(
         'div',
         { className: 'nx-ref-card' },
         el('div', { className: 'nx-title', text: `Revision Diff (${cmp.state})` }),
         el('div', { className: 'nx-muted', text: `Parent ${(cmp.parent_revision_id || 'none').slice(0, 8)} -> ${(cmp.revision_id || '').slice(0, 8)}` }),
-        ...(diffLines.length > 0
-          ? diffLines.map((line) => el('div', { className: 'nx-mono', text: line }))
-          : [el('div', { className: 'nx-muted', text: '(no text difference between revisions)' })]),
+        ...diffBody,
       ),
     );
   }

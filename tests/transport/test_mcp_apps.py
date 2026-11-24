@@ -142,3 +142,33 @@ def test_stdio_cli_flag_enables_mcp_apps(tmp_path: Path) -> None:
             assert {str(r.uri) for r in resources.resources} == {CARD_RESOURCE_URI, ATLAS_RESOURCE_URI}
 
     anyio.run(scenario)
+
+
+def test_open_atlas_cursor_continues_through_search_with_the_applied_filters(tmp_path: Path) -> None:
+    # The Atlas app's "Load more" repeats open_atlas's query and kind through the search tool
+    # (limit may differ). That only works if the cursor accepts exactly those arguments, and must
+    # still be refused when the filters are dropped.
+    store = SQLiteRepository(tmp_path / "memory.sqlite3")
+    service = MemoryService(store, Scope("test-ns", "local"))
+    for n in range(3):
+        service.record(MemoryInput(f"pager-token decision {n}", kind="decision"), f"pager-{n}")
+    service.record(MemoryInput("pager-token procedure", kind="procedure"), "pager-p")
+    server = create_server(service, enable_mcp_apps=True)
+
+    async def scenario() -> None:
+        async with Client(server) as client:
+            first = await client.call_tool("open_atlas", {"query": "pager-token", "kind": "decision", "limit": 2})
+            assert first.is_error is False
+            cursor = first.structured_content["cursor"]
+            assert cursor and len(first.structured_content["hits"]) == 2
+
+            more = await client.call_tool(
+                "search", {"query": "pager-token", "kinds": ["decision"], "limit": 20, "cursor": cursor}
+            )
+            assert more.is_error is False
+            assert [h["kind"] for h in more.structured_content["hits"]] == ["decision"]
+
+            dropped = await client.call_tool("search", {"limit": 20, "cursor": cursor})
+            assert dropped.is_error is True
+
+    anyio.run(scenario)

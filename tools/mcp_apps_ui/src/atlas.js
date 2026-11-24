@@ -19,6 +19,9 @@ const state = {
   // Bumped by every new search; a "Load more" page from an older search is discarded.
   searchGen: 0,
   loadingMore: false,
+  // The search the cursor belongs to, as actually sent: "Load more" must repeat it exactly (the
+  // store rejects a cursor whose query or kinds differ), never rebuild it from draft controls.
+  applied: { query: null, kinds: [] },
   detail: null,
   history: null,
   statusText: "",
@@ -34,10 +37,15 @@ function firstLine(text) {
   return (String(text || "").split("\n").find((l) => l.trim()) || "(empty)").slice(0, 140);
 }
 
-function searchArgs() {
+function draftSearch() {
+  return { query: state.query.trim() || null, kinds: state.kind !== "all" ? [state.kind] : [] };
+}
+
+function searchArgs(search, cursor = null) {
   const args = { limit: 20 };
-  if (state.query.trim()) args.query = state.query.trim();
-  if (state.kind !== "all") args.kinds = [state.kind];
+  if (search.query !== null && search.query !== undefined) args.query = search.query;
+  if (search.kinds.length > 0) args.kinds = search.kinds;
+  if (cursor) args.cursor = cursor;
   return args;
 }
 
@@ -46,9 +54,11 @@ async function runSearch() {
   state.loadingMore = false;
   state.statusText = "Searching...";
   render();
+  const search = draftSearch();
   try {
-    const res = await app.callServerTool({ name: "search", arguments: searchArgs() });
+    const res = await app.callServerTool({ name: "search", arguments: searchArgs(search) });
     if (searchGen !== state.searchGen) return;
+    state.applied = search;
     if (res?.isError || !res?.structuredContent) {
       state.statusText = "Search failed";
       render();
@@ -74,7 +84,7 @@ async function loadMore() {
   state.loadingMore = true;
   render();
   try {
-    const res = await app.callServerTool({ name: "search", arguments: { ...searchArgs(), cursor: state.cursor } });
+    const res = await app.callServerTool({ name: "search", arguments: searchArgs(state.applied, state.cursor) });
     if (searchGen !== state.searchGen) return;
     if (!res?.isError && res?.structuredContent) {
       state.hits = state.hits.concat(res.structuredContent.hits || []);
@@ -353,6 +363,16 @@ function render() {
     ),
   );
 }
+
+// open_atlas's own arguments define the first page's search; adopt them so "Load more" repeats
+// that search and the controls show the filters actually applied.
+app.ontoolinput = ({ arguments: args } = {}) => {
+  const query = typeof args?.query === "string" ? args.query : null;
+  const kind = typeof args?.kind === "string" && KINDS.includes(args.kind) ? args.kind : null;
+  state.applied = { query, kinds: kind ? [kind] : [] };
+  state.query = query || "";
+  state.kind = kind || "all";
+};
 
 app.ontoolresult = (result) => {
   const sc = result?.structuredContent;
