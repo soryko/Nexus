@@ -50,6 +50,11 @@ def _load_script_module(name: str):
     try:
         if str(SCRIPTS_DIR) not in sys.path:
             sys.path.insert(0, str(SCRIPTS_DIR))
+        if name == "project_scope":
+            # The gateway and hooks do `from project_scope import ...`. Return that same module
+            # object, or a monkeypatch applied here (the Linux birth-time stand-in) never reaches
+            # the code under test.
+            return importlib.import_module("project_scope")
         spec = importlib.util.spec_from_file_location(f"ag_plugin_{name}", SCRIPTS_DIR / f"{name}.py")
         assert spec and spec.loader
         mod = importlib.util.module_from_spec(spec)
@@ -81,7 +86,8 @@ def test_mcp_gateway_status_diagnostics_and_bound_apps(tmp_path: Path, monkeypat
         scope_mod = _load_script_module("project_scope")
         observed = scope_mod.identity(repo / ".git")
         if observed["birth_time"] is None:
-            monkeypatch.setattr(scope_mod, "identity", lambda _: {**observed, "birth_time": 987654.5})
+            real_identity = scope_mod.identity
+            monkeypatch.setattr(scope_mod, "identity", lambda path: {**real_identity(path), "birth_time": 987654.5})
         gw_mod = _load_script_module("mcp_gateway")
 
         class FakeSession:
@@ -497,7 +503,8 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
         scope_mod = _load_script_module("project_scope")
         observed = scope_mod.identity(repo / ".git")
         if observed["birth_time"] is None:
-            monkeypatch.setattr(scope_mod, "identity", lambda _: {**observed, "birth_time": 112233.5})
+            real_identity = scope_mod.identity
+            monkeypatch.setattr(scope_mod, "identity", lambda path: {**real_identity(path), "birth_time": 112233.5})
         gw_mod = _load_script_module("mcp_gateway")
 
         scope_mod.enroll(repo)

@@ -33,6 +33,10 @@ const state = {
   headVerdicts: {},
   attachNotice: '',
   pollingTimer: null,
+  // Bumped on every workspace change / memory selection; a response captured under an older
+  // value belongs to a workspace or selection the user has left and must not be applied.
+  workspaceGen: 0,
+  selectionGen: 0,
 };
 
 function el(tag, opts = {}, ...children) {
@@ -175,6 +179,7 @@ async function refreshStatusAndActivity({ loadAtlasIfBound = false } = {}) {
 
 async function loadAtlasList({ cursor = null, resetCursor = false } = {}) {
   if (state.status?.state !== 'bound') return;
+  const workspaceGen = state.workspaceGen;
   if (resetCursor) state.atlasPrevCursors = [];
   const params = {
     limit: 20,
@@ -186,6 +191,7 @@ async function loadAtlasList({ cursor = null, resetCursor = false } = {}) {
     apiPost('/api/overview'),
     apiPost('/api/search', { params }),
   ]);
+  if (workspaceGen !== state.workspaceGen) return;
   if (ovRes.ok && ovRes.data) state.overview = ovRes.data;
   if (srRes.ok && srRes.data) {
     state.atlasHits = srRes.data.items || [];
@@ -198,6 +204,7 @@ async function loadAtlasList({ cursor = null, resetCursor = false } = {}) {
 }
 
 async function openMemory(memoryId, revisionId = null, { renderNow = true } = {}) {
+  const selectionGen = ++state.selectionGen;
   state.selectedMemoryId = memoryId;
   state.selectedRevisionId = revisionId;
   state.compareRevision = null;
@@ -208,6 +215,7 @@ async function openMemory(memoryId, revisionId = null, { renderNow = true } = {}
     apiPost('/api/neighborhood', { params: { memory_id: memoryId, revision_id: revisionId, limit: 20 } }),
     apiPost('/api/related', { params: { memory_id: memoryId, limit: 10 } }),
   ]);
+  if (selectionGen !== state.selectionGen) return;
   state.inspection = inspRes.ok ? inspRes.data : null;
   state.history = histRes.ok ? histRes.data : null;
   state.neighborhood = nbrRes.ok ? nbrRes.data : null;
@@ -825,10 +833,19 @@ async function init() {
   if (window.sidecar?.onWorkspaceChange) {
     window.sidecar.onWorkspaceChange(async (uris) => {
       state.workspaceUris = Array.isArray(uris) ? uris : [];
+      state.workspaceGen += 1;
+      state.selectionGen += 1;
       state.selectedMemoryId = null;
       state.selectedRevisionId = null;
       state.inspection = null;
+      state.history = null;
+      state.neighborhood = null;
+      state.related = null;
+      state.compareRevision = null;
+      state.headVerdicts = {};
       state.atlasHits = [];
+      state.atlasCursor = null;
+      state.atlasPrevCursors = [];
       await refreshStatusAndActivity({ loadAtlasIfBound: state.activeTab === 'atlas' });
     });
   }
