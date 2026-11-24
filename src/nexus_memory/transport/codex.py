@@ -304,7 +304,11 @@ def register_hooks(server: MCPServer, service: MemoryService, checkout: Path) ->
         if not fresh:
             return {}
         lines = [f"memory_id={mid} revision_id={rid}" for mid, rid in fresh]
-        return output("UserPromptSubmit", (
+        # The one line the user sees. A count only: identifiers and stored text never leave
+        # developer context. Offered, not recalled: the model may fetch none of them.
+        noun = "candidate" if len(fresh) == 1 else "candidates"
+        shown = {"systemMessage": f"Nexus: {len(fresh)} memory {noun} offered for this prompt."}
+        return shown | output("UserPromptSubmit", (
             "Fetch the candidate for this task with nexus_memory.get using its memory_id. Check the "
             "current record against both the subject and requested operation. When it supplies the "
             "necessary evidence, apply it and stop retrieving. Keep unrelated records and their contents "
