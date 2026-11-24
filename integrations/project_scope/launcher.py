@@ -7,7 +7,22 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # support isolated (-I) entry
-from project_scope import ScopeError, enroll, host_project, resolve
+from project_scope import ScopeError, enroll, host_project, recover, resolve
+
+
+
+def capture_policy():
+    """The Claude hooks launch's capture policy: autonomous unless NEXUS_CAPTURE_POLICY=explicit.
+
+    The plugin's command hooks read the same variable, so the cue, the guard and the Stop check
+    agree. An unrecognised value falls back to explicit, the more conservative mode, and says so.
+    """
+    value = os.environ.get('NEXUS_CAPTURE_POLICY', '').strip().lower()
+    if value in ('', 'autonomous'):
+        return 'autonomous'
+    if value != 'explicit':
+        print('Nexus: unrecognised NEXUS_CAPTURE_POLICY; using explicit.', file=sys.stderr)
+    return 'explicit'
 
 
 def run_atlas(checkout, open_browser):
@@ -40,6 +55,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('enroll').add_argument('checkout', type=Path)
+    recovery = commands.add_parser('recover', help='confirm a device-only change for an enrolled main checkout')
+    recovery.add_argument('checkout', type=Path)
+    recovery.add_argument('--expected-project-id', metavar='UUID', required=True)
     atlas = commands.add_parser('atlas', help='open the read-only Memory Atlas viewer for an enrolled checkout')
     atlas.add_argument('checkout', type=Path)
     atlas.add_argument('--no-browser', action='store_true')
@@ -54,6 +72,9 @@ def main():
     try:
         if args.command == 'enroll':
             print(enroll(args.checkout))
+            return 0
+        if args.command == 'recover':
+            print(recover(args.checkout, args.expected_project_id))
             return 0
         if args.command == 'atlas':
             return run_atlas(args.checkout, not args.no_browser)
@@ -94,7 +115,8 @@ def main():
         if args.command == 'codex' and not v2:
             options.extend(['--codex-project-root', str(project.common.parent)])
         elif hooks:
-            options.extend(['--hook-project-root', str(project.common.parent)])
+            options.extend(['--hook-project-root', str(project.common.parent),
+                            '--capture-policy', capture_policy()])
         else:
             options.extend(['--repo', str(project.checkout)])
         os.chdir(project.checkout)

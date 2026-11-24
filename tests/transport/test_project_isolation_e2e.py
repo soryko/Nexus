@@ -356,7 +356,7 @@ def test_neutral_antigravity_stdio_resolves_each_call_and_rejects_a_workspace_sw
         assert len(before) == 1
         async with host() as client:
             advertised = await client.list_tools()
-            assert {t.name for t in advertised.tools} == {"record", "get", "revise", "forget", "history", "search", "status"}
+            assert {t.name for t in advertised.tools} == {"record", "get", "revise", "forget", "history", "search", "spaces", "status", "compare_at_head"}
             await denied(client, "record", {"content": "unboundwrite", "idempotency_key": "orphan"})
             assert set(scope_dir.glob("*.sqlite3")) == before
             roots[:] = [a.as_uri()]

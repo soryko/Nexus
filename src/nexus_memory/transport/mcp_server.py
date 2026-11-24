@@ -16,6 +16,7 @@ from mcp.server.context import ServerRequestContext
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel, ConfigDict, Field
 
+from nexus_memory.activity import ActivityJournal, ActivityMiddleware
 from nexus_memory.domain.errors import SCOPED_ERROR_MESSAGES, NexusError, OperationFailure
 from nexus_memory.domain.models import (
     MAX_REFERENCE_FILTER_VALUES,
@@ -27,10 +28,13 @@ from nexus_memory.domain.models import (
     SearchQuery,
     StoreStatus,
     WriteReceipt,
+    space_tag,
+    with_space,
 )
 from nexus_memory.git import GitCli, bind_repository
 from nexus_memory.memory import MemoryService
 from nexus_memory.storage import SQLiteRepository
+from nexus_memory.transport.mcp_apps import INLINE_CARD_META, register_mcp_apps
 from nexus_memory.transport.usage import UnsafeUsageLog, UsageLog, UsageMiddleware
 
 Kind = Literal["observation", "decision", "constraint", "procedure", "failure"]
@@ -91,10 +95,10 @@ def _launch_policy(args: argparse.Namespace) -> _InstructionPolicy:
         return _OFF
     # A hook-enabled launch (--hook-project-root, formerly --codex-project-root) opts into explicit
     # capture before initialization, including when SessionStart and recall hooks never run.
-    hooked = getattr(args, "hook_project_root", None) or getattr(args, "codex_project_root", None)
-    if args.capture_policy == "autonomous" and hooked is None:
-        return _AUTONOMOUS
-    return _EXPLICIT
+    # A hook-enabled launch used to force explicit capture. It now honours the requested policy:
+    # the launcher chooses it (the Claude hooks launch defaults to autonomous, Codex stays explicit),
+    # and the hook guard and session cue follow the same choice.
+    return _AUTONOMOUS if args.capture_policy == "autonomous" else _EXPLICIT
 
 
 def _service_version() -> str:
@@ -120,6 +124,14 @@ class ReceiptOutput(BaseModel):
     operation_id: str
     durable_seq: int
     operation: str
+
+
+class HeadComparisonOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    outcome: Literal["Matches at HEAD", "Changed at HEAD", "Missing at HEAD", "Cannot check"]
+    reference_commit_oid: str | None
+    head_commit_oid: str | None
+    note: str
 
 
 class ReferenceArg(BaseModel):
@@ -193,6 +205,18 @@ class StatusOutput(BaseModel):
     usage_log: Literal["off", "on", "failing"]
     usage_events_written: int | None
     usage_write_failures: int | None
+
+
+class SpaceOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    space: str
+    memories: int
+    last_updated: str
+
+
+class SpacesOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    spaces: list[SpaceOutput]
 
 
 class SearchHitOutput(BaseModel):
@@ -343,13 +367,21 @@ def create_server(
     instructions: bool = True,
     capture_policy: _InstructionPolicy = _EXPLICIT,
     usage: UsageLog | None = None,
-    database: Path | None = None,
+    database: Path | Callable[[], Path | None] | None = None,
+    activity_journal: ActivityJournal | Callable[[], ActivityJournal | None] | None = None,
+    enable_mcp_apps: bool = False,
 ) -> MCPServer:
+    card_meta = INLINE_CARD_META if enable_mcp_apps else None
     policy = capture_policy if instructions else _OFF
     treatment = policy.metadata()
     validation = SafeToolValidation()
-    # Usage logging is outermost, so it records the result after validation has made error text safe.
-    middleware: list[Any] = [UsageMiddleware(usage), validation] if usage is not None else [validation]
+    # Usage and activity logging sit outside validation, recording sanitized results and errors.
+    middleware: list[Any] = []
+    if usage is not None:
+        middleware.append(UsageMiddleware(usage))
+    if activity_journal is not None:
+        middleware.append(ActivityMiddleware(activity_journal))
+    middleware.append(validation)
     server = MCPServer(
         name="nexus-memory",
         description="Durable exact memory with launch-bound namespace and actor scope.",
@@ -357,7 +389,7 @@ def create_server(
         middleware=middleware,
     )
     validation.bind(server)
-    fingerprint = database_location_fingerprint(database) if database is not None else None
+    static_fingerprint = database_location_fingerprint(database) if isinstance(database, Path) else None
     service_version = _service_version()
 
     @server.tool(
@@ -379,10 +411,14 @@ def create_server(
         source_uri: str | None = Field(default=None, max_length=2048),
         snapshot: str | None = Field(default=None, max_length=256),
         references: list[ReferenceArg] = Field(default_factory=list, max_length=MAX_REFERENCES),
+        space: str | None = Field(default=None, max_length=58, description=(
+            "Topic space to file this memory in: a short lowercase slug such as auth or release. "
+            "Shorthand for the tag space/<slug>; replaces any space tag in tags. A memory has at most one space. "
+            "Call spaces first and reuse one that fits; name a new space only when none does.")),
     ) -> ReceiptOutput:
         return _run(
             lambda: service.record(
-                MemoryInput(content, kind, tags, source_uri, snapshot, _references(references)), idempotency_key
+                MemoryInput(content, kind, with_space(tags, space), source_uri, snapshot, _references(references)), idempotency_key
             ),
             ReceiptOutput,
         )
@@ -390,10 +426,26 @@ def create_server(
     @server.tool(
         description="Retrieve the current or an immutable historical revision by exact identifier.",
         annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False),
+        meta=card_meta,
         structured_output=True,
     )
     def get(memory_id: str = Field(min_length=1), revision_id: str | None = None) -> MemoryOutput:
         return _run(lambda: service.get(memory_id, revision_id), MemoryOutput)
+
+    @server.tool(
+        description=("Compare at HEAD, only on explicit user request: excludes working tree and index. "
+                     "Compares the exact path, file kind and object ID in the bound checkout's commit; "
+                     "does not verify permissions, surrounding code, or a memory's truth or relevance."),
+        annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False),
+        meta=card_meta,
+        structured_output=True,
+    )
+    def compare_at_head(
+        memory_id: str = Field(min_length=1),
+        revision_id: str = Field(min_length=1),
+        reference_ordinal: int = Field(ge=0, strict=True, description="Zero-based index in get's references for this revision"),
+    ) -> HeadComparisonOutput:
+        return _run(lambda: service.compare_at_head(memory_id, revision_id, reference_ordinal), HeadComparisonOutput)
 
     @server.tool(
         description=(
@@ -415,12 +467,16 @@ def create_server(
         source_uri: str | None = Field(default=None, max_length=2048),
         snapshot: str | None = Field(default=None, max_length=256),
         references: list[ReferenceArg] = Field(default_factory=list, max_length=MAX_REFERENCES),
+        space: str | None = Field(default=None, max_length=58, description=(
+            "Topic space to file this memory in: a short lowercase slug such as auth or release. "
+            "Shorthand for the tag space/<slug>; replaces any space tag in tags. A memory has at most one space. "
+            "Call spaces first and reuse one that fits; name a new space only when none does.")),
     ) -> ReceiptOutput:
         return _run(
             lambda: service.revise(
                 memory_id,
                 expected_revision_id,
-                MemoryInput(content, kind, tags, source_uri, snapshot, _references(references)),
+                MemoryInput(content, kind, with_space(tags, space), source_uri, snapshot, _references(references)),
                 idempotency_key,
             ),
             ReceiptOutput,
@@ -501,11 +557,14 @@ def create_server(
         reference_path_prefix: str | None = Field(default=None, description="at most 1024 bytes"),
         reference_commits: tuple[str, ...] | None = Field(
             default=None, description=f"at most {MAX_REFERENCE_FILTER_VALUES} object ids"),
+        space: str | None = Field(default=None, max_length=58,
+                                  description="Only memories filed in this space; shorthand for tags_all space/<slug>"),
     ) -> SearchOutput:
         return _run(
             lambda: service.search(
                 SearchQuery(
-                    query, advanced, tags_all, tags_any, tuple(kinds), limit, cursor,
+                    query, advanced, (*tags_all, space_tag(space)) if space is not None else tags_all,
+                    tags_any, tuple(kinds), limit, cursor,
                     repository, reference_paths, reference_path_prefix, reference_commits,
                 )
             ),
@@ -536,6 +595,7 @@ def create_server(
             "diagnostic digest, never the path), and whether instructions and the usage log are on."
         ),
         annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False),
+        meta=card_meta,
         structured_output=True,
     )
     def status() -> StatusOutput:
@@ -546,12 +606,17 @@ def create_server(
             else:
                 log_state = "failing" if usage.write_failures else "on"
                 written, failures = usage.events_written, usage.write_failures
+            if callable(database):
+                resolved_db = database()
+                resolved_fingerprint = database_location_fingerprint(resolved_db) if resolved_db is not None else None
+            else:
+                resolved_fingerprint = static_fingerprint
             return {
                 **stored,
                 "namespace": service.scope.namespace,
                 "actor": service.scope.actor,
                 "service_version": service_version,
-                "database_location_fingerprint": fingerprint,
+                "database_location_fingerprint": resolved_fingerprint,
                 **treatment,
                 "usage_log": log_state,
                 "usage_events_written": written,
@@ -565,10 +630,30 @@ def create_server(
         except Exception:
             return _error("internal_error", "operation failed")
 
+    @server.tool(
+        description=(
+            "List the topic spaces live memories in this project are filed in, with how many memories each holds "
+            "and when one was last written, most recent first. Spaces are created implicitly by recording with "
+            "space; check this list first so related memories share one space instead of near-duplicate names."
+        ),
+        annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False),
+        structured_output=True,
+    )
+    def spaces() -> SpacesOutput:
+        try:
+            return SpacesOutput(spaces=[SpaceOutput.model_validate(asdict(item)) for item in service.spaces()])
+        except NexusError as error:
+            return _error(error.code, str(error))
+        except Exception:
+            return _error("internal_error", "operation failed")
+
+    if enable_mcp_apps:
+        register_mcp_apps(server, service, capture_policy=policy.name)
+
     if codex_checkout is not None:
         from nexus_memory.transport.codex import register_hooks
 
-        register_hooks(server, service, codex_checkout)
+        register_hooks(server, service, codex_checkout, autonomous=capture_policy.name == "autonomous")
     return server
 
 
@@ -667,6 +752,8 @@ def _parser() -> argparse.ArgumentParser:
                         help="Do not send the server instructions (for a control run with the same build)")
     parser.add_argument("--usage-log", type=Path, default=None,
                         help="Append one content-free JSON line per tool call to this private file")
+    parser.add_argument("--mcp-apps", action="store_true",
+                        help="Expose SEP-1865 ui:// MCP App resources and tool metadata")
     return parser
 
 
@@ -781,7 +868,14 @@ def main(argv: list[str] | None = None) -> int:
         if hasattr(signal, "SIGTERM"):
             signal.signal(signal.SIGTERM, lambda signum, frame: _stop_and_exit(usage))
     try:
-        create_server(service, codex_checkout=codex_checkout, capture_policy=policy, usage=usage, database=db_path).run()
+        create_server(
+            service,
+            codex_checkout=codex_checkout,
+            capture_policy=policy,
+            usage=usage,
+            database=db_path,
+            enable_mcp_apps=args.mcp_apps,
+        ).run()
     finally:
         _write_stop(usage, "end_of_input")
         _close(usage)

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "nexus-memory",
+  "displayName": "Nexus Memory",
+  "version": "0.2.0",
+  "description": "Local SQLite project memory with Git-verified references, APFS drift diagnostics, and read-only Memory Atlas & Activity sidecars.",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "Check Nexus Memory status and verify whether this workspace is enrolled and healthy",
+    "Search Nexus project memory for prior architectural decisions, constraints, or known failures",
+    "Verify a recorded Nexus Memory Git reference against HEAD and open the read-only Atlas"
+  ],
+  "author": {
+    "name": "Sory Kora / Cerebros",
+    "url": "https://github.com/soryko/Nexus"
+  },
+  "homepage": "https://github.com/soryko/Nexus",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/soryko/Nexus.git"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "keywords": [
+    "nexus-memory",
+    "memory",
+    "sqlite",
+    "mcp",
+    "mcp-app",
+    "git-verification",
+    "local-first"
+  ]
+}

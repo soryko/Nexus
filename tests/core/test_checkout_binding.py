@@ -240,6 +240,17 @@ def test_the_cli_starts_with_a_registered_checkout_and_a_git_that_cannot_answer(
 # --- 3: what a degraded launch means ---------------------------------------------------------
 
 
+@pytest.mark.parametrize("marker", ["gitdir", "commondir"])
+def test_malformed_git_marker_refuses_discovery(tmp_path: Path, marker: str) -> None:
+    entry = tmp_path / ".git"
+    if marker == "gitdir":
+        entry.write_bytes(b"gitdir: \xff\n")
+    else:
+        entry.mkdir()
+        (entry / "commondir").write_bytes(b"\xff\n")
+    assert locate_without_git(tmp_path) is None
+
+
 def test_without_git_a_subdirectory_binds_the_same_identity_as_with_git(tmp_path: Path) -> None:
     """`--repo repo/sub` is one argument, and it must not name two different bindings.
 

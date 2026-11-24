@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from nexus_memory.transport.codex import SESSION_CUE
+from nexus_memory.transport.codex import AUTONOMOUS_CUE, SESSION_CUE
 
 PLUGIN = Path(__file__).parents[2] / "integrations" / "claude-plugin"
 
@@ -26,9 +26,12 @@ def test_manifest_names_the_plugin_and_bundles_no_server() -> None:
 
 def test_hook_wiring_events_tools_inputs_and_timeouts() -> None:
     config = hooks()
-    assert set(config) == {"SessionStart", "UserPromptSubmit", "PreToolUse"}
-    every = [h for groups in config.values() for group in groups for h in group["hooks"]]
+    assert set(config) == {"SessionStart", "UserPromptSubmit", "PreToolUse", "Stop"}
+    # Per-prompt and per-tool hooks stay fast; the Stop check may run git and gets a little more.
+    every = [h for event, groups in config.items() if event != "Stop" for group in groups for h in group["hooks"]]
     assert all(h["timeout"] <= 2 for h in every)
+    stop, = config["Stop"][0]["hooks"]
+    assert stop["type"] == "command" and stop["timeout"] <= 5 and "stop.py" in stop["command"]
     start, = config["SessionStart"][0]["hooks"]
     assert start["type"] == "command"  # mcp_tool is unavailable at SessionStart (observed, 2.1.316)
     recall, = config["UserPromptSubmit"][0]["hooks"]
@@ -54,6 +57,7 @@ def test_session_start_cue_is_the_engines_fixed_text() -> None:
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
     assert module.CUE == SESSION_CUE
+    assert module.AUTONOMOUS_CUE == AUTONOMOUS_CUE
 
 
 FAKE_SCOPE = '''
@@ -76,9 +80,10 @@ def fake_bin(tmp_path: Path) -> Path:
     return bin_dir
 
 
-def run_script(name: str, tmp_path: Path, cwd: str, bin_dir: Path | None) -> str:
+def run_script(name: str, tmp_path: Path, cwd: str, bin_dir: Path | None, **extra: str) -> str:
     import os
-    env = {k: v for k, v in os.environ.items() if k != "NEXUS_SCOPE_BIN"}
+    env = {k: v for k, v in os.environ.items() if k not in ("NEXUS_SCOPE_BIN", "NEXUS_CAPTURE_POLICY")}
+    env.update(extra)
     env["NEXUS_SCOPE_BIN"] = str(bin_dir or tmp_path / "missing")
     env["CLAUDE_PROJECT_DIR"] = cwd
     return subprocess.run([sys.executable, "-I", str(PLUGIN / "hooks" / name)],
@@ -90,7 +95,11 @@ def test_session_start_prints_the_cue_only_for_an_enrolled_project(tmp_path: Pat
     bin_dir = fake_bin(tmp_path)
     out = json.loads(run_script("session_start.py", tmp_path, "/x/enrolled", bin_dir))
     assert out["hookSpecificOutput"]["hookEventName"] == "SessionStart"
-    assert out["hookSpecificOutput"]["additionalContext"] == SESSION_CUE
+    assert out["hookSpecificOutput"]["additionalContext"] == AUTONOMOUS_CUE  # the default policy
+    for value, cue in (("explicit", SESSION_CUE), ("Explicit ", SESSION_CUE), ("bogus", SESSION_CUE),
+                       ("autonomous", AUTONOMOUS_CUE), ("", AUTONOMOUS_CUE)):
+        out = json.loads(run_script("session_start.py", tmp_path, "/x/enrolled", bin_dir, NEXUS_CAPTURE_POLICY=value))
+        assert out["hookSpecificOutput"]["additionalContext"] == cue, value
     for cwd in ("/x/other", "/x/broken"):
         assert run_script("session_start.py", tmp_path, cwd, bin_dir) == ""
     assert run_script("session_start.py", tmp_path, "/x/enrolled", None) == ""  # resolver absent: unknown, silent
@@ -109,8 +118,55 @@ def test_status_reports_three_states_and_never_enrols(tmp_path: Path) -> None:
 
 def test_skill_and_command_carry_the_policy_and_cannot_enrol() -> None:
     skill = (PLUGIN / "skills" / "nexus-memory" / "SKILL.md").read_text()
-    for needle in ("IDs only", "Fetch only admitted IDs", "Nexus explore:", "untrusted", "Save only when the user asks"):
+    for needle in ("Search before decisions", "untrusted history", "Record on your own judgment",
+                   "File each record in a space", "`spaces`", "`forget` stays explicit-only", "NO_MEMORY",
+                   "NEXUS_CAPTURE_POLICY=explicit", "Nexus explore:"):
         assert needle in skill
     command = (PLUGIN / "commands" / "status.md").read_text()
     assert "allowed-tools: Bash(python3 -I:*)" in command
     assert "mcp__" not in command and "launcher" not in command
+
+
+def test_project_and_enrollment_refuse_a_declared_dir_in_another_checkout(tmp_path: Path, monkeypatch) -> None:
+    # The Stop hook saves into scope.project(cwd), so it must apply the same CLAUDE_PROJECT_DIR
+    # corroboration as enrollment(): a declared directory in another checkout disables both.
+    import importlib.util
+    import types
+    from types import SimpleNamespace
+
+    fake = types.ModuleType("project_scope")
+
+    class ScopeError(ValueError):
+        pass
+
+    def resolve(workspace):
+        parts = Path(workspace).parts
+        if len(parts) < 3 or parts[1] != "repos":
+            raise ScopeError("not enrolled")
+        return SimpleNamespace(checkout=Path(*parts[:3]))
+
+    fake.ScopeError, fake.resolve = ScopeError, resolve
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "project_scope.py").write_text("# placeholder: the module comes from sys.modules\n")
+    monkeypatch.setitem(sys.modules, "project_scope", fake)
+    monkeypatch.setenv("NEXUS_SCOPE_BIN", str(bin_dir))
+    monkeypatch.delenv("NEXUS_SCOPE_HOME", raising=False)
+    spec = importlib.util.spec_from_file_location("nexus_claude_scope_under_test", PLUGIN / "hooks" / "scope.py")
+    scope = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(scope)
+
+    cwd = "/repos/a/src"
+    for declared in (None, "/repos/a", "/repos/a/src"):
+        if declared is None:
+            monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+        else:
+            monkeypatch.setenv("CLAUDE_PROJECT_DIR", declared)
+        assert scope.project(cwd).checkout == Path("/repos/a"), declared
+        assert scope.enrollment(cwd) == "enrolled", declared
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", "/repos/b")
+    assert scope.project(cwd) is None
+    assert scope.enrollment(cwd) == "not-enrolled"
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", "/elsewhere")  # declared dir resolves nowhere
+    assert scope.project(cwd) is None
+    assert scope.enrollment(cwd) == "not-enrolled"

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "nexus-memory": {
+      "command": "node",
+      "args": [
+        "${PLUGIN_ROOT}/scripts/launch.mjs",
+        "mcp"
+      ]
+    }
+  }
+}

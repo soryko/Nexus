@@ -52,7 +52,11 @@ except ImportError:  # pragma: no cover - older SDKs have no per-request envelop
 FORMAT_VERSION = 2
 #: The tools this build serves. Any other name is logged as "unknown", so a caller cannot write
 #: arbitrary text into the log through the tool name.
-KNOWN_TOOLS = frozenset({"record", "get", "revise", "forget", "search", "history", "status"})
+KNOWN_TOOLS = frozenset({
+    "record", "get", "revise", "forget", "search", "history", "status", "compare_at_head",
+    "nexus_session_start", "nexus_recall", "nexus_pre_tool",
+    "codex_session_start", "codex_recall", "task_pre_tool_use",
+})
 #: Search can return 100 hits; logging every identifier would make one line several kilobytes.
 MAX_HIT_IDS = 20
 _CLIENT_FIELD_LIMIT = 64

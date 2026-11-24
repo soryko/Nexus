@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Literal
 
 from .errors import InvalidInput, InvalidReference
 
@@ -14,6 +15,11 @@ DIGEST_VERSION = 1
 # computes it; the frozen version-1 function is never edited.
 REFERENCE_DIGEST_VERSION = 2
 TAG = re.compile(r"[a-z0-9][a-z0-9._/-]{0,63}\Z")
+# A space is a project-local topic bucket that the agent names and creates itself. It is stored
+# as one ordinary tag, so it needs no schema change, revise carries it like any other tag, and
+# it never crosses the namespace boundary. Prefix plus the longest slug is exactly TAG's limit.
+SPACE_PREFIX = "space/"
+SPACE = re.compile(r"[a-z0-9][a-z0-9._-]{0,57}\Z")
 
 # Object formats git can report, with the OID width each one produces. Recorded at bind,
 # never assumed: a fixed 40-hex rule would reject every SHA-256 repository.
@@ -154,6 +160,14 @@ class VerifiedReference:
 
 
 @dataclass(frozen=True, slots=True)
+class HeadComparison:
+    outcome: Literal["Matches at HEAD", "Changed at HEAD", "Missing at HEAD", "Cannot check"]
+    reference_commit_oid: str | None = None
+    head_commit_oid: str | None = None
+    note: str = "excludes working tree and index"
+
+
+@dataclass(frozen=True, slots=True)
 class RepositoryBinding:
     """The persisted identity a server process is bound to. Never selectable by a tool call."""
 
@@ -186,6 +200,10 @@ class MemoryInput:
             raise InvalidInput("tags must be strings") from error
         if len(normalized) > 16 or any(not TAG.fullmatch(tag) for tag in normalized):
             raise InvalidInput("invalid tags")
+        # No space rule here: tags valid before spaces existed (space/auth/api, two space/ tags)
+        # must stay valid, or an identical retry and a tag-preserving revise of a stored record
+        # would fail. One space per memory is enforced by the space argument (with_space); a tag
+        # that is not a well-formed space tag is an ordinary tag.
         if self.source_uri is not None:
             _valid_utf8(self.source_uri, "source_uri", 2048)
         if self.snapshot is not None:
@@ -233,6 +251,59 @@ class StoreStatus:
     latest_durable_seq: int
     repository_id: str | None = None
     verification: str = "unavailable"
+
+
+def space_tag(space: object) -> str:
+    """The tag for a space name, normalized the way tags are."""
+    if not isinstance(space, str):
+        raise InvalidInput("space must be a string")
+    name = space.strip().lower()
+    if not SPACE.fullmatch(name):
+        raise InvalidInput("space must be a slug of lowercase letters, digits, '.', '_' or '-', at most 58 characters")
+    return SPACE_PREFIX + name
+
+
+def _space_name(tag: object) -> str | None:
+    """The space a tag files a memory in, or None when it is not a well-formed space tag."""
+    if not isinstance(tag, str):
+        return None
+    normalized = tag.strip().lower()
+    if not normalized.startswith(SPACE_PREFIX):
+        return None
+    name = normalized[len(SPACE_PREFIX):]
+    return name if SPACE.fullmatch(name) else None
+
+
+def with_space(tags: tuple[str, ...], space: str | None) -> tuple[str, ...]:
+    """Tags with the given space replacing any space already present; unchanged when space is None.
+
+    Only well-formed space tags are replaced. Anything else under the prefix (space/auth/api,
+    written before spaces existed) is an ordinary tag and is kept.
+    """
+    if space is None:
+        return tuple(tags)
+    tag = space_tag(space)
+    kept = tuple(t for t in tags if _space_name(t) is None)
+    return (*kept, tag)
+
+
+def spaces_of(tags: tuple[str, ...]) -> tuple[str, ...]:
+    """Every space the tags file a memory in, in tag order. More than one only for tags written directly."""
+    return tuple(name for name in map(_space_name, tags) if name is not None)
+
+
+def space_of(tags: tuple[str, ...]) -> str | None:
+    """The first space the tags file a memory in, or None."""
+    found = spaces_of(tags)
+    return found[0] if found else None
+
+
+@dataclass(frozen=True, slots=True)
+class SpaceSummary:
+    """One space in the bound scope: live (unforgotten) memories filed in it and the newest write."""
+    space: str
+    memories: int
+    last_updated: str
 
 
 REPOSITORY_ANY = "any"

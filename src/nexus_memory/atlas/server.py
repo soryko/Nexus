@@ -122,7 +122,7 @@ class AtlasServer(ThreadingHTTPServer):
                 self.owner_key = None
                 session = self.owner_session
             else:
-                if self._secret_used or not hmac.compare_digest(key.encode(), self.launch_secret.encode()):
+                if self._secret_used or not key.isascii() or not hmac.compare_digest(key, self.launch_secret):
                     return None
                 self._secret_used = True
                 session = self._session

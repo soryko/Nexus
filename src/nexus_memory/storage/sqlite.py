@@ -45,9 +45,11 @@ from nexus_memory.domain.models import (
     SearchHit,
     SearchPage,
     SearchQuery,
+    SpaceSummary,
     StoreStatus,
     VerifiedReference,
     WriteReceipt,
+    spaces_of,
 )
 
 from nexus_memory.spaces.migration import inventory_partitions
@@ -220,16 +222,21 @@ class SQLiteRepository:
         return repository
 
     @staticmethod
+    def _recency_marked(connection: sqlite3.Connection) -> bool:
+        return bool(connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='data_repairs'"
+        ).fetchone() and connection.execute(
+            "SELECT 1 FROM data_repairs WHERE name='v1-head-recency'"
+        ).fetchone())
+
+    @staticmethod
     def _require_recency_repaired(connection: sqlite3.Connection) -> None:
         """A store whose original head-index backfill was never repaired lists newest-first wrongly.
 
         The repair is a write that only a normal open performs, so a viewer refuses such a store
         instead of showing a misleading order.
         """
-        marked = connection.execute(
-            "SELECT count(*) FROM sqlite_master WHERE name='data_repairs'").fetchone()[0] and connection.execute(
-            "SELECT count(*) FROM data_repairs WHERE name='v1-head-recency'").fetchone()[0]
-        if not marked and connection.execute("SELECT count(*) FROM head_index WHERE durable_seq=0").fetchone()[0]:
+        if not SQLiteRepository._recency_marked(connection) and connection.execute("SELECT count(*) FROM head_index WHERE durable_seq=0").fetchone()[0]:
             raise UnsupportedSchema("this store has a pending upgrade; open it once with Nexus before viewing it")
 
     def _connect_read_only(self) -> sqlite3.Connection:
@@ -411,13 +418,6 @@ class SQLiteRepository:
             "SELECT count(*) FROM sqlite_master WHERE name='history_profile'"
         ).fetchone()[0]
         if not exists:
-            if self.history_profile == "none":
-                return "none"
-            connection.execute(
-                "CREATE TABLE history_profile("
-                "id INTEGER PRIMARY KEY CHECK(id = 1), profile TEXT NOT NULL)"
-            )
-            connection.execute("INSERT INTO history_profile(id,profile) VALUES(1,'none')")
             return "none"
         return connection.execute("SELECT profile FROM history_profile WHERE id=1").fetchone()[0]
 
@@ -458,7 +458,11 @@ class SQLiteRepository:
                 "content_rowid='rowid'" + self._history_tokenizer() + ")"
             )
             self._backfill_history(connection)
-        connection.execute("UPDATE history_profile SET profile=? WHERE id=1", (self.history_profile,))
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS history_profile("
+            "id INTEGER PRIMARY KEY CHECK(id = 1), profile TEXT NOT NULL)"
+        )
+        connection.execute("INSERT OR REPLACE INTO history_profile(id,profile) VALUES(1,?)", (self.history_profile,))
 
     def _history_tokenizer_matches(self, connection: sqlite3.Connection) -> bool:
         """Whether the existing historical index was built under the current tokenizer.
@@ -649,6 +653,14 @@ class SQLiteRepository:
             raise UnsupportedSchema("database schema is newer than this application")
         return version
 
+    def _open_is_current(self, db: sqlite3.Connection) -> bool:
+        """Inspect one read snapshot without creating even the optional profile table."""
+        return (db.execute("PRAGMA user_version").fetchone()[0] == self._target_schema_version
+                and self._recency_marked(db)
+                and self._stored_profile(db) == self.index_profile
+                and self._stored_history_profile(db) == self.history_profile
+                and (self.history_profile == "none" or self._history_tokenizer_matches(db)))
+
     def _migrate(self) -> None:
         connection = None
         try:
@@ -656,6 +668,13 @@ class SQLiteRepository:
             connection = self._connect()
             self._supported_version(connection)  # Refuse before changing journal mode.
             self._establish_wal(connection)
+            connection.execute("BEGIN")
+            current = self._open_is_current(connection)
+            connection.commit()
+            if current:
+                return
+            # Never upgrade a stale WAL snapshot. Read the version and all maintenance
+            # state afresh under the writer lock in case another opener got here first.
             connection.execute("BEGIN IMMEDIATE")
             version = self._supported_version(connection)  # Recheck under the write lock.
             if version == 0:
@@ -1773,6 +1792,42 @@ class SQLiteRepository:
             raise
         except (sqlite3.Error, UnicodeError, ValueError) as error:
             raise StorageIntegrityError("storage operation failed") from error
+
+    def spaces(self, scope: Scope) -> tuple[SpaceSummary, ...]:
+        """Spaces in use by live memories, read from authoritative current revisions.
+
+        Read from revisions rather than head_index so a pending projection cannot hide a space
+        or keep a forgotten one alive. Ordered by most recent write, then name.
+        """
+        db = None
+        try:
+            db = self._connect()
+            with closing(db):
+                db.execute("BEGIN")
+                rows = db.execute(
+                    "SELECT r.tags_json,r.created_at FROM memories m JOIN revisions r"
+                    " ON r.namespace=m.namespace AND r.actor=m.actor AND r.memory_id=m.memory_id"
+                    " AND r.revision_id=m.current_revision_id"
+                    " WHERE m.namespace=? AND m.actor=? AND m.tombstoned=0",
+                    (scope.namespace, scope.actor),
+                ).fetchall()
+                db.commit()
+        except sqlite3.Error as error:
+            raise StorageIntegrityError("storage operation failed") from error
+        counts: dict[str, list] = {}
+        for tags_json, created_at in rows:
+            try:
+                names = spaces_of(tuple(json.loads(tags_json)))
+            except (ValueError, TypeError):
+                continue
+            # A memory tagged directly with two spaces counts in both, as the space filter in
+            # search finds it in both; malformed space/ tags from before spaces count in none.
+            for name in dict.fromkeys(names):
+                entry = counts.setdefault(name, [0, created_at])
+                entry[0] += 1
+                entry[1] = max(entry[1], created_at)
+        ordered = sorted(counts.items(), key=lambda item: (item[1][1], item[0]), reverse=True)
+        return tuple(SpaceSummary(name, count, latest) for name, (count, latest) in ordered)
 
     def status(self, scope: Scope) -> StoreStatus:
         db = None

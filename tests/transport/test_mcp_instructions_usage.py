@@ -529,13 +529,27 @@ def test_capture_treatment_matches_initialization_status_and_every_log_line(tmp_
     assert {(e["capture_policy"], e["instructions_digest"]) for e in _events(log)} == {(expected, digest)}
 
 
-def test_codex_project_launch_selects_explicit_before_any_hook_is_available(tmp_path: Path) -> None:
+def test_usage_recognizes_hooks_without_copying_their_context() -> None:
+    hooks = {"nexus_session_start", "nexus_recall", "nexus_pre_tool",
+             "codex_session_start", "codex_recall", "task_pre_tool_use"}
+    assert hooks <= usage_module.KNOWN_TOOLS
+    assert "arbitrary-client-input" not in usage_module.KNOWN_TOOLS
+    for hook in hooks:
+        assert usage_module._identifiers(hook, {"hookSpecificOutput": {"additionalContext": BODY}}) == {}
+
+
+def test_hooked_launch_honours_the_requested_policy_before_any_hook_is_available(tmp_path: Path) -> None:
     from argparse import Namespace
     from nexus_memory.transport import mcp_server
 
-    # The Codex adapter contributes this parser field. Exercise the same selector before
-    # there is any client identity, Git verification or hook registration to consult.
-    args = Namespace(codex_project_root=tmp_path, capture_policy="autonomous", no_instructions=False)
+    # A hook-enabled launch no longer forces explicit: the launcher chooses (Claude hooks default
+    # to autonomous, Codex passes nothing and gets the parser's explicit default). Exercise the
+    # selector before there is any client identity, Git verification or hook registration.
+    args = Namespace(hook_project_root=tmp_path, capture_policy="autonomous", no_instructions=False)
+    assert mcp_server._launch_policy(args).name == "autonomous"
+    args.capture_policy = "explicit"
     assert mcp_server._launch_policy(args).name == "explicit"
     args.no_instructions = True
     assert mcp_server._launch_policy(args).name == "off"
+    parsed = mcp_server._parser().parse_args(["--namespace", "n", "--hook-project-root", str(tmp_path)])
+    assert parsed.capture_policy == "explicit"  # what a Codex launch, which passes no policy, gets

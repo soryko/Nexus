@@ -106,6 +106,14 @@ def test_stdio_reference_round_trip_and_no_binding_argument(tmp_path: Path) -> N
                 "checked_at": fetched.structured_content["references"][0]["checked_at"],
                 "evidence": ["commit_resolved", "path_resolved", "content_unverified"],
             }]
+            compared = await client.call_tool("compare_at_head", {
+                "memory_id": fetched.structured_content["memory_id"],
+                "revision_id": fetched.structured_content["revision_id"], "reference_ordinal": 0,
+            })
+            assert compared.structured_content == {
+                "outcome": "Matches at HEAD", "reference_commit_oid": head, "head_commit_oid": head,
+                "note": "excludes working tree and index",
+            }
             searched = await client.call_tool("search", {"query": "retry"})
             assert searched.structured_content["hits"][0]["references"][0]["commit_oid"] == head
 
