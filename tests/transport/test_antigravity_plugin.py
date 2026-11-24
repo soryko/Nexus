@@ -764,3 +764,24 @@ def test_mcp_gateway_host_missing_roots_and_pinned_workspace_mode(
         anyio.run(check_unattested)
     finally:
         os.umask(prev_umask)
+
+
+def test_gateway_launcher_commands_name_the_main_checkout(tmp_path: Path) -> None:
+    import shlex
+
+    scope_mod = _load_script_module("project_scope")
+    gw_mod = _load_script_module("mcp_gateway")
+    main = tmp_path / "main"
+    linked = tmp_path / "linked"
+    pid = "00000000-0000-4000-8000-000000000001"
+    for state, key in (("device_drift", "recover_command"), ("unenrolled", "enroll_command")):
+        diag = scope_mod.ScopeDiagnosis(
+            state=state,
+            checkout=linked,
+            common=main / ".git",
+            project_id=pid if state == "device_drift" else None,
+            message=state,
+        )
+        result = gw_mod._diagnostic_status_result(scope_state=state, message=state, diag=diag)
+        argv = shlex.split(result.structured_content[key])
+        assert Path(argv[4]) == main, (state, argv)

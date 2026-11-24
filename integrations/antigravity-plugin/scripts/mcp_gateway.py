@@ -109,8 +109,11 @@ def _diagnostic_status_result(
     project_id = diag.project_id if diag else None
     recorded_device = diag.recorded_device if diag else None
     observed_device = diag.observed_device if diag else None
-    recover_command = _launcher_cmd("device_drift", diag.checkout, project_id) if (diag and scope_state == "device_drift") else None
-    enroll_command = _launcher_cmd("unenrolled", diag.checkout, None) if (diag and scope_state == "unenrolled") else None
+    # enroll and recover accept only the main checkout (main_common), which is the common Git
+    # directory's parent; diag.checkout is the active, possibly linked, worktree.
+    main_checkout = diag.common.parent if (diag and diag.common is not None) else None
+    recover_command = _launcher_cmd("device_drift", main_checkout, project_id) if scope_state == "device_drift" else None
+    enroll_command = _launcher_cmd("unenrolled", main_checkout, None) if scope_state == "unenrolled" else None
 
     payload = {
         "scope_state": scope_state,

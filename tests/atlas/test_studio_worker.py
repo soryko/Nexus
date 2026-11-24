@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shlex
 import os
 import subprocess
 import sys
@@ -123,6 +124,17 @@ def test_status_diagnosis_across_unenrolled_empty_drift_and_ambiguous(studio_env
     assert drift["data"]["observed_device"] == reg["projects"][key]["device"] - 3
     assert "recover" in drift["data"]["recover_command"]
     assert pid in drift["data"]["recover_command"]
+
+    # A linked worktree's recover command must name the main checkout: recover() goes through
+    # main_common(), which refuses any other path, so naming the worktree could never succeed.
+    linked = studio_env.repo.parent / "linked"
+    _git(studio_env.repo, "worktree", "add", "-q", str(linked))
+    linked = linked.resolve()
+    linked_drift = w.handle({"id": 70, "action": "status", "workspace": str(linked)})
+    assert linked_drift["data"]["state"] == "device_drift"
+    argv = shlex.split(linked_drift["data"]["recover_command"])
+    assert argv[3] == "recover" and Path(argv[4]) == studio_env.repo
+    assert scope_mod.main_common(Path(argv[4])) == studio_env.repo / ".git"
     assert w.handle({"id": 8, "action": "overview", "workspace": str(studio_env.repo)})["ok"] is False
 
 

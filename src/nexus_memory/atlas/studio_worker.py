@@ -223,11 +223,13 @@ class StudioWorker:
             self._evict(diag.checkout)
 
         recover_command = None
-        if diag.state == "device_drift" and diag.checkout is not None and diag.project_id is not None:
+        # recover accepts only the main checkout (main_common): the common Git directory's parent,
+        # not diag.checkout, which may be a linked worktree.
+        if diag.state == "device_drift" and diag.common is not None and diag.project_id is not None:
             launcher = Path(self.scope_module.__file__).resolve().with_name("launcher.py")
             recover_command = (
                 f"{shlex.quote(sys.executable)} -I {shlex.quote(str(launcher))} "
-                f"recover {shlex.quote(str(diag.checkout))} "
+                f"recover {shlex.quote(str(diag.common.parent))} "
                 f"--expected-project-id {shlex.quote(diag.project_id)}"
             )
 

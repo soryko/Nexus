@@ -154,7 +154,10 @@ async function apiPost(path, payload = {}) {
 }
 
 async function refreshStatusAndActivity({ loadAtlasIfBound = false } = {}) {
+  // A refresh that finishes after a workspace change belongs to the old workspace: apply nothing.
+  const workspaceGen = state.workspaceGen;
   const statusRes = await apiPost('/api/status');
+  if (workspaceGen !== state.workspaceGen) return;
   if (statusRes.ok && statusRes.data) {
     state.status = statusRes.data;
     state.overview = statusRes.data.overview || { total: 0, counts: [], generation: 0 };
@@ -162,6 +165,7 @@ async function refreshStatusAndActivity({ loadAtlasIfBound = false } = {}) {
   if (state.status?.state === 'bound') {
     const cat = state.activityCategory === 'all' ? null : state.activityCategory;
     const actRes = await apiPost('/api/activity', { params: { limit: 60, category: cat } });
+    if (workspaceGen !== state.workspaceGen) return;
     if (actRes.ok && actRes.data) {
       state.activityEvents = actRes.data.events || [];
       if (actRes.data.health) state.status.activity_health = actRes.data.health;
