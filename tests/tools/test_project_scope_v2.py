@@ -331,3 +331,27 @@ def test_umask_002_checkout_follows_the_private_group_rule(env):
 def test_the_antigravity_plugin_carries_the_same_registry_module():
     vendored = ROOT / 'integrations/antigravity-plugin/scripts/project_scope.py'
     assert vendored.read_bytes() == (SCOPE / 'project_scope.py').read_bytes()
+
+
+def test_without_a_birth_time_a_reused_inode_is_a_new_repo_not_a_move(env, monkeypatch):
+    """Linux reuses inodes and os.stat has no birth time there: identity alone cannot prove a move."""
+    scope = env.scope
+    old = repo(env.tmp / 'old' / 'api')
+    old_id = scope.enroll(old)
+    fresh = repo(env.tmp / 'unrelated' / 'tool')
+    reused = {'device': 7, 'inode': 4242, 'birth_time': None}
+    monkeypatch.setattr(scope, 'identity', lambda _: dict(reused))
+    registry = scope.read_registry(scope.private_base())
+    registry['projects'][str(old / '.git')].update(reused)
+    scope.write_registry(scope.private_base(), registry)
+    assert scope.inspect_scope(fresh).state == 'unenrolled'                # not 'moved'
+    with pytest.raises(scope.ScopeError):
+        scope.recover(fresh, old_id)                                      # cannot take over old_id
+    assert scope.enroll(fresh) != old_id
+    # With a birth time, the same identity is a real move.
+    monkeypatch.setattr(scope, 'identity', lambda _: {**reused, 'birth_time': 99.5})
+    registry = scope.read_registry(scope.private_base())
+    registry['projects'][str(old / '.git')]['birth_time'] = 99.5
+    del registry['projects'][str(fresh / '.git')]
+    scope.write_registry(scope.private_base(), registry)
+    assert scope.inspect_scope(fresh).state == 'moved'

@@ -256,8 +256,18 @@ def load(base: Path) -> dict:
     return read_registry(base) if os.path.lexists(base / 'registry.json') else empty_registry()
 
 
+def distinct_identity(observed: dict) -> bool:
+    """Whether (device, inode, birth time) can tell this Git directory from a later one. Without a
+    birth time (Linux: os.stat has none) a reused inode looks identical, so no identity match is trusted."""
+    birth = observed.get('birth_time')
+    return type(birth) in (float, int) and birth > 0 and math.isfinite(birth)
+
+
 def moved_from(registry: dict, common: Path, observed: dict) -> str | None:
-    """The enrolled path whose Git directory has this exact identity, if it is not this path."""
+    """The enrolled path whose Git directory has this exact identity, if it is not this path. Never a
+    match without a birth time: an unrelated repo that reuses a deleted one's inode must not inherit it."""
+    if not distinct_identity(observed):
+        return None
     for path, entry in registry['projects'].items():
         if path != str(common) and all(entry.get(k) == v for k, v in observed.items()):
             return path
@@ -449,7 +459,8 @@ def recover(workspace: Path, expected_project_id: str) -> str:
                 still_there = False
             if still_there:
                 raise ScopeError('the enrolled path still holds this Git directory')
-            checked_database(base, expected_project_id, required=True)
+            if entries[previous].get('store') != 'catalog':      # a catalog repo has no per-project database
+                checked_database(base, expected_project_id, required=True)
             entries[str(common)] = entries.pop(previous)
             if registry['denied'].pop(previous, None) is not None:
                 registry['denied'][str(common)] = {}

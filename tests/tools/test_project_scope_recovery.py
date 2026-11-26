@@ -135,8 +135,14 @@ def test_inspect_scope_classifies_all_states_without_mutation(tmp_path, monkeypa
 
     observed = scope.identity(repo / '.git')
     if observed['birth_time'] is None:
-        observed['birth_time'] = 123456.25
-        monkeypatch.setattr(scope, 'identity', lambda _: observed.copy())
+        # Linux has no birth time. Give each Git directory its own stand-in, so paths stay distinct.
+        real = scope.identity
+        births = {}
+        def identity(path):
+            found = real(path)
+            found['birth_time'] = births.setdefault(str(path), 123456.25 + len(births))
+            return found
+        monkeypatch.setattr(scope, 'identity', identity)
 
     other = tmp_path / 'other'
     other.mkdir()

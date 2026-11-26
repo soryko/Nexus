@@ -268,3 +268,16 @@ def test_revoking_a_folder_ends_only_its_repos_open_sessions(owner):
             assert 'hits' in await call(back, 'search', query='anything')
         assert owner.status(api)[1]['mode'] == 'Recall only'
     anyio.run(scenario)
+
+
+@pytest.mark.skipif(getattr(os.stat('/'), 'st_birthtime', None) is None, reason='a move needs a birth time')
+def test_a_moved_catalog_repo_is_recovered_with_its_memory(owner):
+    api = repo(owner.work / 'api')
+    project_id = launched(owner.run('claude', owner.runtime, cwd=api))['--project-id']
+    moved = owner.work / 'renamed'
+    api.rename(moved)
+    assert owner.status(moved)[1]['state'] == 'moved'
+    recovered = owner.run('recover', moved, '--expected-project-id', project_id)
+    assert recovered.returncode == 0, recovered.stderr
+    assert launched(owner.run('claude', owner.runtime, cwd=moved))['--project-id'] == project_id
+    assert owner.catalog('SELECT count(*) FROM spaces') == [(1,)]          # the same space, not a new one
