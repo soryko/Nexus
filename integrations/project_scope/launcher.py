@@ -275,7 +275,7 @@ def main():
             options = ['--catalog', str(project.catalog), '--grant-file', str(grant), '--project-id', project.id]
         elif v2:
             options = ['--catalog', str(args.catalog), '--grant-file', str(args.grant_file), '--project-id',project.id]
-        if args.command == 'codex' and not v2:
+        if args.command == 'codex' and (not v2 or grant is not None):
             options.extend(['--codex-project-root', str(project.common.parent)])
         elif hooks:
             options.extend(['--hook-project-root', str(project.common.parent),

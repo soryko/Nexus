@@ -17,6 +17,7 @@ import anyio
 import pytest
 from mcp import Client, StdioServerParameters
 from test_project_scope_v2 import ENTRY, repo, stand_in_runtime
+from nexus_memory.transport.codex import WITHDRAWN_LINE
 
 SERVER = Path(sys.executable).with_name('nexus-memory')
 
@@ -184,3 +185,56 @@ def test_a_delegated_session_reads_only_even_when_the_repo_is_maintained(owner, 
                            check=False)
     assert json.loads(admin.stdout)['mode'] == 'read_only', admin.stdout
     assert owner.catalog("SELECT mode FROM sessions WHERE role='delegated'") == [('read_only',)]
+
+
+def hooks_client(owner, checkout, role='claude-hooks'):
+    return Client(StdioServerParameters(command=sys.executable, args=['-I', str(ENTRY), role, str(SERVER)], cwd=checkout,
+                                        env={'HOME': str(owner.home), 'PATH': os.environ['PATH'], 'PWD': str(checkout),
+                                             'NEXUS_CAPTURE_POLICY': 'explicit'}))
+
+
+async def hook(session, tool, checkout, **arguments):
+    result = await session.call_tool(tool, {'cwd': str(checkout), 'session_id': 's1', **arguments})
+    assert not result.is_error, result.content
+    return result.structured_content
+
+
+PROMPT = 'what did we decide about {} and the staging path?'
+
+
+def note(term):
+    return f'Decision on {term}: staging retention window. The {term} staging path stays bounded.'
+
+
+def test_hook_recall_reads_through_the_fence_and_stops_on_disable(owner):
+    api, web = repo(owner.work / 'api'), repo(owner.work / 'web')
+
+    async def save(checkout, term):
+        assert owner.run('claude', owner.runtime, cwd=checkout).returncode == 0     # first open creates the space
+        assert owner.run('mode', checkout, 'maintain').returncode == 0
+        async with client(owner, checkout) as writer:
+            saved = await call(writer, 'record', idempotency_key='k-' + term, content=note(term))
+        assert owner.run('mode', checkout, 'recall').returncode == 0
+        return saved['memory_id']
+
+    async def scenario():
+        mine = await save(api, 'kestrelx')
+        theirs = await save(web, 'osprayx')
+        async with hooks_client(owner, api) as session:
+            cue = await hook(session, 'nexus_session_start', api)
+            assert 'recall-only' in cue['hookSpecificOutput']['additionalContext']
+            offered = await hook(session, 'nexus_recall', api, prompt=PROMPT.format('kestrelx'))
+            context = offered['hookSpecificOutput']['additionalContext']
+            assert f'memory_id={mine}' in context and 'retention window' not in context   # identifiers, never stored text
+            # The other repo's memory is never offered here, even for its own distinctive term.
+            other = await hook(session, 'nexus_recall', api, prompt=PROMPT.format('osprayx'))
+            assert theirs not in json.dumps(other)
+            assert owner.run('disable', api).returncode == 0
+            withdrawn = await hook(session, 'nexus_recall', api, prompt=PROMPT.format('kestrelx'))
+            assert withdrawn == {'systemMessage': WITHDRAWN_LINE}
+            assert await hook(session, 'nexus_recall', api, prompt=PROMPT.format('kestrelx')) == {}  # said once
+        async with hooks_client(owner, web, role='codex') as codex:
+            offered = await hook(codex, 'codex_recall', web, prompt=PROMPT.format('osprayx'))
+            assert f'memory_id={theirs}' in offered['hookSpecificOutput']['additionalContext']
+            assert mine not in json.dumps(await hook(codex, 'codex_recall', web, prompt=PROMPT.format('kestrelx')))
+    anyio.run(scenario)

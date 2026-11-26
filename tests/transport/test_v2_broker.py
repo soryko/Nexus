@@ -147,3 +147,14 @@ def test_generic_stdio_profile_and_grant_resume(tmp_path):
             denied = await client.call_tool('record',{'idempotency_key':'k','content':'synthetic'})
             assert denied.structured_content == {'code':'space_read_only','retryable':False}
     anyio.run(scenario)
+
+
+def test_a_read_only_grant_gets_recall_only_instructions(tmp_path):
+    from nexus_memory.transport.broker import Broker
+    from nexus_memory.transport.mcp_server import create_v2_server
+    writable = make_broker(tmp_path)
+    assert 'recall-only' not in create_v2_server(writable).instructions
+    session = writable.catalog.launch_context('local', operation=op('reader'))
+    grant = writable.catalog.bind_session(session, 'local', writable.binding.space_id, alias='here', mode='read_only',
+                                          operation=op('bind-reader'))
+    assert 'recall-only' in create_v2_server(Broker(writable.catalog, grant)).instructions
