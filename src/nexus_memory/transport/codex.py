@@ -147,7 +147,8 @@ class FencedSearch:
             raise (AccessWithdrawn if envelope.code in WITHDRAWN else RuntimeError)(envelope.code)
         body = json.loads(self.broker.drain(envelope))
         return SimpleNamespace(hits=[SimpleNamespace(memory_id=h["memory_id"], revision_id=h["revision_id"],
-                                                     excerpt=h.get("excerpt") or "", tags=tuple(h.get("tags") or ()))
+                                                     excerpt=h.get("excerpt") or "", tags=tuple(h.get("tags") or ()),
+                                                     kind=h.get("kind") or "")
                                      for h in body["hits"]])
 
 

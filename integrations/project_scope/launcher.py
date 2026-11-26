@@ -5,53 +5,18 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # support isolated (-I) entry
 import json
 
-from project_scope import (CATALOG, ScopeError, approve_folder, checked_database, enroll, host_project,
-                           inspect_scope, private_base, recover, registry_entry, resolve, revoke_folder, set_denied,
-                           uncovered_catalog_projects)
+from project_scope import (CATALOG, ScopeError, approve_folder, catalog_admin, checked_database, enroll,
+                           host_project, inspect_scope, mint_grant, private_base, recover, registry_entry, resolve,
+                           revoke_folder, set_denied, uncovered_catalog_projects)
 
 # Owner commands reach the catalog through this interpreter's Nexus build. A host launch uses the
 # admin command installed beside the server it starts, so the grant and the server share one build.
 OWNER_ADMIN = [sys.executable, '-I', '-c', 'import sys; from nexus_memory.spaces.admin import main; sys.exit(main())']
 MODES = {'recall': 'Recall only', 'maintain': 'Recall + maintain', 'off': 'Off'}
-
-
-def session_dir(catalog: Path) -> Path:
-    sessions = catalog.parent / 'sessions'
-    sessions.mkdir(mode=0o700, exist_ok=True)
-    info = sessions.lstat()
-    if not sessions.is_dir() or sessions.is_symlink() or info.st_uid != os.getuid() or info.st_mode & 0o077:
-        raise ScopeError('unsafe session directory')
-    return sessions
-
-
-def catalog_admin(command: list[str], catalog: Path, action: str, request: dict, *, out: Path | None = None) -> dict:
-    """Run one `project` admin action. Any refusal or failure is a ScopeError: no memory."""
-    name = uuid4().hex
-    path = session_dir(catalog) / (name + '.request')
-    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), 'w') as file:
-        json.dump(request, file)
-    argv = [*command, 'project', action, '--catalog', str(catalog), '--request', str(path)]
-    if action != 'status':
-        argv += ['--operation-key', name]
-    if out is not None:
-        argv += ['--out', str(out)]
-    try:
-        result = subprocess.run(argv, capture_output=True, text=True, timeout=30, check=False)
-    finally:
-        path.unlink(missing_ok=True)
-    try:
-        output = json.loads(result.stdout)
-    except ValueError:
-        output = None
-    if result.returncode or not isinstance(output, dict) or 'error' in output:
-        reason = output.get('error') if isinstance(output, dict) else 'catalog unavailable'
-        raise ScopeError(f'the project catalog refused: {reason}')
-    return output
 
 
 def owner_catalog() -> Path | None:
@@ -61,10 +26,7 @@ def owner_catalog() -> Path | None:
 
 
 def open_session(runtime: Path, project, host: str) -> Path:
-    grant = session_dir(project.catalog) / (uuid4().hex + '.grant')
-    catalog_admin([str(runtime.with_name('nexus-memory-admin'))], project.catalog, 'open',
-                  {'project_id': project.id, 'checkout': str(project.checkout), 'host': host}, out=grant)
-    return grant
+    return mint_grant([str(runtime.with_name('nexus-memory-admin'))], project, host)
 
 
 def set_ceiling(project_id: str, ceiling: str) -> dict:

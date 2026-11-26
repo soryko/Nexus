@@ -10,6 +10,8 @@ Local, append-only project memory backed by SQLite, lexical BM25 retrieval, cont
 - **Nexus Studio Sidecar (`sidecars/nexus-studio/`)**: Read-only auxiliary pane showing live content-free Activity & Health telemetry (`<store>.activity.sqlite3`), the full Memory Atlas (search, revision history, diffs, Git reference checks at `HEAD`), and Setup / APFS Drift diagnostics.
 - **Optional Scheduled Audit (`sidecars/nexus-audit/`)**: Weekly read-only cron check verifying store binding and Git reference currency at `HEAD` (ships disabled until reviewed and enabled).
 
+- **Catalog repos (registry version 2)**: a repo enrolled through an approved folder keeps its memory in the owner catalog. The gateway enrolls it on its first attested open and mints a grant for each project. A subagent (its conversation differs from the root conversation) gets a read-only grant. Every call goes through the catalog's fence. Supported tools: `record`, `revise`, `forget`, `get`, `history`, `search`, `status`. Refused for now: `spaces`, `compare_at_head` and the Atlas app. After a disable the gateway refuses calls without poisoning the connection, and after a re-enable or an owner's `mode maintain` it mints a fresh grant on its own. Hooks read through a one-time read-only grant. A recall-only repo gets recall-only guidance and never a Stop nudge.
+
 ## Privacy & Capture Policy
 
 - **Autonomous + `Stop`-nudge capture (`forget` stays explicit-only)**: The agent proactively records or revises verified architectural decisions, non-obvious constraints, procedures, and root-caused failures (checking `search` first), backed by a bounded `Stop`-hook nudge on edit/decision turns (`NEXUS_CAPTURE_POLICY=explicit` restores explicit-only mode). `forget` always requires explicit user request.

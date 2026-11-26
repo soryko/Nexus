@@ -19,12 +19,13 @@ import anyio
 from mcp import types
 
 from nexus_memory.activity import ActivityJournal
-from nexus_memory.domain.models import Scope
+from nexus_memory.domain.errors import NexusError, OperationFailure
+from nexus_memory.domain.models import Scope, space_tag, with_space
 from nexus_memory.git.cli import GitCli
 from nexus_memory.git.identity import bind_repository
 from nexus_memory.memory import MemoryService
 from nexus_memory.storage import SQLiteRepository
-from nexus_memory.transport.mcp_server import _AUTONOMOUS, _EXPLICIT, create_server
+from nexus_memory.transport.mcp_server import _AUTONOMOUS, _EXPLICIT, StatusOutput, _operation_error, create_server
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_DIR))
@@ -32,10 +33,22 @@ from project_scope import (  # noqa: E402
     ScopeDiagnosis,
     ScopeError,
     inspect_scope,
+    mint_grant,
     private_base,
     private_file,
-    resolve,
 )
+from project_scope import resolve as _resolve  # noqa: E402
+
+
+def resolve(workspace: Path) -> Any:
+    """This gateway reaches a catalog repo only through a per-project broker (see GuardedService)."""
+    return _resolve(workspace, allow_catalog=True)
+
+
+# The legacy tools a catalog repo answers, through the catalog's fence. The rest (compare_at_head,
+# spaces, the Atlas app) still need a per-project database and are refused for a catalog repo.
+CATALOG_TOOLS = frozenset({"record", "revise", "forget", "get", "history", "search", "status"})
+WITHDRAWN = frozenset({"grant_revoked", "space_not_mounted"})
 
 LEASE_TTL_SECONDS = 10.0
 # Antigravity puts the calling conversation's id in every tools/call request's _meta and hands the
@@ -266,6 +279,9 @@ class GuardedService:
         # nothing about which app a lease-free request came from.
         self._atlas_grants: dict[str, tuple[Any, float]] = {}  # conversation -> (project, expiry)
         self._card_grants: dict[tuple[str, str], tuple[Any, float]] = {}  # (conversation, memory) -> ...
+        # Catalog repos: one broker per (project, role), each on its own minted grant. A subagent's
+        # request (its conversation differs from the root conversation) uses a delegated, read-only grant.
+        self._brokers: dict[tuple[str, str], Any] = {}
 
     def _prune(self, grants: dict) -> dict:
         now = self._clock()
@@ -312,6 +328,9 @@ class GuardedService:
         return getattr(self.service, name)
 
     def _bind_project(self, project: Any) -> None:
+        if project.catalog is not None:
+            self.project, self.service, self.journal, self.database_path = project, None, None, None
+            return
         cached = self._services_by_project.get(project.id)
         if cached is None or cached[0] != project:
             store = SQLiteRepository(project.database)
@@ -323,6 +342,85 @@ class GuardedService:
             cached = (project, service, journal, project.database)
             self._services_by_project[project.id] = cached
         self.project, self.service, self.journal, self.database_path = cached
+
+    def _role(self, ctx: Any) -> str:
+        params = getattr(ctx, "params", None)
+        meta = params.get("_meta") if isinstance(params, dict) else getattr(params, "meta", None)
+        if not isinstance(meta, dict):
+            meta = getattr(ctx, "meta", None)
+        if isinstance(meta, dict):
+            own, root = meta.get(CONVERSATION_META), meta.get(ROOT_CONVERSATION_META)
+            if isinstance(own, str) and isinstance(root, str) and own and root and own != root:
+                return "delegated"
+        return "root"
+
+    def _broker(self, project: Any, role: str) -> Any:
+        from nexus_memory.transport.harnesses.generic import resume
+        key = (project.id, role)
+        broker = self._brokers.get(key)
+        if broker is None:
+            admin = [str(Path(sys.executable).with_name("nexus-memory-admin"))]
+            grant = mint_grant(admin, project, "antigravity", role=role)
+            try:
+                broker = resume(project.catalog, grant, project.id, project.checkout)
+            finally:
+                grant.unlink(missing_ok=True)
+            self._brokers[key] = broker
+        return broker
+
+    async def _catalog_call(self, ctx: Any, tool_name: str | None, project: Any) -> Any:
+        """Answer a catalog repo's call through its broker: success is admitted, drained bytes."""
+        if tool_name not in CATALOG_TOOLS:
+            return denied("unsupported_for_catalog_repo",
+                          "This tool is not available yet for a repo whose memory is in the project catalog.")
+        params = getattr(ctx, "params", None)
+        raw = params.get("arguments") if isinstance(params, dict) else getattr(params, "arguments", None)
+        args = {k: v for k, v in (raw or {}).items() if v is not None}
+        space = args.pop("space", None)
+        if tool_name in ("record", "revise"):
+            args["tags"] = list(with_space(tuple(args.get("tags") or ()), space))
+        elif tool_name == "search" and space is not None:
+            args["tags_all"] = [*(args.get("tags_all") or ()), space_tag(space)]
+        role = self._role(ctx)
+
+        def run() -> Any:
+            broker = self._broker(project, role)
+            envelope = broker.dispatch(tool_name, args)
+            stale = isinstance(envelope, OperationFailure) and (
+                envelope.code in WITHDRAWN
+                or (envelope.code == "space_read_only" and role == "root" and tool_name in ("record", "revise", "forget")))
+            if stale:
+                # The registry admitted this call just now, so a withdrawn or narrowed grant is this process's
+                # stale one (minted before a re-enable, or before the owner chose maintain). Mint once under
+                # the current policy and retry; if the space is off, minting is refused and the call denied.
+                self._brokers.pop((project.id, role), None)
+                broker = self._broker(project, role)
+                envelope = broker.dispatch(tool_name, args)
+            if isinstance(envelope, OperationFailure):
+                if envelope.code in WITHDRAWN:
+                    self._brokers.pop((project.id, role), None)
+                return _operation_error(envelope)
+            try:
+                text = broker.drain(envelope).decode("utf-8")
+            except NexusError as error:
+                return _operation_error(OperationFailure(error.code, False))
+            body = json.loads(text)
+            if tool_name == "status":
+                # The legacy status shape: store facts plus the launch-bound ones. No path is reported.
+                body.pop("lifecycle", None)
+                body = StatusOutput.model_validate({
+                    **body, "namespace": broker.binding.scope.namespace, "actor": broker.binding.scope.actor,
+                    "service_version": _service_version(), "database_location_fingerprint": None,
+                    **_configured_policy().metadata(), "usage_log": "off", "usage_events_written": None,
+                    "usage_write_failures": None}).model_dump()
+                text = json.dumps(body)
+            return types.CallToolResult(content=[types.TextContent(type="text", text=text)],
+                                        structured_content=body if isinstance(body, dict) else None)
+
+        try:
+            return await anyio.to_thread.run_sync(run)
+        except (ScopeError, OSError, NexusError):
+            return denied()
 
     def _tool_name(self, ctx: Any) -> str | None:
         params = getattr(ctx, "params", None)
@@ -413,6 +511,8 @@ class GuardedService:
                             if resolve(granted.checkout).id != granted.id:
                                 raise ScopeError("granted project no longer matches its checkout")
                             self._bind_project(granted)
+                            if granted.catalog is not None:
+                                return await self._catalog_call(ctx, tool_name, granted)
                             return await call_next(ctx)
                         if tool_name == "status":
                             return _diagnostic_status_result(
@@ -431,8 +531,17 @@ class GuardedService:
                     raw_path = leased_path
 
                 diag = inspect_scope(Path(raw_path))
+                if diag.state == "eligible":
+                    # The host attested this root (roots, a pin or a lease) and an approved folder covers
+                    # it: register it on this first open, as the launcher does for other hosts.
+                    _resolve(Path(raw_path), lazy=True, allow_catalog=True)
+                    diag = inspect_scope(Path(raw_path))
+                if diag.state == "disabled" and tool_name != "status":
+                    # The owner turned Nexus off for this repo. That is not a workspace change, so the
+                    # connection is not poisoned: calls are refused until the owner enables it again.
+                    return denied("project_disabled", "Nexus is disabled for this repo.")
                 if diag.state != "bound":
-                    if self.project is not None and not host_lease_mode:
+                    if self.project is not None and not host_lease_mode and diag.state != "disabled":
                         self.changed = True
                         raise ScopeError(diag.message or "project scope changed")
                     if tool_name == "status":
@@ -470,6 +579,7 @@ class GuardedService:
                 self._bind_project(project)
                 if host_lease_mode:
                     self._grant_ui(ctx, tool_name, project)
+
             except Exception as error:
                 if self.project is not None and not host_lease_mode:
                     if not isinstance(error, ConcurrentRootsChange):
@@ -478,6 +588,8 @@ class GuardedService:
                 if tool_name == "status" and isinstance(error, ScopeError):
                     return _diagnostic_status_result(scope_state="invalid", message=str(error))
                 return denied()
+            if self.project is not None and self.project.catalog is not None:
+                return await self._catalog_call(ctx, tool_name, self.project)
             return await call_next(ctx)
 
 
