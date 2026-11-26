@@ -121,8 +121,8 @@ def test_uncommitted_or_digest_mismatched_payload_never_drains(tmp_path, monkeyp
     cat, grant, space = make_catalog(tmp_path)
     fence, queue = broker(cat)
     stage = queue.stage
-    def inspect(slot, payload):
-        env = stage(slot, payload)
+    def inspect(slot, payload, **kw):
+        env = stage(slot, payload, **kw)
         with pytest.raises(PublicationBusy):
             queue.drain(env.publication_id)
         return env

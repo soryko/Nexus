@@ -27,6 +27,7 @@ class _Entry:
     slot: PublicationSlot
     context: object = None
     envelope: PublicationEnvelope | None = None
+    read: bool = False
 
 
 _entries = {}
@@ -84,11 +85,12 @@ class PublicationQueue:
         with _lock:
             _entries.pop(slot.publication_id, None)
 
-    def stage(self, slot, payload):
+    def stage(self, slot, payload, *, read=False):
         with _lock:
             e = self._entry(slot)
             if not e.context or e.envelope or type(payload) is not bytes or len(payload) > slot.max_bytes:
                 raise PublicationBusy('publication cannot be staged')
+            e.read = read
             e.envelope = PublicationEnvelope(slot.publication_id, e.context.grant_id, e.context.epoch,
                 sha256(payload).hexdigest(), payload, datetime.now(timezone.utc).isoformat().replace('+00:00','Z'))
             return e.envelope
@@ -99,13 +101,26 @@ class PublicationQueue:
                              (env.publication_id,)).fetchone()
         return row == (env.grant_id, env.epoch, sha256(env.payload).hexdigest(), env.enqueued_at)
 
+    def _current(self, env):
+        """The session still holds the grant and epoch the envelope was admitted under."""
+        with closing(sqlite3.connect(self.catalog.path.as_uri()+'?mode=ro', uri=True, timeout=0)) as db:
+            return db.execute('SELECT 1 FROM publications JOIN sessions USING(session) WHERE publication_id=? '
+                              'AND sessions.grant_id=? AND sessions.epoch=?',
+                              (env.publication_id, env.grant_id, env.epoch)).fetchone() is not None
+
     def drain(self, publication_id, *, expected=None):
         with _lock:
             e = _entries.get(publication_id)
             if e is None or e.queue is not self or e.envelope is None or (expected is not None and expected != e.envelope):
                 raise PublicationBusy('publication unavailable')
             try:
+                # A read admitted before a revoke or disable is not delivered after it. A write's
+                # receipt still drains: its effect committed before the revoke.
                 if not self._matches(e.envelope):
+                    raise PublicationBusy('publication unavailable')
+                if e.read and not self._current(e.envelope):
+                    # Epochs only increase, so this read can never become deliverable: free its slot.
+                    del _entries[publication_id]
                     raise PublicationBusy('publication unavailable')
             except sqlite3.Error:
                 raise PublicationBusy('publication unavailable') from None

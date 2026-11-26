@@ -147,6 +147,8 @@ class AuthorityFence:
                                    "AND owner=? AND state='active'", (sid, context.principal_id)).fetchone()
                 if not space or sources - {sid} or destination_space_id not in (None, sid):
                     raise SpaceNotMounted('space not mounted')
+                # The ceiling is read under this lock, the one set_ceiling takes to lower it.
+                self.catalog._within_ceiling(space, row, 'read_write' if destination_space_id else 'read_only')
                 if destination_space_id is not None:
                     if row['mode'] != 'read_write':
                         raise SpaceReadOnly('space read only')
@@ -162,7 +164,7 @@ class AuthorityFence:
                 finally:
                     admission.active = False
                 _timeout(db, slot.deadline, PublicationBusy)
-                env = self.queue.stage(slot, payload)
+                env = self.queue.stage(slot, payload, read=destination_space_id is None)
                 db.execute('INSERT INTO publications VALUES(?,?,?,?,?,?)', (env.publication_id, context.session_id,
                            env.grant_id, env.epoch, env.response_digest, env.enqueued_at))
                 db.executemany('INSERT OR IGNORE INTO exposure VALUES(?,?)', ((context.session_id, s) for s in sources))

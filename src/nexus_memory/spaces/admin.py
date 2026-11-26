@@ -25,7 +25,7 @@ from .catalog import Catalog, _bindings, _check, _reader
 from .migration import backup_store, store_manifest
 from project_scope import resolve as resolve_project
 
-COMMANDS = {'catalog':['init'], 'space':['create','list','register'], 'store':['migrate','restore'],
+COMMANDS = {'catalog':['init'], 'space':['create','list','register','ceiling'], 'store':['migrate','restore'],
             'grant':['issue','revoke'], 'graph':['curate','correct','resolve'],
             'proposal':['list','review'], 'projection':['rebuild','status']}
 READS = {'space list','proposal list','projection status'}
@@ -168,11 +168,12 @@ def _record_graph_receipt(catalog, db, op, receipt):
 
 def issue_mount(catalog, stream, handle, request, out):
     """Publish a private ticket for a stable owner-identified receiving context."""
-    r = _object(request,'principal_id receiving_context space_id mode')
+    r = _object(request,'principal_id receiving_context space_id mode','role')
     require(all(isinstance(v,str) and v for v in r.values()))
     key = canonical_command_digest(1,'context',{'context':r['receiving_context']})
     writer = stream+':launcher'
-    session = catalog.launch_context(r['principal_id'],operation=OperationRef(writer,'launch:'+key))
+    session = catalog.launch_context(r['principal_id'],operation=OperationRef(writer,'launch:'+key),
+                                     role=r.get('role','root'))
     operation = OperationRef(writer,'mount:'+key)
     mount = Mount('default',r['space_id'],r['mode'],r['mode']=='read_write')
     with catalog._transaction() as db:
@@ -311,6 +312,11 @@ def execute(args):
         with catalog._transaction() as db:
             _, binding = space(catalog,db,binding.space_id)
         result = json.loads(binding.to_json())
+    elif cmd == 'space ceiling':
+        r = _object(request,'space_id ceiling','principal_id')
+        require(all(isinstance(v,str) and v for v in r.values()))
+        generation = catalog.set_ceiling(r['space_id'],r['ceiling'],principal_id=r.get('principal_id','local'),operation=inner)
+        result = {'space_id':r['space_id'],'ceiling':r['ceiling'],'generation':generation}
     elif cmd == 'space register':
         r = _object(request,'path','expected_store_id')
         bindings = catalog.register_store(r['path'],expected_store_id=r.get('expected_store_id'),operation=inner)
