@@ -8,7 +8,7 @@ This is the baseline for Phase 0 of [the cross-host plan](../plans/cross-host-pr
 |---|---|---|
 | v2 Linux CI on PR #29 | **Passed** | All six jobs green on `db203ea`, 24 Nov: suite, stage-a, dsh-provider, atlas-ui, fresh install on ubuntu-24.04 and on macos-15 |
 | Flaky Atlas UI test | **Root-caused and fixed in the test.** A different, rarer flake remains open | §4 |
-| Baseline recall latency | **Measured.** The p95 budget is not yet set | §5 |
+| Baseline recall latency | **Measured. Budget accepted on 26 Nov: at most 25 ms over the warm p95 baseline, and a cold first recall within 1 s** | §5 |
 | Linux git requirement | **Documented** | README "Requirements" |
 | First writable DSH save | Not part of Phase 0 | It is the Phase 2 entry gate and needs owner-approved spend |
 
@@ -68,7 +68,7 @@ Method: [`benchmarks/recall_latency/run.py`](../../benchmarks/recall_latency/run
 
 The empty-store rows are the negative control: no offers. An earlier run used a corpus built from 22 shared words. At 2000 memories it produced **0 offers**, because no candidate cleared the lexical threshold, so it timed only the no-offer path. Those figures were discarded, and that corpus must not be reused.
 
-Reading: on a warm server, server-side recall is about 5 ms at p95 for up to 2000 memories. That is roughly 800 times below the 4 s ceiling. v2 is not measurably slower than main here. The real stores are much smaller, at 150–230 KB each. The cost that could approach the ceiling is a cold start: a server launch takes about 0.3–0.4 s before the first call. That is where a budget matters. The p95 overhead budget itself is the owner's call (plan §3).
+Reading: on a warm server, server-side recall is about 5 ms at p95 for up to 2000 memories. That is roughly 800 times below the 4 s ceiling. v2 is not measurably slower than main here. The real stores are much smaller, at 150–230 KB each. The cost that could approach the ceiling is a cold start: a server launch takes about 0.3–0.4 s before the first call. That is where a budget matters. On 26 November the owner accepted this budget (plan §3). Warm recall p95 at 2000 memories may be at most 25 ms above main's 4.9 ms. The first recall after a cold start, server launch included, must complete within 1 s. Both are measured with this benchmark.
 
 ## 6. Gaps still open (from plan §4, not re-verified here)
 

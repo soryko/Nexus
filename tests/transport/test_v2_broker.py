@@ -147,3 +147,41 @@ def test_generic_stdio_profile_and_grant_resume(tmp_path):
             denied = await client.call_tool('record',{'idempotency_key':'k','content':'synthetic'})
             assert denied.structured_content == {'code':'space_read_only','retryable':False}
     anyio.run(scenario)
+
+
+def test_a_read_only_grant_gets_recall_only_instructions(tmp_path):
+    from nexus_memory.transport.broker import Broker
+    from nexus_memory.transport.mcp_server import create_v2_server
+    writable = make_broker(tmp_path)
+    assert 'recall-only' not in create_v2_server(writable).instructions
+    session = writable.catalog.launch_context('local', operation=op('reader'))
+    grant = writable.catalog.bind_session(session, 'local', writable.binding.space_id, alias='here', mode='read_only',
+                                          operation=op('bind-reader'))
+    assert 'recall-only' in create_v2_server(Broker(writable.catalog, grant)).instructions
+
+
+def test_only_a_launcher_session_grant_is_consumed(tmp_path):
+    import os
+    import sys
+    from mcp import StdioServerParameters
+    from nexus_memory.transport.harnesses.generic import register
+    b = make_broker(tmp_path)
+    sessions = tmp_path / 'sessions'
+    sessions.mkdir(mode=0o700)
+    tickets = {}
+    for place, context in ((tmp_path, 'owner-issued'), (sessions, 'launcher')):
+        grant = register(b.catalog, 'local', b.binding.space_id, stream='fixture', receiving_context=context)
+        ticket = place / (context + '.grant')
+        ticket.write_text(json.dumps({'grant_id': grant.grant_id}))
+        ticket.chmod(0o600)
+        tickets[context] = ticket
+
+    async def scenario(ticket):
+        spec = StdioServerParameters(command=sys.executable, args=['-I', '-m', 'nexus_memory', '--catalog', str(b.catalog.path),
+                                     '--grant-file', str(ticket), '--consume-grant-file'], cwd=tmp_path,
+                                     env={'HOME': str(tmp_path), 'PATH': os.defpath})
+        async with Client(spec) as client:
+            assert not (await client.call_tool('status', {})).is_error
+    for ticket in tickets.values():
+        anyio.run(scenario, ticket)
+    assert tickets['owner-issued'].exists() and not tickets['launcher'].exists()

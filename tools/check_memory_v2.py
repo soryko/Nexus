@@ -106,6 +106,13 @@ async def scenario(f, fmt, host_probe=None):
     f.admin('catalog init','init')
     p, x = f.space('P',True), f.space('X')
     sid = p['space_id']; repo = p['repository_bindings'][0]['repository_id']
+    # A project space starts recall-only: no writable grant until the owner raises its ceiling.
+    try:
+        f.mount(p,'too-early','read_write')
+        raise SystemExit('FAIL: a recall-only project space issued a writable grant')
+    except subprocess.CalledProcessError:
+        pass
+    f.admin('space ceiling','maintain-P',{'space_id':sid,'ceiling':'maintain'})
     hidden, _ = f.mount(x,'hidden','read_write')
     canary = 'unmounted-synthetic-canary'
     secret = f.bridge(hidden,'remember',{'content':canary},operation_key='x')['result']

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -943,3 +944,120 @@ def test_gateway_reads_the_root_conversation_from_a_raw_request(tmp_path: Path) 
     assert guard._request_conversation(SimpleNamespace(params={"name": "get"})) is None
     assert guard._request_conversation(SimpleNamespace(params={"name": "get", "_meta": {ROOT_CONVERSATION: ""}})) is None
     assert guard._request_conversation(SimpleNamespace(params={"name": "get"}, meta={ROOT_CONVERSATION: "conv-7"})) == "conv-7"
+
+
+def test_mcp_gateway_serves_a_catalog_repo_through_the_fence(tmp_path: Path) -> None:
+    """A folder-enrolled repo in Antigravity: lazily enrolled from the attested root, recall only, a
+    read-only grant for a subagent, writes after the owner opts in, and disable reaching the open process."""
+    home = tmp_path / "home"
+    home.mkdir(mode=0o700)
+    work = (tmp_path / "work").resolve()
+    repo = work / "repo"
+    repo.mkdir(parents=True)
+    _git(repo, "init", "-q")
+    _git(repo, "-c", "user.name=T", "-c", "user.email=t@example.invalid", "commit", "-q", "--allow-empty", "-m", "i")
+    env = _clean_env(home)
+    owner_launcher = REPO_ROOT / "integrations/project_scope/launcher.py"
+
+    def owner(*args: object) -> subprocess.CompletedProcess:
+        return subprocess.run([sys.executable, "-I", str(owner_launcher), *map(str, args)], env=env,
+                              capture_output=True, text=True, check=False)
+
+    assert owner("approve-folder", work).returncode == 0
+    params = StdioServerParameters(command=sys.executable, args=["-I", "-B", str(SCRIPTS_DIR / "mcp_gateway.py")],
+                                   env=env, cwd=PLUGIN_ROOT)
+    subagent = {CONVERSATION: "conv-sub", ROOT_CONVERSATION: "conv-1"}
+
+    async def supply_roots(_ctx):
+        return types.ListRootsResult(roots=[types.Root(uri=repo.as_uri())])
+
+    def code(result) -> str | None:
+        return (result.structured_content or {}).get("code") if result.is_error else None
+
+    async def scenario() -> None:
+        async with Client(params, mode="legacy", list_roots_callback=supply_roots) as client:
+            st = await client.call_tool("status", {}, meta=CONV_META)
+            assert st.is_error is False and st.structured_content["namespace"].startswith("space:")
+            record = {"content": "Decision on gwkestrel: keep it", "kind": "decision", "idempotency_key": "g1"}
+            assert code(await client.call_tool("record", record, meta=CONV_META)) == "space_read_only"
+            assert code(await client.call_tool("spaces", {}, meta=CONV_META)) == "unsupported_for_catalog_repo"
+            assert owner("mode", repo, "maintain").returncode == 0
+            saved = await client.call_tool("record", record, meta=CONV_META)       # no reconnect needed
+            assert saved.is_error is False, saved.content
+            other = {**record, "idempotency_key": "g2", "content": "subagent write"}
+            assert code(await client.call_tool("record", other, meta=subagent)) == "space_read_only"
+            found = await client.call_tool("search", {"query": "gwkestrel"}, meta=subagent)
+            assert json.loads(found.content[0].text)["hits"]
+            # An interrupted disable (catalog off, registry not yet denied) is enforced by the fence itself;
+            # the cached broker is dropped, and no new grant is minted while the space is off.
+            catalog = home / ".local/share/nexus-memory/project-scopes-v1/catalog.sqlite3"
+            with sqlite3.connect(catalog) as db:
+                db.execute("UPDATE spaces SET ceiling='off'")
+            for _ in range(2):
+                assert code(await client.call_tool("search", {"query": "gwkestrel"}, meta=CONV_META)) == "project_scope_unavailable"
+            with sqlite3.connect(catalog) as db:
+                db.execute("UPDATE spaces SET ceiling='recall'")
+            assert (await client.call_tool("search", {"query": "gwkestrel"}, meta=CONV_META)).is_error is False
+            assert owner("disable", repo).returncode == 0
+            assert code(await client.call_tool("search", {"query": "gwkestrel"}, meta=CONV_META)) == "project_disabled"
+            assert owner("enable", repo).returncode == 0
+            back = await client.call_tool("search", {"query": "gwkestrel"}, meta=CONV_META)
+            assert back.is_error is False and json.loads(back.content[0].text)["hits"]
+        assert json.loads(owner("status", repo).stdout)["store"] == "catalog"
+    anyio.run(scenario)
+
+
+def test_hooks_reach_a_catalog_repo_only_through_the_fence(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    home.mkdir(mode=0o700)
+    work = (tmp_path / "work").resolve()
+    repo = work / "repo"
+    repo.mkdir(parents=True)
+    _git(repo, "init", "-q")
+    _git(repo, "-c", "user.name=T", "-c", "user.email=t@example.invalid", "commit", "-q", "--allow-empty", "-m", "i")
+    env = _clean_env(home)
+    owner_launcher = REPO_ROOT / "integrations/project_scope/launcher.py"
+
+    def owner(*args: object) -> None:
+        subprocess.run([sys.executable, "-I", str(owner_launcher), *map(str, args)], env=env, check=True,
+                       capture_output=True)
+
+    def hook(cmd: str, payload: dict) -> dict:
+        done = subprocess.run([sys.executable, "-I", "-B", str(SCRIPTS_DIR / "hooks.py"), cmd],
+                              input=json.dumps({"workspacePaths": [str(repo)], "conversationId": "s1", **payload}),
+                              capture_output=True, text=True, env=env, check=True)
+        return json.loads(done.stdout)
+
+    owner("approve-folder", work)
+    start = hook("start", {})["injectSteps"][0]["systemMessage"]["systemMessage"]
+    assert "recall-only" in start                                   # first open, lazily enrolled
+    prompt = {"lastUserInput": "what did we decide about hookkestrel retention"}
+    assert hook("recall", prompt) == {"injectSteps": []}            # creates the space; nothing stored yet
+    catalog = home / ".local/share/nexus-memory/project-scopes-v1/catalog.sqlite3"
+    with sqlite3.connect(catalog) as db:                            # a hook's grant only ever reads
+        assert db.execute("SELECT DISTINCT role FROM sessions").fetchall() == [("delegated",)]
+    owner("mode", repo, "maintain")
+    params = StdioServerParameters(command=sys.executable, args=["-I", "-B", str(SCRIPTS_DIR / "mcp_gateway.py")],
+                                   env=env, cwd=PLUGIN_ROOT)
+
+    async def supply_roots(_ctx):
+        return types.ListRootsResult(roots=[types.Root(uri=repo.as_uri())])
+
+    async def save() -> None:
+        async with Client(params, mode="legacy", list_roots_callback=supply_roots) as client:
+            saved = await client.call_tool("record", {"content": "Decision on hookkestrel: retention is thirty days",
+                                                      "kind": "decision", "idempotency_key": "h1"}, meta=CONV_META)
+            assert saved.is_error is False, saved.content
+    anyio.run(save)
+    owner("mode", repo, "recall")
+    offered = hook("recall", prompt)["injectSteps"][0]["ephemeralMessage"]
+    assert "hookkestrel" in offered
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text(json.dumps({"step_index": 0, "type": "USER_INPUT",
+                                      "content": "<USER_REQUEST>\nwe decided: keep retention\n</USER_REQUEST>"}) + "\n")
+    stop = {"transcriptPath": str(transcript), "terminationReason": "NO_TOOL_CALL", "fullyIdle": True}
+    assert hook("stop", stop) == {}                                  # recall only: never asks for a write
+    owner("mode", repo, "maintain")
+    assert hook("stop", stop).get("decision") == "continue"
+    owner("disable", repo)
+    assert hook("recall", prompt) == {"injectSteps": []}            # disabled: no memory, no message

@@ -30,6 +30,11 @@ PRAGMA user_version=1;
 '''
 
 
+# Stage B repo ceiling, highest first. A session grant can never exceed it; see set_ceiling.
+CEILINGS = ('maintain', 'recall', 'off')
+ROLES = ('root', 'delegated')
+
+
 def _id():
     return str(uuid4())
 
@@ -99,12 +104,21 @@ class Catalog:
             if not version and not db.execute('SELECT 1 FROM sqlite_schema').fetchone():
                 for statement in _SCHEMA.strip().rstrip(';').split(';'):
                     db.execute(statement)
-            elif version not in (1, 2) or not db.execute("SELECT 1 FROM sqlite_schema WHERE name='operations'").fetchone():
+            elif version not in (1, 2, 3) or not db.execute("SELECT 1 FROM sqlite_schema WHERE name='operations'").fetchone():
                 raise UnsupportedSchema('unsupported catalog')
             if version < 2:
                 db.execute('CREATE TABLE publications(publication_id TEXT PRIMARY KEY, session TEXT NOT NULL REFERENCES sessions, '
                            'grant_id TEXT NOT NULL, epoch INTEGER NOT NULL, digest TEXT NOT NULL, enqueued_at TEXT NOT NULL)')
                 db.execute('PRAGMA user_version=2')
+            if version < 3:
+                # Version 3 (Stage B): a per-space ceiling and its generation, and a session role.
+                # Existing spaces keep Stage A behaviour ('maintain'); a v2 runtime refuses version 3.
+                db.execute("ALTER TABLE spaces ADD COLUMN ceiling TEXT NOT NULL DEFAULT 'maintain' "
+                           "CHECK(ceiling IN ('maintain','recall','off'))")
+                db.execute('ALTER TABLE spaces ADD COLUMN ceiling_generation INTEGER NOT NULL DEFAULT 1')
+                db.execute("ALTER TABLE sessions ADD COLUMN role TEXT NOT NULL DEFAULT 'root' "
+                           "CHECK(role IN ('root','delegated'))")
+                db.execute('PRAGMA user_version=3')
 
     @contextmanager
     def _transaction(self):
@@ -155,9 +169,12 @@ class Catalog:
         return bindings
 
     def _install_bindings(self, db, bindings, title, kind, owner):
+        # A project space starts recall-only; maintenance is a separate owner opt-in.
+        ceiling = 'recall' if kind == 'project' else 'maintain'
         for b in bindings:
-            db.execute('INSERT INTO spaces VALUES(?,?,?,?,?,?,?,1)',
-                       (b.space_id,b.store_id,b.scope.namespace,b.scope.actor,title or b.scope.namespace,kind,owner))
+            db.execute('INSERT INTO spaces(space_id,store_id,namespace,actor,title,kind,owner,policy_version,ceiling) '
+                       'VALUES(?,?,?,?,?,?,?,1,?)',
+                       (b.space_id,b.store_id,b.scope.namespace,b.scope.actor,title or b.scope.namespace,kind,owner,ceiling))
 
     def register_store(self, path, *, operation, expected_store_id=None) -> tuple[SpaceBinding,...]:
         path = Path(path).resolve()
@@ -273,15 +290,70 @@ class Catalog:
             self._finish(db,op,store_id)
             return bindings
 
-    def launch_context(self, principal_id, *, operation):
-        """Trusted fresh-context launcher only; there is no caller-chosen session ID."""
+    def revoke_space_sessions(self, space_id, *, principal_id, operation):
+        """Owner control: end every session on a space without changing its ceiling (a folder approval
+        was withdrawn). Uses the same epoch bump as 'off', under the lock the fence holds."""
         with self._transaction() as db:
-            op = self._operation(db,operation,'launch',principal_id)
+            op = self._operation(db,operation,'revoke-sessions',space_id,principal_id)
+            if op['receipt']:
+                return int(op['receipt'])
+            if not db.execute('SELECT 1 FROM spaces WHERE space_id=? AND owner=?',(space_id,principal_id)).fetchone():
+                raise SpaceNotMounted('space not mounted')
+            count = db.execute('UPDATE sessions SET epoch=epoch+1,grant_id=NULL,space_id=NULL,alias=NULL,mode=NULL '
+                               'WHERE space_id=?',(space_id,)).rowcount
+            self._finish(db,op,str(count))
+            return count
+
+    def launch_context(self, principal_id, *, operation, role='root'):
+        """Trusted fresh-context launcher only; there is no caller-chosen session ID.
+
+        role='delegated' (a subagent or worker) can only ever hold a read-only grant."""
+        if role not in ROLES:
+            raise InvalidInput('invalid session role')
+        with self._transaction() as db:
+            command = ('launch',principal_id) if role == 'root' else ('launch',principal_id,role)
+            op = self._operation(db,operation,*command)
             if not op['receipt']:
-                db.execute('INSERT INTO sessions(session,owner,stream,epoch) VALUES(?,?,?,0)',
-                           (op['allocation'],principal_id,operation.writer_stream_id))
+                db.execute('INSERT INTO sessions(session,owner,stream,epoch,role) VALUES(?,?,?,0,?)',
+                           (op['allocation'],principal_id,operation.writer_stream_id,role))
                 self._finish(db,op,op['allocation'])
             return op['allocation']
+
+    def set_ceiling(self, space_id, ceiling, *, principal_id, operation):
+        """Owner control: change a space's ceiling under the catalog lock the fence holds while it
+        publishes. Lowering it revokes every grant above it (all grants, for 'off') by bumping the
+        session epoch, so no write admitted under the old ceiling can commit after this returns.
+        Returns the new ceiling generation."""
+        if ceiling not in CEILINGS:
+            raise InvalidInput('invalid ceiling')
+        with self._transaction() as db:
+            op = self._operation(db,operation,'ceiling',space_id,ceiling,principal_id)
+            if op['receipt']:
+                return int(op['receipt'])
+            row = db.execute('SELECT ceiling,ceiling_generation FROM spaces WHERE space_id=? AND owner=?',
+                             (space_id,principal_id)).fetchone()
+            if row is None:
+                raise SpaceNotMounted('space not mounted')
+            generation = row['ceiling_generation']+1
+            db.execute('UPDATE spaces SET ceiling=?,ceiling_generation=? WHERE space_id=?',(ceiling,generation,space_id))
+            if ceiling == 'off':
+                db.execute('UPDATE sessions SET epoch=epoch+1,grant_id=NULL,space_id=NULL,alias=NULL,mode=NULL '
+                           'WHERE space_id=?',(space_id,))
+            elif ceiling == 'recall':
+                # Writers keep their reads: the grant is narrowed, not revoked. The fence refuses any later
+                # write on both counts (ceiling and session mode) under this lock, and raising the ceiling
+                # again never restores write to these sessions.
+                db.execute("UPDATE sessions SET mode='read_only' WHERE space_id=? AND mode='read_write'",(space_id,))
+            self._finish(db,op,str(generation))
+            return generation
+
+    @staticmethod
+    def _within_ceiling(space, session, mode):
+        """Raise unless a grant of this mode fits the space's ceiling and the session's role."""
+        if space['ceiling'] == 'off':
+            raise SpaceNotMounted('space disabled')
+        if mode == 'read_write' and (space['ceiling'] != 'maintain' or session['role'] != 'root'):
+            raise SpaceReadOnly('space read only')
 
     @staticmethod
     def _grant(db, session):
@@ -302,9 +374,11 @@ class Catalog:
                                  (session_id,principal_id,operation.writer_stream_id)).fetchone()
             if session is None or (op['receipt'] and session['grant_id'] != op['receipt']):
                 raise GrantRevoked('grant revoked')
-            space = db.execute('SELECT store_id FROM spaces WHERE space_id=? AND owner=?',(space_id,principal_id)).fetchone()
+            space = db.execute('SELECT store_id,ceiling FROM spaces WHERE space_id=? AND owner=?',(space_id,principal_id)).fetchone()
             if not space or (not switch and session['grant_id'] and not op['receipt']):
                 raise SpaceNotMounted('space not mounted')
+            if not op['receipt']:
+                self._within_ceiling(space,session,mode)
             row = self._store(db,space[0])
             _check(row['state'] == 'active')
             self._inspect(db,row)
@@ -326,7 +400,8 @@ class Catalog:
             if write and session['mode'] != 'read_write':
                 raise SpaceReadOnly('space read only')
             sid = session['space_id']
-            row = db.execute('SELECT stores.*,namespace,actor FROM stores JOIN spaces USING(store_id) WHERE space_id=?', (sid,)).fetchone()
+            row = db.execute('SELECT stores.*,namespace,actor,ceiling FROM stores JOIN spaces USING(store_id) WHERE space_id=?', (sid,)).fetchone()
+            self._within_ceiling(row,session,session['mode'] if write else 'read_only')
             path = Path(row['locator'])
             _check(row['state'] == 'active' and _identity(path) == (row['dev'], row['ino']))
             with _reader(path) as store:

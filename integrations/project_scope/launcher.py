@@ -7,7 +7,120 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # support isolated (-I) entry
-from project_scope import ScopeError, enroll, host_project, recover, resolve
+import json
+
+from project_scope import (CATALOG, ScopeError, approve_folder, catalog_admin, checked_database, enroll,
+                           host_project, inspect_scope, mint_grant, private_base, recover, registry_entry, resolve,
+                           revoke_folder, set_denied, uncovered_catalog_projects)
+
+# Owner commands reach the catalog through this interpreter's Nexus build. A host launch uses the
+# admin command installed beside the server it starts, so the grant and the server share one build.
+OWNER_ADMIN = [sys.executable, '-I', '-c', 'import sys; from nexus_memory.spaces.admin import main; sys.exit(main())']
+MODES = {'recall': 'Recall only', 'maintain': 'Recall + maintain', 'off': 'Off'}
+
+
+def owner_catalog() -> Path | None:
+    """The owner catalog if one exists. It is created by a repo's first host launch, not here."""
+    catalog = checked_database(private_base(), CATALOG)
+    return catalog if catalog.exists() else None
+
+
+def open_session(runtime: Path, project, host: str) -> Path:
+    return mint_grant([str(runtime.with_name('nexus-memory-admin'))], project, host)
+
+
+def set_ceiling(project_id: str, ceiling: str) -> dict:
+    catalog = owner_catalog()
+    if catalog is None:
+        return {'space_id': None}
+    return catalog_admin(OWNER_ADMIN, catalog, 'ceiling', {'project_id': project_id, 'ceiling': ceiling})
+
+
+def disable(checkout: Path) -> int:
+    """Stop the catalog first, so open sessions lose their grants before the registry says off.
+    If the catalog cannot be reached the registry denial still stops new launches, and the owner is told."""
+    entry = registry_entry(checkout) or {}
+    failure = None
+    if entry.get('store') == 'catalog':
+        try:
+            set_ceiling(entry['id'], 'off')
+        except (ScopeError, OSError, subprocess.SubprocessError) as error:
+            failure = error
+    print(set_denied(checkout, True))
+    if failure:
+        print(f'Nexus: new sessions are refused, but open sessions were not stopped ({failure}). '
+              'Run disable again.', file=sys.stderr)
+        return 1
+    return 0
+
+
+def enable(checkout: Path) -> int:
+    """Remove the registry denial, then reopen the space at recall only: a new generation, never maintain."""
+    print(set_denied(checkout, False))
+    entry = registry_entry(checkout) or {}
+    if entry.get('store') == 'catalog':
+        try:
+            set_ceiling(entry['id'], 'recall')
+        except (ScopeError, OSError, subprocess.SubprocessError) as error:
+            print(f'Nexus: the repo is still off in the catalog ({error}). Run enable again.', file=sys.stderr)
+            return 1
+    return 0
+
+
+def withdraw_folder(folder: Path) -> int:
+    """Revoke the approval, then end open sessions of every catalog repo it no longer covers. The sweep
+    also runs when the folder was already revoked, so a retry finishes an interrupted revocation."""
+    refused = None
+    try:
+        print(revoke_folder(folder))
+    except ScopeError as error:
+        refused = error
+    catalog = owner_catalog()
+    failed = []
+    for project_id in (uncovered_catalog_projects() if catalog else []):
+        try:
+            catalog_admin(OWNER_ADMIN, catalog, 'revoke', {'project_id': project_id})
+        except (ScopeError, OSError, subprocess.SubprocessError):
+            failed.append(project_id)
+    if failed:
+        print(f'Nexus: new sessions are refused, but open sessions of {len(failed)} repo(s) were not stopped. '
+              'Run revoke-folder again.', file=sys.stderr)
+        return 1
+    if refused:
+        raise refused
+    return 0
+
+
+def set_mode(checkout: Path, mode: str) -> int:
+    d = inspect_scope(checkout)
+    if d.state != 'bound' or d.store != 'catalog':
+        raise ScopeError('mode applies to a catalog repo that is enrolled and enabled')
+    if set_ceiling(d.project_id, mode)['space_id'] is None:
+        raise ScopeError('open this repo in a host first; its project space does not exist yet')
+    print(MODES[mode])
+    return 0
+
+
+def status(checkout: Path) -> int:
+    d = inspect_scope(checkout)
+    report = {'state': d.state, 'project_id': d.project_id, 'message': d.message,
+              'checkout': d.checkout and str(d.checkout), 'store': d.store, 'mode': None}
+    if d.state == 'disabled':
+        report['mode'] = MODES['off']
+    elif d.state == 'eligible':
+        report['mode'] = MODES['recall'] + ' (on first open)'
+    elif d.state == 'bound' and d.store == 'legacy':
+        report['mode'] = 'Legacy store (no ceiling)'
+    elif d.state == 'bound':
+        try:
+            catalog = owner_catalog()
+            space = catalog_admin(OWNER_ADMIN, catalog, 'status', {'project_id': d.project_id}) if catalog else {}
+            report['mode'] = MODES[space.get('ceiling') or 'recall']
+            report['generation'] = space.get('generation')
+        except (ScopeError, OSError, subprocess.SubprocessError) as error:
+            report['mode'], report['message'] = 'Unknown', str(error)
+    print(json.dumps(report, sort_keys=True))
+    return 0 if d.state == 'bound' and report['mode'] in (MODES['recall'], MODES['maintain'], 'Legacy store (no ceiling)') else 3
 
 
 
@@ -23,6 +136,10 @@ def capture_policy():
     if value != 'explicit':
         print('Nexus: unrecognised NEXUS_CAPTURE_POLICY; using explicit.', file=sys.stderr)
     return 'explicit'
+
+
+# Owner commands print the reason they refused; host launches never echo scope details.
+OWNER_COMMANDS = ('enroll', 'recover', 'approve-folder', 'revoke-folder', 'disable', 'enable', 'mode', 'status')
 
 
 def run_atlas(checkout, open_browser):
@@ -58,6 +175,14 @@ def main():
     recovery = commands.add_parser('recover', help='confirm a device-only change for an enrolled main checkout')
     recovery.add_argument('checkout', type=Path)
     recovery.add_argument('--expected-project-id', metavar='UUID', required=True)
+    commands.add_parser('approve-folder', help='enable recall for repos opened under this folder').add_argument('folder', type=Path)
+    commands.add_parser('revoke-folder', help='withdraw a folder approval; records are kept').add_argument('folder', type=Path)
+    commands.add_parser('disable', help='turn Nexus off for one repo, overriding folders').add_argument('checkout', type=Path)
+    commands.add_parser('enable', help='remove a per-repo disable').add_argument('checkout', type=Path)
+    commands.add_parser('status', help='show how Nexus treats a checkout (read-only)').add_argument('checkout', type=Path)
+    mode = commands.add_parser('mode', help='recall only, or also let Nexus maintain memory for this repo')
+    mode.add_argument('checkout', type=Path)
+    mode.add_argument('mode', choices=('recall', 'maintain'))
     atlas = commands.add_parser('atlas', help='open the read-only Memory Atlas viewer for an enrolled checkout')
     atlas.add_argument('checkout', type=Path)
     atlas.add_argument('--no-browser', action='store_true')
@@ -76,6 +201,21 @@ def main():
         if args.command == 'recover':
             print(recover(args.checkout, args.expected_project_id))
             return 0
+        if args.command == 'approve-folder':
+            print(approve_folder(args.folder))
+            return 0
+        if args.command == 'revoke-folder':
+            return withdraw_folder(args.folder)
+        if args.command in ('disable', 'enable', 'mode', 'status') and not args.checkout.is_absolute():
+            raise ScopeError('checkout path must be absolute')
+        if args.command == 'disable':
+            return disable(args.checkout)
+        if args.command == 'enable':
+            return enable(args.checkout)
+        if args.command == 'mode':
+            return set_mode(args.checkout, args.mode)
+        if args.command == 'status':
+            return status(args.checkout)
         if args.command == 'atlas':
             return run_atlas(args.checkout, not args.no_browser)
         if not args.runtime.is_absolute():
@@ -96,11 +236,17 @@ def main():
                 command.append(str(args.expected_project))
             os.execv(python, command)
         hooks = args.command == 'claude-hooks'
+        grant = None
         try:
-            project = host_project('claude' if hooks else args.command)
-            if args.expected_project is not None and resolve(args.expected_project).id != project.id:
+            # Antigravity has no catalog session grants yet, so a catalog repo is refused there.
+            catalog_ok = args.command != 'antigravity' and not v2
+            project = host_project('claude' if hooks else args.command, allow_catalog=catalog_ok)
+            if (args.expected_project is not None
+                    and resolve(args.expected_project, allow_catalog=catalog_ok).id != project.id):
                 raise ScopeError('host entry is bound to a different enrolled project')
-        except (ScopeError, OSError):      # OSError: no registry yet, the first-run case
+            if project.catalog is not None:
+                grant = open_session(args.runtime, project, args.command)
+        except (ScopeError, OSError, subprocess.SubprocessError):  # OSError: no registry yet, the first-run case
             if not hooks:
                 raise
             # Unenrolled or ambiguous. Stay connected with only no-op hook tools (no store, no memory
@@ -110,9 +256,13 @@ def main():
             os.chdir(Path.home())
             os.execv(args.runtime, [str(args.runtime), '--namespace', 'unenrolled', '--hook-unenrolled'])
         options = ['--db', str(project.database), '--namespace', project.id, '--actor', 'local']
-        if v2:
+        if grant is not None:
+            v2 = True
+            options = ['--catalog', str(project.catalog), '--grant-file', str(grant), '--project-id', project.id,
+                       '--consume-grant-file']
+        elif v2:
             options = ['--catalog', str(args.catalog), '--grant-file', str(args.grant_file), '--project-id',project.id]
-        if args.command == 'codex' and not v2:
+        if args.command == 'codex' and (not v2 or grant is not None):
             options.extend(['--codex-project-root', str(project.common.parent)])
         elif hooks:
             options.extend(['--hook-project-root', str(project.common.parent),
@@ -122,6 +272,12 @@ def main():
         os.chdir(project.checkout)
         os.environ['PWD'] = str(project.checkout)
         os.execv(args.runtime, [str(args.runtime), *options])
+    except ScopeError as error:
+        if args.command in OWNER_COMMANDS:
+            print(f'Nexus: {error}', file=sys.stderr)
+            return 1
+        print('Nexus unavailable: project scope could not be verified.', file=sys.stderr)
+        return 1
     except (OSError, ValueError, subprocess.SubprocessError, RuntimeError):
         print('Nexus unavailable: project scope could not be verified.', file=sys.stderr)
         return 1
