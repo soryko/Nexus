@@ -40,6 +40,8 @@ including the license's permissions for qualifying noncommercial organizations.
 
 Python 3.12+ and [uv](https://docs.astral.sh/uv/getting-started/installation/), with a Python whose **linked SQLite is 3.51.3 or newer**.
 
+For reference verification, a **git that accepts `--no-lazy-fetch`** (Git 2.44 or newer). Every git call carries that flag, so a missing object in a partial clone fails instead of being fetched from the network. Stock Ubuntu 24.04 ships git 2.43, which rejects the flag; install a newer git (for example from `ppa:git-core/ppa`) first. `uv run python .github/scripts/verify_runtime.py` probes the flags and reports each as accepted or rejected.
+
 > [!WARNING]
 > A Python that satisfies the version floor can still fail the SQLite one — the two are independent. Which SQLite an interpreter links is a property of that individual build, not of its Python version, its distributor or the `sqlite3` on your PATH, and builds from one distributor have been observed on both sides of the floor. So a plain `uv sync` can produce an environment that cannot start this server, and no distributor is assumed safe: `tools/install.py` probes each candidate and reports both numbers.
 
