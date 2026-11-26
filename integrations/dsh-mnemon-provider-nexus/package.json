@@ -1,0 +1,8 @@
+{
+  "name": "dsh-mnemon-provider-nexus", "version": "0.1.0", "private": true, "type": "module",
+  "packageManager": "pnpm@10.13.1", "engines": {"node":"22.19.0"},
+  "exports": {".": {"types":"./dist/index.d.ts","import":"./dist/index.js"}}, "files":["dist","README.md"],
+  "scripts":{"typecheck":"tsc --noEmit","build":"tsc","test":"vitest run tests/sdk.spec.ts tests/conformance.spec.ts","test:packed":"vitest run tests/packed.spec.ts","test:loader":"vitest run tests/loader.spec.ts"},
+  "peerDependencies":{"dsh-mnemon-source-memory-spaces":"0.5.31","dsh-mnemon":"0.5.50","@deepseek-ai/cordis":"4.0.5"},
+  "devDependencies":{"typescript":"5.9.3","vitest":"3.2.7","@types/node":"22.20.1","@deepseek-ai/dsh":"0.2.1-rc.5"}
+}

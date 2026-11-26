@@ -284,6 +284,35 @@ class Driver:
                   f"receipt replayed, active_memories=1")
         return got
 
+    def installed_spaces(self, db: Path, seeded: dict) -> None:
+        """Exercise 005, 006, admin and the NDJSON bridge after source removal."""
+        catalog = self.work / 'owner catalog'
+        def admin(command, key, body=None, *extra):
+            args = [self.bin / 'nexus-memory-admin', *command.split(), '--catalog', catalog,
+                    '--operation-key', key, *extra]
+            if body is not None:
+                request = self.work / 'request.json'
+                request.write_text(json.dumps(body))
+                args += ['--request', request]
+            return json.loads(self.run(args).stdout)
+        admin('catalog init', 'init')
+        space, = admin('space register', 'register', {'path': str(db)})['spaces']
+        admin('store migrate', 'migrate', {'store_id': space['store_id']})
+        schema = self.python_snippet("import sqlite3,sys,json; print(json.dumps(dict(version="
+                                     "sqlite3.connect(sys.argv[1]).execute('pragma user_version').fetchone()[0])))", str(db))
+        if schema['version'] != 6:
+            raise Failed('installed migration did not produce schema 6')
+        ticket = self.work / 'distribution.ticket'
+        admin('grant issue', 'issue', dict(space_id=space['space_id'], principal_id='local',
+              receiving_context='distribution', mode='read_only'), '--out', ticket)
+        request = dict(v=1, id='test', method='get', params=dict(memory_id=seeded['receipt']['memory_id']))
+        reply = subprocess.run([self.bin / 'nexus-memory-bridge', '--catalog', catalog,
+                                '--grant-file', ticket], cwd=self.work, env=self._clean_env(),
+                               input=json.dumps(request)+'\n', text=True, capture_output=True, timeout=30, check=True)
+        if json.loads(reply.stdout)['result']['content'] != seeded['content']:
+            raise Failed('installed v2 bridge returned different bytes')
+        self.step('v2 after source removal', 'registered v4 seed, applied 005/006, read through installed bridge')
+
     # ------------------------------------------------------------------ drives
 
     def candidate(self) -> dict:
@@ -299,6 +328,7 @@ class Driver:
         self.remove_source()
         lifecycle = self.lifecycle()
         retrieved = self.retrieve(db, seeded)
+        self.installed_spaces(db, seeded)
         after = self.origin("source removed")
         return {
             "candidate_sha": sha,

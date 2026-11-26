@@ -23,6 +23,44 @@ from nexus_memory.domain.models import (
 )
 
 
+from nexus_memory.domain.spaces import MemoryRef, OperationRef
+
+
+EXACT_COMMAND_VERSION = 1
+
+
+@dataclass(frozen=True, slots=True)
+class WriteContext:
+    space_id: str
+    operation: OperationRef
+    principal_id: str
+    agent_id: str | None = None
+    session_id: str | None = None
+    run_id: str | None = None
+    source_event_id: str | None = None
+    compat_metadata: dict | None = None
+    publication_sources: tuple[MemoryRef, ...] | None = None
+    visibility_role: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedMutation:
+    scope: Scope
+    operation: str
+    target: str | None
+    expected: str | None
+    item: MemoryInput | None
+    key: str
+    digest: str
+    digest_version: int
+    references: tuple[VerifiedReference, ...] = ()
+    context: WriteContext | None = None
+    command_digest: str | None = None
+    replay: WriteReceipt | None = None
+    compat_json: str | None = None
+    sources_json: str | None = None
+
+
 @dataclass(slots=True)
 class WriteObservation:
     """Request-local receipt disposition, separate from the immutable public receipt."""
@@ -45,6 +83,8 @@ def observe_write() -> Iterator[WriteObservation]:
 
 
 class MemoryRepository(Protocol):
+    def commit_prepared(self, command: PreparedMutation) -> WriteReceipt: ...
+    def receipt_for_operation(self, scope: Scope, operation: OperationRef, command_digest: str) -> WriteReceipt | None: ...
     def record(self, scope: Scope, item: MemoryInput, key: str, digest: str,
                references: tuple[VerifiedReference, ...] = (), digest_version: int = DIGEST_VERSION) -> WriteReceipt: ...
     def revise(self, scope: Scope, memory_id: str, expected_revision_id: str, item: MemoryInput, key: str, digest: str,

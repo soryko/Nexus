@@ -72,6 +72,23 @@ class GitCli:
         except subprocess.TimeoutExpired as error:
             raise VerificationUnavailable("git did not answer in time") from error
 
+    def read_blob(self, object_oid: str, *, max_bytes: int, checkout: Path | None = None) -> bytes:
+        """Read only an immutable, full-OID blob. Reject by size before reading bytes."""
+        from nexus_memory.domain.errors import InvalidEvidence
+        if (len(object_oid) not in (40, 64) or not HEX.fullmatch(object_oid)
+                or type(max_bytes) is not int or not 0 <= max_bytes <= 1 << 20):
+            raise InvalidEvidence('invalid blob request')
+        cwd = checkout or Path.cwd()
+        kind = self._run(cwd, 'cat-file', '-t', object_oid)
+        size = self._run(cwd, 'cat-file', '-s', object_oid)
+        if (kind.returncode or kind.stdout != b'blob\n' or size.returncode
+                or not size.stdout.strip().isdigit() or int(size.stdout) > max_bytes):
+            raise InvalidEvidence('blob unavailable or too large')
+        result = self._run(cwd, 'cat-file', 'blob', object_oid)
+        if result.returncode or len(result.stdout) != int(size.stdout):
+            raise InvalidEvidence('blob unavailable')
+        return result.stdout
+
     def inspect(self, checkout: Path) -> CheckoutInfo:
         """Locate the shared Git directory and read the object format, for binding."""
         if not checkout.is_dir():

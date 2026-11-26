@@ -32,6 +32,67 @@ env:
   NEXUS_DIAGNOSTICS_DIR: ${{ github.workspace }}/artifacts/diagnostics
 
 jobs:
+  dsh-provider:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Provision isolated provider toolchain
+        run: |
+          npm install --prefix "$RUNNER_TEMP/nexus-tools" --ignore-scripts node-linux-x64@22.19.0 pnpm@10.13.1
+          echo "$RUNNER_TEMP/nexus-tools/node_modules/node-linux-x64/bin" >> "$GITHUB_PATH"
+          echo "$RUNNER_TEMP/nexus-tools/node_modules/.bin" >> "$GITHUB_PATH"
+          curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Verify installed bridge and isolated provider
+        run: |
+          evidence="$GITHUB_WORKSPACE/artifacts/dsh-provider"
+          mkdir -p "$evidence"
+          node -v > "$evidence/node-version.txt"
+          pnpm -v > "$evidence/pnpm-version.txt"
+          test "$(node -v)" = v22.19.0 && test "$(pnpm -v)" = 10.13.1
+          uv sync --frozen
+          uv run pytest -q tests/transport/test_dsh_bridge.py --junitxml="$evidence/bridge.xml"
+          cd integrations/dsh-mnemon-provider-nexus
+          export NEXUS_FIXTURE_STORE="$RUNNER_TEMP/nexus-store"
+          pnpm install --frozen-lockfile --store-dir "$NEXUS_FIXTURE_STORE"
+          sha256sum pnpm-lock.yaml > "$evidence/lockfile.sha256"
+          for check in typecheck build test test:packed test:loader; do
+            if pnpm run "$check"; then rc=0; else rc=$?; fi
+            printf '%s\t%d\n' "$check" "$rc" >> "$evidence/checks.tsv"
+            if (( rc != 0 )); then exit "$rc"; fi
+          done
+      - name: Retain provider gate results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: dsh-provider-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/dsh-provider/
+          if-no-files-found: warn
+          retention-days: 14
+
+  stage-a:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0  # The rehearsal runs the historical v4 implementation.
+      - name: Run zero-model protocol and recovery drills
+        run: |
+          curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
+          export PATH="$HOME/.local/bin:$PATH"
+          uv sync --frozen
+          mkdir -p artifacts
+          uv run python tools/check_memory_v2.py > artifacts/stage-a-protocol.json
+          uv run python tools/rehearse_memory_v2.py > artifacts/stage-a-recovery.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: stage-a-fixtures
+          path: artifacts/stage-a-*.json
+          retention-days: 14
+
   suite:
     runs-on: ubuntu-24.04
     timeout-minutes: 20

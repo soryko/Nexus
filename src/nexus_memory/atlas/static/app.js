@@ -366,6 +366,8 @@ async function revalidate() {
 
 async function main() {
   await signIn();
+  const { startSpaces } = await import('/spaces.js');
+  if (await startSpaces()) return;
   const overview = await refreshOverview();
   renderKinds(overview);
   wire();

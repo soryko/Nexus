@@ -1,0 +1,5 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "\"${NEXUS_HOOK_PYTHON}\" -I -m nexus_memory.transport.host_control", "timeout": 2}]}]
+  }
+}

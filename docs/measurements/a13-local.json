@@ -1,0 +1,318 @@
+{
+  "protocol": {
+    "source_sha": "8b3ea5bf4516a78a590f678d03482f7c3fd59059",
+    "working_tree_modified": true,
+    "runtime": {
+      "os": "Darwin",
+      "arch": "arm64",
+      "python": "3.13.14",
+      "sqlite": "3.53.1",
+      "mcp": "2.1.1"
+    },
+    "kind": "synthetic_protocol_fixture",
+    "hosts": {
+      "DSH": "not exercised by this checker",
+      "Claude Code": "not exercised by this checker",
+      "Codex": "not exercised by this checker"
+    },
+    "limitations": [
+      "not host certification",
+      "no model or utility evaluation",
+      "not a release authorization"
+    ],
+    "R": "1c11812c116dbd39414db9adc18c84928fe99ad0",
+    "M": "4a52156976f3a4ed25341ced51425d513b9b0613",
+    "exact_receipt": {
+      "memory_id": "3c2ce574-f9ef-459c-b5d1-819f43342997",
+      "revision_id": "18b6848c-a2a2-42d0-be34-6b2805481b93",
+      "operation_id": "6bac48d7-103a-4700-8ee4-41db847bb56e",
+      "durable_seq": 1,
+      "operation": "record"
+    },
+    "curation_receipt": {
+      "assertion_revisions": [
+        {
+          "assertion_id": "3868facf-accd-491e-b6bd-3d0540e0e7d5",
+          "kind": "assertion_revision",
+          "revision_id": "b969daad-e301-4c14-9ee2-ed08a0b5182f"
+        },
+        {
+          "assertion_id": "133fd057-dfd4-42ab-b05c-c88815a903c4",
+          "kind": "assertion_revision",
+          "revision_id": "28cbdc90-bc17-4e3a-8416-dfd6793fc673"
+        },
+        {
+          "assertion_id": "e422f903-1476-4fda-925d-fe70a4268871",
+          "kind": "assertion_revision",
+          "revision_id": "7cf1dd83-3494-43e9-8721-3641f407838e"
+        },
+        {
+          "assertion_id": "fec39d60-b761-44a5-9c3f-9d6f8c951683",
+          "kind": "assertion_revision",
+          "revision_id": "c0dfb278-19b9-41dc-805e-2ffd320851d1"
+        },
+        {
+          "assertion_id": "ca9df65e-45e1-481e-b6ef-738671139107",
+          "kind": "assertion_revision",
+          "revision_id": "af11ed00-3991-4531-b5b5-a169f33f5259"
+        }
+      ],
+      "graph_event_seq": 1,
+      "id_mappings": {
+        "D17": "1fef340f-cf8c-4f60-9c3f-f25929b0e447",
+        "D32": "410ac0d7-e631-44af-ae8b-a2bad9f1cb72",
+        "I42": "dafe6077-386e-4215-ab19-1d81124b7743",
+        "file": "fec39d60-b761-44a5-9c3f-9d6f8c951683",
+        "file-source": "6912ab3e-3e08-4e7b-ac22-f270a2d91824",
+        "implements": "3868facf-accd-491e-b6bd-3d0540e0e7d5",
+        "implements-source": "c5a21fb5-de89-40c8-8520-4d42ba2e72be",
+        "main": "ca9df65e-45e1-481e-b6ef-738671139107",
+        "main-source": "e003981a-5727-49e0-8eaf-783b289da70b",
+        "motivation": "133fd057-dfd4-42ab-b05c-c88815a903c4",
+        "motivation-source": "4afc52b4-882d-4c35-b56e-56a4b172b7a9",
+        "regression": "e422f903-1476-4fda-925d-fe70a4268871",
+        "regression-source": "2a02c7f5-1776-471a-b053-480b5c11c0f6",
+        "renew_lease": "271ec777-f9ca-42d0-a3d4-8ff43c08125c",
+        "test.txt": "934b7f74-3a1d-47b5-9910-37433f84da24",
+        "test_rejoin_after_suspend": "8664eca4-05e7-4a6a-8db8-0864143140e2"
+      },
+      "operation_id": "eb2235b5-b814-4d92-9446-3c30c196d690",
+      "projection_generation": 1
+    },
+    "retrieved_refs": [
+      {
+        "source": {
+          "kind": "memory",
+          "ref": {
+            "memory_id": "3c2ce574-f9ef-459c-b5d1-819f43342997",
+            "revision_id": "18b6848c-a2a2-42d0-be34-6b2805481b93",
+            "space_id": "52cd409f-f6dc-4157-ad74-c124f1ad37cb"
+          }
+        },
+        "span": {
+          "end": 75,
+          "sha256": "fe6c22ea00efa016949406fe58012806b58201596cce1220a471ad6e5bed14e5",
+          "start": 0
+        }
+      },
+      {
+        "source": {
+          "kind": "memory",
+          "ref": {
+            "memory_id": "a05282b9-c3f3-47af-b77c-b82d249a3fe9",
+            "revision_id": "b5f33903-be4e-4725-b199-f5d14a820abb",
+            "space_id": "52cd409f-f6dc-4157-ad74-c124f1ad37cb"
+          }
+        },
+        "span": {
+          "end": 35,
+          "sha256": "067b9ec853e347aee835ebed45a3279954bcba888c4957cd796561d57934a5d2",
+          "start": 0
+        }
+      },
+      {
+        "source": {
+          "kind": "memory",
+          "ref": {
+            "memory_id": "8ddc2a59-f808-42b1-93df-991dff31e45a",
+            "revision_id": "3fcd5a16-68d4-4761-bcab-723772783411",
+            "space_id": "52cd409f-f6dc-4157-ad74-c124f1ad37cb"
+          }
+        },
+        "span": {
+          "end": 29,
+          "sha256": "9197066defc8318b0fcc929f90b2ad3bfce05a8bbf3c74d6937b2fb879c9785d",
+          "start": 0
+        }
+      },
+      {
+        "source": {
+          "blob_oid": "4276c52ec04b61faa8d3cfb59447deea4e3e274c",
+          "commit_oid": "1c11812c116dbd39414db9adc18c84928fe99ad0",
+          "kind": "code",
+          "path": "test.txt",
+          "repository_id": "51eaaefa-2570-4509-8193-333df04b6ceb"
+        },
+        "span": {
+          "end": 32,
+          "sha256": "10feb3d775949464efd6a20908fc1bd47d6448d65527910413b2c324c2f8dafb",
+          "start": 0
+        }
+      }
+    ],
+    "assertions": [
+      "empty_P",
+      "three_semantic_hops",
+      "one_file_proof",
+      "exact_sources",
+      "hidden_X",
+      "withdrawal_unresolved",
+      "correction_stale",
+      "revoked_read_explain_replay_write"
+    ],
+    "outcome": "passed"
+  },
+  "upgrade": {
+    "old_source_sha": "4ce3a5bbafdff74e2cdf98858c9e579d64790093",
+    "schemas": [
+      4,
+      5,
+      6
+    ],
+    "backup_blob_hash": "9ee4c0c4b5233d451eb705278edcc7c1e1107dba5dfb159b216fb982e3c3844d",
+    "restored_durable_sequence": 1,
+    "old_startup_exit": 1,
+    "git_commit": "caf559ea0590867e90e2008f7149604b4e1ba5b9",
+    "git_blob": "001f1993905d81b471eeaa840432cf35aedaea61",
+    "legacy_receipt": {
+      "memory_id": "2efbd788-0539-43b6-bf8b-92d2f9421e66",
+      "revision_id": "2414cb7b-1a71-4828-8a74-b39bb1ecc42d",
+      "operation_id": "f7671c45-6cd0-47b8-94f3-50a57be85a61",
+      "durable_seq": 1,
+      "operation": "record"
+    },
+    "assertions": [
+      "backup_verified",
+      "exact_get_search_retry_revise_forget",
+      "old_startup_refused",
+      "pre_restore_mount_revoked",
+      "later_edit_and_forget_absent"
+    ],
+    "outcome": "passed"
+  },
+  "hosts": {
+    "kind": "fresh_host_probe",
+    "observations": {
+      "Claude Code": {
+        "version": "2.1.318 (Claude Code)",
+        "recall": "pending: no no-model tool-call path exercised",
+        "health": "connected"
+      },
+      "Codex": {
+        "version": "codex-cli 0.169.0",
+        "recall": "verified: app-server MCP tool call",
+        "retrieved_refs": [
+          {
+            "source": {
+              "kind": "memory",
+              "ref": {
+                "memory_id": "b557a1de-731f-40a8-b558-1763eb5f9726",
+                "revision_id": "823a98cd-c16c-4c45-9d40-a3612eb170f8",
+                "space_id": "1a9acf20-20a3-4eca-bffb-828acb0c4f54"
+              }
+            },
+            "span": {
+              "end": 75,
+              "sha256": "fe6c22ea00efa016949406fe58012806b58201596cce1220a471ad6e5bed14e5",
+              "start": 0
+            }
+          },
+          {
+            "source": {
+              "kind": "memory",
+              "ref": {
+                "memory_id": "27a164a6-c8bc-46f6-8ab4-aef21c9ebee0",
+                "revision_id": "19cd4fa8-4e76-4523-9387-883335895721",
+                "space_id": "1a9acf20-20a3-4eca-bffb-828acb0c4f54"
+              }
+            },
+            "span": {
+              "end": 35,
+              "sha256": "067b9ec853e347aee835ebed45a3279954bcba888c4957cd796561d57934a5d2",
+              "start": 0
+            }
+          },
+          {
+            "source": {
+              "kind": "memory",
+              "ref": {
+                "memory_id": "6698bcd7-6c24-4375-835e-c00458046a38",
+                "revision_id": "71e8dbd5-ef00-4457-8fc1-5de2ab016d25",
+                "space_id": "1a9acf20-20a3-4eca-bffb-828acb0c4f54"
+              }
+            },
+            "span": {
+              "end": 29,
+              "sha256": "9197066defc8318b0fcc929f90b2ad3bfce05a8bbf3c74d6937b2fb879c9785d",
+              "start": 0
+            }
+          },
+          {
+            "source": {
+              "blob_oid": "4276c52ec04b61faa8d3cfb59447deea4e3e274c",
+              "commit_oid": "3d320c9429db2cd737a36dd059d20bf612b06b4b",
+              "kind": "code",
+              "path": "test.txt",
+              "repository_id": "d137f841-7328-4d47-8266-c6fa430cf59e"
+            },
+            "span": {
+              "end": 32,
+              "sha256": "10feb3d775949464efd6a20908fc1bd47d6448d65527910413b2c324c2f8dafb",
+              "start": 0
+            }
+          }
+        ]
+      }
+    },
+    "model_turns": 0,
+    "R": "3d320c9429db2cd737a36dd059d20bf612b06b4b",
+    "exact_receipt": {
+      "memory_id": "b557a1de-731f-40a8-b558-1763eb5f9726",
+      "revision_id": "823a98cd-c16c-4c45-9d40-a3612eb170f8",
+      "operation_id": "8873de31-5706-4e2c-9b31-8bca178c5bd8",
+      "durable_seq": 1,
+      "operation": "record"
+    },
+    "curation_operation_id": "2b85b813-7e25-4167-9565-0adef3316c1b"
+  },
+  "junit": {
+    "suite": {
+      "tests": 846,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 4
+    },
+    "mutations": {
+      "tests": 36,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "atlas-ui": {
+      "tests": 39,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "provider": {
+    "tarball_sha256": "1380159a9748f6a09424419c58e8770bdcf2975f7bb9e42d3d75e2d374e15900",
+    "pnpm_lock_sha256": "3cf9e0cf91e808a7c07591ed2fae120788cf3eff3fa3bedc6c35c6b1f2c38ea6",
+    "installed_files": {
+      "dsh-mnemon": {
+        "version": "0.5.50",
+        "regular_files_manifest_sha256": "8962f708909b8200957cf30e61a0f67981d374a4a704cbefc39c23db39c082d7"
+      },
+      "dsh-mnemon-source-memory-spaces": {
+        "version": "0.5.31",
+        "regular_files_manifest_sha256": "1d764dafcb2733b1f49726ccdb542daad93ab8c9ef3871db7f54558888dbad2a"
+      },
+      "@deepseek-ai/dsh": {
+        "version": "0.2.1-rc.5",
+        "regular_files_manifest_sha256": "c40263f7a0305f6abd06783e35bd118719dd1b4f0037b4daa492e72611e2125b"
+      },
+      "@deepseek-ai/cordis": {
+        "version": "4.0.5",
+        "regular_files_manifest_sha256": "194fa7c44398b4b5d91d58a12df6cb86804e5876d26c843d4cbbaec1175130f7"
+      },
+      "typescript": {
+        "version": "5.9.3",
+        "regular_files_manifest_sha256": "19650bd8ea297979ee6cdc20fa23af0cf267b386d12f0aea8abc0711a3fa6bb1"
+      },
+      "vitest": {
+        "version": "3.2.7",
+        "regular_files_manifest_sha256": "ff686aec01f203ceb092136381c983a2d067021d4e8f71dd6f0b7d4809ac0b93"
+      }
+    }
+  }
+}

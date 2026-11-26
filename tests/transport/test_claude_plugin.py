@@ -125,3 +125,48 @@ def test_skill_and_command_carry_the_policy_and_cannot_enrol() -> None:
     command = (PLUGIN / "commands" / "status.md").read_text()
     assert "allowed-tools: Bash(python3 -I:*)" in command
     assert "mcp__" not in command and "launcher" not in command
+
+
+def test_project_and_enrollment_refuse_a_declared_dir_in_another_checkout(tmp_path: Path, monkeypatch) -> None:
+    # The Stop hook saves into scope.project(cwd), so it must apply the same CLAUDE_PROJECT_DIR
+    # corroboration as enrollment(): a declared directory in another checkout disables both.
+    import importlib.util
+    import types
+    from types import SimpleNamespace
+
+    fake = types.ModuleType("project_scope")
+
+    class ScopeError(ValueError):
+        pass
+
+    def resolve(workspace):
+        parts = Path(workspace).parts
+        if len(parts) < 3 or parts[1] != "repos":
+            raise ScopeError("not enrolled")
+        return SimpleNamespace(checkout=Path(*parts[:3]))
+
+    fake.ScopeError, fake.resolve = ScopeError, resolve
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "project_scope.py").write_text("# placeholder: the module comes from sys.modules\n")
+    monkeypatch.setitem(sys.modules, "project_scope", fake)
+    monkeypatch.setenv("NEXUS_SCOPE_BIN", str(bin_dir))
+    monkeypatch.delenv("NEXUS_SCOPE_HOME", raising=False)
+    spec = importlib.util.spec_from_file_location("nexus_claude_scope_under_test", PLUGIN / "hooks" / "scope.py")
+    scope = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(scope)
+
+    cwd = "/repos/a/src"
+    for declared in (None, "/repos/a", "/repos/a/src"):
+        if declared is None:
+            monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+        else:
+            monkeypatch.setenv("CLAUDE_PROJECT_DIR", declared)
+        assert scope.project(cwd).checkout == Path("/repos/a"), declared
+        assert scope.enrollment(cwd) == "enrolled", declared
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", "/repos/b")
+    assert scope.project(cwd) is None
+    assert scope.enrollment(cwd) == "not-enrolled"
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", "/elsewhere")  # declared dir resolves nowhere
+    assert scope.project(cwd) is None
+    assert scope.enrollment(cwd) == "not-enrolled"

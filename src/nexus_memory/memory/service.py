@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import replace
+from copy import deepcopy
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
 
 from nexus_memory.domain.errors import (
@@ -39,7 +40,8 @@ from nexus_memory.domain.models import (
     VerifiedReference,
     WriteReceipt,
 )
-from nexus_memory.storage.repository import MemoryRepository
+from nexus_memory.domain.spaces import _canonical as canonical_json, canonical_command_digest
+from nexus_memory.storage.repository import EXACT_COMMAND_VERSION, MemoryRepository, PreparedMutation, WriteContext
 
 from .verifier import RepositoryVerifier
 
@@ -193,37 +195,75 @@ class MemoryService:
         self.verifier.check_identity()
         return tuple(sorted(verified.values(), key=lambda item: (item.commit_oid, item.path)))
 
-    def _prepare(self, operation: str, target: str | None, expected: str | None, item: MemoryInput,
-                 key: str) -> tuple[str, int, tuple[VerifiedReference, ...], WriteReceipt | None]:
-        digest, version = self._request_digest(operation, target, expected, item)
-        if not item.references:
-            return digest, version, (), None
-        # A retry never invokes git: an already-committed receipt is returned before verification.
-        if receipt := self.repository.receipt(self.scope, key, digest):
-            return digest, version, (), receipt
-        return digest, version, self._verify(item.references), None
+    def _prepare(self, operation: str, target: str | None, expected: str | None, item: MemoryInput | None,
+                 key: str, context: WriteContext | None) -> PreparedMutation:
+        key = self._key(key)
+        if operation != "record":
+            target = self._identifier(target, "memory_id")
+            expected = self._identifier(expected, "expected_revision_id")
+        digest, version = (self._request_digest(operation, target, expected, item) if item is not None
+                           else (self._digest(operation, target, expected, None), DIGEST_VERSION))
+        command_digest = compat_json = sources_json = replay = None
+        if context is not None:
+            if key != context.operation.operation_key:
+                raise InvalidInput("operation key differs from context")
+            if operation == "forget" and any(value is not None for value in (
+                context.compat_metadata, context.publication_sources, context.visibility_role,
+            )):
+                raise InvalidInput("forget does not create revision provenance")
+            # Use one snapshot for the wrapper, durable JSON and in-transaction checks.
+            metadata = deepcopy(context.compat_metadata)
+            if context.publication_sources is not None:
+                context = replace(context, publication_sources=tuple(context.publication_sources))
+            sources = (None if context.publication_sources is None else
+                       {"version": 1, "sources": [asdict(ref) for ref in context.publication_sources]})
+            command_digest = canonical_command_digest(EXACT_COMMAND_VERSION, "exact", {
+                "space_id": context.space_id, "legacy_digest": digest, "legacy_digest_version": version,
+                "compat_metadata": metadata, "publication_sources": sources,
+                "visibility_role": context.visibility_role,
+            })
+            if metadata is not None:
+                compat_json = canonical_json(metadata)
+            if sources is not None:
+                sources_json = canonical_json(sources)
+            replay = self.repository.receipt_for_operation(self.scope, context.operation, command_digest)
+        elif item is not None and item.references:
+            replay = self.repository.receipt(self.scope, key, digest)
+        verified = self._verify(item.references) if item and item.references and not replay else ()
+        return PreparedMutation(self.scope, operation, target, expected, item, key, digest, version,
+                                verified, context, command_digest, replay, compat_json, sources_json)
+
+    def prepare_record(self, input: MemoryInput, idempotency_key: str,
+                       context: WriteContext | None = None) -> PreparedMutation:
+        return self._prepare("record", None, None, input, idempotency_key, context)
+
+    def prepare_revise(self, memory_id: str, expected_revision_id: str, input: MemoryInput, idempotency_key: str,
+                       context: WriteContext | None = None) -> PreparedMutation:
+        return self._prepare("revise", memory_id, expected_revision_id, input, idempotency_key, context)
+
+    def prepare_forget(self, memory_id: str, expected_revision_id: str, idempotency_key: str,
+                       context: WriteContext | None = None) -> PreparedMutation:
+        return self._prepare("forget", memory_id, expected_revision_id, None, idempotency_key, context)
+
+    def commit_prepared(self, command: PreparedMutation) -> WriteReceipt:
+        if command.scope != self.scope:
+            raise InvalidInput("prepared scope differs from bound scope")
+        return self.repository.commit_prepared(command)
 
     def record(self, input: MemoryInput, idempotency_key: str) -> WriteReceipt:
-        key = self._key(idempotency_key)
-        digest, version, verified, replay = self._prepare("record", None, None, input, key)
-        if replay is not None:
-            return replay
-        return self.repository.record(self.scope, input, key, digest, verified, version)
+        command = self.prepare_record(input, idempotency_key)
+        return command.replay or self.repository.record(self.scope, input, command.key, command.digest,
+                                                        command.references, command.digest_version)
 
     def revise(self, memory_id: str, expected_revision_id: str, input: MemoryInput, idempotency_key: str) -> WriteReceipt:
-        key = self._key(idempotency_key)
-        memory_id = self._identifier(memory_id, "memory_id")
-        expected_revision_id = self._identifier(expected_revision_id, "expected_revision_id")
-        digest, version, verified, replay = self._prepare("revise", memory_id, expected_revision_id, input, key)
-        if replay is not None:
-            return replay
-        return self.repository.revise(self.scope, memory_id, expected_revision_id, input, key, digest, verified, version)
+        command = self.prepare_revise(memory_id, expected_revision_id, input, idempotency_key)
+        return command.replay or self.repository.revise(self.scope, memory_id, expected_revision_id, input,
+                                                        command.key, command.digest, command.references,
+                                                        command.digest_version)
 
     def forget(self, memory_id: str, expected_revision_id: str, idempotency_key: str) -> WriteReceipt:
-        key = self._key(idempotency_key)
-        memory_id = self._identifier(memory_id, "memory_id")
-        expected_revision_id = self._identifier(expected_revision_id, "expected_revision_id")
-        return self.repository.forget(self.scope, memory_id, expected_revision_id, key, self._digest("forget", memory_id, expected_revision_id, None))
+        command = self.prepare_forget(memory_id, expected_revision_id, idempotency_key)
+        return self.repository.forget(self.scope, memory_id, expected_revision_id, command.key, command.digest)
 
     def get(self, memory_id: str, revision_id: str | None = None) -> MemoryView:
         memory_id = self._identifier(memory_id, "memory_id")

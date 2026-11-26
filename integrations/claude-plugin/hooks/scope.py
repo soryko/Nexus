@@ -37,11 +37,28 @@ def _resolver(cwd):
         sys.path.remove(str(bin_dir))
 
 
+def _corroborated(project_scope, cwd):
+    """Resolve `cwd`; None when unenrolled or when CLAUDE_PROJECT_DIR names another checkout.
+
+    Raises project_scope.ScopeError as resolve() does.
+    """
+    resolved = project_scope.resolve(Path(cwd))
+    if resolved is None:
+        return None
+    declared = os.environ.get("CLAUDE_PROJECT_DIR")
+    if declared and Path(declared) != Path(cwd):
+        # A subdirectory may corroborate the same checkout; another enrolled
+        # project (or another worktree) must not enable this hook.
+        if project_scope.resolve(Path(declared)).checkout != resolved.checkout:
+            return None
+    return resolved
+
+
 def project(cwd):
     """The resolved enrolled project for `cwd`, or None when not enrolled or undeterminable."""
     try:
         with _resolver(cwd) as project_scope:
-            return project_scope.resolve(Path(cwd)) if project_scope is not None else None
+            return _corroborated(project_scope, cwd) if project_scope is not None else None
     except Exception:
         return None
 
@@ -53,7 +70,8 @@ def enrollment(cwd):
             if project_scope is None:
                 return "unknown"
             try:
-                project_scope.resolve(Path(cwd))
+                if _corroborated(project_scope, cwd) is None:
+                    return "not-enrolled"
             except project_scope.ScopeError:
                 return "not-enrolled"
             return "enrolled"
