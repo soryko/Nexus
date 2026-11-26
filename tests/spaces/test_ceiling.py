@@ -47,19 +47,24 @@ def test_a_project_space_starts_recall_only(tmp_path):
     assert grant(cat, research, 'read_write', 'rw')
 
 
-def test_maintain_is_an_explicit_opt_in_and_lowering_it_revokes_writers_only(tmp_path):
+def test_maintain_is_an_explicit_opt_in_and_lowering_it_narrows_writers_to_reads(tmp_path):
     cat, space = catalog(tmp_path)
     assert ceiling(cat, space, 'maintain', 'up') == 2
     writer = grant(cat, space, 'read_write', 'w')
     reader = grant(cat, space, 'read_only', 'r')
     assert publish(cat, writer, space, exact(cat, writer, space))
     assert ceiling(cat, space, 'recall', 'down') == 3
-    with pytest.raises(GrantRevoked):
-        publish(cat, writer, space, exact(cat, writer, space))
-    env, queue = read(cat, reader, space)                      # readers keep working
-    assert queue.drain(env.publication_id)
+    with pytest.raises(SpaceReadOnly):
+        publish(cat, writer, space, lambda _: pytest.fail('write ran after the ceiling was lowered'))
+    for session in (writer, reader):                           # both sessions keep reading
+        env, queue = read(cat, session, space)
+        assert queue.drain(env.publication_id)
     with pytest.raises(SpaceReadOnly):
         grant(cat, space, 'read_write', 'w2')
+    # Raising the ceiling again does not hand write back to a narrowed session.
+    ceiling(cat, space, 'maintain', 'up-again')
+    with pytest.raises(SpaceReadOnly):
+        publish(cat, writer, space, lambda _: pytest.fail('narrowed session wrote after re-raise'))
 
 
 def test_off_revokes_every_grant_and_refuses_new_ones(tmp_path):

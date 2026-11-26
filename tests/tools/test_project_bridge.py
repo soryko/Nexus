@@ -116,6 +116,7 @@ def test_recall_only_maintain_disable_and_enable_against_a_real_server(owner):
     async def scenario():
         async with client(owner, api) as first:
             assert (await call(first, 'status'))['lifecycle'] == 'generic_explicit'
+            assert not list((owner.base / 'sessions').glob('*.grant'))           # consumed once read
             refused = await call(first, 'record', idempotency_key='k1', content='synthetic kestrel decision')
             assert refused == {'code': 'space_read_only', 'retryable': False}      # recall only by default
         assert owner.status(api)[1]['mode'] == 'Recall only'
@@ -125,6 +126,11 @@ def test_recall_only_maintain_disable_and_enable_against_a_real_server(owner):
             saved = await call(writer, 'record', idempotency_key='k2', content='synthetic kestrel decision')
             assert 'memory_id' in saved
             assert (await call(reader, 'search', query='kestrel'))['hits']
+            # Lowering to recall narrows the writer without a restart: it keeps reading, and cannot write.
+            assert owner.run('mode', api, 'recall').returncode == 0
+            assert (await call(writer, 'search', query='kestrel'))['hits']
+            narrowed = await call(writer, 'record', idempotency_key='k2b', content='after lowering')
+            assert narrowed == {'code': 'space_read_only', 'retryable': False}
             disabled = owner.run('disable', api)
             assert disabled.returncode == 0, disabled.stderr
             # Both open sessions lose access at once, without a restart.
@@ -237,4 +243,28 @@ def test_hook_recall_reads_through_the_fence_and_stops_on_disable(owner):
             offered = await hook(codex, 'codex_recall', web, prompt=PROMPT.format('osprayx'))
             assert f'memory_id={theirs}' in offered['hookSpecificOutput']['additionalContext']
             assert mine not in json.dumps(await hook(codex, 'codex_recall', web, prompt=PROMPT.format('kestrelx')))
+    anyio.run(scenario)
+
+
+def test_revoking_a_folder_ends_only_its_repos_open_sessions(owner):
+    api = repo(owner.work / 'api')
+    other_folder = (owner.tmp / 'other').resolve()
+    kept = repo(other_folder / 'kept')
+    assert owner.run('approve-folder', other_folder).returncode == 0
+
+    async def scenario():
+        async with client(owner, api) as gone, client(owner, kept) as stays:
+            assert 'hits' in await call(gone, 'search', query='anything')
+            revoked = owner.run('revoke-folder', owner.work)
+            assert revoked.returncode == 0, revoked.stderr
+            assert (await call(gone, 'search', query='anything'))['code'] == 'grant_revoked'
+            assert 'hits' in await call(stays, 'search', query='anything')
+        assert owner.run('claude', owner.runtime, cwd=api).returncode != 0
+        # A retry after the folder is gone still sweeps, and says the folder was not approved.
+        again = owner.run('revoke-folder', owner.work)
+        assert again.returncode == 1 and 'not approved' in again.stderr
+        assert owner.run('approve-folder', owner.work).returncode == 0
+        async with client(owner, api) as back:                 # the space and its ceiling are unchanged
+            assert 'hits' in await call(back, 'search', query='anything')
+        assert owner.status(api)[1]['mode'] == 'Recall only'
     anyio.run(scenario)

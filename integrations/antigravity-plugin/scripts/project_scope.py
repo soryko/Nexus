@@ -332,6 +332,15 @@ def revoke_folder(folder: Path) -> str:
     return key
 
 
+def uncovered_catalog_projects() -> list[str]:
+    """Catalog repos enrolled through a folder that no approved folder covers any more. Their open
+    sessions must be cut off; new launches are already refused by resolve()."""
+    registry = load(private_base())
+    return [entry['id'] for key, entry in registry['projects'].items()
+            if entry.get('origin') == 'folder' and entry.get('store') == 'catalog'
+            and approved_folder(registry, Path(key).parent, Path(key)) is None]
+
+
 def set_denied(workspace: Path, denied: bool) -> str:
     """Owner command: a per-repo denial overrides every folder approval. Records are kept."""
     _, common = checkout_dirs(workspace)

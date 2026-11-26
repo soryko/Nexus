@@ -27,7 +27,7 @@ from project_scope import resolve as resolve_project
 
 COMMANDS = {'catalog':['init'], 'space':['create','list','register','ceiling'], 'store':['migrate','restore'],
             'grant':['issue','revoke'], 'graph':['curate','correct','resolve'],
-            'proposal':['list','review'], 'projection':['rebuild','status'], 'project':['open','ceiling','status']}
+            'proposal':['list','review'], 'projection':['rebuild','status'], 'project':['open','ceiling','revoke','status']}
 READS = {'space list','proposal list','projection status','project status'}
 LIMIT = 1 << 20
 
@@ -369,6 +369,13 @@ def execute(args):
         if row:
             generation = catalog.set_ceiling(row['space_id'],r['ceiling'],principal_id='local',operation=inner)
             result = {'space_id':row['space_id'],'ceiling':r['ceiling'],'generation':generation}
+    elif cmd == 'project revoke':
+        with catalog._transaction() as db:
+            row = project_space(db,_object(request,'project_id')['project_id'])
+        result = {'space_id':None}
+        if row:
+            result = {'space_id':row['space_id'],
+                      'revoked':catalog.revoke_space_sessions(row['space_id'],principal_id='local',operation=inner)}
     elif cmd == 'space register':
         r = _object(request,'path','expected_store_id')
         bindings = catalog.register_store(r['path'],expected_store_id=r.get('expected_store_id'),operation=inner)

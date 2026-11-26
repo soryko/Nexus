@@ -11,7 +11,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # support isolated (-I
 import json
 
 from project_scope import (CATALOG, ScopeError, approve_folder, checked_database, enroll, host_project,
-                           inspect_scope, private_base, recover, registry_entry, resolve, revoke_folder, set_denied)
+                           inspect_scope, private_base, recover, registry_entry, resolve, revoke_folder, set_denied,
+                           uncovered_catalog_projects)
 
 # Owner commands reach the catalog through this interpreter's Nexus build. A host launch uses the
 # admin command installed beside the server it starts, so the grant and the server share one build.
@@ -101,6 +102,30 @@ def enable(checkout: Path) -> int:
         except (ScopeError, OSError, subprocess.SubprocessError) as error:
             print(f'Nexus: the repo is still off in the catalog ({error}). Run enable again.', file=sys.stderr)
             return 1
+    return 0
+
+
+def withdraw_folder(folder: Path) -> int:
+    """Revoke the approval, then end open sessions of every catalog repo it no longer covers. The sweep
+    also runs when the folder was already revoked, so a retry finishes an interrupted revocation."""
+    refused = None
+    try:
+        print(revoke_folder(folder))
+    except ScopeError as error:
+        refused = error
+    catalog = owner_catalog()
+    failed = []
+    for project_id in (uncovered_catalog_projects() if catalog else []):
+        try:
+            catalog_admin(OWNER_ADMIN, catalog, 'revoke', {'project_id': project_id})
+        except (ScopeError, OSError, subprocess.SubprocessError):
+            failed.append(project_id)
+    if failed:
+        print(f'Nexus: new sessions are refused, but open sessions of {len(failed)} repo(s) were not stopped. '
+              'Run revoke-folder again.', file=sys.stderr)
+        return 1
+    if refused:
+        raise refused
     return 0
 
 
@@ -218,8 +243,7 @@ def main():
             print(approve_folder(args.folder))
             return 0
         if args.command == 'revoke-folder':
-            print(revoke_folder(args.folder))
-            return 0
+            return withdraw_folder(args.folder)
         if args.command in ('disable', 'enable', 'mode', 'status') and not args.checkout.is_absolute():
             raise ScopeError('checkout path must be absolute')
         if args.command == 'disable':
@@ -272,7 +296,8 @@ def main():
         options = ['--db', str(project.database), '--namespace', project.id, '--actor', 'local']
         if grant is not None:
             v2 = True
-            options = ['--catalog', str(project.catalog), '--grant-file', str(grant), '--project-id', project.id]
+            options = ['--catalog', str(project.catalog), '--grant-file', str(grant), '--project-id', project.id,
+                       '--consume-grant-file']
         elif v2:
             options = ['--catalog', str(args.catalog), '--grant-file', str(args.grant_file), '--project-id',project.id]
         if args.command == 'codex' and (not v2 or grant is not None):

@@ -290,6 +290,20 @@ class Catalog:
             self._finish(db,op,store_id)
             return bindings
 
+    def revoke_space_sessions(self, space_id, *, principal_id, operation):
+        """Owner control: end every session on a space without changing its ceiling (a folder approval
+        was withdrawn). Uses the same epoch bump as 'off', under the lock the fence holds."""
+        with self._transaction() as db:
+            op = self._operation(db,operation,'revoke-sessions',space_id,principal_id)
+            if op['receipt']:
+                return int(op['receipt'])
+            if not db.execute('SELECT 1 FROM spaces WHERE space_id=? AND owner=?',(space_id,principal_id)).fetchone():
+                raise SpaceNotMounted('space not mounted')
+            count = db.execute('UPDATE sessions SET epoch=epoch+1,grant_id=NULL,space_id=NULL,alias=NULL,mode=NULL '
+                               'WHERE space_id=?',(space_id,)).rowcount
+            self._finish(db,op,str(count))
+            return count
+
     def launch_context(self, principal_id, *, operation, role='root'):
         """Trusted fresh-context launcher only; there is no caller-chosen session ID.
 
@@ -323,14 +337,13 @@ class Catalog:
             generation = row['ceiling_generation']+1
             db.execute('UPDATE spaces SET ceiling=?,ceiling_generation=? WHERE space_id=?',(ceiling,generation,space_id))
             if ceiling == 'off':
-                above = 'space_id=?'
-            elif ceiling == 'recall':
-                above = "space_id=? AND mode='read_write'"
-            else:
-                above = None
-            if above:
                 db.execute('UPDATE sessions SET epoch=epoch+1,grant_id=NULL,space_id=NULL,alias=NULL,mode=NULL '
-                           'WHERE '+above,(space_id,))
+                           'WHERE space_id=?',(space_id,))
+            elif ceiling == 'recall':
+                # Writers keep their reads: the grant is narrowed, not revoked. The fence refuses any later
+                # write on both counts (ceiling and session mode) under this lock, and raising the ceiling
+                # again never restores write to these sessions.
+                db.execute("UPDATE sessions SET mode='read_only' WHERE space_id=? AND mode='read_write'",(space_id,))
             self._finish(db,op,str(generation))
             return generation
 

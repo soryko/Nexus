@@ -753,6 +753,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument('--catalog', type=Path)
     parser.add_argument('--grant-file', type=Path)
     parser.add_argument('--project-id', help=argparse.SUPPRESS)
+    # The launcher mints one grant file per launch in <catalog dir>/sessions; the server removes it once read.
+    parser.add_argument('--consume-grant-file', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument("--namespace", help="Trusted namespace bound for this server process")
     parser.add_argument("--actor", default="local", help="Trusted actor bound for this server process (default: local)")
     parser.add_argument("--db", type=Path, default=None, help="SQLite database path")
@@ -806,7 +808,11 @@ def main(argv: list[str] | None = None) -> int:
             if args.hook_project_root:
                 from nexus_memory.transport.codex import resolve_checkout
                 checkout = resolve_checkout(args.hook_project_root, Path.cwd())
-            broker = resume(args.catalog,args.grant_file,args.project_id,checkout)
+            try:
+                broker = resume(args.catalog,args.grant_file,args.project_id,checkout)
+            finally:
+                if args.consume_grant_file and args.grant_file.parent == args.catalog.parent / 'sessions':
+                    args.grant_file.unlink(missing_ok=True)
             with ingress(broker,checkout if args.hook_project_root else None):
                 create_v2_server(broker, hooks_checkout=checkout if args.hook_project_root else None,
                                  autonomous=_launch_policy(args).name == 'autonomous').run()
