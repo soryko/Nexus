@@ -182,7 +182,8 @@ def test_filters_are_visible_and_one_reset_clears_them(enrolled, browser_page) -
         text = page.locator("#filters").inner_text()
         assert "text “retention”" in text and "tag “queue”" in text and "kind observation" in text
         page.get_by_role("button", name="Reset filters").click()
-        expect(page.locator('#count')).to_contain_text('matching (48 in this project)')
+        # "matching (48 in this project)" is also in the filtered text still on screen, so wait for the total.
+        expect(page.locator('#count')).to_contain_text('of 48 matching')
         assert page.locator("#filters").inner_text() == "No filters: newest memories first."
         assert page.locator("#q").input_value() == "" and page.locator("#tag").input_value() == ""
         assert page.locator("#kinds input:checked").count() == 0
@@ -422,11 +423,11 @@ def test_oversize_revision_is_reported_not_compared(enrolled, browser_page) -> N
     with _served(enrolled) as server:
         page = browser_page
         _open(page, server)
-        page.locator("#q").fill("chain-token")
-        page.get_by_role("button", name="Search").click()
-        expect(page.locator("#count")).to_contain_text("matching")
-        page.get_by_role("button", name="Reset filters").click()
-        page.locator("#results li button").first.click()
+        # The current revision is the oversize one and does not contain "chain-token", so a text
+        # search finds nothing. Open it from the unfiltered list. The old search-then-reset steps
+        # waited on "matching" text that was already on screen: when the empty result arrived
+        # first, the wait never ended.
+        page.locator("#results li button", has_text="xxxxxxxx").click()
         expect(page.locator("#memory")).to_be_visible()
         expect(page.locator("#memory-diff")).to_have_text("This revision and its parent are too large to compare here.")
 
@@ -440,7 +441,7 @@ def test_a_dense_relation_cannot_hide_another_in_the_connections_panel(enrolled,
         _open(page, server)
         page.locator("#q").fill("chain-token")
         page.get_by_role("button", name="Search").click()
-        expect(page.locator("#count")).to_contain_text("matching")
+        expect(page.locator("#count")).to_contain_text("of 1 matching")       # the unfiltered list already says "matching"
         page.locator("#results li button").first.click()
         expect(page.locator("#graph-lists h3", has_text="files cited")).to_be_visible()
         revisions_h3 = page.locator("#graph-lists h3", has_text="other revisions").inner_text()
