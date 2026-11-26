@@ -4,12 +4,15 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass
 import fcntl
+import grp
 import json
 import math
 import os
 from pathlib import Path
+import pwd
 import stat
 import subprocess
+import sys
 import tempfile
 from uuid import UUID, uuid4
 
@@ -30,7 +33,8 @@ class Project:
 class ScopeDiagnosis:
     """Strictly read-only inspection result for a workspace path."""
 
-    state: str  # "bound" | "device_drift" | "unenrolled" | "identity_changed" | "invalid"
+    # "bound" | "device_drift" | "unenrolled" | "eligible" | "disabled" | "moved" | "identity_changed" | "invalid"
+    state: str
     checkout: Path | None = None
     common: Path | None = None
     project_id: str | None = None
@@ -38,6 +42,38 @@ class ScopeDiagnosis:
     recorded_device: int | None = None
     observed_device: int | None = None
     message: str = ""
+
+
+def private_group(metadata: os.stat_result) -> bool:
+    """True for a Linux user-private group: the owner's primary group, named for the owner, with
+    no other member and no other account using it as its primary group. Checked on every call."""
+    if not sys.platform.startswith('linux') or metadata.st_uid != os.getuid():
+        return False
+    try:
+        user = pwd.getpwuid(os.getuid())
+        group = grp.getgrgid(metadata.st_gid)
+    except KeyError:
+        return False
+    if metadata.st_gid != user.pw_gid or group.gr_name != user.pw_name or set(group.gr_mem) - {user.pw_name}:
+        return False
+    return all(other.pw_gid != metadata.st_gid or other.pw_uid == user.pw_uid for other in pwd.getpwall())
+
+
+def writable_by_others(metadata: os.stat_result) -> bool:
+    """World write always counts; group write counts unless the group is the owner's private one."""
+    return bool(metadata.st_mode & 0o002) or (bool(metadata.st_mode & 0o020) and not private_group(metadata))
+
+
+def canonical(path: Path) -> Path:
+    """Resolve symlinks and, on macOS, the stored letter case of every component."""
+    path = path.resolve(strict=True)
+    if sys.platform == 'darwin':
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | (os.O_DIRECTORY if path.is_dir() else 0))
+        try:
+            path = Path(fcntl.fcntl(fd, fcntl.F_GETPATH, b'\0' * 1024).rstrip(b'\0').decode(errors='surrogateescape'))
+        finally:
+            os.close(fd)
+    return path
 
 
 def private_base(*, create: bool = False) -> Path:
@@ -49,9 +85,8 @@ def private_base(*, create: bool = False) -> Path:
         if create:
             current.mkdir(mode=0o700, exist_ok=True)
         metadata = current.lstat()
-        forbidden = 0o077 if current == base else 0o022
-        if (not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != os.getuid()
-                or metadata.st_mode & forbidden):
+        unsafe = metadata.st_mode & 0o077 if current == base else writable_by_others(metadata)
+        if not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != os.getuid() or unsafe:
             raise ScopeError('unsafe project storage directory')
     return base
 
@@ -66,7 +101,7 @@ def private_file(path: Path) -> None:
 def checkout_dirs(workspace: Path) -> tuple[Path, Path]:
     if not workspace.is_absolute():
         raise ScopeError('workspace must be absolute')
-    workspace = workspace.resolve(strict=True)
+    workspace = canonical(workspace)
     if not workspace.is_dir():
         raise ScopeError('workspace is not a directory')
     result = subprocess.run(
@@ -76,23 +111,23 @@ def checkout_dirs(workspace: Path) -> tuple[Path, Path]:
                                              'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull})
     lines = result.stdout.decode(errors='surrogateescape').splitlines()
     if result.returncode or len(lines) != 3:
-        raise ScopeError('workspace is not a supported Git checkout')
-    checkout, admin, common = (Path(line).resolve(strict=True) for line in lines)
+        raise ScopeError(unsupported_reason(workspace) or 'workspace is not a supported Git checkout')
+    checkout, admin, common = (canonical(Path(line)) for line in lines)
     if not workspace.is_relative_to(checkout) or workspace.is_relative_to(common):
         raise ScopeError('workspace outside checkout')
     # Refuse a nested or forged marker that Git might bypass while walking to a parent.
     nearest = next((p / '.git' for p in (workspace, *workspace.parents) if os.path.lexists(p / '.git')), None)
     marker = checkout / '.git'
     if nearest != marker or common.name != '.git':
-        raise ScopeError('unverified checkout marker')
+        raise ScopeError(unsupported_reason(workspace) or 'unverified checkout marker')
     metadata = common.stat()
     if (os.path.lexists(common / 'commondir') or metadata.st_uid != os.getuid()
-            or metadata.st_mode & 0o022):
+            or writable_by_others(metadata)):
         raise ScopeError('unverified Git common directory')
     if stat.S_ISDIR(marker.lstat().st_mode) and marker == admin == common:
         return checkout, common
     if not stat.S_ISREG(marker.lstat().st_mode) or admin.parent != common / 'worktrees':
-        raise ScopeError('unverified linked worktree')
+        raise ScopeError(unsupported_reason(workspace) or 'unverified linked worktree')
     # The trusted common directory must independently point back to this exact worktree.
     backlink = admin / 'gitdir'
     if not stat.S_ISREG(backlink.lstat().st_mode):
@@ -103,27 +138,76 @@ def checkout_dirs(workspace: Path) -> tuple[Path, Path]:
     return checkout, common
 
 
+def unsupported_reason(workspace: Path) -> str | None:
+    """Name a layout v1 refuses on purpose, for status. Never used to admit anything."""
+    try:
+        result = subprocess.run(
+            ['/usr/bin/git', '-C', workspace, 'rev-parse', '--is-bare-repository',
+             '--show-superproject-working-tree', '--absolute-git-dir'],
+            capture_output=True, timeout=3, env={'PATH': '/usr/bin:/bin', 'HOME': str(Path.home()),
+                                                 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull})
+    except (OSError, subprocess.SubprocessError):
+        return None
+    lines = result.stdout.decode(errors='surrogateescape').splitlines()
+    if result.returncode or not lines:
+        return None
+    if lines[0] == 'true':
+        return 'bare repositories are not supported'
+    if len(lines) == 3 and lines[1]:
+        return 'submodules are not supported'
+    if lines[-1] and Path(lines[-1]).name != '.git' and '/worktrees/' not in lines[-1]:
+        return 'repositories with a separate Git directory are not supported'
+    return None
+
+
 def identity(common: Path) -> dict:
     st = common.stat()
     return {'device': st.st_dev, 'inode': st.st_ino, 'birth_time': getattr(st, 'st_birthtime', None)}
 
 
+REGISTRY_VERSION = 2
+ORIGINS = ('explicit', 'folder')
+
+
 def read_registry(base: Path) -> dict:
+    """Read version 1 or 2. Version 2 adds approved folders, per-repo denials and lazily
+    enrolled entries; a version 1 reader refuses it, so an old build fails closed."""
     path = base / 'registry.json'
     private_file(path)
     data = json.loads(path.read_bytes())
-    if not isinstance(data, dict) or data.get('version') != 1 or not isinstance(data.get('projects'), dict):
+    if (not isinstance(data, dict) or data.get('version') not in (1, REGISTRY_VERSION)
+            or not isinstance(data.get('projects'), dict)):
         raise ScopeError('invalid project registry')
+    if data['version'] == 1 and data.keys() & {'folders', 'denied'}:
+        raise ScopeError('invalid project registry')
+    for section in ('folders', 'denied'):
+        value = data.setdefault(section, {})
+        if not isinstance(value, dict) or any(not Path(k).is_absolute() or not isinstance(v, dict)
+                                              for k, v in value.items()):
+            raise ScopeError('invalid project registry')
     seen = set()
     for name, entry in data['projects'].items():
         if not Path(name).is_absolute() or not isinstance(entry, dict):
             raise ScopeError('invalid project mapping')
         value = entry.get('id')
         if (not isinstance(value, str) or str(UUID(value)) != value or value in seen
-                or not {'device', 'inode', 'birth_time'} <= entry.keys()):
+                or not {'device', 'inode', 'birth_time'} <= entry.keys()
+                or entry.get('origin', 'explicit') not in ORIGINS
+                or (data['version'] == 1 and 'origin' in entry)):
             raise ScopeError('invalid or duplicate project identity')
         seen.add(value)
     return data
+
+
+def needed_version(registry: dict) -> int:
+    """Version 2 only while version-2 state exists, so a v1-only registry stays readable by old builds."""
+    v2 = (registry.get('folders') or registry.get('denied')
+          or any(entry.get('origin', 'explicit') != 'explicit' for entry in registry['projects'].values()))
+    return REGISTRY_VERSION if v2 else 1
+
+
+def empty_registry() -> dict:
+    return {'version': 1, 'projects': {}, 'folders': {}, 'denied': {}}
 
 
 @contextmanager
@@ -137,6 +221,11 @@ def registry_lock(base: Path, *, create: bool = False):
 
 
 def write_registry(base: Path, registry: dict) -> None:
+    version = needed_version(registry)
+    registry = {'version': version, 'projects': registry['projects'],
+                **({'folders': registry.get('folders', {}), 'denied': registry.get('denied', {})} if version == 2 else {})}
+    if version == 1:
+        registry['projects'] = {k: {f: v for f, v in e.items() if f != 'origin'} for k, e in registry['projects'].items()}
     with tempfile.NamedTemporaryFile(dir=base, mode='w', delete=False) as out:
         try:
             json.dump(registry, out, indent=2)
@@ -150,28 +239,101 @@ def write_registry(base: Path, registry: dict) -> None:
 
 def main_common(workspace: Path) -> Path:
     checkout, common = checkout_dirs(workspace)
-    if workspace.resolve() != common.parent or checkout != common.parent:
+    if canonical(workspace) != common.parent or checkout != common.parent:
         raise ScopeError('specify the main checkout explicitly')
     return common
+
+
+def load(base: Path) -> dict:
+    return read_registry(base) if os.path.lexists(base / 'registry.json') else empty_registry()
+
+
+def moved_from(registry: dict, common: Path, observed: dict) -> str | None:
+    """The enrolled path whose Git directory has this exact identity, if it is not this path."""
+    for path, entry in registry['projects'].items():
+        if path != str(common) and all(entry.get(k) == v for k, v in observed.items()):
+            return path
+    return None
+
+
+def approved_folder(registry: dict, checkout: Path, common: Path) -> str | None:
+    """Both the opened worktree and its main checkout must sit inside one approved folder."""
+    for folder in registry.get('folders', {}):
+        root = Path(folder)
+        if checkout.is_relative_to(root) and common.parent.is_relative_to(root):
+            return folder
+    return None
+
+
+def _register(base: Path, registry: dict, common: Path, origin: str) -> str:
+    """Caller holds the registry lock and has re-read the registry under it."""
+    entries = registry['projects']
+    key = str(common)
+    if key in registry['denied']:
+        raise ScopeError('Nexus is disabled for this repo; run enable first')
+    observed = identity(common)
+    if key in entries:
+        if any(entries[key].get(k) != v for k, v in observed.items()):
+            raise ScopeError('checkout replaced; owner recovery is required')
+        if origin == 'explicit' and entries[key].get('origin', 'explicit') != 'explicit':
+            entries[key]['origin'] = 'explicit'
+            write_registry(base, registry)
+        return entries[key]['id']
+    previous = moved_from(registry, common, observed)
+    if previous is not None:
+        raise ScopeError(f'moved: this Git directory is enrolled at {previous}; run recover')
+    project_id = str(uuid4())
+    entries[key] = {'id': project_id, **observed, 'origin': origin}
+    write_registry(base, registry)
+    return project_id
 
 
 def enroll(workspace: Path) -> str:
     common = main_common(workspace)
     base = private_base(create=True)
     with registry_lock(base, create=True):
-        path = base / 'registry.json'
-        registry = read_registry(base) if os.path.lexists(path) else {'version': 1, 'projects': {}}
-        entries = registry['projects']
-        key = str(common)
-        observed = identity(common)
-        if key in entries:
-            if any(entries[key].get(k) != v for k, v in observed.items()):
-                raise ScopeError('checkout replaced; owner recovery is required')
-            return entries[key]['id']
-        project_id = str(uuid4())
-        entries[key] = {'id': project_id, **observed}
+        return _register(base, load(base), common, 'explicit')
+
+
+def approve_folder(folder: Path) -> str:
+    """Owner command: repos under this folder get recall on first open. Grants no maintenance."""
+    if not folder.is_absolute():
+        raise ScopeError('folder must be absolute')
+    folder = canonical(folder)
+    if not folder.is_dir() or folder == Path(folder.anchor):
+        raise ScopeError('approve a specific folder, not a file or the filesystem root')
+    base = private_base(create=True)
+    with registry_lock(base, create=True):
+        registry = load(base)
+        registry['folders'].setdefault(str(folder), {})
         write_registry(base, registry)
-        return project_id
+    return str(folder)
+
+
+def revoke_folder(folder: Path) -> str:
+    """Owner command: repos enrolled only through this folder stop resolving; records are kept."""
+    base = private_base()
+    key = str(canonical(folder)) if os.path.lexists(folder) else str(folder)
+    with registry_lock(base):
+        registry = load(base)
+        if registry['folders'].pop(key, None) is None:
+            raise ScopeError('folder is not approved')
+        write_registry(base, registry)
+    return key
+
+
+def set_denied(workspace: Path, denied: bool) -> str:
+    """Owner command: a per-repo denial overrides every folder approval. Records are kept."""
+    _, common = checkout_dirs(workspace)
+    base = private_base(create=denied)
+    with registry_lock(base, create=denied):
+        registry = load(base)
+        if denied:
+            registry['denied'][str(common)] = {}
+        elif registry['denied'].pop(str(common), None) is None:
+            raise ScopeError('Nexus is not disabled for this repo')
+        write_registry(base, registry)
+    return str(common)
 
 
 def checked_database(base: Path, project_id: str, *, required: bool = False) -> Path:
@@ -196,15 +358,34 @@ def device_only_drift(entry: dict, observed: dict) -> bool:
 
 
 def recover(workspace: Path, expected_project_id: str) -> str:
-    """Confirm a device-only identity change without creating a project or store."""
+    """Confirm a device-only identity change, or a move of the same Git directory to a new path,
+    keeping the project ID and store. Never creates a project or a store."""
     base = private_base()
     with registry_lock(base):
         common = main_common(workspace)
         registry = read_registry(base)
-        entry = registry['projects'].get(str(common))
-        if entry is None or entry['id'] != expected_project_id:
-            raise ScopeError('expected project does not match enrollment')
+        entries = registry['projects']
+        entry = entries.get(str(common))
         observed = identity(common)
+        if entry is None:
+            previous = moved_from(registry, common, observed)
+            if previous is None or entries[previous]['id'] != expected_project_id:
+                raise ScopeError('expected project does not match enrollment')
+            # The old path must no longer hold this Git directory (a move, not a second path to it).
+            try:
+                still_there = os.path.lexists(previous) and identity(Path(previous)) == observed
+            except OSError:
+                still_there = False
+            if still_there:
+                raise ScopeError('the enrolled path still holds this Git directory')
+            checked_database(base, expected_project_id, required=True)
+            entries[str(common)] = entries.pop(previous)
+            if registry['denied'].pop(previous, None) is not None:
+                registry['denied'][str(common)] = {}
+            write_registry(base, registry)
+            return expected_project_id
+        if entry['id'] != expected_project_id:
+            raise ScopeError('expected project does not match enrollment')
         if not device_only_drift(entry, observed):
             raise ScopeError('recovery requires a device-only identity change')
         checked_database(base, expected_project_id, required=True)
@@ -256,14 +437,33 @@ def inspect_scope(workspace: Path) -> ScopeDiagnosis:
             message=str(error) or 'project registry is invalid',
         )
 
+    if str(common) in registry['denied']:
+        return ScopeDiagnosis(state='disabled', checkout=checkout, common=common,
+                              project_id=registry['projects'].get(str(common), {}).get('id'),
+                              message='Nexus is disabled for this repo')
     entry = registry['projects'].get(str(common))
+    folder = approved_folder(registry, checkout, common)
     if entry is None:
+        try:
+            previous = moved_from(registry, common, identity(common))
+        except OSError:
+            previous = None
+        if previous is not None:
+            return ScopeDiagnosis(state='moved', checkout=checkout, common=common,
+                                  project_id=registry['projects'][previous]['id'],
+                                  message=f'moved: this Git directory is enrolled at {previous}; run recover')
+        if folder is not None:
+            return ScopeDiagnosis(state='eligible', checkout=checkout, common=common,
+                                  message=f'recall will be enabled on first open (approved folder {folder})')
         return ScopeDiagnosis(
             state='unenrolled',
             checkout=checkout,
             common=common,
             message='workspace is not enrolled in Nexus project scope',
         )
+    if entry.get('origin', 'explicit') == 'folder' and folder is None:
+        return ScopeDiagnosis(state='unenrolled', checkout=checkout, common=common, project_id=entry['id'],
+                              message='no approved folder covers this checkout any more')
 
     try:
         observed = identity(common)
@@ -339,12 +539,27 @@ def inspect_scope(workspace: Path) -> ScopeDiagnosis:
     )
 
 
-def resolve(workspace: Path) -> Project:
+def resolve(workspace: Path, *, lazy: bool = False) -> Project:
+    """Bind a workspace to its enrolled project. With lazy=True (the host's own active checkout
+    only), a repo under an approved folder is registered on first open, under the registry lock."""
     checkout, common = checkout_dirs(workspace)
     base = private_base()
-    entry = read_registry(base)['projects'].get(str(common))
+    registry = read_registry(base)
+    key = str(common)
+    if key in registry['denied']:
+        raise ScopeError('Nexus is disabled for this repo')
+    entry = registry['projects'].get(key)
+    if entry is None and lazy and approved_folder(registry, checkout, common):
+        with registry_lock(base):
+            registry = read_registry(base)   # another host may have registered it meanwhile
+            if approved_folder(registry, checkout, common):
+                _register(base, registry, common, 'folder')
+        registry = read_registry(base)
+        entry = registry['projects'].get(key)
     if entry is None or any(entry.get(k) != v for k, v in identity(common).items()):
         raise ScopeError('project is not enrolled or its checkout has changed')
+    if entry.get('origin', 'explicit') == 'folder' and not approved_folder(registry, checkout, common):
+        raise ScopeError('no approved folder covers this checkout')
     database = checked_database(base, entry['id'])
     return Project(checkout, common, entry['id'], database)
 
@@ -369,9 +584,9 @@ def host_project(client: str, workspace_paths: list[str] | None = None) -> Proje
     if client == 'antigravity' and cwd == plugin:
         if not signals:
             raise ScopeError('missing host workspace')
-        workspace = resolve(Path(signals[0]))
+        workspace = resolve(Path(signals[0]), lazy=True)
     else:
-        workspace = resolve(cwd)
+        workspace = resolve(cwd, lazy=True)
     # PWD can corroborate a known workspace but cannot select one on its own.
     pwd = os.environ.get('PWD')
     # A GUI process commonly inherits PWD=/ even after the host changes cwd.

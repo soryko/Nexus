@@ -7,7 +7,10 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # support isolated (-I) entry
-from project_scope import ScopeError, enroll, host_project, recover, resolve
+import json
+
+from project_scope import (ScopeError, approve_folder, enroll, host_project, inspect_scope, recover,
+                           resolve, revoke_folder, set_denied)
 
 
 
@@ -23,6 +26,10 @@ def capture_policy():
     if value != 'explicit':
         print('Nexus: unrecognised NEXUS_CAPTURE_POLICY; using explicit.', file=sys.stderr)
     return 'explicit'
+
+
+# Owner commands print the reason they refused; host launches never echo scope details.
+OWNER_COMMANDS = ('enroll', 'recover', 'approve-folder', 'revoke-folder', 'disable', 'enable', 'status')
 
 
 def run_atlas(checkout, open_browser):
@@ -58,6 +65,11 @@ def main():
     recovery = commands.add_parser('recover', help='confirm a device-only change for an enrolled main checkout')
     recovery.add_argument('checkout', type=Path)
     recovery.add_argument('--expected-project-id', metavar='UUID', required=True)
+    commands.add_parser('approve-folder', help='enable recall for repos opened under this folder').add_argument('folder', type=Path)
+    commands.add_parser('revoke-folder', help='withdraw a folder approval; records are kept').add_argument('folder', type=Path)
+    commands.add_parser('disable', help='turn Nexus off for one repo, overriding folders').add_argument('checkout', type=Path)
+    commands.add_parser('enable', help='remove a per-repo disable').add_argument('checkout', type=Path)
+    commands.add_parser('status', help='show how Nexus treats a checkout (read-only)').add_argument('checkout', type=Path)
     atlas = commands.add_parser('atlas', help='open the read-only Memory Atlas viewer for an enrolled checkout')
     atlas.add_argument('checkout', type=Path)
     atlas.add_argument('--no-browser', action='store_true')
@@ -76,6 +88,22 @@ def main():
         if args.command == 'recover':
             print(recover(args.checkout, args.expected_project_id))
             return 0
+        if args.command == 'approve-folder':
+            print(approve_folder(args.folder))
+            return 0
+        if args.command == 'revoke-folder':
+            print(revoke_folder(args.folder))
+            return 0
+        if args.command in ('disable', 'enable'):
+            print(set_denied(args.checkout, args.command == 'disable'))
+            return 0
+        if args.command == 'status':
+            if not args.checkout.is_absolute():
+                raise ScopeError('checkout path must be absolute')
+            d = inspect_scope(args.checkout)
+            print(json.dumps({'state': d.state, 'project_id': d.project_id, 'message': d.message,
+                              'checkout': d.checkout and str(d.checkout)}, sort_keys=True))
+            return 0 if d.state == 'bound' else 3
         if args.command == 'atlas':
             return run_atlas(args.checkout, not args.no_browser)
         if not args.runtime.is_absolute():
@@ -122,6 +150,12 @@ def main():
         os.chdir(project.checkout)
         os.environ['PWD'] = str(project.checkout)
         os.execv(args.runtime, [str(args.runtime), *options])
+    except ScopeError as error:
+        if args.command in OWNER_COMMANDS:
+            print(f'Nexus: {error}', file=sys.stderr)
+            return 1
+        print('Nexus unavailable: project scope could not be verified.', file=sys.stderr)
+        return 1
     except (OSError, ValueError, subprocess.SubprocessError, RuntimeError):
         print('Nexus unavailable: project scope could not be verified.', file=sys.stderr)
         return 1

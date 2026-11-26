@@ -16,6 +16,22 @@ Enrollment is an explicit local owner operation. Supply the absolute main checko
 
 When a verified project connects for the first time, it gets a new database under `project-scopes-v1/`. The registry binds a random identifier to the trusted local Git common directory and its filesystem identity. Replacing or moving a checkout needs owner attention. An unknown or ambiguous project has no fallback to a shared database. The Claude pilot and DSH founder profile each explicitly configure their own shared database. Those stores are separate from the retired default endpoint.
 
+### Folder approval, disable and moves (registry version 2)
+
+Instead of enrolling each checkout, the owner can approve a folder once. A Git checkout opened by a host under that folder is registered on its first open and gets its own project, with recall only. Approval enrolls nothing by itself and never scans the folder. Both the opened worktree and its main checkout must be inside the approved folder after symlinks (and, on macOS, letter case) are resolved, so a symlink inside the folder cannot enroll a checkout outside it.
+
+```sh
+"$nexus_python" -I "$scope_bin/launcher.py" approve-folder "$folder"      # recall for repos opened under it
+"$nexus_python" -I "$scope_bin/launcher.py" revoke-folder "$folder"       # repos it enrolled stop resolving; records kept
+"$nexus_python" -I "$scope_bin/launcher.py" disable "$checkout"           # per repo; overrides every folder
+"$nexus_python" -I "$scope_bin/launcher.py" enable "$checkout"
+"$nexus_python" -I "$scope_bin/launcher.py" status "$checkout"            # read-only; exit 0 only when bound
+```
+
+A checkout whose Git directory is already enrolled at another path is refused with "moved: run recover". `recover <new main checkout> --expected-project-id <id>` moves the entry, keeping its project ID and store, once the old path no longer holds that Git directory. Submodules, bare repositories and `--separate-git-dir` repositories are unsupported, and `status` names which. On Linux a group-writable Git directory is accepted only when its group is the owner's private group (primary group, same name, no other member or primary user); any other group-writable directory is still refused.
+
+The registry stays at version 1 until version-2 state exists (an approved folder, a disabled repo or a folder-enrolled project). Then it is written as version 2, which older launchers refuse, so they fail closed instead of ignoring a disable. Every host's launcher must be upgraded together. `integrations/antigravity-plugin/scripts/project_scope.py` is a copy of this module and a test keeps the two identical.
+
 ### Automatic task reads
 
 The Nexus checkout's Codex configuration pairs `codex_recall` on prompt submission with `task_pre_tool_use` before Nexus tool calls. Both hooks use the same running adapter. In a task session the model can fetch the current version of an admitted decision. If no decision qualifies, the guard declines follow-up searches before they return excerpts. To deliberately search more broadly or inspect history, start your prompt with `Nexus explore:`. Existing Codex sessions need a reconnect after changing the runtime. Review the new hook in Codex's native trust prompt.
