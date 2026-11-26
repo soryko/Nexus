@@ -15,6 +15,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 SCOPE = ROOT / 'integrations/project_scope'
 ENTRY = SCOPE / 'launcher.py'
+BIRTH_TIME = getattr(os.stat('/'), 'st_birthtime', None) is not None   # macOS yes, Linux no
 
 
 def git(cwd, *args):
@@ -190,6 +191,13 @@ def test_a_moved_checkout_is_refused_until_the_owner_recovers_it(env):
     new = env.tmp / 'new' / 'api'
     new.parent.mkdir()
     old.rename(new)
+    if not BIRTH_TIME:
+        # Linux: no birth time, so a move cannot be told from inode reuse. The checkout is a new repo,
+        # and recover cannot hand it the old project.
+        assert json.loads(env.launch(new, 'status', new).stdout)['state'] == 'unenrolled'
+        assert env.launch(new, 'recover', new, '--expected-project-id', project_id).returncode != 0
+        assert env.launch(new, 'enroll', new).stdout.strip() not in ('', project_id)
+        return
     refused = env.launch(new, 'enroll', new)
     assert refused.returncode != 0 and 'moved' in refused.stderr
     assert host(env, new).returncode != 0
@@ -206,6 +214,11 @@ def test_a_moved_checkout_under_an_approved_folder_is_not_enrolled_again(env):
     env.launch(work, 'approve-folder', work)
     first = project_of(host(env, api))
     api.rename(work / 'renamed')
+    if not BIRTH_TIME:
+        # Linux: the moved checkout is enrolled as a new project, never given the old one's.
+        second = project_of(host(env, work / 'renamed'))
+        assert second != first and len(env.registry()['projects']) == 2
+        return
     assert host(env, work / 'renamed').returncode != 0
     assert [e['id'] for e in env.registry()['projects'].values()] == [first]
 
