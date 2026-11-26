@@ -25,12 +25,17 @@ Instead of enrolling each checkout, the owner can approve a folder once. A Git c
 "$nexus_python" -I "$scope_bin/launcher.py" revoke-folder "$folder"       # repos it enrolled stop resolving; records kept
 "$nexus_python" -I "$scope_bin/launcher.py" disable "$checkout"           # per repo; overrides every folder
 "$nexus_python" -I "$scope_bin/launcher.py" enable "$checkout"
-"$nexus_python" -I "$scope_bin/launcher.py" status "$checkout"            # read-only; exit 0 only when bound
+"$nexus_python" -I "$scope_bin/launcher.py" mode "$checkout" maintain     # or: recall (the default)
+"$nexus_python" -I "$scope_bin/launcher.py" status "$checkout"            # read-only; exit 0 only when usable
 ```
+
+A repo enrolled through a folder keeps its memory in the owner catalog (`catalog.sqlite3` beside the registry), not in a per-project database. Its first host launch creates its project space at **Recall only**, and every later launch gets its own session grant. These steps run through `nexus-memory-admin project open`, installed beside the server being started. A grant never exceeds the space's ceiling. A delegated session (a subagent or worker) only ever reads. `mode maintain` is the per-repo opt-in to writes, and a folder never grants it. `disable` turns the space off in the catalog first, which revokes every open session's grant without a restart. It then records the denial in the registry. If the catalog cannot be reached, new launches are still refused and the command exits 1, so it can be run again. `enable` reopens the space at Recall only, as a new generation, never back to maintain. `status` reports `store` (`catalog` or `legacy`) and the effective `mode`.
+
+Only the launcher's Claude and Codex entries open catalog repos. Antigravity, Atlas, and any explicit `--catalog`/`--grant-file` profile are refused for them until they can reach memory through the catalog's fence. In catalog mode the server is v2's, which has no `nexus_recall` or `codex_recall` hook tool, so these repos have search and get but no automatic prompt recall yet. An explicitly enrolled repo keeps its version 1 per-project database and behaviour.
 
 A checkout whose Git directory is already enrolled at another path is refused with "moved: run recover". `recover <new main checkout> --expected-project-id <id>` moves the entry, keeping its project ID and store, once the old path no longer holds that Git directory. Submodules, bare repositories and `--separate-git-dir` repositories are unsupported, and `status` names which. On Linux a group-writable Git directory is accepted only when its group is the owner's private group (primary group, same name, no other member or primary user); any other group-writable directory is still refused.
 
-The registry stays at version 1 until version-2 state exists (an approved folder, a disabled repo or a folder-enrolled project). Then it is written as version 2, which older launchers refuse, so they fail closed instead of ignoring a disable. Every host's launcher must be upgraded together. `integrations/antigravity-plugin/scripts/project_scope.py` is a copy of this module and a test keeps the two identical.
+The registry stays at version 1 until version-2 state exists (an approved folder, a disabled repo, or a folder-enrolled or catalog project). Then it is written as version 2, which older launchers refuse, so they fail closed instead of ignoring a disable. Every host's launcher must be upgraded together. `integrations/antigravity-plugin/scripts/project_scope.py` is a copy of this module and a test keeps the two identical.
 
 ### Automatic task reads
 

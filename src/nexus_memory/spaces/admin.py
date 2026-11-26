@@ -27,8 +27,8 @@ from project_scope import resolve as resolve_project
 
 COMMANDS = {'catalog':['init'], 'space':['create','list','register','ceiling'], 'store':['migrate','restore'],
             'grant':['issue','revoke'], 'graph':['curate','correct','resolve'],
-            'proposal':['list','review'], 'projection':['rebuild','status']}
-READS = {'space list','proposal list','projection status'}
+            'proposal':['list','review'], 'projection':['rebuild','status'], 'project':['open','ceiling','status']}
+READS = {'space list','proposal list','projection status','project status'}
 LIMIT = 1 << 20
 
 
@@ -92,7 +92,7 @@ class ProjectCatalog(Catalog):
         binding, = bindings
         path = Path(self._store(db,binding.store_id)['locator'])
         store = SQLiteRepository(path,owner_schema5=True,**profiles(path))
-        project = resolve_project(self.checkout)
+        project = resolve_project(self.checkout, allow_catalog=True)
         repo, verifier = bind_repository(store,binding.scope,project.checkout,git=GitCli())
         require(repo is not None and repo.locator == str(project.common))
         db.execute('INSERT INTO admin_projects VALUES(?,?,?)',
@@ -111,7 +111,7 @@ def enrolled_git(catalog_db, path, binding, batch):
         row = db.execute('SELECT locator,object_format FROM repositories WHERE namespace=? AND actor=? AND repository_id=?',
                          (binding.scope.namespace,binding.scope.actor,next(iter(ids)))).fetchone()
         require(row is not None)
-        project = resolve_project(Path(row[0]).parent)
+        project = resolve_project(Path(row[0]).parent, allow_catalog=True)
         require(project.common == Path(row[0]) and catalog_db.execute(
             'SELECT 1 FROM admin_projects WHERE space_id=? AND repository_id=? AND project_id=?',
             (binding.space_id,next(iter(ids)),project.id)).fetchone())
@@ -166,7 +166,7 @@ def _record_graph_receipt(catalog, db, op, receipt):
     catalog._finish(db,op,receipt.to_json())
 
 
-def issue_mount(catalog, stream, handle, request, out):
+def issue_mount(catalog, stream, handle, request, out, ticket_fields=None):
     """Publish a private ticket for a stable owner-identified receiving context."""
     r = _object(request,'principal_id receiving_context space_id mode','role')
     require(all(isinstance(v,str) and v for v in r.values()))
@@ -182,11 +182,49 @@ def issue_mount(catalog, stream, handle, request, out):
                            (r['space_id'],r['principal_id'])).fetchone())
         ticket = catalog._operation(db,operation,'bind',session,r['principal_id'],mount.to_json())['allocation']
     # Never activate a mount if its ticket cannot be delivered privately.
-    output_private(out,{'grant_id':ticket})
+    output_private(out,{'grant_id':ticket,**(ticket_fields or {})})
     grant = catalog.bind_session(session,r['principal_id'],r['space_id'],alias=mount.alias,mode=mount.mode,operation=operation)
     with catalog._transaction() as db:
         db.execute('INSERT OR IGNORE INTO admin_mounts VALUES(?,?,?)',(handle,grant.grant_id,grant.epoch))
     return {'grant_id':handle,'epoch':grant.epoch}
+
+
+def project_space(db, project_id):
+    """The space `project open` created for a registry project: it is titled with the project ID."""
+    return db.execute("SELECT spaces.space_id,ceiling,ceiling_generation FROM admin_projects "
+                      "JOIN spaces USING(space_id) JOIN stores USING(store_id) "
+                      "WHERE project_id=? AND title=? AND kind='project' AND state='active'",
+                      (project_id,project_id)).fetchone()
+
+
+def open_project(catalog, stream, allocation, request, out):
+    """Host launch for a catalog repo: create its project space once, then mint a grant for this
+    session alone. The grant never exceeds the space's ceiling, and a delegated session reads only."""
+    r = _object(request,'project_id checkout host','role')
+    require(all(isinstance(v,str) and v for v in r.values()) and r.get('role','root') in ('root','delegated'))
+    project = resolve_project(Path(r['checkout']), allow_catalog=True)
+    require(project.id == r['project_id'] and project.catalog is not None and project.catalog.resolve() == catalog.path)
+    creator = ProjectCatalog(catalog.path)
+    creator.checkout = project.common.parent
+    # Every host derives the same operation, so concurrent first opens create one space.
+    binding = creator.create_space(project.id,'project',principal_id='local',
+                                   operation=OperationRef(stream,'project-space:'+project.id))
+    with catalog._transaction() as db:   # the catalog lock serializes the fresh store's upgrade too
+        path, _ = space(catalog,db,binding.space_id)
+        with _reader(path) as store:
+            version, = store.execute('PRAGMA user_version').fetchone()
+            empty = not store.execute('SELECT 1 FROM memories LIMIT 1').fetchone()
+        if version < 6:
+            require(empty)               # only a store this command just created; never a migration
+            SQLiteRepository(path,owner_schema6=True,**profiles(path))
+        row = project_space(db,project.id)
+        require(row is not None and row['space_id'] == binding.space_id)
+    role = r.get('role','root')     # an 'off' space is refused by bind_session's own ceiling check
+    mode = 'read_write' if row['ceiling'] == 'maintain' and role == 'root' else 'read_only'
+    issue_mount(catalog,stream,allocation,{'principal_id':'local','receiving_context':r['host']+':'+allocation,
+                                           'space_id':binding.space_id,'mode':mode,'role':role},
+                out,{'project_id':project.id})
+    return {'space_id':binding.space_id,'ceiling':row['ceiling'],'generation':row['ceiling_generation'],'mode':mode}
 
 
 def backup_identity(path):
@@ -252,15 +290,15 @@ def execute(args):
     require(args.action in COMMANDS[args.group] and (cmd in READS or args.operation_key))
     if args.group in ('proposal','projection'):
         raise UnsupportedCapability('later stage')
-    require(bool(args.out) == (cmd == 'grant issue') and bool(args.grant_file) == (args.group == 'graph')
+    require(bool(args.out) == (cmd in ('grant issue','project open')) and bool(args.grant_file) == (args.group == 'graph')
             and bool(args.space_id) == (args.group == 'graph'))
     request = read_object(args.request) if args.request else {}
-    require(cmd == 'catalog init' or args.catalog.is_file())
+    require(cmd in ('catalog init','project open') or args.catalog.is_file())
     if os.path.lexists(args.catalog):
         info = args.catalog.lstat()
         require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid() and stat.S_IMODE(info.st_mode) == 0o600)
     catalog = Catalog(args.catalog)
-    if cmd == 'catalog init':
+    if cmd == 'catalog init' or args.group == 'project':
         initialize(catalog)
     with catalog._transaction() as db:
         stream = db.execute('SELECT stream FROM admin_stream WHERE id=1').fetchone()[0]
@@ -268,6 +306,9 @@ def execute(args):
             _object(request,'')
             return {'spaces':[dict(row) for row in db.execute('SELECT spaces.* FROM spaces JOIN stores USING(store_id) '
                         "WHERE state='active' ORDER BY space_id")]}
+        if cmd == 'project status':
+            row = project_space(db,_object(request,'project_id')['project_id'])
+            return dict(zip(('space_id','ceiling','generation'),row)) if row else {'space_id':None}
         operation = OperationRef(stream,args.operation_key)
         if args.group == 'graph':
             file = _object(read_object(args.grant_file,private=True),'grant_id secret')
@@ -317,6 +358,17 @@ def execute(args):
         require(all(isinstance(v,str) and v for v in r.values()))
         generation = catalog.set_ceiling(r['space_id'],r['ceiling'],principal_id=r.get('principal_id','local'),operation=inner)
         result = {'space_id':r['space_id'],'ceiling':r['ceiling'],'generation':generation}
+    elif cmd == 'project open':
+        result = open_project(catalog,stream,allocation,request,args.out)
+    elif cmd == 'project ceiling':
+        r = _object(request,'project_id ceiling')
+        require(all(isinstance(v,str) and v for v in r.values()))
+        with catalog._transaction() as db:
+            row = project_space(db,r['project_id'])
+        result = {'space_id':None}
+        if row:
+            generation = catalog.set_ceiling(row['space_id'],r['ceiling'],principal_id='local',operation=inner)
+            result = {'space_id':row['space_id'],'ceiling':r['ceiling'],'generation':generation}
     elif cmd == 'space register':
         r = _object(request,'path','expected_store_id')
         bindings = catalog.register_store(r['path'],expected_store_id=r.get('expected_store_id'),operation=inner)

@@ -47,17 +47,32 @@ def env(tmp_path, monkeypatch):
     def registry():
         return json.loads((home / '.local/share/nexus-memory/project-scopes-v1/registry.json').read_text())
 
-    return SimpleNamespace(scope=scope, home=home, launch=launch, registry=registry, tmp=tmp_path.resolve())
+    return SimpleNamespace(scope=scope, home=home, launch=launch, registry=registry, tmp=tmp_path.resolve(),
+                           runtime=stand_in_runtime(tmp_path / 'bin'))
+
+
+def stand_in_runtime(bin_dir):
+    """A server that prints its arguments, beside the real admin command of this build."""
+    bin_dir.mkdir()
+    server = bin_dir / 'nexus-memory'
+    server.write_text('#!/bin/sh\necho "$@"\n')
+    admin = bin_dir / 'nexus-memory-admin'
+    admin.write_text(f'#!/bin/sh\nexec {sys.executable} -I -c '
+                     '"import sys; from nexus_memory.spaces.admin import main; sys.exit(main())" "$@"\n')
+    for path in (server, admin):
+        path.chmod(0o700)
+    return server
 
 
 def project_of(result):
     assert result.returncode == 0, result.stderr
     args = result.stdout.split()
-    return args[args.index('--namespace') + 1]
+    flag = '--project-id' if '--project-id' in args else '--namespace'
+    return args[args.index(flag) + 1]
 
 
 def host(env, cwd):
-    return env.launch(cwd, 'claude', '/bin/echo')
+    return env.launch(cwd, 'claude', env.runtime)
 
 
 def test_a_repo_under_an_approved_folder_enrolls_on_first_open(env):
@@ -109,7 +124,7 @@ def test_two_hosts_opening_at_once_get_one_registration(env):
     work = env.tmp / 'work'
     api = repo(work / 'api')
     env.launch(api, 'approve-folder', work)
-    procs = [subprocess.Popen([sys.executable, '-I', ENTRY, 'claude', '/bin/echo'], cwd=api,
+    procs = [subprocess.Popen([sys.executable, '-I', ENTRY, 'claude', env.runtime], cwd=api,
                               env={'HOME': str(env.home), 'PATH': os.environ['PATH']},
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for _ in range(8)]
     ids = set()
@@ -117,7 +132,7 @@ def test_two_hosts_opening_at_once_get_one_registration(env):
         out, err = proc.communicate(timeout=60)
         assert proc.returncode == 0, err
         args = out.split()
-        ids.add(args[args.index('--namespace') + 1])
+        ids.add(args[args.index('--project-id') + 1])
     assert len(ids) == 1
     assert len(env.registry()['projects']) == 1
 
@@ -219,6 +234,21 @@ def test_version_mismatches_fail_closed(env):
         path.write_text(json.dumps(bad))
         with pytest.raises(scope.ScopeError):
             scope.read_registry(base)
+
+
+def test_a_version_1_registry_cannot_carry_a_catalog_store(env):
+    api = repo(env.tmp / 'api')
+    project_id = env.launch(api, 'enroll', api).stdout.strip()
+    path = env.home / '.local/share/nexus-memory/project-scopes-v1/registry.json'
+    data = env.registry()
+    assert data['version'] == 1 and project_of(host(env, api)) == project_id   # the control: it launches
+    data['projects'][str(api / '.git')]['store'] = 'catalog'
+    path.write_text(json.dumps(data))
+    assert host(env, api).returncode != 0
+    data['version'] = 2
+    data['projects'][str(api / '.git')]['store'] = 'elsewhere'
+    path.write_text(json.dumps(data))
+    assert host(env, api).returncode != 0
 
 
 @pytest.mark.parametrize('layout', ['bare', 'submodule', 'separate'])

@@ -26,7 +26,10 @@ class Project:
     checkout: Path
     common: Path
     id: str
-    database: Path
+    database: Path | None
+    # Set for a repo whose memory lives in the owner catalog (registry version 2). Such a
+    # repo has no per-project database; only a caller that asks for the catalog gets one.
+    catalog: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -42,6 +45,7 @@ class ScopeDiagnosis:
     recorded_device: int | None = None
     observed_device: int | None = None
     message: str = ""
+    store: str | None = None          # "catalog" | "legacy", once an entry exists
 
 
 def private_group(metadata: os.stat_result) -> bool:
@@ -167,6 +171,8 @@ def identity(common: Path) -> dict:
 
 REGISTRY_VERSION = 2
 ORIGINS = ('explicit', 'folder')
+STORES = ('legacy', 'catalog')
+CATALOG = 'catalog'   # the owner catalog is <base>/catalog.sqlite3
 
 
 def read_registry(base: Path) -> dict:
@@ -193,7 +199,8 @@ def read_registry(base: Path) -> dict:
         if (not isinstance(value, str) or str(UUID(value)) != value or value in seen
                 or not {'device', 'inode', 'birth_time'} <= entry.keys()
                 or entry.get('origin', 'explicit') not in ORIGINS
-                or (data['version'] == 1 and 'origin' in entry)):
+                or entry.get('store', 'legacy') not in STORES
+                or (data['version'] == 1 and entry.keys() & {'origin', 'store'})):
             raise ScopeError('invalid or duplicate project identity')
         seen.add(value)
     return data
@@ -202,7 +209,8 @@ def read_registry(base: Path) -> dict:
 def needed_version(registry: dict) -> int:
     """Version 2 only while version-2 state exists, so a v1-only registry stays readable by old builds."""
     v2 = (registry.get('folders') or registry.get('denied')
-          or any(entry.get('origin', 'explicit') != 'explicit' for entry in registry['projects'].values()))
+          or any(entry.get('origin', 'explicit') != 'explicit' or 'store' in entry
+                 for entry in registry['projects'].values()))
     return REGISTRY_VERSION if v2 else 1
 
 
@@ -283,7 +291,9 @@ def _register(base: Path, registry: dict, common: Path, origin: str) -> str:
     if previous is not None:
         raise ScopeError(f'moved: this Git directory is enrolled at {previous}; run recover')
     project_id = str(uuid4())
-    entries[key] = {'id': project_id, **observed, 'origin': origin}
+    # A repo first enrolled through a folder starts recall-only, which only the catalog enforces,
+    # so it never gets a per-project database. An explicit enroll keeps the version 1 layout.
+    entries[key] = {'id': project_id, **observed, 'origin': origin, **({'store': 'catalog'} if origin == 'folder' else {})}
     write_registry(base, registry)
     return project_id
 
@@ -334,6 +344,13 @@ def set_denied(workspace: Path, denied: bool) -> str:
             raise ScopeError('Nexus is not disabled for this repo')
         write_registry(base, registry)
     return str(common)
+
+
+def registry_entry(workspace: Path) -> dict | None:
+    """The registry entry for a checkout's Git directory, enabled or not, without any other check.
+    Owner controls use it so a damaged store or catalog never hides which repo they act on."""
+    _, common = checkout_dirs(workspace)
+    return load(private_base()).get('projects', {}).get(str(common))
 
 
 def checked_database(base: Path, project_id: str, *, required: bool = False) -> Path:
@@ -438,8 +455,9 @@ def inspect_scope(workspace: Path) -> ScopeDiagnosis:
         )
 
     if str(common) in registry['denied']:
+        denied = registry['projects'].get(str(common))
         return ScopeDiagnosis(state='disabled', checkout=checkout, common=common,
-                              project_id=registry['projects'].get(str(common), {}).get('id'),
+                              project_id=denied and denied['id'], store=denied and denied.get('store', 'legacy'),
                               message='Nexus is disabled for this repo')
     entry = registry['projects'].get(str(common))
     folder = approved_folder(registry, checkout, common)
@@ -463,6 +481,7 @@ def inspect_scope(workspace: Path) -> ScopeDiagnosis:
         )
     if entry.get('origin', 'explicit') == 'folder' and folder is None:
         return ScopeDiagnosis(state='unenrolled', checkout=checkout, common=common, project_id=entry['id'],
+                              store=entry.get('store', 'legacy'),
                               message='no approved folder covers this checkout any more')
 
     try:
@@ -479,9 +498,10 @@ def inspect_scope(workspace: Path) -> ScopeDiagnosis:
     recorded_dev = entry.get('device') if isinstance(entry.get('device'), int) else None
     observed_dev = observed.get('device') if isinstance(observed.get('device'), int) else None
 
+    store = entry.get('store', 'legacy')
     if not any(entry.get(k) != v for k, v in observed.items()):
         try:
-            database = checked_database(base, entry['id'], required=False)
+            database = checked_database(base, CATALOG if store == 'catalog' else entry['id'], required=False)
         except (ScopeError, OSError) as error:
             return ScopeDiagnosis(
                 state='invalid',
@@ -501,6 +521,7 @@ def inspect_scope(workspace: Path) -> ScopeDiagnosis:
             recorded_device=recorded_dev,
             observed_device=observed_dev,
             message='project scope is bound',
+            store=store,
         )
 
     if device_only_drift(entry, observed):
@@ -539,9 +560,12 @@ def inspect_scope(workspace: Path) -> ScopeDiagnosis:
     )
 
 
-def resolve(workspace: Path, *, lazy: bool = False) -> Project:
+def resolve(workspace: Path, *, lazy: bool = False, allow_catalog: bool = False) -> Project:
     """Bind a workspace to its enrolled project. With lazy=True (the host's own active checkout
-    only), a repo under an approved folder is registered on first open, under the registry lock."""
+    only), a repo under an approved folder is registered on first open, under the registry lock.
+
+    A catalog repo resolves only for a caller that passes allow_catalog: one that will reach its
+    memory through the catalog's fence. Any other caller is refused rather than handed a path."""
     checkout, common = checkout_dirs(workspace)
     base = private_base()
     registry = read_registry(base)
@@ -560,11 +584,15 @@ def resolve(workspace: Path, *, lazy: bool = False) -> Project:
         raise ScopeError('project is not enrolled or its checkout has changed')
     if entry.get('origin', 'explicit') == 'folder' and not approved_folder(registry, checkout, common):
         raise ScopeError('no approved folder covers this checkout')
+    if entry.get('store') == 'catalog':
+        if not allow_catalog:
+            raise ScopeError('this repo uses the project catalog, which this entry point does not support yet')
+        return Project(checkout, common, entry['id'], None, checked_database(base, CATALOG))
     database = checked_database(base, entry['id'])
     return Project(checkout, common, entry['id'], database)
 
 
-def host_project(client: str, workspace_paths: list[str] | None = None) -> Project:
+def host_project(client: str, workspace_paths: list[str] | None = None, *, allow_catalog: bool = False) -> Project:
     cwd = Path.cwd()
     if any(os.environ.get(k) for k in ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR')):
         raise ScopeError('Git workspace override is ambiguous')
@@ -584,15 +612,15 @@ def host_project(client: str, workspace_paths: list[str] | None = None) -> Proje
     if client == 'antigravity' and cwd == plugin:
         if not signals:
             raise ScopeError('missing host workspace')
-        workspace = resolve(Path(signals[0]), lazy=True)
+        workspace = resolve(Path(signals[0]), lazy=True, allow_catalog=allow_catalog)
     else:
-        workspace = resolve(cwd, lazy=True)
+        workspace = resolve(cwd, lazy=True, allow_catalog=allow_catalog)
     # PWD can corroborate a known workspace but cannot select one on its own.
     pwd = os.environ.get('PWD')
     # A GUI process commonly inherits PWD=/ even after the host changes cwd.
     if pwd not in (None, '/') and (not pwd or Path(pwd).resolve(strict=True) != cwd):
         signals.append(pwd)
     for signal in set(signals):
-        if not signal or resolve(Path(signal)).checkout != workspace.checkout:
+        if not signal or resolve(Path(signal), allow_catalog=allow_catalog).checkout != workspace.checkout:
             raise ScopeError('host workspace disagrees with active checkout')
     return workspace
