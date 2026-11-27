@@ -135,9 +135,20 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--catalog',required=True,type=Path)
     parser.add_argument('--grant-file',required=True,type=Path)
+    # A catalog repo session (Stage B): the launcher names the project and its verified checkout, and
+    # a one-time grant minted into the catalog's sessions/ folder is deleted once read, as the MCP server does.
+    parser.add_argument('--project-id')
+    parser.add_argument('--repo',type=Path)
+    parser.add_argument('--consume-grant-file',action='store_true')
     args = parser.parse_args()
+    if (args.project_id is None) != (args.repo is None):
+        parser.error('--project-id and --repo go together')
     try:
-        broker = resume(args.catalog,args.grant_file,broker_type=ProviderBroker)
+        try:
+            broker = resume(args.catalog,args.grant_file,args.project_id,args.repo,broker_type=ProviderBroker)
+        finally:
+            if args.consume_grant_file and args.grant_file.parent == args.catalog.parent / 'sessions':
+                args.grant_file.unlink(missing_ok=True)
         return serve(broker,sys.stdin.buffer,sys.stdout.buffer)
     except Exception:
         print('bridge unavailable',file=sys.stderr)
