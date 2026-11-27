@@ -56,7 +56,9 @@ function canonical(path: string) {
 /** Reasons the profile cannot be vouched for, empty when it can. Exported for tests. */
 export function inventoryProblems(ctx: Ctx, self: unknown, workspace: string): string[] {
   const problems: string[] = []
-  if (canonical(process.cwd()) !== workspace) problems.push('process is not running in the workspace')
+  let cwd: string | undefined
+  try { cwd = canonical(process.cwd()) } catch { /* the working directory is gone */ }
+  if (cwd !== workspace) problems.push('process is not running in the workspace')
   if (ctx.get('workspaceRegistry', false) !== undefined) problems.push('a multi-workspace registry is mounted')
   const loader = ctx.get('loader', false)
   if (loader === undefined) return [...problems, 'no loader inventory']
@@ -89,10 +91,15 @@ export async function apply(ctx: Ctx, config: HostConfig) {
   if (!config.binding || typeof config.binding.journalDir !== 'string' || !config.binding.journalDir.startsWith('/'))
     throw Error('a private absolute journalDir is required')
   if (!config.readBinding || typeof config.readBinding.executable !== 'string') throw Error('readBinding is required')
-  const workspace = canonical(config.workspace)
+  const log = ctx.logger?.('nexus-writer-host') ?? console
+  // A missing workspace is not a configuration error: DSH must still start, without Nexus.
+  let workspace: string
+  try { workspace = canonical(config.workspace) } catch {
+    log.warn?.('Nexus is off: the configured workspace does not exist')
+    return
+  }
   const loader = ctx.get('loader', false)
   const self = loader?.locate?.(ctx.fiber) ? [...loader.entries()].find((e: any) => e.fiber === ctx.fiber) : undefined
-  const log = ctx.logger?.('nexus-writer-host') ?? console
   // At start the loader may not have mounted every entry yet. Saves therefore re-check the
   // complete inventory; the first save fixes its digest, and any later difference (an entry
   // added, removed, enabled or reconfigured) refuses saves until DSH restarts.
