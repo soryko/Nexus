@@ -38,4 +38,6 @@ if len(sys.argv) < 3 or sys.argv[2] != 'recall':
     run('mode', api, 'maintain')
 print(json.dumps({'workspace': str(api.resolve()), 'home': str(home),
                   'binding': {'executable': sys.executable, 'args': ['-I', str(LAUNCHER), 'dsh', str(BRIDGE)],
-                              'home': str(home), 'journalDir': str(base / 'journal')}}))
+                              'home': str(home), 'journalDir': str(base / 'journal')},
+                  'readBinding': {'executable': sys.executable, 'args': ['-I', str(LAUNCHER), 'dsh-worker', str(BRIDGE)],
+                                  'home': str(home)}}))

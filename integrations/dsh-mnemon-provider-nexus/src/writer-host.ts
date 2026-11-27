@@ -1,44 +1,51 @@
-/** The audited DSH host for a writable Nexus child (Stage B, Phase 2).
+/** The audited DSH host for Nexus (Stage B, Phase 2).
  *
- * DSH's provider host exposes no profile inventory, so this plugin is the embedding owner the
- * provider asks for: it composes the only Memory Spaces Source that carries the Nexus child, and
- * checks the profile it runs in before and while it vouches for that Source.
+ * Reads and writes take separate paths, each on its own grant:
  *
- * - One receiving project. The process working directory must be the configured workspace, the
- *   process must not mount a multi-workspace registry, and every request to the Source must name
- *   that workspace. A request for any other workspace is refused, not served from this grant.
- * - One Source. No other loader entry may mention the Nexus provider or bridge.
- * - Pinned. Hot reload must be off. Each write re-checks the whole loader inventory; the first
- *   write fixes its digest, and any later change refuses every write until DSH restarts.
- * - Root only, and remember only. Writes need a live root agent (no subagent origin, no parent or
- *   fork lineage); archive, link, forget and the rest are refused. The Nexus catalog enforces the
- *   repo's mode and root role again on its side, with the grant the launcher minted.
+ * - Recall goes through mnemon. This plugin composes the only Memory Spaces Source that carries
+ *   the Nexus child, on a read-only (delegated) grant, and refuses every mutation through it.
+ *   mnemon's own remember delegates to a spawned child session, and the agent a Source request
+ *   names is not a reliable identity, so no write may arrive that way (first real save, 27 Nov).
+ * - Saving goes through the `nexus_remember` tool, on a root grant. A tool call carries the
+ *   agent that is actually executing it, so the root check reads that agent's own session header.
+ *
+ * The host vouches only while:
+ * - One workspace. The process runs in the configured workspace, mounts no multi-workspace
+ *   registry, and every Source request names that workspace.
+ * - One exposure. No other loader entry names the Nexus provider, bridge or launcher.
+ * - Pinned. Hot reload is off. Each save re-checks the whole loader inventory; the first save
+ *   fixes its digest, and any later change refuses saves until DSH restarts.
+ * The Nexus catalog enforces the repo's mode and the root role again on its side.
  */
 import {createHash} from 'node:crypto'
 import {realpathSync} from 'node:fs'
 import {resolve} from 'node:path'
 import {installMemorySpaces} from 'dsh-mnemon-source-memory-spaces'
-import {forAuditedHost} from './index.js'
+import readOnlyProvider from './index.js'
 import type {Binding} from './client.js'
+import {RootWriter,rememberInput} from './root-writer.js'
 
 export const name = 'dsh-nexus-writer-host'
-export const inject = ['mnemonMemory', 'loader']
+export const inject = ['mnemonMemory', 'loader', 'tools']
 
 export interface HostConfig {
   /** Stable Source instance id for this composed Source. */
   instanceId: string
   /** Absolute path of the one workspace (a Git checkout) this process serves. */
   workspace: string
-  /** The bridge launch: the project launcher's `dsh` command, which mints the session grant. */
+  /** The save path: the project launcher's `dsh` command, which mints a root session grant. */
   binding: Binding & {journalDir: string}
+  /** The recall path: the launcher's `dsh-worker` command, which mints a read-only grant. */
+  readBinding: Binding
   /** Memory Spaces Source settings (dataDir and the like), passed through unchanged. */
   memorySpaces?: Record<string, unknown>
 }
 
+export const TOOL = 'nexus_remember'
 const NEXUS = /dsh-mnemon-provider-nexus|nexus-memory-bridge|project_scope\/launcher\.py/u
 const HOT_RELOAD = /(^|[/@])dsh-hmr($|[/@])/u
 
-interface Scope {workspaceId?: string; agentId?: string}
+interface Scope {workspaceId?: string}
 interface AgentHeader {cwd?: string; origin?: string; parentSession?: string; delegationDepth?: number; isSeeded?: boolean}
 type Ctx = any
 
@@ -81,15 +88,16 @@ export async function apply(ctx: Ctx, config: HostConfig) {
   if (typeof config.workspace !== 'string' || !config.workspace.startsWith('/')) throw Error('workspace must be absolute')
   if (!config.binding || typeof config.binding.journalDir !== 'string' || !config.binding.journalDir.startsWith('/'))
     throw Error('a private absolute journalDir is required')
+  if (!config.readBinding || typeof config.readBinding.executable !== 'string') throw Error('readBinding is required')
   const workspace = canonical(config.workspace)
   const loader = ctx.get('loader', false)
   const self = loader?.locate?.(ctx.fiber) ? [...loader.entries()].find((e: any) => e.fiber === ctx.fiber) : undefined
   const log = ctx.logger?.('nexus-writer-host') ?? console
-  // At start the loader may not have mounted every entry yet. Writes therefore re-check the
-  // complete inventory; the first write fixes its digest, and any later difference (an entry
-  // added, removed, enabled or reconfigured) revokes writes until DSH restarts.
+  // At start the loader may not have mounted every entry yet. Saves therefore re-check the
+  // complete inventory; the first save fixes its digest, and any later difference (an entry
+  // added, removed, enabled or reconfigured) refuses saves until DSH restarts.
   const initial = inventoryProblems(ctx, self, workspace)
-  if (initial.length) log.warn?.(`Nexus stays read-only: ${initial.join('; ')}`)
+  if (initial.length) log.warn?.(`Nexus saves are off: ${initial.join('; ')}`)
   let pinned = initial.length === 0, baseline: string | undefined
   const stillPinned = () => {
     if (!pinned) return false
@@ -97,31 +105,26 @@ export async function apply(ctx: Ctx, config: HostConfig) {
     baseline ??= problems.length ? undefined : digest
     if (problems.length || digest !== baseline) {
       pinned = false
-      log.warn?.(`Nexus writes revoked: ${problems.join('; ') || 'the profile changed'}`)
+      log.warn?.(`Nexus saves revoked: ${problems.join('; ') || 'the profile changed'}`)
     }
     return pinned
   }
 
-  const sourceKey = config.instanceId
-  const provider = forAuditedHost(() => pinned ? {
-    source: sourceKey, enabledSources: [sourceKey], receivingProjects: [workspace], exposurePinnedUntilDisposal: true,
-  } : undefined)
-
-  const agents = () => ctx.get('agents', false)
   // mnemon resolves a session's cwd without following links; compare canonical paths.
-  const sameWorkspace = (scope: Scope | undefined) => {
-    if (typeof scope?.workspaceId !== 'string' || !scope.workspaceId.startsWith('/')) return false
-    try { return canonical(scope.workspaceId) === workspace } catch { return false }
+  const sameWorkspace = (path: unknown) => {
+    if (typeof path !== 'string' || !path.startsWith('/')) return false
+    try { return canonical(path) === workspace } catch { return false }
   }
-  const rootAgent = (scope: Scope | undefined) => {
-    const agent = typeof scope?.agentId === 'string' ? agents()?.get(scope.agentId) : undefined
+  /** The executing agent is the root session of this workspace: no subagent origin, no parent or
+   * fork lineage, no delegation depth. Read from the agent a tool call carries, never a request. */
+  const isRoot = (agent: any) => {
     const header: AgentHeader | undefined = agent?.session?.header
     if (!header || header.origin !== undefined || header.parentSession !== undefined || header.isSeeded) return false
     if ((header.delegationDepth ?? 0) !== 0) return false
-    return typeof header.cwd === 'string' && sameWorkspace({workspaceId: header.cwd})
+    return sameWorkspace(header.cwd)
   }
   const refuse = (what: string) => { throw Error(`nexus writer host: ${what}`) }
-  const guardScope = (scope: Scope | undefined) => { if (!sameWorkspace(scope)) refuse('request for another workspace') }
+  const guardScope = (scope: Scope | undefined) => { if (!sameWorkspace(scope?.workspaceId)) refuse('request for another workspace') }
 
   const guardSource = (definition: any) => ({
     ...definition,
@@ -142,17 +145,10 @@ export async function apply(ctx: Ctx, config: HostConfig) {
       const wrapped: any = {
         async facts(request: any, signal?: AbortSignal) { guardScope(request?.scope); await enable(request.scope); return runtime.facts(request, signal) },
         async project(request: any, signal?: AbortSignal) { guardScope(request?.scope); await enable(request.scope); return runtime.project(request, signal) },
+        mutate() { refuse(`writes go through ${TOOL} from the root session`) },
       }
       if (runtime.manage) wrapped.manage = (request: any) => { guardScope(request?.scope); return runtime.manage(request) }
       if (runtime.query) wrapped.query = (request: any) => { guardScope(request?.view?.scope); return runtime.query(request) }
-      if (runtime.mutate) wrapped.mutate = (request: any) => {
-        const scope = request?.view?.scope
-        guardScope(scope)
-        if (request?.offer?.sourceActionId !== 'remember') refuse('only remember is allowed')
-        if (!rootAgent(scope)) refuse('only the root session of this workspace may write')
-        if (!stillPinned()) refuse('the profile changed after start; restart DSH to write')
-        return runtime.mutate(request)
-      }
       if (runtime.dispose) wrapped.dispose = () => runtime.dispose()
       return wrapped
     },
@@ -167,9 +163,32 @@ export async function apply(ctx: Ctx, config: HostConfig) {
       return real.installContributions({...contribution, sources: contribution.sources?.map(guardSource)}, options)
     },
   }))
-  const {journalDir, ...binding} = config.binding
   await installMemorySpaces(inner, [{
-    instanceId: 'nexus', module: provider as any,
-    config: {audience: 'isolated-writer', enabledSources: [sourceKey], bindings: {project: {...binding, journalDir}}},
-  }], {instanceId: sourceKey, config: config.memorySpaces as any})
+    instanceId: 'nexus', module: readOnlyProvider as any, config: {bindings: {project: config.readBinding}},
+  }], {instanceId: config.instanceId, config: config.memorySpaces as any})
+
+  const writer = new RootWriter(config.binding)
+  ctx.effect(() => () => { void writer.dispose() }, 'nexus-writer-host: settle saves')
+  const text = (value: unknown) => [{type: 'text', text: JSON.stringify(value)}]
+  ctx.effect(() => ctx.tools.register({
+    name: TOOL,
+    description: 'Save one durable project decision or fact to this repository\'s Nexus memory, exactly as given. ' +
+      'Only the root session can save, and only when the owner asked for it; the repo must be in maintain mode. ' +
+      'Returns the Nexus memory_id and revision_id.',
+    parameters: {
+      type: 'object', additionalProperties: false, required: ['content'],
+      properties: {
+        content: {type: 'string', description: 'The exact text to save.'},
+        category: {type: 'string', enum: ['preference', 'decision', 'fact', 'insight', 'context', 'general']},
+        importance: {type: 'integer', minimum: 1, maximum: 5},
+        tags: {type: 'array', items: {type: 'string'}, maxItems: 20},
+      },
+    },
+    output: {schema: {type: 'object', additionalProperties: true}, render: (_args: unknown, value: unknown) => text(value)},
+    async execute(args: unknown, exec: any) {
+      if (!isRoot(exec?.agent)) refuse('only the root session of this workspace may save')
+      if (!stillPinned()) refuse('the profile changed after start; restart DSH to save')
+      return await writer.remember(rememberInput(args), exec?.signal)
+    },
+  }), `nexus-writer-host: ${TOOL}`)
 }
