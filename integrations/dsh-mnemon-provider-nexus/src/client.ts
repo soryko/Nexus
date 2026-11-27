@@ -1,7 +1,9 @@
 import {spawn} from 'node:child_process'
 import {randomUUID} from 'node:crypto'
 import {isAbsolute} from 'node:path'
-export interface Binding { executable:string; args:string[]; journalDir?:string; atlasOrigin?:string }
+// home: an absolute HOME for the bridge process, so a disposable profile resolves a disposable
+// Nexus registry and catalog. Without it the bridge inherits no HOME and the OS account's is used.
+export interface Binding { executable:string; args:string[]; journalDir?:string; atlasOrigin?:string; home?:string }
 const MAX=1024*1024
 export class Client {
   private child
@@ -11,7 +13,8 @@ export class Client {
   readonly ready:Promise<unknown>
   constructor(binding:Binding,startup=5000,private timeout=10000){
     if(!isAbsolute(binding.executable))throw Error('absolute executable required')
-    this.child=spawn(binding.executable,binding.args,{shell:false,stdio:['pipe','pipe','ignore'],env:{PATH:process.env.PATH,LANG:'C.UTF-8'}})
+    if(binding.home!==undefined&&(typeof binding.home!=='string'||!isAbsolute(binding.home)))throw Error('absolute home required')
+    this.child=spawn(binding.executable,binding.args,{shell:false,stdio:['pipe','pipe','ignore'],env:{PATH:process.env.PATH,LANG:'C.UTF-8',...(binding.home?{HOME:binding.home}:{})}})
     this.child.on('error',()=>this.dispose());this.child.on('exit',()=>this.dispose());this.child.stdin.on('error',()=>this.dispose())
     this.child.stdout.on('data',(chunk:Buffer)=>{try{this.receive(chunk)}catch{this.dispose()}})
     this.ready=this.send('capabilities',{},undefined,undefined,startup)

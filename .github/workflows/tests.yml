@@ -57,7 +57,7 @@ jobs:
           export NEXUS_FIXTURE_STORE="$RUNNER_TEMP/nexus-store"
           pnpm install --frozen-lockfile --store-dir "$NEXUS_FIXTURE_STORE"
           sha256sum pnpm-lock.yaml > "$evidence/lockfile.sha256"
-          for check in typecheck build test test:packed test:loader; do
+          for check in typecheck build test test:packed test:loader test:writer; do
             if pnpm run "$check"; then rc=0; else rc=$?; fi
             printf '%s\t%d\n' "$check" "$rc" >> "$evidence/checks.tsv"
             if (( rc != 0 )); then exit "$rc"; fi
