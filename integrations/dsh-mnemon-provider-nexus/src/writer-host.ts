@@ -127,9 +127,21 @@ export async function apply(ctx: Ctx, config: HostConfig) {
     ...definition,
     create(context: any) {
       const runtime = definition.create(context)
+      // A profile has no UI step that turns the Nexus provider on, and this host owns the only
+      // binding it has. So the first request for this workspace enables it (idempotently).
+      let enabled: Promise<void> | undefined
+      const enable = (scope: Scope) => enabled ??= (async () => {
+        if (!runtime.manage) return
+        const call = async (mode: string, operation: string, input: unknown) => (await runtime.manage({
+          sourceInstanceKey: context.sourceInstanceKey, scope, mode, operation, input, confirmed: true})).value
+        const services = await call('read', 'provider-services', null)
+        const nexus = services?.items?.find((s: any) => s.providerId === 'nexus')
+        if (nexus?.enabled !== true || nexus?.settings?.binding !== 'project')
+          await call('mutate', 'provider-service-update', {providerId: 'nexus', enabled: true, settings: {binding: 'project'}})
+      })().catch(error => { enabled = undefined; log.warn?.(`Nexus provider not enabled: ${error?.message ?? error}`) })
       const wrapped: any = {
-        facts(request: any, signal?: AbortSignal) { guardScope(request?.scope); return runtime.facts(request, signal) },
-        project(request: any, signal?: AbortSignal) { guardScope(request?.scope); return runtime.project(request, signal) },
+        async facts(request: any, signal?: AbortSignal) { guardScope(request?.scope); await enable(request.scope); return runtime.facts(request, signal) },
+        async project(request: any, signal?: AbortSignal) { guardScope(request?.scope); await enable(request.scope); return runtime.project(request, signal) },
       }
       if (runtime.manage) wrapped.manage = (request: any) => { guardScope(request?.scope); return runtime.manage(request) }
       if (runtime.query) wrapped.query = (request: any) => { guardScope(request?.view?.scope); return runtime.query(request) }

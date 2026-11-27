@@ -23,6 +23,7 @@ function boot(mode:'pinned'|'shared',ceiling:'maintain'|'recall'='maintain'){
 
 it('writes from the root session of its one workspace, and nothing else writes',()=>{
  const r=boot('pinned')
+ expect(r.enabledByHost).toBe(true)
  expect(r.remember).toBe(true)
  expect(r.offers).toBe(true)
  expect(r.root.ok,r.root.error).toBe(true)

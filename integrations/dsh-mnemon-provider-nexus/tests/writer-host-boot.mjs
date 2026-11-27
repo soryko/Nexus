@@ -31,7 +31,8 @@ try {
   const scope=scopeFor('root'), view=(s=scope)=>({id:'fixture',scope:s})
   runtime=sources.get(key).create({sourceInstanceKey,configuration:{}})
   const manage=async(operation,input,s=scope,m='mutate')=>(await runtime.manage({sourceInstanceKey,scope:s,mode:m,operation,input,confirmed:true})).value
-  await manage('provider-service-update',{providerId:'nexus',enabled:true,settings:{binding:'project'}})
+  const before=await runtime.facts({scope})                    // the host enables its provider on first use
+  results.enabledByHost=(await manage('provider-services',null,scope,'read')).items.some(s=>s.providerId==='nexus'&&s.enabled===true)
   const body=(await manage('body-directory',null,scope,'read')).items.find(b=>b.provider.id==='nexus');assert.ok(body)
   results.remember=body.provider.capabilities.remember
   const facts=await runtime.facts({scope})
