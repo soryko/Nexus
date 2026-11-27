@@ -25,8 +25,8 @@ def owner_catalog() -> Path | None:
     return catalog if catalog.exists() else None
 
 
-def open_session(runtime: Path, project, host: str) -> Path:
-    return mint_grant([str(runtime.with_name('nexus-memory-admin'))], project, host)
+def open_session(runtime: Path, project, host: str, role: str = 'root') -> Path:
+    return mint_grant([str(runtime.with_name('nexus-memory-admin'))], project, host, role=role)
 
 
 def set_ceiling(project_id: str, ceiling: str) -> dict:
@@ -186,7 +186,9 @@ def main():
     atlas = commands.add_parser('atlas', help='open the read-only Memory Atlas viewer for an enrolled checkout')
     atlas.add_argument('checkout', type=Path)
     atlas.add_argument('--no-browser', action='store_true')
-    for name in ('codex', 'claude', 'claude-hooks', 'antigravity'):
+    # dsh and dsh-worker take the nexus-memory-bridge executable as their runtime. A worker is a
+    # delegated session, so its grant is read-only whatever the repo's mode.
+    for name in ('codex', 'claude', 'claude-hooks', 'antigravity', 'dsh', 'dsh-worker'):
         host = commands.add_parser(name)
         host.add_argument('runtime', type=Path)
         host.add_argument('--expected-project', type=Path)
@@ -222,7 +224,7 @@ def main():
             raise ScopeError('runtime path must be absolute')
         v2 = args.catalog is not None or args.grant_file is not None
         if v2 and (not args.catalog or not args.grant_file or not args.catalog.is_absolute()
-                   or not args.grant_file.is_absolute() or args.command == 'antigravity'):
+                   or not args.grant_file.is_absolute() or args.command in ('antigravity', 'dsh', 'dsh-worker')):
             raise ScopeError('unsupported or incomplete scoped profile')
         plugin = Path.home().resolve(strict=True) / '.gemini/config/plugins/nexus-memory'
         is_plugin_launch = Path.cwd() == plugin or os.environ.get('PLUGIN_ROOT') == str(plugin)
@@ -240,12 +242,16 @@ def main():
         try:
             # Antigravity has no catalog session grants yet, so a catalog repo is refused there.
             catalog_ok = args.command != 'antigravity' and not v2
-            project = host_project('claude' if hooks else args.command, allow_catalog=catalog_ok)
+            dsh = args.command in ('dsh', 'dsh-worker')
+            project = host_project('claude' if hooks else 'dsh' if dsh else args.command, allow_catalog=catalog_ok)
             if (args.expected_project is not None
                     and resolve(args.expected_project, allow_catalog=catalog_ok).id != project.id):
                 raise ScopeError('host entry is bound to a different enrolled project')
+            if dsh and project.catalog is None:
+                raise ScopeError('DSH memory needs a catalog repo')
             if project.catalog is not None:
-                grant = open_session(args.runtime, project, args.command)
+                grant = open_session(args.runtime, project, 'dsh' if dsh else args.command,
+                                     role='delegated' if args.command == 'dsh-worker' else 'root')
         except (ScopeError, OSError, subprocess.SubprocessError):  # OSError: no registry yet, the first-run case
             if not hooks:
                 raise

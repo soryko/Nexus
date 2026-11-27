@@ -281,3 +281,66 @@ def test_a_moved_catalog_repo_is_recovered_with_its_memory(owner):
     assert recovered.returncode == 0, recovered.stderr
     assert launched(owner.run('claude', owner.runtime, cwd=moved))['--project-id'] == project_id
     assert owner.catalog('SELECT count(*) FROM spaces') == [(1,)]          # the same space, not a new one
+
+
+BRIDGE = Path(sys.executable).with_name('nexus-memory-bridge')
+
+
+class Bridge:
+    """A DSH session's bridge, started through the launcher exactly as the writer host starts it."""
+
+    def __init__(self, owner, checkout, role='dsh'):
+        self.proc = subprocess.Popen([sys.executable, '-I', str(ENTRY), role, str(BRIDGE)], cwd=checkout,
+                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                     env={'HOME': str(owner.home), 'PATH': os.environ['PATH'], 'PWD': str(checkout)})
+
+    def call(self, method, params, **extra):
+        frame = dict(v=1, id='i', method=method, params=params, **extra)
+        self.proc.stdin.write(json.dumps(frame).encode() + b'\n')
+        self.proc.stdin.flush()
+        line = self.proc.stdout.readline()
+        assert line, self.proc.stderr.read().decode()
+        return json.loads(line)
+
+    def close(self):
+        self.proc.stdin.close()
+        self.proc.wait(timeout=30)
+
+
+def test_dsh_launch_binds_the_bridge_to_the_verified_project(owner):
+    api = repo(owner.work / 'api')
+    result = owner.run('dsh', owner.runtime, cwd=api)
+    assert result.returncode == 0, result.stderr
+    args = result.stdout.split()
+    assert args[args.index('--repo') + 1] == str(api) and '--consume-grant-file' in args
+    assert Path(args[args.index('--grant-file') + 1]).parent == owner.base / 'sessions'
+    assert owner.catalog("SELECT role,mode FROM sessions") == [('root', 'read_only')]       # recall only by default
+
+
+def test_dsh_root_writes_only_under_maintain_and_a_worker_never_does(owner):
+    api = repo(owner.work / 'api')
+    assert owner.run('dsh', owner.runtime, cwd=api).returncode == 0          # first open creates the space
+    recall = Bridge(owner, api)
+    try:
+        assert recall.call('capabilities', {})['result']['remember'] is False
+    finally:
+        recall.close()
+    assert owner.run('mode', api, 'maintain').returncode == 0
+    unread = set((owner.base / 'sessions').glob('*.grant'))                  # the stand-in runtime reads none
+    root, worker = Bridge(owner, api), Bridge(owner, api, 'dsh-worker')
+    try:
+        assert root.call('capabilities', {})['result']['remember'] is True
+        assert worker.call('capabilities', {})['result']['remember'] is False
+        receipt = root.call('remember', {'content': 'DSH phase 2 fixture'}, operation_key='k1')['result']
+        assert worker.call('get', {'memory_id': receipt['memory_id']})['result']['content'] == 'DSH phase 2 fixture'
+        assert not worker.call('remember', {'content': 'worker write'}, operation_key='k2')['ok']
+    finally:
+        root.close()
+        worker.close()
+    assert set((owner.base / 'sessions').glob('*.grant')) == unread         # each bridge consumed its grant
+    assert owner.catalog("SELECT role,mode FROM sessions WHERE role='delegated'") == [('delegated', 'read_only')]
+
+
+def test_dsh_refuses_a_repo_outside_the_catalog(owner, tmp_path):
+    outside = repo(tmp_path / 'elsewhere')
+    assert owner.run('dsh', owner.runtime, cwd=outside).returncode != 0
